@@ -49,6 +49,7 @@ import {
   type RawIssue,
   type RawIssueComment,
   type RawPull,
+  type RawPullDetail,
   type RawReview,
   type RawReviewComment,
 } from "./client";
@@ -362,6 +363,27 @@ const fakeClient = Effect.fn("github.fakeClient")(function* (seed: Seed) {
         Effect.map(() => opened),
       );
     },
+    getPull: (_repo, number) =>
+      Ref.get(pulls).pipe(
+        Effect.map((current) => {
+          const found =
+            current.find((candidate) => candidate.number === number) ??
+            pull({ number, headRef: `pull-${number}` });
+          return {
+            ...found,
+            baseSha: found.baseSha,
+            baseRef: found.baseRef,
+            title: `Pull request ${number}`,
+            body: "",
+          } satisfies RawPullDetail & {
+            readonly baseSha: string | undefined;
+            readonly baseRef: string | undefined;
+          };
+        }),
+      ),
+    getPullDiff: () => Effect.succeed(""),
+    listPullFiles: () => Effect.succeed([]),
+    createReview: () => Effect.void,
     addLabel: (_repo, number, label) =>
       patch(number, (issue) => ({ ...issue, labels: [...issue.labels, label] })),
     removeLabel: (_repo, number, label) =>
@@ -539,6 +561,8 @@ const pull = (over: Partial<RawPull> & { readonly number: number; readonly headR
   authorAssociation: "MEMBER",
   draft: false,
   headSha: `sha-${over.number}`,
+  baseSha: `base-${over.number}`,
+  baseRef: "main",
   headRepository: "owner/repo",
   closingIssueNumbers: [],
   updatedAtMillis: 0,
@@ -1206,9 +1230,29 @@ describe("GitHub adapters", () => {
     ),
   );
 
+  it.effect("reads a named fork pull request through its base repository", () =>
+    Effect.gen(function* () {
+      const pullRequest = yield* (yield* SourceControlProvider).readPullRequest(workspace, "#482");
+
+      assert.deepInclude(pullRequest, {
+        number: 482,
+        headSha: "sha-482",
+        baseBranch: "main",
+      });
+    }).pipe(
+      Effect.provide(
+        withClient({
+          issues: [],
+          pulls: [pull({ number: 482, headRef: "review-actions", headRepository: "fork/repo" })],
+        }),
+      ),
+    ),
+  );
+
   it.effect("contributes pull request actions with their publication gates", () =>
     Effect.gen(function* () {
-      const entries = (yield* SourceControlProvider).workflowCatalogContribution.entries;
+      const contribution = (yield* SourceControlProvider).workflowCatalogContribution;
+      const entries = contribution.entries;
       assert.deepStrictEqual(
         entries.map(({ key, permissionProfile, requiresWorkspace, actsOn }) => ({
           key,
@@ -1241,7 +1285,29 @@ describe("GitHub adapters", () => {
             requiresWorkspace: true,
             actsOn: ["issue", "pull-request"],
           },
+          {
+            key: catalogKey("github.comment-on-named-pull-request"),
+            permissionProfile: "read-only",
+            requiresWorkspace: true,
+            actsOn: ["*"],
+          },
+          {
+            key: catalogKey("github.post-review"),
+            permissionProfile: "read-only",
+            requiresWorkspace: true,
+            actsOn: ["*"],
+          },
+          {
+            key: catalogKey("github.draft-review"),
+            permissionProfile: "read-only",
+            requiresWorkspace: true,
+            actsOn: ["*"],
+          },
         ],
+      );
+      assert.deepStrictEqual(
+        contribution.templates.map(({ name }) => name),
+        ["Slack → Review"],
       );
     }).pipe(Effect.provide(withClient({ issues: [] }))),
   );

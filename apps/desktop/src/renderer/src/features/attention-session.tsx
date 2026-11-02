@@ -5,6 +5,7 @@ import {
   type RunId,
   WorkflowActionArtifact,
   WorkflowActionTarget,
+  type WorkflowAgentInputValue,
   type WorkflowAttention,
   type WorkflowCatalog,
   type WorkflowNotification,
@@ -121,6 +122,7 @@ const targetLabel = (target: WorkflowActionTarget) =>
     NewIssue: ({ workspace }) => workspace,
     NewPullRequest: ({ issue }) => issue,
     CurrentPullRequest: ({ item }) => sourceOf(item).label,
+    NamedPullRequest: ({ number }) => `PR #${number}`,
   });
 
 const targetApp = (target: WorkflowActionTarget) =>
@@ -134,7 +136,16 @@ const targetApp = (target: WorkflowActionTarget) =>
     NewIssue: ({ app }) => catalogIcon(app),
     NewPullRequest: ({ app }) => catalogIcon(app),
     CurrentPullRequest: ({ app }) => catalogIcon(app),
+    NamedPullRequest: ({ app }) => catalogIcon(app),
   });
+
+const agentInputText = (input: WorkflowAgentInputValue) =>
+  typeof input === "string"
+    ? input
+    : input.map(({ path, line, body }) => `${path}:${line} — ${body}`).join("\n");
+
+const agentInputIsMissing = (input: WorkflowAgentInputValue | undefined) =>
+  input === undefined || (typeof input === "string" && input.trim().length === 0);
 
 const stepStates = {
   pending: "planned",
@@ -157,10 +168,10 @@ const planSteps = (park: WorkflowPark, catalog: WorkflowCatalog) => {
         action: entry?.name ?? titleCase(step.entry.slice(step.entry.indexOf(".") + 1)),
         target: targetLabel(step.target),
         parameters: step.parameters.map(({ value }) => value),
-        inputs: Object.entries(step.inputs).map(([id, text]) => ({
+        inputs: Object.entries(step.inputs).map(([id, input]) => ({
           id,
           label: titleCase(id),
-          text,
+          text: agentInputText(input),
         })),
         state: stepStates[step.status],
         note: step.status === "failed" ? failedReason : (issueArtifact?.issue ?? null),
@@ -199,7 +210,7 @@ const choicesFor = (
       .filter(({ key }) => entries.has(key))
       .flatMap(({ agentInputs }) => agentInputs);
     const inputs = [...new Set(requiredInputs)]
-      .filter((id) => !park.plan?.inputs[id]?.trim())
+      .filter((id) => agentInputIsMissing(park.plan?.inputs[id]))
       .map((id) => ({
         id,
         label: operation.hints.find(({ field }) => field === id)?.text ?? titleCase(id),

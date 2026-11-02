@@ -4,6 +4,7 @@ import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -763,6 +764,119 @@ describe("GitHub client", () => {
         title: "Open pull requests from the engine",
         body: "Closes #472",
       });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("creates a pending review by omitting event", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({ id: 91 }, 200)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* client.createReview(repo, 480, {
+        commitId: "reviewed-sha",
+        body: "Review draft",
+        comments: [{ path: "src/index.ts", line: 12, body: "Please rename this." }],
+        event: null,
+      });
+
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.method, "POST");
+      assert.strictEqual(request.url, "https://api.github.com/repos/colonylabs/cogwork/pulls/480/reviews");
+      assert.deepStrictEqual(yield* Effect.promise(() => request.json()), {
+        commit_id: "reviewed-sha",
+        body: "Review draft",
+        comments: [{ path: "src/index.ts", line: 12, side: "RIGHT", body: "Please rename this." }],
+      });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("does not retry a review when the response is lost", () => {
+    const status = vi.fn().mockReturnValueOnce(500).mockReturnValue(201);
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, status())));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(
+        Effect.result(
+          client.createReview(repo, 480, {
+            commitId: "reviewed-sha",
+            body: "Review body",
+            comments: [],
+            event: "COMMENT",
+          }),
+        ),
+      );
+      yield* TestClock.adjust("1 second");
+      const result = yield* Fiber.join(operation);
+
+      assert.isTrue(Result.isFailure(result));
+      assert.strictEqual(fetch.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("reads pull request description, diff, and changed files", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
+      const request = new Request(input, init);
+      if (request.headers.get("accept") === "application/vnd.github.v3.diff") {
+        return Promise.resolve(new Response("diff --git a/src/index.ts b/src/index.ts\n"));
+      }
+      if (request.url.endsWith("/compare/base-sha...head-sha")) {
+        return Promise.resolve(
+          jsonResponse({
+            files: [
+              {
+                filename: "src/index.ts",
+                status: "modified",
+                additions: 1,
+                deletions: 0,
+                changes: 1,
+                patch: "@@ -10,0 +11,1 @@\n+const answer = 42;",
+              },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          ...pullResponse(480),
+          title: "Review this change",
+          body: "Please review the implementation.",
+          base: { sha: "base-sha", ref: "main" },
+        }),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const [pull, diff, files] = yield* Effect.all([
+        client.getPull(repo, 480),
+        client.getPullDiff(repo, "base-sha", "head-sha"),
+        client.listPullFiles(repo, "base-sha", "head-sha"),
+      ]);
+
+      assert.strictEqual(pull.title, "Review this change");
+      assert.strictEqual(pull.body, "Please review the implementation.");
+      assert.strictEqual(diff, "diff --git a/src/index.ts b/src/index.ts\n");
+      assert.deepStrictEqual(files, [
+        {
+          path: "src/index.ts",
+          status: "modified",
+          additions: 1,
+          deletions: 0,
+          changes: 1,
+          patch: "@@ -10,0 +11,1 @@\n+const answer = 42;",
+        },
+      ]);
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input, init]) => new Request(input, init).url),
+        [
+          "https://api.github.com/repos/colonylabs/cogwork/pulls/480",
+          "https://api.github.com/repos/colonylabs/cogwork/compare/base-sha...head-sha",
+          "https://api.github.com/repos/colonylabs/cogwork/compare/base-sha...head-sha",
+        ],
+      );
     }).pipe(withFetchClient(fetch));
   });
 

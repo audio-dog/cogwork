@@ -12,6 +12,7 @@ import {
   Principal,
   RunId,
   SessionId,
+  SourceControlType,
   WorkflowActionArtifact,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
@@ -54,6 +55,7 @@ import {
 import {
   emptyLayer as emptyIssueTrackerLayer,
   IssueTracker,
+  IssueTrackerError,
   type IssueTrackerService,
   makeEmpty as makeEmptyIssueTracker,
 } from "./issue-tracker";
@@ -64,7 +66,11 @@ import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry 
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SlackWrite } from "./slack-write";
-import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
+import {
+  emptyService as emptySourceControl,
+  SourceControlProvider,
+  type SourceControlProviderService,
+} from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   makeMemoryTriggerObservationStore,
@@ -91,6 +97,7 @@ const decodeRun = Schema.decodeSync(RunId);
 const decodeSession = Schema.decodeSync(SessionId);
 const decodeWorkItem = Schema.decodeSync(WorkItemId);
 const decodeWorkspace = Schema.decodeSync(WorkspaceId);
+const githubSourceControlType = Schema.decodeSync(SourceControlType)("github");
 const workflow = decodeWorkflow("daily-summary");
 const siblingWorkflow = decodeWorkflow("sibling-summary");
 const trigger = decodeNode("schedule");
@@ -410,6 +417,7 @@ const makeCoordination = () =>
       processed,
       observed,
       claims,
+      handbacks,
     };
   });
 
@@ -533,6 +541,7 @@ interface HarnessBehavior {
   readonly observationStore?: (service: TriggerObservationStoreService) => TriggerObservationStoreService;
   readonly issueTracker?: IssueTrackerService;
   readonly registry?: RegistryState;
+  readonly sourceControl?: SourceControlProviderService;
 }
 
 const testProgram = (
@@ -593,6 +602,7 @@ const testProgram = (
       Effect.provideService(IssueTracker, issueTracker),
       Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
+      Effect.provideService(SourceControlProvider, behavior.sourceControl ?? emptySourceControl),
     );
     return { runner, coordination, notifications, observationStore };
   });
@@ -933,6 +943,7 @@ describe("WorkflowRun", () => {
 
     return Effect.gen(function* () {
       const calls = yield* CodingPipelineProbe;
+      const sourceControl = yield* SourceControlProvider;
       const baseTracker = yield* makeEmptyIssueTracker;
       const tracker = {
         ...baseTracker,
@@ -943,7 +954,7 @@ describe("WorkflowRun", () => {
       } satisfies IssueTrackerService;
       const registry = { ...emptyRegistry, workspaces: [workspace] };
       const runCodingAdmission = (admission: TriggerAdmission, result: unknown) =>
-        testProgram([result], { issueTracker: tracker, registry }, codingService).pipe(
+        testProgram([result], { issueTracker: tracker, registry, sourceControl }, codingService).pipe(
           Effect.tap(({ observationStore }) => observationStore.putAll([admission])),
           Effect.tap(({ runner }) => runner.execute(admission)),
         );
@@ -1390,6 +1401,109 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
+  it.effect("adds the pull request tool and rejects a head change after its read", () =>
+    Effect.gen(function* () {
+      const reviewWorkspace: RegisteredWorkspace = {
+        source: "test",
+        repository: "owner/repo",
+        contributions: [],
+        config: yield* Schema.decodeEffect(WorkspaceConfig)({
+          name: "repo",
+          checkoutPath: "/repo",
+          issueTracker: { type: "github" },
+        }),
+      };
+      const postReviewEntry = decodeEntry("github.post-review");
+      const reviewDocument = WorkflowDocument.make({
+        ...document,
+        workspaces: { _tag: "Every" },
+        operations: document.operations.map((candidate) => ({
+          ...candidate,
+          transitions: candidate.transitions.map((transition) => ({
+            ...transition,
+            actions: [
+              { entry: postReviewEntry, parameters: [{ id: "event", value: "comment" }] },
+              { entry: waitForApprovalEntry, parameters: [] },
+            ],
+          })),
+        })),
+      });
+      const postReviewCatalogEntry = {
+        key: postReviewEntry,
+        name: "Post a review",
+        kind: "action" as const,
+        system: "github",
+        connection: "github",
+        requires: [],
+        parameters: [{ id: "event", required: true, source: "fixed" as const, values: ["comment"] }],
+        itemKind: null,
+        actsOn: ["*"],
+        requiresWorkspace: true,
+        permissionProfile: "read-only" as const,
+        agentInputs: ["pull_request", "review_body", "review_comments"],
+        emits: [],
+      } satisfies WorkflowCatalogEntry;
+      const pullReads = yield* Ref.make(0);
+      const sourceControl = {
+        ...emptySourceControl,
+        readPullRequest: () =>
+          Ref.getAndUpdate(pullReads, (count) => count + 1).pipe(
+            Effect.map((count) => ({
+              number: 826,
+              url: "https://github.com/owner/repo/pull/826",
+              headBranch: "826-review-actions",
+              baseBranch: "main",
+              headSha: count === 0 ? "abc123" : "new-head",
+              title: "Review actions",
+              description: "Adds review actions.",
+              diff: "",
+              changedFiles: [],
+              comments: [],
+            })),
+          ),
+      };
+      const reviewOutput = {
+        summary: "Review ready",
+        stuck: false,
+        answers: { done: "yes" },
+        workspace: reviewWorkspace.config.name,
+        inputs: {
+          pull_request: "#826",
+          review_body: "Looks good.",
+          review_comments: [],
+          approval_request: "Post this review?",
+        },
+      };
+      const { runner, coordination } = yield* testProgram(
+        [reviewOutput],
+        {
+          registry: { ...emptyRegistry, workspaces: [reviewWorkspace] },
+          sourceControl,
+          run: (request) => {
+            const execute = request.engineTools?.find(({ name }) => name === "pull-request")?.execute;
+            if (!execute) return Stream.die("pull request tool is unavailable");
+            return Stream.fromEffect(
+              Effect.promise(() =>
+                Promise.resolve(execute({ workspace: "repo", pull_request: "#826" })),
+              ).pipe(Effect.map(() => resultEvent(reviewOutput))),
+            );
+          },
+        },
+        workflowServiceFor(reviewDocument, [postReviewCatalogEntry, waitForApprovalCatalogEntry]),
+      );
+
+      yield* runner.execute(admission);
+      const [run] = yield* (yield* RunLedger).listRuns(1);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.deepStrictEqual(plan?.tools, ["pull-request"]);
+      assert.strictEqual(run.status, "failed");
+      assert.include((yield* Ref.get(coordination.attempts))[0]?.reason ?? "", "received a new commit");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
   it.effect("refuses a matched action input that is empty after trim", () =>
     Effect.gen(function* () {
       const { runner, coordination } = yield* testProgram([
@@ -1756,6 +1870,167 @@ describe("WorkflowRun", () => {
       if (!notification) return;
       yield* notifications.dismiss(notification.id);
       assert.isEmpty(yield* notifications.list);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("keeps approval waiting on refresh failure and withdraws it for a new head", () =>
+    Effect.gen(function* () {
+      const reviewWorkspace: RegisteredWorkspace = {
+        source: "test",
+        repository: "owner/repo",
+        contributions: [],
+        config: yield* Schema.decodeEffect(WorkspaceConfig)({
+          name: "repo",
+          checkoutPath: "/repo",
+          issueTracker: { type: "github" },
+        }),
+      };
+      const attempt = decodeRun("waiting-review");
+      const reviewPlan = WorkflowActionPlan.make({
+        item: keyOf(admission.event.key),
+        workflow,
+        attempt,
+        operation,
+        revision: admission.event.revision,
+        createdAtMillis: 1_000,
+        consumedHandbackAtMillis: 0,
+        digest: "waiting-review-digest",
+        workflowRevision: 1,
+        summary: "Review is ready",
+        answers: { done: decodeNode("yes") },
+        inputs: {
+          pull_request: "#826",
+          review_body: "Looks good.",
+          review_comments: [],
+          approval_request: "Post this review?",
+        },
+        workspace: reviewWorkspace.config.name,
+        lineage: admission.lineage,
+        handOff: null,
+        steps: [
+          WorkflowActionPlanStep.make({
+            position: 0,
+            entry: waitForApprovalEntry,
+            parameters: [],
+            inputs: { approval_request: "Post this review?" },
+            target: { _tag: "Cogwork" },
+            writeKey: "wait-review",
+            status: "pending",
+            failures: 0,
+            artifact: null,
+          }),
+          WorkflowActionPlanStep.make({
+            position: 1,
+            entry: decodeEntry("github.post-review"),
+            parameters: [{ id: "event", value: "approve" }],
+            inputs: {
+              pull_request: "#826",
+              review_body: "Looks good.",
+              review_comments: [],
+            },
+            target: {
+              _tag: "NamedPullRequest",
+              workspace: reviewWorkspace.config.name,
+              app: githubSourceControlType,
+              issueTracker: reviewWorkspace.config.issueTracker,
+              repository: reviewWorkspace.repository ?? null,
+              number: 826,
+              url: "https://github.com/owner/repo/pull/826",
+              headBranch: "826-review-actions",
+              baseBranch: "main",
+              headSha: "old-head",
+            },
+            writeKey: "post-review",
+            status: "pending",
+            failures: 0,
+            artifact: null,
+          }),
+        ],
+      });
+      const refreshAvailable = yield* Ref.make(false);
+      const reviewWrites = yield* Ref.make(0);
+      const sourceControl = {
+        ...emptySourceControl,
+        readPullRequest: () =>
+          Ref.get(refreshAvailable).pipe(
+            Effect.flatMap((available) =>
+              available
+                ? Effect.succeed({
+                    number: 826,
+                    url: "https://github.com/owner/repo/pull/826",
+                    headBranch: "826-review-actions",
+                    baseBranch: "main",
+                    headSha: "new-head",
+                    title: "Review actions",
+                    description: "Adds review actions.",
+                    diff: "",
+                    changedFiles: [],
+                    comments: [],
+                  })
+                : Effect.fail(
+                    new IssueTrackerError({
+                      reason: "unavailable",
+                      retryable: true,
+                      message: "GitHub unavailable",
+                    }),
+                  ),
+            ),
+          ),
+        postReview: (selected, pullRequest, _event, _input, origin) =>
+          Ref.update(reviewWrites, (count) => count + 1).pipe(
+            Effect.map(() =>
+              WorkflowActionArtifact.make({
+                workspace: selected.config.name,
+                issue: WorkItemId.make(`#${pullRequest.number}`),
+                url: pullRequest.url,
+                origin,
+              }),
+            ),
+          ),
+      } satisfies SourceControlProviderService;
+      const { runner, coordination, observationStore } = yield* testProgram([], {
+        registry: { ...emptyRegistry, workspaces: [reviewWorkspace] },
+        sourceControl,
+      });
+      yield* observationStore.putAll([admission]);
+      yield* (yield* WorkflowActionPlanStore).create(reviewPlan);
+      yield* (yield* RunLedger).insertRun({
+        id: attempt,
+        workspace: reviewWorkspace.config.name,
+        workItem: decodeWorkItem("#826"),
+        stage: "implement",
+        harness: harnessName,
+        branch: null,
+        session: null,
+        usage: null,
+        status: "succeeded",
+        startedAtMillis: 1,
+        endedAtMillis: 2,
+      });
+
+      const unavailableApproval = yield* Effect.result(
+        runner.approve({
+          item: admission.event.key,
+          attempt,
+          digest: reviewPlan.digest,
+        }),
+      );
+      assert.isTrue(Result.isFailure(unavailableApproval));
+      if (Result.isFailure(unavailableApproval)) {
+        assert.strictEqual(unavailableApproval.failure.reason, "unavailable");
+      }
+      assert.strictEqual(yield* Ref.get(reviewWrites), 0);
+      assert.isNotNull(yield* (yield* WorkflowActionPlanStore).pending(reviewPlan.item, workflow));
+
+      yield* Ref.set(refreshAvailable, true);
+      yield* runner.refreshReviewPlans();
+
+      assert.isNull(yield* (yield* WorkflowActionPlanStore).pending(reviewPlan.item, workflow));
+      assert.strictEqual(
+        (yield* Ref.get(coordination.handbacks))[0]?.note,
+        "The pull request received a new commit. Review the new head.",
+      );
+      assert.strictEqual((yield* (yield* RunLedger).getRun(attempt))?.status, "interrupted");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

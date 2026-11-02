@@ -423,6 +423,7 @@ export const make = (config: SchedulerConfig) =>
       const config = yield* Ref.get(configRef);
       const snapshot = yield* worker.snapshot;
       const candidates = candidatesOf(yield* registry.state, snapshot, config);
+      yield* workflowRun.refreshReviewPlans();
       const workflowCandidates = (yield* triggerObservation.eligible).map(workflowCandidateOf);
       const schedulable = [...candidates.sort(byStageThenPriority), ...workflowCandidates];
       const day = utcDay(yield* Clock.currentTimeMillis);

@@ -117,6 +117,14 @@ export const WorkflowActionTarget = Schema.TaggedUnion({
   NewIssue: workflowActionTargetBinding,
   NewPullRequest: { ...sourceControlActionTargetBinding, issue: WorkItemId },
   CurrentPullRequest: { ...sourceControlActionTargetBinding, item: WorkItemRef },
+  NamedPullRequest: {
+    ...sourceControlActionTargetBinding,
+    number: Schema.Int.check(Schema.isGreaterThan(0)),
+    url: TrimmedNonEmptyString,
+    headBranch: TrimmedNonEmptyString,
+    baseBranch: TrimmedNonEmptyString,
+    headSha: TrimmedNonEmptyString,
+  },
 });
 export type WorkflowActionTarget = typeof WorkflowActionTarget.Type;
 
@@ -148,10 +156,20 @@ export class WorkflowSlackActionArtifact extends Schema.Class<WorkflowSlackActio
 export const WorkflowActionPlanArtifact = Schema.Union([WorkflowActionArtifact, WorkflowSlackActionArtifact]);
 export type WorkflowActionPlanArtifact = typeof WorkflowActionPlanArtifact.Type;
 
+export const WorkflowReviewComment = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  line: Schema.Int.check(Schema.isGreaterThan(0)),
+  body: TrimmedNonEmptyString,
+}).annotate({ parseOptions: { onExcessProperty: "error" } });
+export type WorkflowReviewComment = typeof WorkflowReviewComment.Type;
+
+export const WorkflowAgentInputValue = Schema.Union([Schema.String, Schema.Array(WorkflowReviewComment)]);
+export type WorkflowAgentInputValue = typeof WorkflowAgentInputValue.Type;
+
 export const WorkflowOperationElement = Schema.Struct({
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
-  inputs: Schema.Record(Schema.String, Schema.String),
+  inputs: Schema.Record(Schema.String, WorkflowAgentInputValue),
   workspace: Schema.optional(Schema.String),
 });
 export type WorkflowOperationElement = typeof WorkflowOperationElement.Type;
@@ -160,7 +178,7 @@ export class WorkflowActionPlanStep extends Schema.Class<WorkflowActionPlanStep>
   position: Schema.Natural,
   entry: WorkflowCatalogKey,
   parameters: Schema.Array(WorkflowParameterValue),
-  inputs: Schema.Record(Schema.String, TrimmedNonEmptyString),
+  inputs: Schema.Record(Schema.String, WorkflowAgentInputValue),
   target: WorkflowActionTarget,
   writeKey: TrimmedNonEmptyString,
   status: Schema.Literals(["pending", "executing", "completed", "failed"]),
@@ -183,7 +201,7 @@ export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("Workfl
   ),
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
-  inputs: Schema.Record(Schema.String, Schema.String).pipe(
+  inputs: Schema.Record(Schema.String, WorkflowAgentInputValue).pipe(
     Schema.withConstructorDefault(Effect.succeed({})),
     Schema.withDecodingDefaultKey(Effect.succeed({})),
   ),
@@ -516,7 +534,12 @@ const operationActionEntries = (operation: WorkflowOperation, catalog: WorkflowC
 
 const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
   const inputs = unique(operationActionEntries(operation, catalog).flatMap(({ agentInputs }) => agentInputs));
-  return objectFields(inputs.map((input) => [input, Schema.String] as const));
+  return objectFields(
+    inputs.map((input) => [
+      input,
+      input === "review_comments" ? Schema.Array(WorkflowReviewComment) : Schema.String,
+    ]),
+  );
 };
 
 export const workflowOperationResultSchema = (

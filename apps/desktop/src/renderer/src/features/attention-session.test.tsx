@@ -262,6 +262,63 @@ const changeTextarea = async (textarea: HTMLTextAreaElement, value: string) => {
 describe("AttentionClientProvider", () => {
   beforeEach(() => document.body.replaceChildren());
 
+  it("shows a named pull request and its line comments", async () => {
+    const reviewPlan = {
+      ...plan,
+      inputs: {
+        pull_request: "#826",
+        review_body: "Review body",
+        review_comments: [{ path: "src/review.ts", line: 12, body: "Check this." }],
+      },
+      steps: [
+        {
+          position: 0,
+          entry: "github.post-review",
+          parameters: [{ id: "event", value: "comment" }],
+          inputs: {
+            pull_request: "#826",
+            review_body: "Review body",
+            review_comments: [{ path: "src/review.ts", line: 12, body: "Check this." }],
+          },
+          target: {
+            _tag: "NamedPullRequest",
+            workspace: "acme",
+            app: "github",
+            issueTracker: { type: "github", repo: "taylor/cogwork" },
+            repository: "taylor/cogwork",
+            number: 826,
+            url: "https://github.com/taylor/cogwork/pull/826",
+            headBranch: "review-actions",
+            baseBranch: "main",
+            headSha: "abc123",
+          },
+          writeKey: "review",
+          status: "pending",
+          failures: 0,
+          artifact: null,
+        },
+      ],
+    };
+    const { container, root } = await renderAttention({
+      snapshot: snapshot(
+        attentionWith(
+          { _tag: "AwaitingApproval", plan: "run-817", digest: "shown-digest", revision: "revision-2" },
+          ["approve", "reject"],
+          reviewPlan,
+        ),
+      ),
+      client: defaultClient(),
+    });
+
+    expect(container.textContent).toContain("PR #826");
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More"]')?.click());
+    await act(async () => element(document.body, "Edit")?.click());
+    expect(
+      container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Review Comments"]')?.value,
+    ).toBe("src/review.ts:12 — Check this.");
+    await act(async () => root.unmount());
+  });
+
   it("sends the shown digest and edited text, and shows a stale refusal", async () => {
     const approve = vi.fn<AttentionClient["approve"]>().mockRejectedValueOnce(
       new WorkflowTouchpointFailure({
