@@ -8,16 +8,16 @@ import {
   SlackChannelId,
   SlackMessageTs,
   SlackTeamId,
+  SourceControlType,
   TrimmedNonEmptyString,
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
-
 import { Lineage, ParkReason, WorkItemKey, WorkItemRef } from "./coordination";
 import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
-import { IssueTrackerConfig } from "./workspace";
+import { IssueTrackerConfig, SourceControlConfig } from "./workspace";
 
 export const WorkflowId = TrimmedNonEmptyString.pipe(Schema.brand("WorkflowId"));
 export type WorkflowId = typeof WorkflowId.Type;
@@ -93,6 +93,14 @@ const workflowActionTargetBinding = {
   repository: Schema.NullOr(TrimmedNonEmptyString),
 } as const;
 
+const sourceControlActionTargetBinding = {
+  workspace: WorkspaceId,
+  app: SourceControlType,
+  issueTracker: IssueTrackerConfig,
+  sourceControl: Schema.optional(SourceControlConfig),
+  repository: Schema.NullOr(TrimmedNonEmptyString),
+} as const;
+
 export const WorkflowActionTarget = Schema.TaggedUnion({
   Cogwork: {},
   NoWorkspace: {},
@@ -106,6 +114,8 @@ export const WorkflowActionTarget = Schema.TaggedUnion({
   CurrentIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   ExistingIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   NewIssue: workflowActionTargetBinding,
+  NewPullRequest: { ...sourceControlActionTargetBinding, issue: WorkItemId },
+  CurrentPullRequest: { ...sourceControlActionTargetBinding, item: WorkItemRef },
 });
 export type WorkflowActionTarget = typeof WorkflowActionTarget.Type;
 

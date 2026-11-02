@@ -1,10 +1,14 @@
 import {
+  BranchName,
+  HarnessName,
   keyOf,
   type ParkReason,
   RunId,
   SlackChannelId,
   SlackMessageTs,
   SlackTeamId,
+  SourceControlType,
+  WorkflowActionArtifact,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
   WorkflowActionTarget,
@@ -24,7 +28,10 @@ import * as Schema from "effect/Schema";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
+import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { RunLedger } from "./run-ledger";
 import { SlackWrite, SlackWriteError, slackActionEntries } from "./slack-write";
+import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   makeMemoryTriggerObservationStore,
@@ -37,6 +44,7 @@ import {
   memoryLayer as workflowActionPlanStoreLayer,
 } from "./workflow-action-plan-store";
 import { memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
+import { PullRequestReadiness, WorktreeManager } from "./worktree";
 
 const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
@@ -47,6 +55,8 @@ const decodeSlackChannel = Schema.decodeSync(SlackChannelId);
 const decodeSlackTs = Schema.decodeSync(SlackMessageTs);
 const slackTeam = Schema.decodeSync(SlackTeamId)("T123");
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
+const decodeHarness = Schema.decodeSync(HarnessName);
+const decodeBranch = Schema.decodeSync(BranchName);
 const workflow = decodeWorkflow("issue-writes");
 const operation = decodeNode("write");
 const trigger = decodeNode("issue-changed");
@@ -139,6 +149,40 @@ const step = (position: number, entry: string, comment = "") =>
     artifact: null,
   });
 
+const sourceWorkspace: RegisteredWorkspace = { ...workspace, repository: "owner/repo" };
+const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
+const pullRequest = {
+  number: 820,
+  url: "https://github.com/owner/repo/pull/820",
+  headBranch: "820-pull-request-output-actions",
+  baseBranch: "main",
+};
+const sourceStep = (entry: string) =>
+  WorkflowActionPlanStep.make({
+    ...step(0, entry),
+    target: {
+      _tag: "CurrentPullRequest",
+      workspace: sourceWorkspace.config.name,
+      app: githubSourceControl,
+      issueTracker: sourceWorkspace.config.issueTracker,
+      repository: sourceWorkspace.repository ?? null,
+      item: ref,
+    },
+  });
+
+const openPullRequestStep = WorkflowActionPlanStep.make({
+  ...step(0, "github.open-pull-request"),
+  inputs: { pr_title: "Open the pull request", pr_body: "Closes #811" },
+  target: {
+    _tag: "NewPullRequest",
+    workspace: sourceWorkspace.config.name,
+    app: githubSourceControl,
+    issueTracker: sourceWorkspace.config.issueTracker,
+    repository: sourceWorkspace.repository ?? null,
+    issue: item,
+  },
+});
+
 const slackStep = (
   position: number,
   entry: string,
@@ -178,6 +222,7 @@ class ActionPlanProbe extends Context.Service<
         readonly operation: Parameters<CoordinationService["park"]>[2];
       }>
     >;
+    readonly pushOrigins: Ref.Ref<ReadonlyArray<WorkflowActionArtifact["origin"]>>;
     readonly parkFailures: Ref.Ref<number>;
   }
 >()("@cogwork/engine/workflow-action-plan.test/ActionPlanProbe") {
@@ -192,6 +237,7 @@ class ActionPlanProbe extends Context.Service<
           readonly operation: Parameters<CoordinationService["park"]>[2];
         }>
       >([]),
+      pushOrigins: Ref.make<ReadonlyArray<WorkflowActionArtifact["origin"]>>([]),
       parkFailures: Ref.make(0),
     }),
   );
@@ -794,4 +840,135 @@ describe("Workflow action plan", () => {
       });
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
+
+  it.effect("completes a pull request push without a write when there are no new commits", () => {
+    const worktreeLayer = Layer.mock(WorktreeManager, {
+      pushBranchIfAhead: () => Effect.succeed(false),
+    });
+    const registryLayer = Layer.succeed(
+      WorkspaceRegistry,
+      readOnlyRegistry({ ...emptyRegistry, workspaces: [sourceWorkspace] }),
+    );
+    const initial = plan([sourceStep("github.push-to-this-pull-request")]);
+    return Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      yield* (yield* WorkflowActionPlanStore).create(initial);
+      const result = yield* executeWorkflowActionPlan(initial, admission);
+
+      assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
+      assert.isEmpty(yield* Ref.get(probe.pushOrigins));
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.effect(
+            SourceControlProvider,
+            Effect.map(ActionPlanProbe, (probe) => ({
+              ...emptySourceControl,
+              resolvePullRequest: () => Effect.succeed(pullRequest),
+              recordPullRequestPush: (_workspace, resolved, origin) =>
+                Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
+                  Effect.map(() =>
+                    WorkflowActionArtifact.make({
+                      workspace: sourceWorkspace.config.name,
+                      issue: decodeItem(`#${resolved.number}`),
+                      url: resolved.url,
+                      origin,
+                    }),
+                  ),
+                ),
+            })),
+          ).pipe(Layer.provideMerge(requirements)),
+          worktreeLayer,
+          registryLayer,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("records the Run origin when it pushes new pull request commits", () => {
+    const worktreeLayer = Layer.mock(WorktreeManager, {
+      pushBranchIfAhead: () => Effect.succeed(true),
+    });
+    const registryLayer = Layer.succeed(
+      WorkspaceRegistry,
+      readOnlyRegistry({ ...emptyRegistry, workspaces: [sourceWorkspace] }),
+    );
+    const initial = plan([sourceStep("github.push-to-this-pull-request")]);
+
+    return Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      yield* (yield* WorkflowActionPlanStore).create(initial);
+      yield* executeWorkflowActionPlan(initial, admission);
+      assert.deepInclude((yield* Ref.get(probe.pushOrigins))[0], {
+        attempt: initial.attempt,
+        writeKey: "write-0",
+      });
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.effect(
+            SourceControlProvider,
+            Effect.map(ActionPlanProbe, (probe) => ({
+              ...emptySourceControl,
+              resolvePullRequest: () => Effect.succeed(pullRequest),
+              recordPullRequestPush: (_workspace, resolved, origin) =>
+                Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
+                  Effect.map(() =>
+                    WorkflowActionArtifact.make({
+                      workspace: sourceWorkspace.config.name,
+                      issue: decodeItem(`#${resolved.number}`),
+                      url: resolved.url,
+                      origin,
+                    }),
+                  ),
+                ),
+            })),
+          ).pipe(Layer.provideMerge(requirements)),
+          worktreeLayer,
+          registryLayer,
+        ),
+      ),
+      Effect.scoped,
+    );
+  });
+
+  it.effect("retries when pull request readiness changes after the plan is frozen", () => {
+    const reason = "head 811-open-the-pull-request is not ahead of origin/main";
+    const sourceControlLayer = Layer.mock(SourceControlProvider, {
+      workflowCatalogContribution: { entries: [], templates: [] },
+      openWorkflowPullRequest: () => Effect.die("must not open"),
+    });
+    const worktreeLayer = Layer.mock(WorktreeManager, {
+      pullRequestReadiness: () => Effect.succeed(PullRequestReadiness.Declined({ reason })),
+    });
+    const registryLayer = Layer.succeed(
+      WorkspaceRegistry,
+      readOnlyRegistry({ ...emptyRegistry, workspaces: [sourceWorkspace] }),
+    );
+    const initial = plan([openPullRequestStep]);
+
+    return Effect.gen(function* () {
+      const ledger = yield* RunLedger;
+      yield* ledger.insertRun({
+        id: initial.attempt,
+        workspace: sourceWorkspace.config.name,
+        workItem: item,
+        stage: "implement",
+        harness: decodeHarness("scripted"),
+        branch: decodeBranch("811-open-the-pull-request"),
+        session: null,
+        usage: null,
+        status: "running",
+        startedAtMillis: 1,
+        endedAtMillis: null,
+      });
+      yield* (yield* WorkflowActionPlanStore).create(initial);
+      const result = yield* executeWorkflowActionPlan(initial, admission);
+      assert.deepStrictEqual(result, { _tag: "Retry" });
+    }).pipe(
+      Effect.provide(Layer.mergeAll(requirements, sourceControlLayer, worktreeLayer, registryLayer)),
+      Effect.scoped,
+    );
+  });
 });

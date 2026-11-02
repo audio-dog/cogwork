@@ -1,4 +1,10 @@
-import type { WorkItem, WorkItemId } from "@cogwork/contracts";
+import type {
+  WorkflowActionArtifact,
+  WorkflowActionOrigin,
+  WorkItem,
+  WorkItemId,
+  WorkItemRef,
+} from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -6,6 +12,7 @@ import type { ObservedPr } from "./follow-up";
 import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import type { TriggerSource } from "./trigger-source";
+import type { WorkflowCatalogContribution } from "./workflow-catalog";
 
 // Everything the provider can learn about a pull request by reading it. The follow-up marker is the
 // tracker's coordination state, not the PR's, so it is attached during composition rather than here.
@@ -23,8 +30,18 @@ export interface OpenedPullRequest {
   readonly url: string;
 }
 
+export interface ResolvedPullRequest extends OpenedPullRequest {
+  readonly headBranch: string;
+  readonly baseBranch: string;
+}
+
+export interface WorkflowPullRequestInput extends OpenPullRequestInput {
+  readonly origin: WorkflowActionOrigin;
+}
+
 export interface SourceControlProviderService {
   readonly triggerSources?: ReadonlyArray<TriggerSource>;
+  readonly workflowCatalogContribution: WorkflowCatalogContribution;
   readonly observe: (
     workspace: RegisteredWorkspace,
     workItems: ReadonlyArray<WorkItem>,
@@ -48,6 +65,31 @@ export interface SourceControlProviderService {
     workspace: RegisteredWorkspace,
     input: OpenPullRequestInput,
   ) => Effect.Effect<OpenedPullRequest, IssueTrackerError>;
+  readonly resolvePullRequest: (
+    workspace: RegisteredWorkspace,
+    item: WorkItemRef,
+  ) => Effect.Effect<ResolvedPullRequest | null, IssueTrackerError>;
+  readonly openWorkflowPullRequest: (
+    workspace: RegisteredWorkspace,
+    input: WorkflowPullRequestInput,
+  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
+  readonly recordPullRequestPush: (
+    workspace: RegisteredWorkspace,
+    pullRequest: ResolvedPullRequest,
+    origin: WorkflowActionOrigin,
+  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
+  readonly commentPullRequest: (
+    workspace: RegisteredWorkspace,
+    pullRequest: ResolvedPullRequest,
+    body: string,
+    origin: WorkflowActionOrigin,
+  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
+  readonly requestReview: (
+    workspace: RegisteredWorkspace,
+    pullRequest: ResolvedPullRequest,
+    reviewer: string,
+    origin: WorkflowActionOrigin,
+  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
 }
 
 export class SourceControlProvider extends Context.Service<
@@ -55,7 +97,8 @@ export class SourceControlProvider extends Context.Service<
   SourceControlProviderService
 >()("@cogwork/engine/source-control/SourceControlProvider") {}
 
-const noProvider: SourceControlProviderService = {
+export const emptyService: SourceControlProviderService = {
+  workflowCatalogContribution: { entries: [], templates: [] },
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
   findOpenPullRequest: () => Effect.succeed(null),
@@ -67,8 +110,41 @@ const noProvider: SourceControlProviderService = {
         message: "source control provider is not configured",
       }),
     ),
+  resolvePullRequest: () => Effect.succeed(null),
+  openWorkflowPullRequest: () =>
+    Effect.fail(
+      new IssueTrackerError({
+        reason: "unavailable",
+        retryable: false,
+        message: "source control provider is not configured",
+      }),
+    ),
+  recordPullRequestPush: () =>
+    Effect.fail(
+      new IssueTrackerError({
+        reason: "unavailable",
+        retryable: false,
+        message: "source control provider is not configured",
+      }),
+    ),
+  commentPullRequest: () =>
+    Effect.fail(
+      new IssueTrackerError({
+        reason: "unavailable",
+        retryable: false,
+        message: "source control provider is not configured",
+      }),
+    ),
+  requestReview: () =>
+    Effect.fail(
+      new IssueTrackerError({
+        reason: "unavailable",
+        retryable: false,
+        message: "source control provider is not configured",
+      }),
+    ),
 };
 
 // The binding for a workspace with no source control provider — a Linear tracker with no
 // `sourceControl` block. It reports no pull request for any item.
-export const emptyLayer = Layer.succeed(SourceControlProvider, noProvider);
+export const emptyLayer = Layer.succeed(SourceControlProvider, emptyService);
