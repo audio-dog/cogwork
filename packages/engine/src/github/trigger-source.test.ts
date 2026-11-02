@@ -58,7 +58,6 @@ const botRegistryState = { workspaces: [botWorkspace], failures: [] };
 const workflow = Schema.decodeSync(WorkflowId)("coding");
 const operation = Schema.decodeSync(WorkflowNodeId)("follow-up");
 const reviewTrigger = Schema.decodeSync(WorkflowNodeId)("review");
-const linkedIssueId = Schema.decodeSync(WorkItemId)("#7");
 const firstIssueId = Schema.decodeSync(WorkItemId)("#1");
 const secondIssueId = Schema.decodeSync(WorkItemId)("#2");
 const thirdIssueId = Schema.decodeSync(WorkItemId)("#3");
@@ -570,9 +569,9 @@ describe("GitHub Trigger sources", () => {
         ["checks:head-sha:test:failure", "conflict:head-sha:base-sha"],
       );
       assert.deepStrictEqual(events[0]?.key, {
-        _tag: "Issue",
+        _tag: "PullRequest",
         workspace: workspaceId,
-        id: linkedIssueId,
+        number: 10,
       });
     }).pipe(Effect.provide(pullClientLayer())),
   );

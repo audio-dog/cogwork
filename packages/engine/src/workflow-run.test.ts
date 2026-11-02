@@ -22,6 +22,7 @@ import {
   WorkflowNodeId,
   type WorkflowRecord,
   WorkItemId,
+  type WorkItemRef,
   WorkspaceConfig,
   WorkspaceId,
 } from "@cogwork/contracts";
@@ -430,17 +431,16 @@ const codingSourceControlLayer = Layer.effect(
     ...emptySourceControl,
     workflowCatalogContribution: { entries: githubSourceControlActionEntries, templates: [] },
     resolvePullRequest: (_workspace, item) => {
-      const isUnimplementedIssue = item._tag === "Issue" && item.id === "#802";
-      return Effect.succeed(
-        isUnimplementedIssue
-          ? null
-          : {
-              number: 900,
-              url: "https://example.test/pull/900",
-              headBranch: "900-follow-up",
+      const pullRequest =
+        item._tag === "PullRequest"
+          ? {
+              number: item.number,
+              url: `https://example.test/pull/${item.number}`,
+              headBranch: `${item.number}-follow-up`,
               baseBranch: "main",
-            },
-      );
+            }
+          : null;
+      return Effect.succeed(pullRequest);
     },
     openWorkflowPullRequest: (_workspace, input) =>
       Ref.update(calls, (current) => [...current, `open:${input.title}`]).pipe(
@@ -458,7 +458,7 @@ const codingSourceControlLayer = Layer.effect(
         Effect.map(() =>
           WorkflowActionArtifact.make({
             workspace: decodeWorkspace("github"),
-            issue: decodeWorkItem("#900"),
+            issue: decodeWorkItem(`#${pullRequest.number}`),
             url: pullRequest.url,
             origin,
           }),
@@ -898,24 +898,18 @@ describe("WorkflowRun", () => {
         },
       }),
     } satisfies WorkflowsService;
-    const admissionFor = (
-      triggerId: string,
-      item: string,
-      workContext?: TriggerAdmission["event"]["workContext"],
-    ) => {
+    const admissionFor = (triggerId: string, item: WorkItemRef) => {
       const selected = codingDocument.triggers.find(({ id }) => id === triggerId);
       if (!selected) throw new Error(`Missing coding Trigger ${triggerId}`);
-      const issue = decodeWorkItem(item);
       return {
         event: {
-          key: { _tag: "Issue", workspace: workspace.config.name, id: issue },
-          revision: `${triggerId}:${item}`,
+          key: item,
+          revision: `${triggerId}:${keyOf(item)}`,
           cause: triggerId === "needs-info-comment" ? { _tag: "Person" } : { _tag: "Unknown" },
           atMillis: 1_000,
           entry: selected.entry,
           workspace: workspace.config.name,
           parameters: selected.parameters,
-          ...(workContext ? { workContext } : {}),
         },
         subscription: {
           workflow,
@@ -927,7 +921,7 @@ describe("WorkflowRun", () => {
           catchUp: { since: 0 },
         },
         lineage: {
-          root: LineageId.make(`${triggerId}:${item}`),
+          root: LineageId.make(`${triggerId}:${keyOf(item)}`),
           parent: null,
           hop: 0,
         },
@@ -947,83 +941,53 @@ describe("WorkflowRun", () => {
         addLabels: (_workspace, issue, labels) =>
           Ref.update(calls, (current) => [...current, `labels:${issue}:${labels.join(",")}`]),
       } satisfies IssueTrackerService;
-      const needsInfo = admissionFor("needs-triage", "#800");
-      const reporterComment = admissionFor("needs-info-comment", "#801", {
-        body: "Implement retries.",
-        comments: [
-          {
-            author: "reporter",
-            authorAssociation: "OWNER",
-            body: "Here are the requested logs.",
-            createdAtMillis: 900,
-          },
-        ],
+      const registry = { ...emptyRegistry, workspaces: [workspace] };
+      const runCodingAdmission = (admission: TriggerAdmission, result: unknown) =>
+        testProgram([result], { issueTracker: tracker, registry }, codingService).pipe(
+          Effect.tap(({ observationStore }) => observationStore.putAll([admission])),
+          Effect.tap(({ runner }) => runner.execute(admission)),
+        );
+      const issue = (id: string) =>
+        ({
+          _tag: "Issue",
+          workspace: workspace.config.name,
+          id: decodeWorkItem(id),
+        }) satisfies WorkItemRef;
+      const needsInfoProgram = yield* runCodingAdmission(admissionFor("needs-triage", issue("#800")), {
+        summary: "More information needed",
+        stuck: false,
+        answers: { role: "needs-info" },
+        inputs: { comment: "Please add the failing logs.", hand_off: "Waiting for logs." },
+        workspace: workspace.config.name,
       });
-      const implement = admissionFor("ready-for-agent", "#802");
-      const followUp = admissionFor("checks-failed", "#803");
-      const needsInfoProgram = yield* testProgram(
-        [
-          {
-            summary: "More information needed",
-            stuck: false,
-            answers: { role: "needs-info" },
-            inputs: { comment: "Please add the failing logs.", hand_off: "Waiting for logs." },
-            workspace: workspace.config.name,
-          },
-        ],
-        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
-        codingService,
+      yield* runCodingAdmission(admissionFor("needs-info-comment", issue("#801")), {
+        summary: "Ready after reporter reply",
+        stuck: false,
+        answers: { role: "ready-for-agent" },
+        inputs: { comment: "Thanks, this is ready.", hand_off: "" },
+        workspace: workspace.config.name,
+      });
+      yield* runCodingAdmission(admissionFor("ready-for-agent", issue("#802")), {
+        summary: "Implementation complete",
+        stuck: false,
+        answers: {},
+        inputs: { pr_title: "Implement retries", pr_body: "Closes #802" },
+        workspace: workspace.config.name,
+      });
+      yield* runCodingAdmission(
+        admissionFor("checks-failed", {
+          _tag: "PullRequest",
+          workspace: workspace.config.name,
+          number: 803,
+        }),
+        {
+          summary: "Fixed failing check",
+          stuck: false,
+          answers: { reply: "no" },
+          inputs: { comment: "" },
+          workspace: workspace.config.name,
+        },
       );
-      yield* needsInfoProgram.observationStore.putAll([needsInfo]);
-      yield* needsInfoProgram.runner.execute(needsInfo);
-
-      const reporterProgram = yield* testProgram(
-        [
-          {
-            summary: "Ready after reporter reply",
-            stuck: false,
-            answers: { role: "ready-for-agent" },
-            inputs: { comment: "Thanks, this is ready.", hand_off: "" },
-            workspace: workspace.config.name,
-          },
-        ],
-        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
-        codingService,
-      );
-      yield* reporterProgram.observationStore.putAll([reporterComment]);
-      yield* reporterProgram.runner.execute(reporterComment);
-
-      const implementProgram = yield* testProgram(
-        [
-          {
-            summary: "Implementation complete",
-            stuck: false,
-            answers: {},
-            inputs: { pr_title: "Implement retries", pr_body: "Closes #802" },
-            workspace: workspace.config.name,
-          },
-        ],
-        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
-        codingService,
-      );
-      yield* implementProgram.observationStore.putAll([implement]);
-      yield* implementProgram.runner.execute(implement);
-
-      const followUpProgram = yield* testProgram(
-        [
-          {
-            summary: "Fixed failing check",
-            stuck: false,
-            answers: { reply: "no" },
-            inputs: { comment: "" },
-            workspace: workspace.config.name,
-          },
-        ],
-        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
-        codingService,
-      );
-      yield* followUpProgram.observationStore.putAll([followUp]);
-      yield* followUpProgram.runner.execute(followUp);
 
       assert.deepStrictEqual(yield* Ref.get(calls), [
         "comment:#800:Please add the failing logs.",
@@ -1032,8 +996,8 @@ describe("WorkflowRun", () => {
         "labels:#801:ready-for-agent",
         "push-branch:802",
         "open:Implement retries",
-        "push-if-ahead:900-follow-up",
-        "push:900",
+        "push-if-ahead:803-follow-up",
+        "push:803",
       ]);
       assert.strictEqual(
         (yield* Ref.get(needsInfoProgram.coordination.parks)).at(-1)?.reason._tag,
