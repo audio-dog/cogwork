@@ -1,0 +1,62 @@
+packages/engine/src/workflow-run.test.ts
+  s_f29dff91b8e93b::t_3ebe3b1ff375c9 30,59,424-431,445-469,471,473-478,483-485,487-489
+  s_f29dff91b8e93b::t_5e87f35ea5e5b9 432-435,443-444,1033
+  s_f29dff91b8e93b::t_253f0a933b039d 45,81,421-423,486,864-1032,1034-1043
+  s_f29dff91b8e93b::t_5817cb7f297c9d 436-442
+  s_f29dff91b8e93b::t_f21547fd813484 470,472,479-482
+  s_d5c877c6fd626b::t_8a86083fcdccb2 490,1044
+packages/engine/src/issue-workflow-catalog.ts
+  s_f29dff91b8e93b::t_1438c5d858a9d0 18-20,121-233,235-273,275
+  s_f29dff91b8e93b::t_e9738a8a820bb1 234
+  s_f29dff91b8e93b::t_7b46daea6800e0 294
+  s_40a53a8bf12365::t_0ca1b583662c64 274,276-277
+packages/engine/src/daemon-composition.test.ts
+  s_f29dff91b8e93b::t_7027cc90455fb5 457-472,479,481-484
+  s_f29dff91b8e93b::t_1f8059d977ded4 473-478,480
+packages/engine/src/workflow.test.ts
+  s_f29dff91b8e93b::t_0dc5f9613ead51 291-295,381-385
+  s_f29dff91b8e93b::t_6705e454a41397 36-38,42,133-135,196-207,242-245,251,263-290,296-380,386-451
+  s_f29dff91b8e93b::t_78d5d2cc119c42 462,468-470,474
+  s_f29dff91b8e93b::t_51a48ea4376be2 246,248,250,253,261,471-473
+  s_ef714bcdd07f2d::t_550fc1c8d9ab00 247,249,252,254-260,262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "84ef7b79caaa4e1ece70a459a2bb45bf097ab1ae",
+  "prompts": {},
+  "sessions": {
+    "s_40a53a8bf12365": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a2483e29-d07e-4e77-a57e-78da07c489e1",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d5c877c6fd626b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f7950e34-8bf8-4c4d-bb4f-21d0fdb4f746",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ef714bcdd07f2d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1fbe0fe8-d474-46ad-8f40-569dd1f07922",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f29dff91b8e93b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-3603-7a30-b771-959684067fe4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
