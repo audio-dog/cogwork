@@ -56,7 +56,7 @@ import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
-import { type PrSignals, SourceControlProvider } from "./source-control";
+import { emptyService as emptySourceControl, type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 import * as Worktree from "./worktree";
@@ -158,6 +158,7 @@ const stub = (service: Partial<IssueTracker.IssueTrackerService>): IssueTracker.
 
 const providerStub = (prs: ReadonlyArray<readonly [WorkItemId, PrSignals]> = []) =>
   Layer.succeed(SourceControlProvider, {
+    ...emptySourceControl,
     observe: () => Effect.succeed(new Map(prs)),
     comment: () => Effect.void,
     findOpenPullRequest: () => Effect.succeed(null),
@@ -263,6 +264,7 @@ describe("workspace observation", () => {
   it.effect("identifies the tracker Connection when tracker observation fails", () =>
     Effect.gen(function* () {
       const observe = observeWorkspace(stub({ observe: () => Effect.fail(auth) }), {
+        ...emptySourceControl,
         observe: () => Effect.succeed(new Map()),
         comment: () => Effect.void,
         findOpenPullRequest: () => Effect.succeed(null),
@@ -277,6 +279,7 @@ describe("workspace observation", () => {
   it.effect("identifies the source-control Connection when provider observation fails", () =>
     Effect.gen(function* () {
       const observe = observeWorkspace(stub({}), {
+        ...emptySourceControl,
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
         findOpenPullRequest: () => Effect.succeed(null),
@@ -291,6 +294,7 @@ describe("workspace observation", () => {
   it.effect("uses the GitHub tracker Connection for fallback source-control failures", () =>
     Effect.gen(function* () {
       const observe = observeWorkspace(stub({}), {
+        ...emptySourceControl,
         observe: () => Effect.fail(auth),
         comment: () => Effect.void,
         findOpenPullRequest: () => Effect.succeed(null),
@@ -1167,6 +1171,7 @@ describe("daemon heartbeats", () => {
     ensure: () => Effect.die("unused"),
     pullRequestReadiness: () => Effect.die("unused"),
     pushBranch: () => Effect.die("unused"),
+    pushBranchIfAhead: () => Effect.die("unused"),
     list: () => Effect.succeed([]),
     remove: () => Effect.void,
     reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),

@@ -535,7 +535,9 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     }),
   ).pipe(Layer.provide(Layer.mergeAll(providerTriggerSources, connections, coordination, slackClientLayer)));
   const workflows = workflowsLayer.pipe(
-    Layer.provide(workflowCatalogContributionsLayer.pipe(Layer.provide(triggerSources))),
+    Layer.provide(
+      workflowCatalogContributionsLayer.pipe(Layer.provide(Layer.merge(triggerSources, issueTracker))),
+    ),
     Layer.provide(machineReadiness),
     Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
   );
@@ -572,6 +574,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         workflowNotifications,
         slackWrite,
         triggerObservationStore,
+        adapters.worktrees,
       ),
     ),
   );

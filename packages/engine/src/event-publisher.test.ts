@@ -60,7 +60,7 @@ import * as Registry from "./registry";
 import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
-import { SourceControlProvider } from "./source-control";
+import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 
@@ -317,6 +317,7 @@ const trackerStub = (observe: IssueTrackerService["observe"]): IssueTrackerServi
 });
 
 const providerStub = Layer.succeed(SourceControlProvider, {
+  ...emptySourceControl,
   observe: () => Effect.succeed(new Map()),
   comment: () => Effect.void,
   findOpenPullRequest: () => Effect.succeed(null),

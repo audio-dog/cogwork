@@ -83,7 +83,7 @@ import * as RunControl from "./run-control";
 import * as RunLedger from "./run-ledger";
 import * as Scheduler from "./scheduler";
 import { SlackLogin } from "./slack-login";
-import { type PrSignals, SourceControlProvider } from "./source-control";
+import { emptyService as emptySourceControl, type PrSignals, SourceControlProvider } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { harnessProbeTestLayer } from "./testing/harness-probe-layer";
 import { WorkflowRun } from "./workflow-run";
@@ -265,6 +265,7 @@ interface TrackerCalls {
 const emptyCalls: TrackerCalls = { handBack: [], reclassify: [], handOff: [], released: [] };
 
 const providerStub = Layer.succeed(SourceControlProvider, {
+  ...emptySourceControl,
   observe: () => Effect.succeed(new Map<WorkItemId, PrSignals>()),
   comment: () => Effect.void,
   findOpenPullRequest: () => Effect.succeed(null),

@@ -378,12 +378,13 @@ export const make = Effect.gen(function* () {
   const pullRequestReadiness = Effect.fn("Worktree.pullRequestReadiness")(function* (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
+    selectedHeadBranch?: string,
   ) {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
     const remote = remoteOf(config);
     const baseBranch = baseBranchOf(config);
-    const headBranch = branchName(item);
+    const headBranch = selectedHeadBranch ?? branchName(item);
 
     const refreshFailure = yield* git
       .fetch(repoPath, remote, {
@@ -423,6 +424,22 @@ export const make = Effect.gen(function* () {
     const remote = remoteOf(config);
     const remoteUrl = yield* git.remoteUrl(repoPath, remote);
     yield* git.pushBranch(repoPath, remoteUrl, headBranch);
+  });
+
+  const pushBranchIfAhead = Effect.fn("Worktree.pushBranchIfAhead")(function* (
+    workspace: RegisteredWorkspace,
+    headBranch: string,
+  ) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const remote = remoteOf(config);
+    const exists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
+    if (exists) {
+      const divergence = yield* git.divergence(repoPath, remote, headBranch, { branch: headBranch });
+      if (divergence.ahead === 0) return false;
+    }
+    yield* pushBranch(workspace, headBranch);
+    return true;
   });
 
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
@@ -500,6 +517,7 @@ export const make = Effect.gen(function* () {
     ensure,
     pullRequestReadiness,
     pushBranch,
+    pushBranchIfAhead,
     list,
     remove,
     reconcile,
