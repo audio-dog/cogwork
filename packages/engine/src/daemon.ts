@@ -123,6 +123,7 @@ import { SourceControlProvider } from "./source-control";
 import {
   controlStoreTriggerObservationStoreLayer,
   TriggerObservation,
+  type TriggerObservationStore,
   layer as triggerObservationLayer,
 } from "./trigger-observation";
 import { combineTriggerSources, TriggerSources } from "./trigger-source";
@@ -429,6 +430,7 @@ export interface HostAdapters<E = never, R = never> {
   readonly performanceEvidenceRoot: string;
   readonly performanceHealth: Layer.Layer<PerformanceHealthSource, E, R>;
   readonly performanceIssueWorkspace?: WorkspaceId;
+  readonly triggerObservationStore?: Layer.Layer<TriggerObservationStore, E, R>;
 }
 
 const providerTriggerSourcesLayer = <E, R>(
@@ -583,7 +585,9 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(machineReadiness),
     Layer.provide(Layer.mergeAll(controlStore, daemonEventBusLayer, harness)),
   );
-  const triggerObservationStore = controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
+  const triggerObservationStore =
+    adapters.triggerObservationStore ??
+    controlStoreTriggerObservationStoreLayer.pipe(Layer.provide(controlStore));
   const workflowNotifications = workflowNotificationsLayer.pipe(
     Layer.provide(Layer.merge(runLedger, runRecorder)),
   );
