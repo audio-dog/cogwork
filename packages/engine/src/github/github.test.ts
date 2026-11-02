@@ -557,6 +557,7 @@ describe("GitHub adapters", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
 
       const artifact = yield* tracker
@@ -588,6 +589,7 @@ describe("GitHub adapters", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
 
       const artifact = yield* tracker.createIssue(workspace, {
@@ -626,6 +628,7 @@ describe("GitHub adapters", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
       const result = yield* Effect.result(
         tracker.createIssue(workspace, {
@@ -661,6 +664,7 @@ describe("GitHub adapters", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
       const error = yield* tracker
         .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
@@ -694,6 +698,7 @@ describe("GitHub adapters", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
       const result = yield* Effect.result(
         tracker.createIssue(workspace, { title: "Created", body: "Body", labels: [], origin }),
@@ -724,6 +729,7 @@ describe("GitHub adapters", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
 
       const artifact = yield* tracker.createIssue(workspace, {
