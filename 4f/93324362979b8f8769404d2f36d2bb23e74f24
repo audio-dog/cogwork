@@ -1,0 +1,35 @@
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_ba08b7cf6195a4::t_5f7d90914a5a79 303,312
+  s_ba08b7cf6195a4::t_66bf705008d10c 28,78-79,82-88,120-125,144,192-193,201-218,317
+  s_ba08b7cf6195a4::t_1002fa23040b8d 244
+  s_ba08b7cf6195a4::t_672496dc313ab4 379
+  s_ba08b7cf6195a4::t_fed25197fc64f6 396
+  s_ba08b7cf6195a4::t_60a4ee11d20e41 388
+  s_ba08b7cf6195a4::t_9a33f6b4ab7936 141
+  s_ba08b7cf6195a4::t_887c99bb580126 1-27,29-77,80-81,89-119,126-140,142-143,145-191,194-200,219-243,245-302,304-311,313-316,318-378,380-387,389-395,397-406
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_ba08b7cf6195a4::t_9a33f6b4ab7936 247
+  s_ba08b7cf6195a4::t_fefe183b583282 1-12,14-158,164-208,212-215,218-224,226,233-239,245-246,248-271,274-317,319-320,323-330,352-357
+  s_ba08b7cf6195a4::t_66bf705008d10c 159-163
+  s_ba08b7cf6195a4::t_f9a8f04df4b2b2 13,209-211,216-217,225,227-232,240-244,272-273,347-351
+  s_ba08b7cf6195a4::t_5f9ec4204d2390 318,321-322,331-346
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_ba08b7cf6195a4::t_4dfd85556460c4 1,8,13,16,18-20,25,70-71,93,139,149,154-159
+  s_ba08b7cf6195a4::t_5f9ec4204d2390 135,212,214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4f93324362979b8f8769404d2f36d2bb23e74f24",
+  "prompts": {},
+  "sessions": {
+    "s_ba08b7cf6195a4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d57-75f5-7743-aa07-3fa49250abf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
