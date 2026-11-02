@@ -7,6 +7,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkflowAtom,
+  switchWorkflowAtom,
   workflowCatalogAtom,
   workflowsAtom,
   workflowTemplatesAtom,
@@ -15,6 +16,10 @@ import { ActivitySessionContext, initialActivitySession } from "./activity-sessi
 import { DaemonWorkflowProvider, useWorkflowSession } from "./workflow-session";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+
+const enableNotifications = vi.hoisted(() => vi.fn(async () => ({ _tag: "ready" as const })));
+
+vi.mock("./desktop-notifications", () => ({ DesktopNotificationCoordinator: () => null }));
 
 const atomActions: Map<unknown, (value: unknown) => Promise<unknown>> = vi.hoisted(() => new Map());
 const atomValues: Map<unknown, unknown> = vi.hoisted(() => new Map());
@@ -59,6 +64,9 @@ function SessionProbe() {
       <button type="button" onClick={async () => actions.create(workflowDocument)}>
         Create
       </button>
+      <button type="button" onClick={async () => actions.switchEnabled(record.id, true)}>
+        Turn on
+      </button>
       <output>{state.workflows.map(({ workingCopy }) => workingCopy.name).join(",")}</output>
     </>
   );
@@ -69,6 +77,9 @@ describe("DaemonWorkflowProvider", () => {
     atomActions.clear();
     atomValues.clear();
     atomActions.set(createWorkflowAtom, async () => record);
+    atomActions.set(switchWorkflowAtom, async () => ({ workflow: { ...record, enabled: true } }));
+    Reflect.set(window, "cogwork", { notifications: { enable: enableNotifications } });
+    enableNotifications.mockClear();
     atomValues.set(workflowsAtom, {
       _tag: "Success",
       waiting: false,
@@ -91,7 +102,9 @@ describe("DaemonWorkflowProvider", () => {
         </ActivitySessionContext>,
       );
     });
-    const create = container.querySelector<HTMLButtonElement>("button");
+    const create = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      ({ textContent }) => textContent === "Create",
+    );
     if (!create) throw new Error("Create button did not render");
 
     await act(async () => {
@@ -100,6 +113,33 @@ describe("DaemonWorkflowProvider", () => {
     });
 
     expect(container.querySelector("output")?.textContent).toBe("Created Workflow");
+    await act(async () => root.unmount());
+  });
+
+  it("enables OS notifications when a Workflow is switched on", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ActivitySessionContext value={{ ...initialActivitySession, seed: false }}>
+          <DaemonWorkflowProvider>
+            <SessionProbe />
+          </DaemonWorkflowProvider>
+        </ActivitySessionContext>,
+      );
+    });
+    const turnOn = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      ({ textContent }) => textContent === "Turn on",
+    );
+    if (!turnOn) throw new Error("Turn on button did not render");
+
+    await act(async () => {
+      turnOn.click();
+      await Promise.resolve();
+    });
+
+    expect(enableNotifications).toHaveBeenCalledOnce();
     await act(async () => root.unmount());
   });
 });
