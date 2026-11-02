@@ -16,7 +16,7 @@ import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { CoordinationView } from "./coordination";
+import type { CoordinationService, CoordinationView } from "./coordination";
 import type { FollowUpMarker, FollowUpTrigger, ObservedPr } from "./follow-up";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 import type { TriggerSource } from "./trigger-source";
@@ -48,6 +48,8 @@ interface ObservedItemBase {
   readonly openBlockers: number;
   readonly proposal: string | null;
   readonly priority: Priority;
+  readonly states?: ReadonlyArray<string>;
+  readonly lastTouchedAtMillis?: number;
 }
 
 export interface TrackerItem extends ObservedItemBase {
@@ -234,6 +236,10 @@ export type IssueTrackerService = Effect.Success<typeof makeEmpty> & {
     itemId: WorkItemId,
   ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
   readonly triggerSources?: ReadonlyArray<TriggerSource>;
+  readonly workflowCoordination?: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+  ) => Effect.Effect<CoordinationService, IssueTrackerError>;
 };
 
 export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
