@@ -1,0 +1,30 @@
+packages/engine/src/daemon-composition.test.ts
+  s_9fd7d719c90ee1::t_aa4dcaf1e83480 371,504
+packages/engine/src/workflow.test.ts
+  s_9fd7d719c90ee1::t_3121eae9ec2e52 471-473
+  s_9fd7d719c90ee1::t_4724a4a5673621 435-465
+  s_9fd7d719c90ee1::t_34b615b32af096 412
+  s_9fd7d719c90ee1::t_016f257b0fd5ea 38,130-131,422-434,466-470
+packages/engine/src/issue-workflow-catalog.ts
+  s_9fd7d719c90ee1::t_0bcf45c59024ba 1,47,49-50,52-108,110-119,121
+  s_9fd7d719c90ee1::t_af1ff0f01da7ff 39,42-46,48,51,120
+  s_9fd7d719c90ee1::t_6e85947ee7573f 138
+  s_9fd7d719c90ee1::t_12c19aaab4d920 40,109
+  s_9fd7d719c90ee1::t_8e3ef4a502a372 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "15e96e84ae64b41156083e109760342986bb678b",
+  "prompts": {},
+  "sessions": {
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
