@@ -232,7 +232,7 @@ export const ApproveWorkflowPlan = Rpc.make("ApproveWorkflowPlan", {
     digest: TrimmedNonEmptyString,
     edits: Schema.optional(Schema.Record(Schema.String, TrimmedNonEmptyString)),
   },
-  success: Schema.Void,
+  success: TrimmedNonEmptyString,
   error: WorkflowTouchpointFailure,
 });
 
@@ -255,6 +255,11 @@ export const ChooseWorkflowAnswer = Rpc.make("ChooseWorkflowAnswer", {
   },
   success: Schema.Void,
   error: WorkflowTouchpointFailure,
+});
+
+export const DismissWorkflowNotification = Rpc.make("DismissWorkflowNotification", {
+  payload: { id: TrimmedNonEmptyString },
+  success: Schema.Void,
 });
 
 export const SetScheduling = Rpc.make("SetScheduling", {
@@ -393,6 +398,7 @@ export const DaemonCommands = RpcGroup.make(
   ApproveWorkflowPlan,
   RejectWorkflowPlan,
   ChooseWorkflowAnswer,
+  DismissWorkflowNotification,
   HandBack,
   Reclassify,
   SetScheduling,

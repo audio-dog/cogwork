@@ -182,12 +182,15 @@ export const WorkflowPark = Schema.Struct({
   commands: Schema.Array(WorkflowParkCommand),
   reason: ParkReason,
   attempt: Schema.NullOr(RunId),
+  parkedAtMillis: Schema.Natural,
+  plan: Schema.NullOr(WorkflowActionPlan),
 });
 export type WorkflowPark = typeof WorkflowPark.Type;
 
 export const WorkflowSkippedRecord = Schema.Struct({
   summary: TrimmedNonEmptyString,
   reason: TrimmedNonEmptyString,
+  atMillis: Schema.Natural,
 });
 export type WorkflowSkippedRecord = typeof WorkflowSkippedRecord.Type;
 
@@ -261,10 +264,12 @@ export type WorkflowOperation = typeof WorkflowOperation.Type;
 
 export const WorkflowNotification = Schema.Struct({
   id: TrimmedNonEmptyString,
+  item: WorkItemRef,
   workflow: WorkflowId,
   operation: WorkflowNodeId,
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
+  artifacts: Schema.Array(WorkflowActionArtifact),
   atMillis: Schema.Natural,
 });
 export type WorkflowNotification = typeof WorkflowNotification.Type;
