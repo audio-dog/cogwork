@@ -1,0 +1,345 @@
+packages/contracts/src/run.ts
+  s_6fa8fc2659e726::t_5e9639e416959a 78,108
+packages/engine/src/source-control.ts
+  s_6fa8fc2659e726::t_c58452a23bd168 15-26
+  s_6fa8fc2659e726::t_ed96eba6ae6443 2,54-55,90
+  s_6fa8fc2659e726::t_568758d647e809 52
+packages/engine/src/github/client.ts
+  s_6fa8fc2659e726::t_9e35e65c16c98f 39
+  s_6fa8fc2659e726::t_cb235cb77a90d9 83
+  s_6fa8fc2659e726::t_ed96eba6ae6443 172,1474
+packages/engine/src/control-store-schema.ts
+  s_6fa8fc2659e726::t_7607b9f6a9564c 347
+  s_6fa8fc2659e726::t_84e49035af7483 83
+packages/engine/src/github/ready-to-merge.test.ts
+  s_6fa8fc2659e726::t_66e0549fc7cd1d 1,4-6,8-20,22-31,33-44,46-62
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_6fa8fc2659e726::t_41625696fb8f82 21
+apps/cli/src/status.ts
+  s_6fa8fc2659e726::t_a7d9ccfb90c6d3 10
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_6fa8fc2659e726::t_beb9a3321a358e 4,17
+apps/cli/src/ledger.test.ts
+  s_6fa8fc2659e726::t_3fd3af4cd63d0d 87
+  s_6fa8fc2659e726::t_c0dfe152080ca4 67,163
+packages/contracts/src/board.test.ts
+  s_6fa8fc2659e726::t_dcd8a1fea543c3 169,171,478
+  s_6fa8fc2659e726::t_79c5eb85cdcb0c 9,15,42-44,46-55,58,80,82-84,89-90,96-97,103,108-109,115,125-126,130-131,138,145,156,159
+  s_6fa8fc2659e726::t_c58413cd4e4427 191,344,364
+apps/cli/src/commands.ts
+  s_6fa8fc2659e726::t_5abaa8f02ae4c8 261
+  s_6fa8fc2659e726::t_b00915e7eb3e7f 232,343
+  s_6fa8fc2659e726::t_7607b9f6a9564c 703
+  s_b938d2bd46327e::t_ee0b0ac86cd258 114
+packages/engine/src/coordination.ts
+  s_6fa8fc2659e726::t_47dbe058ea04f8 75
+  s_6fa8fc2659e726::t_bf7782b482c25c 55,213-216
+  s_6fa8fc2659e726::t_1d7d2f3c2bcaf7 172
+packages/contracts/src/rpc.ts
+  s_6fa8fc2659e726::t_677aaef7073416 24,198
+packages/engine/src/github/provider.ts
+  s_6fa8fc2659e726::t_ff227b33553903 338-345,347-351,354-356,358-370,375
+  s_6fa8fc2659e726::t_9e35e65c16c98f 357
+  s_6fa8fc2659e726::t_050a9d5491a375 14,35
+  s_6fa8fc2659e726::t_0b2cbaa86d453b 130-133
+  s_6fa8fc2659e726::t_c58452a23bd168 19
+  s_6fa8fc2659e726::t_dbbe5de9adeefc 151
+  s_6fa8fc2659e726::t_63839ba06fb260 115-118,120-125,127,129,346,352-353
+  s_6fa8fc2659e726::t_7d0f94e8b8051b 126
+  s_6fa8fc2659e726::t_54f5a6ecdcb8cb 37,135-137
+packages/contracts/src/settings.test.ts
+  s_6fa8fc2659e726::t_0d310c29019ea6 93,104,113,135,147,156
+  s_6fa8fc2659e726::t_3fce980c42f848 7
+packages/engine/src/external-harness-runtime.test.ts
+  s_6fa8fc2659e726::t_72e7d778493e64 1081
+  s_6fa8fc2659e726::t_52752fa54dc611 59,890
+packages/contracts/src/board.ts
+  s_6fa8fc2659e726::t_ca813cb34c53a5 5,12
+packages/engine/src/control-store.ts
+  s_6fa8fc2659e726::t_84e49035af7483 361,370,372,504-506
+apps/cli/src/read-model-item.ts
+  s_6fa8fc2659e726::t_a7d9ccfb90c6d3 7-8
+  s_b938d2bd46327e::t_7c0dea5b537db2 1
+packages/engine/src/commands.ts
+  s_6fa8fc2659e726::t_c76f00ac09a928 52,167,169-170,480,489
+  s_6fa8fc2659e726::t_76d26e7aa22295 16,55-56,118-130,172,177,184,196,277,294,305,340,368,521,678
+  s_b938d2bd46327e::t_79bffc81d8da4f 168
+packages/engine/src/github/markers.ts
+  s_6fa8fc2659e726::t_dd5410df91b33a 1-12,22,27,39-40
+apps/desktop/src/renderer/src/components/activity-transcript.tsx
+  s_6fa8fc2659e726::t_9e61dd3e2c739e 132
+packages/engine/src/daemon-event-bus.ts
+  s_6fa8fc2659e726::t_778bfd376fe633 54,62
+packages/engine/src/provider-runner.ts
+  s_6fa8fc2659e726::t_778bfd376fe633 43
+  s_6fa8fc2659e726::t_867cff78d2df73 226
+packages/engine/src/run-ledger.test.ts
+  s_6fa8fc2659e726::t_dec91d94f1a430 193,209,213
+  s_6fa8fc2659e726::t_959405e30d158f 128
+packages/engine/docs/adr/0015-workflows-replace-the-fixed-pipeline.md
+  s_6fa8fc2659e726::t_1437ea2bfb981f 1-21
+packages/engine/src/workspace-registry.test.ts
+  s_6fa8fc2659e726::t_52752fa54dc611 834,839,841-842
+packages/engine/src/run-recorder.test.ts
+  s_6fa8fc2659e726::t_f203e308775e97 36
+apps/cli/src/commands.test.ts
+  s_6fa8fc2659e726::t_eb935cd5a3727b 237,267
+  s_6fa8fc2659e726::t_3bc12c73830eeb 227,239,277,281,287,289-290,312
+packages/engine/src/daemon.ts
+  s_6fa8fc2659e726::t_c76f00ac09a928 593-597,599
+  s_6fa8fc2659e726::t_e9a2969fcac7ae 88
+  s_6fa8fc2659e726::t_bb47e3141d0484 62,87,117
+  s_6fa8fc2659e726::t_ac2717207425c3 492
+  s_6fa8fc2659e726::t_a2a4cf0708aada 205-211,245
+  s_6fa8fc2659e726::t_a3d38b99abec7c 201-202,279,287-289
+  s_6fa8fc2659e726::t_5e9853bfaa75f6 253,423,623,630,653-655
+packages/engine/src/scheduler.ts
+  s_6fa8fc2659e726::t_b4fc795bcb36e3 150-154,162,172,174
+  s_6fa8fc2659e726::t_7ebf79b067ddeb 1,20,49-59,100-101,109,125,129-130,133,140-141,143,158-161,163-166,168,170-171,173,179,183-185,188,190-193,196-208,217,235-236,238-239,257-261,268-283,286,288,290-299,314-316,318-320,324
+packages/engine/src/daemon-event-bus.test.ts
+  s_6fa8fc2659e726::t_228ce006f411c2 121
+packages/engine/src/harness.ts
+  s_6fa8fc2659e726::t_6acb9223d369fb 10,36
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_6fa8fc2659e726::t_b4c2392dfcf813 5,7-8,13,33,56,65,99,109,113,127-128,145
+packages/contracts/CONTEXT.md
+  s_6fa8fc2659e726::t_4e03d2adc889c4 45,49-50,204,292,387,515-516,621
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_6fa8fc2659e726::t_cc6beaeec6cc46 224,278,432
+  s_6fa8fc2659e726::t_5abaa8f02ae4c8 239,280
+  s_6fa8fc2659e726::t_868b09bdf011d3 175,214,223,242,247,263,266-267,271,283,289,384-385,402,410-411,425,434-435
+packages/engine/docs/adr/0012-operation-resolution-is-a-module-and-outcomes-are-data.md
+  s_6fa8fc2659e726::t_1437ea2bfb981f 3-4
+apps/desktop/src/renderer/src/features/activity-session.test.ts
+  s_6fa8fc2659e726::t_3fa09c13180db7 5,22,25-38,118,124
+  s_6fa8fc2659e726::t_6392524a6326dc 45,64
+packages/engine/src/linear/markers.ts
+  s_6fa8fc2659e726::t_1dd603409f2aa6 1,18-19
+packages/engine/src/workflow-run.test.ts
+  s_6fa8fc2659e726::t_440cc905fafb76 2076,2283
+packages/codex-cli/CONTEXT.md
+  s_6fa8fc2659e726::t_41625696fb8f82 39
+packages/codex-cli/src/harness-configuration.test.ts
+  s_6fa8fc2659e726::t_78f94ee37d8323 271-272,276,283
+  s_6fa8fc2659e726::t_2ae9e44720e0a0 229
+apps/desktop/src/renderer/src/features/attention.ts
+  s_6fa8fc2659e726::t_b4c2392dfcf813 3,5,12-13
+  s_6fa8fc2659e726::t_4e9e828a6e74a1 1,18
+packages/engine/docs/adr/0009-priority-orders-work-within-a-stage.md
+  s_6fa8fc2659e726::t_1437ea2bfb981f 3-4
+packages/engine/src/workflow.test.ts
+  s_6fa8fc2659e726::t_0b5f658779a831 513-521,523-527,531-533
+  s_6fa8fc2659e726::t_961527d333b62b 522,528-530
+packages/engine/src/coordination-contract.ts
+  s_6fa8fc2659e726::t_82ce7b5f7661f2 1,10-11
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_6fa8fc2659e726::t_47f3c2130c4cf4 7,10-11,219,225-226,228-229,272,317,325
+  s_6fa8fc2659e726::t_088a5215826f76 131
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_6fa8fc2659e726::t_6392524a6326dc 41
+packages/engine/src/issue-tracker-router.ts
+  s_6fa8fc2659e726::t_1e7eb38b1146f6 14-18,22-25,44-47
+  s_b938d2bd46327e::t_28fc101998aa02 6
+apps/desktop/src/renderer/src/features/feed.ts
+  s_6fa8fc2659e726::t_9e61dd3e2c739e 4,11-23
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_6fa8fc2659e726::t_4ada36c0b5f22f 110,141
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_6fa8fc2659e726::t_4cfdf122ff9dbe 265
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_6fa8fc2659e726::t_8bf3eafc92f69d 4,22,56-59
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_6fa8fc2659e726::t_dec91d94f1a430 30
+packages/engine/src/event-publisher.ts
+  s_6fa8fc2659e726::t_a3d38b99abec7c 16
+  s_6fa8fc2659e726::t_a2a4cf0708aada 94,96,98,102,106,108-109,113-119,121-123,125,127,132-133,137,168-169
+  s_6fa8fc2659e726::t_d264830beef303 130-131,134,138,141-142,145,147,152-153,155-158,164-165,176
+  s_6fa8fc2659e726::t_b5299c44bd5da4 161-162
+  s_6fa8fc2659e726::t_3f3e4b94e1bbcf 6,95,99,101,103,120
+packages/engine/src/run-plan.ts
+  s_6fa8fc2659e726::t_7acbb4ca418414 1,12,15
+  s_6fa8fc2659e726::t_4ded943cf382f3 16,18
+packages/engine/src/workflow-action-plan.test.ts
+  s_6fa8fc2659e726::t_8a470186d5fb70 957
+packages/engine/CONTEXT.md
+  s_6fa8fc2659e726::t_77f3ac183ce1c7 13,16-18,28-30,33,37,57,60-62,125,144-146,149,153,189-190
+packages/engine/src/read-model.ts
+  s_6fa8fc2659e726::t_568758d647e809 22-27
+  s_6fa8fc2659e726::t_7ac7d3b545799b 3,6-7,9-11,20-21,28-31,33,36-37
+  s_6fa8fc2659e726::t_ea495502635963 14-15,17-19,35
+  s_6fa8fc2659e726::t_618b86a8fb0745 12-13
+  s_6fa8fc2659e726::t_f9897574b51251 1,54,61,63-64,74-75
+  s_6fa8fc2659e726::t_a3d38b99abec7c 67-73
+  s_6fa8fc2659e726::t_c76f00ac09a928 16,32
+  s_6fa8fc2659e726::t_b13f7502d3b361 34
+packages/contracts/src/daemon-event.ts
+  s_6fa8fc2659e726::t_ca813cb34c53a5 18,21,46
+packages/engine/src/workflow-artifact-store.ts
+  s_6fa8fc2659e726::t_ed96eba6ae6443 56,113-115
+  s_6fa8fc2659e726::t_618b86a8fb0745 19
+packages/contracts/src/run.test.ts
+  s_6fa8fc2659e726::t_dec91d94f1a430 9
+apps/desktop/CONTEXT.md
+  s_6fa8fc2659e726::t_41625696fb8f82 139,157,182
+packages/engine/src/testing/engine-test-layer.test.ts
+  s_6fa8fc2659e726::t_c22cea1531477d 22
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_6fa8fc2659e726::t_088a5215826f76 409
+packages/engine/src/tools/policy.ts
+  s_6fa8fc2659e726::t_6acb9223d369fb 7
+  s_6fa8fc2659e726::t_778bfd376fe633 47
+  s_6fa8fc2659e726::t_7db05d54e246fd 98-99,101
+apps/cli/src/watch.test.ts
+  s_6fa8fc2659e726::t_11ddeb1835a82e 139-143,153,224
+  s_6fa8fc2659e726::t_ea496fb9023e64 1,24,32
+  s_6fa8fc2659e726::t_b6083edb9718ac 201-218,249-251,259-260,262,268,270-271,276-277
+  s_6fa8fc2659e726::t_652b5533c2e376 297
+packages/engine/src/trigger-observation.ts
+  s_6fa8fc2659e726::t_8d6d5d98e80eb7 136-139,141-144,983
+  s_6fa8fc2659e726::t_f0cb85a4400fd6 129-135,963
+  s_6fa8fc2659e726::t_a356606107131f 140
+  s_6fa8fc2659e726::t_f05f4d17ed7063 616-623,625-626,630
+packages/contracts/src/daemon.ts
+  s_6fa8fc2659e726::t_45006ab5221c12 109
+packages/engine/src/control-store.test.ts
+  s_6fa8fc2659e726::t_3c87ae4fdebdba 834,843,868
+  s_6fa8fc2659e726::t_eb935cd5a3727b 854,858,876
+  s_6fa8fc2659e726::t_7b068101738e3c 232,330,332-334,345,347,364,366,855,890,892-893
+  s_6fa8fc2659e726::t_a6a859be88694b 1128,1211,1269
+packages/engine/src/github/host.ts
+  s_6fa8fc2659e726::t_44ddfa6cbe0a75 13
+  s_6fa8fc2659e726::t_510331ae9a67b9 12
+apps/cli/src/watch.ts
+  s_6fa8fc2659e726::t_11d358b4234982 202
+  s_6fa8fc2659e726::t_7607b9f6a9564c 161,206
+  s_6fa8fc2659e726::t_a7d9ccfb90c6d3 10
+packages/cursor-acp/src/harness.test.ts
+  s_6fa8fc2659e726::t_77293e42669380 9,158-159,183,189
+packages/engine/src/coordination-fold.test.ts
+  s_6fa8fc2659e726::t_0739b98392efb8 1,3,5-6,32,42,90,93-94,126
+packages/engine/src/trigger-observation.test.ts
+  s_6fa8fc2659e726::t_12d8f80c3f216f 639,682-684,714
+  s_6fa8fc2659e726::t_cb06d1901d580e 712
+  s_6fa8fc2659e726::t_aeac738362d4e1 613
+  s_6fa8fc2659e726::t_6005db754bd765 640,642-643,647,649-660,669-676,681,685,690,718,721-724
+  s_6fa8fc2659e726::t_6398f64423a186 648
+  s_6fa8fc2659e726::t_41d88a4957bd64 662,664
+  s_6fa8fc2659e726::t_fd8b4d637db00b 663
+  s_6fa8fc2659e726::t_58d3e474606646 611-612,614
+  s_6fa8fc2659e726::t_f016d1acfd4ed7 8,644-646,661,665-668,677-680
+  s_6fa8fc2659e726::t_5c76ea6ae3bd7b 713
+  s_6fa8fc2659e726::t_8d6d5d98e80eb7 56,154-158,160-177,179-181
+  s_6fa8fc2659e726::t_f0bcc75fb3abc5 159
+  s_6fa8fc2659e726::t_6d9cb572febba7 178
+  s_6fa8fc2659e726::t_6edd72a15bb5aa 182
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_6fa8fc2659e726::t_41625696fb8f82 87
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_6fa8fc2659e726::t_7db05d54e246fd 298
+packages/contracts/src/work-item.ts
+  s_6fa8fc2659e726::t_386529de045d82 13-21
+  s_6fa8fc2659e726::t_5e9639e416959a 10-12
+packages/engine/src/linear/host.ts
+  s_6fa8fc2659e726::t_b46d74378c8c9a 12
+  s_6fa8fc2659e726::t_0527ebf1496bed 1,9,21
+  s_6fa8fc2659e726::t_b0930727fe9dc1 8
+packages/contracts/src/settings.ts
+  s_6fa8fc2659e726::t_bbec46b28332ec 228,235,305,316,443,446,448,451,455,458,462,468
+  s_6fa8fc2659e726::t_02267b57de03ba 38
+  s_6fa8fc2659e726::t_ec9c990261eff7 41
+  s_6fa8fc2659e726::t_d55c48a9b784ad 78
+apps/cli/src/ledger.ts
+  s_6fa8fc2659e726::t_b00915e7eb3e7f 62
+  s_6fa8fc2659e726::t_7607b9f6a9564c 116,139,154
+packages/claude-code/src/harness-host.test.ts
+  s_6fa8fc2659e726::t_279ad1d06e5a03 1,165-170,197-198
+  s_6fa8fc2659e726::t_ab9596c6409346 172-185,187-195
+  s_6fa8fc2659e726::t_c76f00ac09a928 171,196
+  s_6fa8fc2659e726::t_5829f29529ff2b 186
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_6fa8fc2659e726::t_7a0431f35264f4 150-151,154
+  s_6fa8fc2659e726::t_088a5215826f76 68
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_6fa8fc2659e726::t_088a5215826f76 20
+  s_6fa8fc2659e726::t_a28dcb5ae0370d 18,22
+  s_b938d2bd46327e::t_e1be90161dbaed 1-7
+packages/engine/src/workflow-run.ts
+  s_6fa8fc2659e726::t_778bfd376fe633 513,568
+  s_6fa8fc2659e726::t_2d6b638e11ec5b 550
+packages/engine/src/github/adapter.ts
+  s_6fa8fc2659e726::t_91fcfb02d0b51e 6
+  s_6fa8fc2659e726::t_c2e7dd776c78c8 3,9,16-22
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_6fa8fc2659e726::t_41625696fb8f82 20
+packages/codex-cli/src/harness-fixtures.ts
+  s_6fa8fc2659e726::t_78f94ee37d8323 81,90-91,93,105,114-115,294-298,301,304,306,322,326-327,330-331
+  s_b938d2bd46327e::t_88a7148cd50bee 10
+packages/engine/src/coordination-control-store.test.ts
+  s_6fa8fc2659e726::t_0739b98392efb8 1,19
+packages/engine/src/provider-runner.test.ts
+  s_6fa8fc2659e726::t_41c99b413f7fef 425
+  s_6fa8fc2659e726::t_4fb2f16b19551c 176,181-182,187
+  s_6fa8fc2659e726::t_3e66ff09f183fe 183,218,566-568
+packages/engine/src/issue-tracker.ts
+  s_6fa8fc2659e726::t_b5fe64c1af478b 21,97,104-105,113
+packages/engine/src/performance-issue-filer.ts
+  s_6fa8fc2659e726::t_41c2c5e8aa6fb7 9
+packages/engine/src/session-store.test.ts
+  s_6fa8fc2659e726::t_eacd922c883526 130
+packages/codex-cli/src/harness-execution.test.ts
+  s_6fa8fc2659e726::t_2b3e4b42a35ce5 166
+  s_6fa8fc2659e726::t_78f94ee37d8323 1,253
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_6fa8fc2659e726::t_519fe2d36a34aa 20-21,48-49,54,58,70,76-77,80-86,92-93,95,98-151,158
+packages/engine/src/watch-activity.test.ts
+  s_6fa8fc2659e726::t_695b1f2aac495f 28
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_6fa8fc2659e726::t_1437ea2bfb981f 3-4
+packages/claude-code/src/harness-fixtures.ts
+  s_6fa8fc2659e726::t_279ad1d06e5a03 8,205,234-235,430,433
+  s_6fa8fc2659e726::t_3fd3af4cd63d0d 426
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_6fa8fc2659e726::t_a28dcb5ae0370d 43,94,206
+  s_6fa8fc2659e726::t_aedcc8e29536d9 13-14,17
+  s_6fa8fc2659e726::t_1d31d1592e8682 251-252,254
+  s_6fa8fc2659e726::t_088a5215826f76 340
+  s_6fa8fc2659e726::t_48f97f1d6023ac 1
+packages/engine/src/github/client.test.ts
+  s_6fa8fc2659e726::t_52752fa54dc611 33
+packages/engine/src/trigger-source.ts
+  s_6fa8fc2659e726::t_2d6b638e11ec5b 41
+  s_6fa8fc2659e726::t_994e04822f60eb 3
+packages/engine/docs/adr/0001-scheduler-acts-once-per-snapshot-generation.md
+  s_6fa8fc2659e726::t_1437ea2bfb981f 3-4
+packages/contracts/src/run-plan.ts
+  s_6fa8fc2659e726::t_5e9639e416959a 8,199
+packages/engine/src/linear/adapter.ts
+  s_6fa8fc2659e726::t_c2e7dd776c78c8 3,9,16-22
+  s_6fa8fc2659e726::t_91fcfb02d0b51e 6
+packages/engine/src/github/source-control-target.ts
+  s_6fa8fc2659e726::t_bba59a1843e4fb 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f5deb1afc31f419a645e490dbadd3ad60010715c",
+  "prompts": {},
+  "sessions": {
+    "s_6fa8fc2659e726": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19e59-969e-78e0-8ffb-2723729ca8b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b938d2bd46327e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19e64-a521-75a3-a1f5-453ae6b7f00d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
