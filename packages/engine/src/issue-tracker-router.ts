@@ -3,7 +3,7 @@ import * as Layer from "effect/Layer";
 import { makeAdapter as makeGitHub } from "./github/adapter";
 import { GitHubClient } from "./github/client";
 import { makeGitHubTrackerTriggerSource } from "./github/tracker-trigger-source";
-import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
+import { IssueTracker, IssueTrackerError, type IssueTrackerService } from "./issue-tracker";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
 import { makeLinearTrackerTriggerSource } from "./linear/tracker-trigger-source";
@@ -20,6 +20,17 @@ export const route = (github: IssueTrackerService, linear: IssueTrackerService):
     rateLimitScope: (workspace) => forWorkspace(workspace).rateLimitScope(workspace),
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
     assignees: (workspace, id) => forWorkspace(workspace).assignees?.(workspace, id) ?? Effect.succeed([]),
+    workflowCoordination: (workspace, id) => {
+      const coordination = forWorkspace(workspace).workflowCoordination;
+      return coordination === undefined
+        ? Effect.fail(
+            new IssueTrackerError({
+              reason: "unavailable",
+              message: `workflow coordination is unavailable for ${workspace.config.name}`,
+            }),
+          )
+        : coordination(workspace, id);
+    },
     readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
     claim: (workspace, id, claim) => forWorkspace(workspace).claim(workspace, id, claim),
     release: (workspace, id) => forWorkspace(workspace).release(workspace, id),

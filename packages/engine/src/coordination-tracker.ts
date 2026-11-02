@@ -55,6 +55,8 @@ export interface ListedItem<CommentId> {
   readonly acceptedClaimants: ReadonlyArray<string>;
   readonly priority: Priority;
   readonly comments: ReadonlyArray<CoordinationComment<CommentId>>;
+  readonly states?: ReadonlyArray<string>;
+  readonly lastTouchedAtMillis?: number;
 }
 
 export interface CoordinationHost<Ref, CommentId> {
@@ -377,7 +379,23 @@ export const makeCoordinationTracker = <Ref, CommentId>(host: CoordinationHost<R
 
   const writeNote = (ref: Ref, detail: string) => Coordination.postNote(codec, host.comments(ref), detail);
 
+  const workflowCoordination = Effect.fn("coordinationTracker.workflowCoordination")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    id: WorkItemId,
+  ) {
+    const listed = yield* host.list(workspace);
+    const item = listed.find((candidate) => candidate.id === id);
+    if (item === undefined) {
+      return yield* new IssueTrackerError({
+        reason: "unavailable",
+        message: `item ${id} is not available in ${workspace.config.name}`,
+      });
+    }
+    return makeTrackerCoordination(host, workspace, item);
+  });
+
   return {
+    workflowCoordination,
     rateLimitScope: host.rateLimitScope,
     observe: Effect.fn("coordinationTracker.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
       const listed = yield* host.list(workspace);
@@ -410,6 +428,8 @@ export const makeCoordinationTracker = <Ref, CommentId>(host: CoordinationHost<R
                 openBlockers: item.openBlockers,
                 proposal: Coordination.selectTriageProposal(item.comments),
                 priority: item.priority,
+                states: item.states,
+                lastTouchedAtMillis: item.lastTouchedAtMillis,
               }),
             ),
           );

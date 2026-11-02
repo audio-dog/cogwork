@@ -323,6 +323,8 @@ export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRe
         acceptedClaimants: [target.actorLogin, Coordination.defaultClaimant],
         priority: priorities.get(issue.number) ?? defaultPriority,
         comments,
+        states: issue.labels,
+        lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,
       } satisfies ListedItem<number>;
     });
 

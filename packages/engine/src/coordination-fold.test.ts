@@ -120,4 +120,28 @@ describe("coordination fold", () => {
       assert.strictEqual(view.gate(operation, "2")._tag, "Open");
     });
   });
+
+  it("keeps the parked Operation blocked until the tracker source revision changes", () => {
+    const judge = codingOperation("judge");
+    const view = fold(
+      {
+        claim: null,
+        attempts: [],
+        handbacks: [],
+        parks: [
+          {
+            reason: { _tag: "AwaitingApproval", plan: "plan", digest: "digest", revision: "1" },
+            operation,
+            atMillis: 1,
+          },
+        ],
+        revision: null,
+      },
+      "cogwork",
+    );
+
+    assert.strictEqual(view.gate(operation, "1")._tag, "Parked");
+    assert.strictEqual(view.gate(judge, "sweep-revision")._tag, "Open");
+    assert.strictEqual(view.gate(operation, "tracker-revision")._tag, "Open");
+  });
 });
