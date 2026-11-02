@@ -301,6 +301,7 @@ const invalidTarget = (step: WorkflowActionPlanStep) =>
   });
 
 interface ActionContext {
+  readonly item: TriggerAdmission["event"]["key"];
   readonly plan: WorkflowActionPlan;
   readonly step: WorkflowActionPlanStep;
   readonly workspace: WorkspaceIssueTrackerBinding | null;
@@ -439,10 +440,12 @@ const actionExecutors = {
     yield* context.notifications
       .write(run, {
         id: `${context.plan.workflow}:${context.plan.operation}:${context.plan.revision}`,
+        item: context.item,
         workflow: context.plan.workflow,
         operation: context.plan.operation,
         summary: context.step.inputs.notification ?? "",
         answers: context.plan.answers,
+        artifacts: context.plan.steps.flatMap(({ artifact }) => (artifact === null ? [] : [artifact])),
         atMillis: context.plan.createdAtMillis,
       })
       .pipe(
@@ -580,6 +583,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
         }
         const workspace = targetWorkspace(step);
         const context = {
+          item: admission.event.key,
           plan: state.plan,
           step,
           workspace,

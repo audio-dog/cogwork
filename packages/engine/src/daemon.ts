@@ -369,6 +369,8 @@ export const handlersLayer = DaemonRpcs.toLayer({
   ApproveWorkflowPlan: (payload) => Effect.flatMap(WorkflowRun, ({ approve }) => approve(payload)),
   RejectWorkflowPlan: (payload) => Effect.flatMap(WorkflowRun, ({ reject }) => reject(payload)),
   ChooseWorkflowAnswer: (payload) => Effect.flatMap(WorkflowRun, ({ chooseAnswer }) => chooseAnswer(payload)),
+  DismissWorkflowNotification: (payload) =>
+    Effect.flatMap(WorkflowNotifications, ({ dismiss }) => dismiss(payload.id)).pipe(Effect.orDie),
   HandBack: handBack,
   Reclassify: reclassify,
   SetScheduling: setScheduling,

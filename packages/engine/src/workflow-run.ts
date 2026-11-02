@@ -885,6 +885,7 @@ export const make = Effect.gen(function* () {
     yield* recordDecision(approved, "workflow.plan-approved", { digest: approved.digest });
     const execution = yield* executeClaimedPlan(approved, admission);
     yield* finishTouchpointPlan(approved, admission, execution);
+    return approved.digest;
   });
 
   const reject = Effect.fn("WorkflowRun.reject")(function* (payload: {
