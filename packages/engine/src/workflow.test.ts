@@ -33,9 +33,13 @@ import * as Stream from "effect/Stream";
 import { clockEntries, clockSource } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";
+import { githubSourceControlActionEntries } from "./github/provider";
+import { githubPullRequestEntries } from "./github/pull-request-trigger-source";
+import { githubTrackerEntries } from "./github/tracker-trigger-source";
 import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
+import { linearTrackerEntries } from "./linear/tracker-trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import {
   cogworkWorkflowCatalogContribution,
@@ -126,6 +130,9 @@ const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
   issueTrackerWorkflowCatalogContribution("github"),
   issueTrackerWorkflowCatalogContribution("linear"),
+  { entries: githubSourceControlActionEntries, templates: [] },
+  { entries: [...githubTrackerEntries, ...githubPullRequestEntries], templates: [] },
+  { entries: linearTrackerEntries, templates: [] },
   triggerContribution,
   granolaWorkflowCatalogContribution,
   clockContribution,
@@ -186,17 +193,19 @@ layer(NodeServices.layer)((it) => {
       const templates = yield* withWorkflows(storePath, ({ templates }) => templates);
 
       assert.deepStrictEqual(
-        templates.map(({ id, document }) => ({
-          id: String(id),
-          trigger: String(document.triggers[0]?.entry),
-          forEach: document.operations[0]?.forEach,
-          choices: document.operations[0]?.questions[0]?.choices.map(({ id }) => String(id)),
-          actions: document.operations[0]?.transitions.map(({ when, actions }) => ({
-            choice: String(when[0]?.choice),
-            entry: String(actions[0]?.entry),
-            parameters: actions[0]?.parameters.map(({ id, value }) => ({ id: String(id), value })),
+        templates
+          .filter(({ id }) => !id.endsWith("-coding-pipeline"))
+          .map(({ id, document }) => ({
+            id: String(id),
+            trigger: String(document.triggers[0]?.entry),
+            forEach: document.operations[0]?.forEach,
+            choices: document.operations[0]?.questions[0]?.choices.map(({ id }) => String(id)),
+            actions: document.operations[0]?.transitions.map(({ when, actions }) => ({
+              choice: String(when[0]?.choice),
+              entry: String(actions[0]?.entry),
+              parameters: actions[0]?.parameters.map(({ id, value }) => ({ id: String(id), value })),
+            })),
           })),
-        })),
         [
           {
             id: "granola-to-github-issue",
@@ -260,6 +269,216 @@ layer(NodeServices.layer)((it) => {
           },
         ],
       );
+      assert.deepStrictEqual(
+        templates
+          .filter(({ id }) => id.endsWith("-coding-pipeline"))
+          .map(({ id, document }) => ({
+            id: String(id),
+            triggers: document.triggers.map(({ entry, parameters, start }) => ({
+              entry: String(entry),
+              parameters: parameters.map(({ id, value }) => `${id}:${value}`),
+              start: String(start),
+            })),
+            operations: document.operations.map(({ id, instructionPackage, questions, transitions }) => ({
+              id: String(id),
+              instructionPackage,
+              choices: questions.flatMap(({ choices }) => choices.map(({ id: choice }) => String(choice))),
+              routes: transitions.map(({ when, actions, handOff }) => ({
+                when: when.map(({ question, choice }) => `${question}:${choice}`),
+                actions: actions.map(({ entry, parameters }) =>
+                  [entry, ...parameters.map(({ id, value }) => `${id}:${value}`)].join(":"),
+                ),
+                handOff: handOff === null ? null : String(handOff),
+              })),
+            })),
+          })),
+        [
+          {
+            id: "github-coding-pipeline",
+            triggers: [
+              { entry: "github.issue-has-label", parameters: ["label:needs-triage"], start: "triage" },
+              {
+                entry: "github.issue-has-label",
+                parameters: ["label:ready-for-agent"],
+                start: "implement",
+              },
+              {
+                entry: "github.new-comment-from-person",
+                parameters: ["label:needs-info"],
+                start: "triage",
+              },
+              { entry: "github.pull-request-checks-failed", parameters: [], start: "follow-up" },
+              {
+                entry: "github.pull-request-conflicts-with-base",
+                parameters: [],
+                start: "follow-up",
+              },
+              {
+                entry: "github.new-review-comment-from-person",
+                parameters: [],
+                start: "follow-up",
+              },
+              {
+                entry: "github.new-finding-from-bot",
+                parameters: ["bot:cursor[bot]"],
+                start: "follow-up",
+              },
+            ],
+            operations: [
+              {
+                id: "triage",
+                instructionPackage: "triage-agent",
+                choices: ["ready-for-agent", "needs-info", "ready-for-human", "wontfix"],
+                routes: [
+                  {
+                    when: ["role:ready-for-agent"],
+                    actions: ["github.comment-this-item", "github.add-label:label:ready-for-agent"],
+                    handOff: null,
+                  },
+                  {
+                    when: ["role:needs-info"],
+                    actions: [
+                      "github.comment-this-item",
+                      "github.add-label:label:needs-info",
+                      "cogwork.hand-to-me",
+                    ],
+                    handOff: null,
+                  },
+                  {
+                    when: ["role:ready-for-human"],
+                    actions: [
+                      "github.comment-this-item",
+                      "github.add-label:label:ready-for-human",
+                      "cogwork.hand-to-me",
+                    ],
+                    handOff: null,
+                  },
+                  {
+                    when: ["role:wontfix"],
+                    actions: [
+                      "github.comment-this-item",
+                      "github.add-label:label:wontfix",
+                      "github.close-this-issue",
+                    ],
+                    handOff: null,
+                  },
+                ],
+              },
+              {
+                id: "implement",
+                instructionPackage: "implement-agent",
+                choices: [],
+                routes: [{ when: [], actions: ["github.open-pull-request"], handOff: null }],
+              },
+              {
+                id: "follow-up",
+                instructionPackage: "follow-up-agent",
+                choices: ["yes", "no"],
+                routes: [
+                  { when: [], actions: ["github.push-to-this-pull-request"], handOff: null },
+                  {
+                    when: ["reply:yes"],
+                    actions: ["github.comment-on-this-pull-request"],
+                    handOff: null,
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            id: "linear-coding-pipeline",
+            triggers: [
+              { entry: "linear.issue-has-label", parameters: ["label:state:needs-triage"], start: "triage" },
+              {
+                entry: "linear.issue-has-label",
+                parameters: ["label:state:ready-for-agent"],
+                start: "implement",
+              },
+              {
+                entry: "linear.new-comment-from-person",
+                parameters: ["label:state:needs-info"],
+                start: "triage",
+              },
+              { entry: "github.pull-request-checks-failed", parameters: [], start: "follow-up" },
+              {
+                entry: "github.pull-request-conflicts-with-base",
+                parameters: [],
+                start: "follow-up",
+              },
+              {
+                entry: "github.new-review-comment-from-person",
+                parameters: [],
+                start: "follow-up",
+              },
+              {
+                entry: "github.new-finding-from-bot",
+                parameters: ["bot:cursor[bot]"],
+                start: "follow-up",
+              },
+            ],
+            operations: [
+              {
+                id: "triage",
+                instructionPackage: "triage-agent",
+                choices: ["ready-for-agent", "needs-info", "ready-for-human", "wontfix"],
+                routes: [
+                  {
+                    when: ["role:ready-for-agent"],
+                    actions: ["linear.comment-this-item", "linear.add-label:label:state:ready-for-agent"],
+                    handOff: null,
+                  },
+                  {
+                    when: ["role:needs-info"],
+                    actions: [
+                      "linear.comment-this-item",
+                      "linear.add-label:label:state:needs-info",
+                      "cogwork.hand-to-me",
+                    ],
+                    handOff: null,
+                  },
+                  {
+                    when: ["role:ready-for-human"],
+                    actions: [
+                      "linear.comment-this-item",
+                      "linear.add-label:label:state:ready-for-human",
+                      "cogwork.hand-to-me",
+                    ],
+                    handOff: null,
+                  },
+                  {
+                    when: ["role:wontfix"],
+                    actions: [
+                      "linear.comment-this-item",
+                      "linear.add-label:label:state:wontfix",
+                      "linear.close-this-issue",
+                    ],
+                    handOff: null,
+                  },
+                ],
+              },
+              {
+                id: "implement",
+                instructionPackage: "implement-agent",
+                choices: [],
+                routes: [{ when: [], actions: ["github.open-pull-request"], handOff: null }],
+              },
+              {
+                id: "follow-up",
+                instructionPackage: "follow-up-agent",
+                choices: ["yes", "no"],
+                routes: [
+                  { when: [], actions: ["github.push-to-this-pull-request"], handOff: null },
+                  {
+                    when: ["reply:yes"],
+                    actions: ["github.comment-on-this-pull-request"],
+                    handOff: null,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      );
       yield* Effect.forEach(templates, (template) => {
         assert.deepStrictEqual(template.document.workspaces, { _tag: "Every" });
         assert.isTrue(
@@ -270,14 +489,19 @@ layer(NodeServices.layer)((it) => {
         return withWorkflows(storePath, ({ create, publish }) =>
           create({ document: template.document }).pipe(
             Effect.tap((created) =>
-              Effect.sync(() =>
+              Effect.sync(() => {
                 assert.isFalse(
                   created.diagnostics.some(
                     ({ class: diagnosticClass }) =>
                       diagnosticClass === "malformed" || diagnosticClass === "incomplete",
                   ),
-                ),
-              ),
+                );
+                if (!template.id.endsWith("-coding-pipeline")) return;
+                const codes = created.diagnostics.map(({ code }) => code);
+                ["hand-off-and-trigger", "unreachable-operation"].forEach((code) => {
+                  assert.notInclude(codes, code);
+                });
+              }),
             ),
             Effect.flatMap((created) => publish({ id: created.id, revision: created.workingRevision })),
           ),
