@@ -233,12 +233,19 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
   const gate = (key: OperationKey, sourceRevision?: string): CoordinationGate => {
     const processedRevision = ledger.revision?.processed;
     const hasProcessedRevision = processedRevision !== null && processedRevision !== undefined;
+    const revisionMovedPast = (candidate: ParkRecord) =>
+      sourceRevision !== undefined &&
+      (hasProcessedRevision
+        ? sourceRevision !== processedRevision
+        : candidate.reason._tag === "AwaitingApproval" && sourceRevision !== candidate.reason.revision);
     const isNewSourceRevision =
-      sourceRevision !== undefined && hasProcessedRevision && sourceRevision !== processedRevision;
+      sourceRevision !== undefined &&
+      (hasProcessedRevision ? sourceRevision !== processedRevision : activeParks.some(revisionMovedPast));
     const matchingPark = newestByTime(
       activeParks.filter((candidate) => {
         const matchesOperation = candidate.operation === undefined || sameOperation(candidate.operation, key);
-        const clearedByRevision = isNewSourceRevision && revisionClearedParks.has(candidate.reason._tag);
+        const clearedByRevision =
+          revisionMovedPast(candidate) && revisionClearedParks.has(candidate.reason._tag);
         return matchesOperation && !clearedByRevision;
       }),
     );

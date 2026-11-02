@@ -16,11 +16,12 @@ import {
   type WorkflowOperation,
   type WorkflowParameterValue,
   WorkItemId,
+  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { Coordination } from "./coordination";
+import { Coordination, defaultClaimant } from "./coordination";
 import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { RunLedger } from "./run-ledger";
@@ -301,6 +302,7 @@ const invalidTarget = (step: WorkflowActionPlanStep) =>
   });
 
 interface ActionContext {
+  readonly item: WorkItemRef;
   readonly plan: WorkflowActionPlan;
   readonly step: WorkflowActionPlanStep;
   readonly workspace: WorkspaceIssueTrackerBinding | null;
@@ -386,6 +388,9 @@ const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPending
       }),
     { discard: true },
   );
+  if (waiting.length > 0) {
+    yield* context.coordination.handBack(context.item, { by: defaultClaimant });
+  }
   return null;
 });
 
@@ -542,12 +547,16 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     return { _tag: "Replan" } as const;
   }
   if (waiting) {
-    yield* coordination.park(admission.event.key, {
-      _tag: "AwaitingApproval",
-      plan: initial.attempt,
-      digest: initial.digest,
-      revision: initial.revision,
-    });
+    yield* coordination.park(
+      admission.event.key,
+      {
+        _tag: "AwaitingApproval",
+        plan: initial.attempt,
+        digest: initial.digest,
+        revision: initial.revision,
+      },
+      { workflow: initial.workflow, operation: initial.operation },
+    );
     return { _tag: "AwaitingApproval" } as const;
   }
   const planForParking = (plan: WorkflowActionPlan) =>
@@ -580,6 +589,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
         }
         const workspace = targetWorkspace(step);
         const context = {
+          item: admission.event.key,
           plan: state.plan,
           step,
           workspace,
