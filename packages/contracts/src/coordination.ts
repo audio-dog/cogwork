@@ -72,6 +72,7 @@ export type Lineage = typeof Lineage.Type;
 export const Cause = Schema.TaggedUnion({
   Person: {},
   Cogwork: { origin: WorkItemKey, lineage: Lineage },
+  Clock: {},
   Unknown: {},
 });
 export type Cause = typeof Cause.Type;

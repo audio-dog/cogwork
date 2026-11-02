@@ -216,7 +216,12 @@ class ActionPlanProbe extends Context.Service<
   {
     readonly calls: Ref.Ref<ReadonlyArray<string>>;
     readonly barrier: Ref.Ref<number>;
-    readonly parks: Ref.Ref<ReadonlyArray<ParkReason>>;
+    readonly parks: Ref.Ref<
+      ReadonlyArray<{
+        readonly reason: ParkReason;
+        readonly operation: Parameters<CoordinationService["park"]>[2];
+      }>
+    >;
     readonly pushOrigins: Ref.Ref<ReadonlyArray<WorkflowActionArtifact["origin"]>>;
     readonly parkFailures: Ref.Ref<number>;
   }
@@ -226,7 +231,12 @@ class ActionPlanProbe extends Context.Service<
     Effect.all({
       calls: Ref.make<ReadonlyArray<string>>([]),
       barrier: Ref.make(0),
-      parks: Ref.make<ReadonlyArray<ParkReason>>([]),
+      parks: Ref.make<
+        ReadonlyArray<{
+          readonly reason: ParkReason;
+          readonly operation: Parameters<CoordinationService["park"]>[2];
+        }>
+      >([]),
       pushOrigins: Ref.make<ReadonlyArray<WorkflowActionArtifact["origin"]>>([]),
       parkFailures: Ref.make(0),
     }),
@@ -249,14 +259,14 @@ const coordinationLayer = Layer.effect(
         claim: () => Effect.die("unused"),
         release: () => Effect.die("unused"),
         recordAttempt: () => Effect.die("unused"),
-        park: (_ref, reason) =>
+        park: (_ref, reason, operation) =>
           Ref.modify(probe.parkFailures, (failures) =>
             failures > 0 ? [true, failures - 1] : [false, failures],
           ).pipe(
             Effect.flatMap((shouldFail) =>
               shouldFail
                 ? Effect.die("park crashed")
-                : Ref.update(probe.parks, (current) => [...current, reason]),
+                : Ref.update(probe.parks, (current) => [...current, { reason, operation }]),
             ),
             Effect.andThen(Ref.get(probe.barrier)),
             Effect.map(viewAt),
@@ -553,7 +563,7 @@ describe("Workflow action plan", () => {
       assert.strictEqual(first._tag, "Parked");
       assert.strictEqual(second._tag, "Parked");
       assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:unknown"]);
-      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
+      assert.deepInclude((yield* Ref.get(probe.parks))[0]?.reason, {
         _tag: "DraftOutcomeUnknown",
         step: "slack.draft-reply-in-slack",
       });
@@ -579,7 +589,7 @@ describe("Workflow action plan", () => {
       assert.strictEqual(recovered._tag, "Success");
       if (recovered._tag === "Success") assert.strictEqual(recovered.value._tag, "Parked");
       assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:crash"]);
-      assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "DraftOutcomeUnknown");
+      assert.strictEqual((yield* Ref.get(probe.parks))[0]?.reason._tag, "DraftOutcomeUnknown");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -602,12 +612,13 @@ describe("Workflow action plan", () => {
       assert.strictEqual(inFlight?.steps[0]?.status, "executing");
       assert.strictEqual(recovered._tag, "Parked");
       assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:unknown"]);
-      assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "DraftOutcomeUnknown");
+      assert.strictEqual((yield* Ref.get(probe.parks))[0]?.reason._tag, "DraftOutcomeUnknown");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
   it.effect("withdraws the pending approval for this item", () =>
     Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
       const store = yield* WorkflowActionPlanStore;
       const observationStore = yield* TriggerObservationStore;
       const waiting = WorkflowActionPlan.make({
@@ -618,12 +629,14 @@ describe("Workflow action plan", () => {
       yield* store.create(waiting);
       yield* store.create(withdrawing);
       yield* observationStore.putAll([admission]);
+      yield* executeWorkflowActionPlan(waiting, admission);
 
       const result = yield* executeWorkflowActionPlan(withdrawing, admission);
 
       assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
       assert.isEmpty(yield* store.list);
       assert.isEmpty(yield* observationStore.admissions);
+      assert.strictEqual(yield* Ref.get(probe.barrier), 100);
     }).pipe(Effect.provide(requirements)),
   );
 
@@ -639,6 +652,22 @@ describe("Workflow action plan", () => {
       const result = yield* executeWorkflowActionPlan(initial, admission);
 
       assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
+    }).pipe(Effect.provide(requirements)),
+  );
+
+  it.effect("scopes an approval park to the waiting Operation", () =>
+    Effect.gen(function* () {
+      const probe = yield* ActionPlanProbe;
+      const waiting = plan([step(0, "cogwork.wait-for-approval")]);
+
+      const result = yield* executeWorkflowActionPlan(waiting, admission);
+      const [park] = yield* Ref.get(probe.parks);
+
+      assert.strictEqual(result._tag, "AwaitingApproval");
+      assert.deepStrictEqual(park?.operation, {
+        workflow: waiting.workflow,
+        operation: waiting.operation,
+      });
     }).pipe(Effect.provide(requirements)),
   );
 
@@ -665,7 +694,7 @@ describe("Workflow action plan", () => {
         "retry:write-0",
       ]);
       assert.deepInclude(saved?.steps[0], { status: "failed", failures: 3 });
-      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
+      assert.deepInclude((yield* Ref.get(probe.parks))[0]?.reason, {
         _tag: "WriteFailed",
         step: "github.comment-this-item",
         error: "retry",
@@ -747,7 +776,7 @@ describe("Workflow action plan", () => {
       yield* (yield* WorkflowActionPlanStore).create(initial);
 
       const result = yield* executeWorkflowActionPlan(initial, admission);
-      const parked = (yield* Ref.get(probe.parks))[0];
+      const parked = (yield* Ref.get(probe.parks))[0]?.reason;
 
       assert.strictEqual(result._tag, "Parked");
       assert.isEmpty(yield* Ref.get(probe.calls));
@@ -790,7 +819,7 @@ describe("Workflow action plan", () => {
 
       assert.strictEqual(result._tag, "Parked");
       assert.isEmpty(yield* Ref.get(probe.calls));
-      assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "WriteFailed");
+      assert.strictEqual((yield* Ref.get(probe.parks))[0]?.reason._tag, "WriteFailed");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -804,7 +833,7 @@ describe("Workflow action plan", () => {
 
       assert.strictEqual(result._tag, "Parked");
       assert.isEmpty(yield* Ref.get(probe.calls));
-      assert.deepInclude((yield* Ref.get(probe.parks))[0], {
+      assert.deepInclude((yield* Ref.get(probe.parks))[0]?.reason, {
         _tag: "WriteFailed",
         step: "github.add-label",
         error: "Action github.add-label has an invalid target",
