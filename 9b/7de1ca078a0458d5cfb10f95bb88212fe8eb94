@@ -1,0 +1,19 @@
+packages/engine/src/workflow.test.ts
+  s_d02f765b9ff4a9::t_9c4eb9ac77fb5b 252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9b7de1ca078a0458d5cfb10f95bb88212fe8eb94",
+  "prompts": {},
+  "sessions": {
+    "s_d02f765b9ff4a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d3f-e486-76a3-9b7e-ba03c7ba9561",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
