@@ -1,0 +1,45 @@
+packages/engine/src/playbook.test.ts
+  s_a785565860b8c9::t_5f80be25345d8b 49-50,408-415,474
+  s_a785565860b8c9::t_8755f8edbbaf4b 469-470
+packages/engine/src/context-assembler.test.ts
+  s_a785565860b8c9::t_5f80be25345d8b 501-503,511,524-533
+AGENTS.md
+  s_a785565860b8c9::t_5c5bd317d4f887 23-37
+packages/engine/src/context-assembler.ts
+  s_a785565860b8c9::t_5f80be25345d8b 87
+docs/research/bugbot-alternatives-for-bug-review.md
+  s_a785565860b8c9::t_99bfa79ef1b50d 541-545
+  s_a785565860b8c9::t_c3f918732f1df6 361-365
+  s_a785565860b8c9::t_1f2bdb53c80aec 63-69
+  s_a785565860b8c9::t_f32d5331a78b8c 504-517,519-525
+  s_a785565860b8c9::t_08a78e53f170ab 559
+docs/adr/0027-headless-review-is-one-bounded-round-of-report-only-reviewers.md
+  s_a785565860b8c9::t_a9dd02148c5424 6
+  s_a785565860b8c9::t_5f80be25345d8b 34,39-42,45-46
+  s_a785565860b8c9::t_3958fd09edd438 48-57
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_a785565860b8c9::t_7786869a706d7a 158
+  s_a785565860b8c9::t_fe51558d322fe2 97
+  s_a785565860b8c9::t_9e85f8ade3ec4c 74,89,91,99,101,153
+docs/agents/bug-hunt.md
+  s_a785565860b8c9::t_950b85b6a81279 42-43
+  s_a785565860b8c9::t_db5753e2e242d0 50
+  s_a785565860b8c9::t_8c5c15b788f504 1-35,37-41,44-49,51-71
+  s_a785565860b8c9::t_ccabaec1212220 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2866b0ef292d6de78297562b84b55f2ad38b48b",
+  "prompts": {},
+  "sessions": {
+    "s_a785565860b8c9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "96b07dfc-e668-4e11-8bc2-b9e905067b96",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
