@@ -194,7 +194,7 @@ layer(NodeServices.layer)((it) => {
 
       assert.deepStrictEqual(
         templates
-          .filter(({ id }) => id.startsWith("granola-"))
+          .filter(({ id }) => !id.endsWith("-coding-pipeline"))
           .map(({ id, document }) => ({
             id: String(id),
             trigger: String(document.triggers[0]?.entry),
