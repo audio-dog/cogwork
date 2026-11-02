@@ -1,12 +1,10 @@
 import {
-  type ClassifiedItem,
   DaemonRpcs,
-  type IssueTrackerError,
-  type TriageRole,
-  TriageRole as TriageRoleSchema,
+  keyOf,
   TrimmedNonEmptyString,
+  type WorkflowTouchpointFailure,
   WorkItemId,
-  type WorkItemNotFound,
+  WorkItemRef,
   WorkspaceId,
 } from "@cogwork/contracts";
 import * as Console from "effect/Console";
@@ -19,7 +17,6 @@ import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import { formatClassifiedItem } from "./classified-item";
 import { defaultSocketPath } from "./paths";
 import { clientLayer } from "./rpc";
 import { terminalLine } from "./terminal-text";
@@ -28,14 +25,11 @@ import { workspaceFlag } from "./workspace-commands";
 interface HandBackOptions {
   readonly workspace: string;
   readonly item: string;
-  readonly role: TriageRole;
   readonly note?: string;
 }
 
 interface HandBackRequest {
-  readonly workspace: WorkspaceId;
-  readonly workItem: WorkItemId;
-  readonly role: TriageRole;
+  readonly item: WorkItemRef;
   readonly note?: string;
 }
 
@@ -57,30 +51,25 @@ export const makeHandBackRequest = Effect.fn("handBack.makeRequest")(function* (
   const workspace = yield* decodeWorkspace(options.workspace);
   const workItem = yield* decodeWorkItem(options.item);
   const note = options.note === undefined ? undefined : yield* decodeNote(options.note);
-  return { workspace, workItem, role: options.role, ...(note ? { note } : {}) };
+  return {
+    item: WorkItemRef.cases.Issue.make({ workspace, id: workItem }),
+    ...(note ? { note } : {}),
+  };
 });
 
-export const handBackError = (error: WorkItemNotFound | IssueTrackerError | RpcClientError) => {
-  if (error._tag === "WorkItemNotFound") {
-    return inputError(
-      terminalLine(`No parked work item "${error.workItem}" was found in workspace "${error.workspace}".`),
-      error,
-    );
-  }
+export const handBackError = (error: WorkflowTouchpointFailure | RpcClientError) => {
   return inputError(terminalLine(`Could not hand back the work item: ${error.message}`), error);
 };
 
-export const formatHandBackResult = (item: ClassifiedItem | null, request: HandBackRequest) => {
-  if (item === null) return terminalLine(`Handed back ${request.workItem} as ${request.role}`);
-  return `Handed back ${formatClassifiedItem(item)}`;
-};
+export const formatHandBackResult = (request: HandBackRequest) =>
+  terminalLine(`Handed back ${keyOf(request.item)}`);
 
 const runHandBack = Effect.fn("handBack.run")(
   function* (options: HandBackOptions & { readonly socket: string }) {
     const request = yield* makeHandBackRequest(options);
     const client = yield* RpcClient.make(DaemonRpcs);
-    const item = yield* client.HandBack(request).pipe(Effect.mapError(handBackError));
-    yield* Console.log(formatHandBackResult(item, request));
+    yield* client.HandBack(request).pipe(Effect.mapError(handBackError));
+    yield* Console.log(formatHandBackResult(request));
   },
   (effect, options) => effect.pipe(Effect.scoped, Effect.provide(clientLayer(options.socket))),
 );
@@ -92,10 +81,6 @@ const socketFlag = Flag.string("socket").pipe(
 
 const itemArgument = Argument.string("item").pipe(Argument.withDescription("Parked work item to hand back"));
 
-const roleFlag = Flag.choice("role", TriageRoleSchema.literals).pipe(
-  Flag.withDescription("Role to assign after the handback"),
-);
-
 const noteFlag = Flag.string("note").pipe(
   Flag.withDescription("Optional note to add to the work item"),
   Flag.optional,
@@ -105,7 +90,6 @@ export const handBackCommand = Command.make("hand-back", {
   socket: socketFlag,
   workspace: workspaceFlag,
   item: itemArgument,
-  role: roleFlag,
   note: noteFlag,
 }).pipe(
   Command.withDescription("Hand a parked work item back to cogwork"),

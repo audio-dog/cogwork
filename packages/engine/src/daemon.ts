@@ -127,10 +127,11 @@ import { combineTriggerSources, TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { controlStoreLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
 import { controlStoreLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
+import { WorkflowAttention, layer as workflowAttentionLayer } from "./workflow-attention";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
 import { WorkflowNotifications, layer as workflowNotificationsLayer } from "./workflow-notification";
-import { layer as workflowRunLayer } from "./workflow-run";
+import { WorkflowRun, layer as workflowRunLayer } from "./workflow-run";
 import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
@@ -358,12 +359,16 @@ export const handlersLayer = DaemonRpcs.toLayer({
   ListWorkflows: () => Effect.flatMap(Workflows, ({ list }) => list),
   ListWorkflowNotifications: () =>
     Effect.flatMap(WorkflowNotifications, ({ list }) => list).pipe(Effect.orDie),
+  ListWorkflowAttention: () => Effect.flatMap(WorkflowAttention, ({ list }) => list),
   GetWorkflow: (payload) => Effect.flatMap(Workflows, ({ get }) => get(payload)),
   ValidateWorkflow: (payload) => Effect.flatMap(Workflows, ({ validate }) => validate(payload)),
   GetWorkflowCatalog: () => Effect.flatMap(Workflows, ({ catalog }) => catalog),
   GetWorkflowTemplates: () => Effect.flatMap(Workflows, ({ templates }) => templates),
   ListWorkflowOptions: (payload) => Effect.flatMap(Workflows, ({ listOptions }) => listOptions(payload)),
   CancelRun: cancelRun,
+  ApproveWorkflowPlan: (payload) => Effect.flatMap(WorkflowRun, ({ approve }) => approve(payload)),
+  RejectWorkflowPlan: (payload) => Effect.flatMap(WorkflowRun, ({ reject }) => reject(payload)),
+  ChooseWorkflowAnswer: (payload) => Effect.flatMap(WorkflowRun, ({ chooseAnswer }) => chooseAnswer(payload)),
   HandBack: handBack,
   Reclassify: reclassify,
   SetScheduling: setScheduling,
@@ -567,6 +572,9 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
       ),
     ),
   );
+  const workflowAttention = workflowAttentionLayer.pipe(
+    Layer.provide(Layer.mergeAll(workflows, coordination, triggerObservationStore, workflowActionPlans)),
+  );
   const base = Layer.mergeAll(
     registry,
     plugins,
@@ -589,6 +597,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     workflowActionPlans,
     workflowArtifacts,
     workflowRun,
+    workflowAttention,
     McpSkill.layer.pipe(Layer.provide(credentials)),
     runControlLayer,
   );

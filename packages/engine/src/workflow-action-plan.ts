@@ -17,13 +17,14 @@ import {
   type WorkflowParameterValue,
   WorkItemId,
 } from "@cogwork/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
 import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { RunLedger } from "./run-ledger";
-import type { TriggerAdmission } from "./trigger-observation";
+import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
@@ -55,6 +56,7 @@ interface BuildInput {
   readonly output: OperationOutput;
   readonly attempt: RunId;
   readonly createdAtMillis: number;
+  readonly workflowRevision: number;
 }
 
 const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
@@ -67,6 +69,17 @@ const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArra
 };
 
 const decodeFailure = (message: string) => Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
+
+const planJson = Schema.fromJsonString(WorkflowActionPlan);
+
+const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function* (plan: WorkflowActionPlan) {
+  const encoded = yield* Schema.encodeEffect(planJson)(
+    WorkflowActionPlan.make({ ...plan, digest: "pending" }),
+  ).pipe(
+    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
+  );
+  return createHash("sha256").update(encoded).digest("hex");
+});
 
 type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
   readonly app: WorkspaceIssueTrackerBinding["config"]["issueTracker"]["type"];
@@ -246,19 +259,18 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     revision: input.admission.event.revision,
     createdAtMillis: input.createdAtMillis,
     consumedHandbackAtMillis: 0,
+    workflowRevision: input.workflowRevision,
     summary: input.output.summary,
     answers: input.output.answers,
+    inputs: input.output.inputs,
+    workspace: input.output.workspace ?? null,
     lineage: input.admission.lineage,
     handOff,
     steps,
   } as const;
-  const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(WorkflowActionPlan))(
-    WorkflowActionPlan.make({ ...content, digest: "pending" }),
-  ).pipe(
-    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
-  );
-  const digest = createHash("sha256").update(encoded).digest("hex");
-  return WorkflowActionPlan.make({ ...content, digest });
+  const pending = WorkflowActionPlan.make({ ...content, digest: "pending" });
+  const digest = yield* digestWorkflowActionPlan(pending);
+  return WorkflowActionPlan.make({ ...pending, digest });
 });
 
 const parameterValues = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
@@ -295,6 +307,9 @@ interface ActionContext {
   readonly tracker: IssueTrackerActionService;
   readonly notifications: Effect.Success<typeof WorkflowNotifications>;
   readonly ledger: Effect.Success<typeof RunLedger>;
+  readonly actionPlans: Effect.Success<typeof WorkflowActionPlanStore>;
+  readonly coordination: Effect.Success<typeof Coordination>;
+  readonly observationStore: Effect.Success<typeof TriggerObservationStore>;
 }
 
 const requireIssueTarget = (step: WorkflowActionPlanStep) => {
@@ -320,6 +335,62 @@ const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (con
   );
   return null;
 });
+
+const actionFailure = (error: unknown) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    retryable: true,
+    message: error instanceof Error ? error.message : String(error),
+  });
+
+const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPendingApproval")(function* (
+  context: ActionContext,
+) {
+  const plans = yield* context.actionPlans.list;
+  const waiting = plans.filter(
+    (plan) =>
+      plan.item === context.plan.item &&
+      plan.attempt !== context.plan.attempt &&
+      plan.steps.some(({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending"),
+  );
+  const admissions = yield* context.observationStore.admissions;
+  const endedAtMillis = yield* Clock.currentTimeMillis;
+  yield* Effect.forEach(
+    waiting,
+    (plan) =>
+      Effect.gen(function* () {
+        const matchingAdmissions = admissions.filter(
+          (admission) =>
+            keyOf(admission.event.key) === plan.item &&
+            admission.subscription.workflow === plan.workflow &&
+            admission.event.revision === plan.revision,
+        );
+        yield* Effect.forEach(
+          matchingAdmissions,
+          (admission) =>
+            context.observationStore.complete(
+              admission,
+              context.coordination.markProcessed(admission.event.key, admission.event.revision),
+            ),
+          { discard: true },
+        );
+        yield* context.actionPlans.remove(plan.item, plan.workflow, plan.attempt);
+        const run = yield* context.ledger.getRun(plan.attempt);
+        if (run !== null) {
+          yield* context.ledger.updateRun(plan.attempt, {
+            status: "interrupted",
+            usage: null,
+            endedAtMillis,
+          });
+        }
+      }),
+    { discard: true },
+  );
+  return null;
+});
+
+const withdrawPendingApproval = (context: ActionContext) =>
+  withdrawPendingApprovalRaw(context).pipe(Effect.mapError(actionFailure));
 
 const actionExecutors = {
   "create-issue": Effect.fn("WorkflowActionPlan.createIssue")(function* (context: ActionContext) {
@@ -388,7 +459,7 @@ const actionExecutors = {
   }),
   stop: () => Effect.succeed(null),
   "hand-to-me": () => Effect.succeed(null),
-  "withdraw-pending-approval": () => Effect.succeed(null),
+  "withdraw-pending-approval": withdrawPendingApproval,
 } satisfies Record<string, ActionExecutor>;
 
 const executorFor = (step: WorkflowActionPlanStep) => {
@@ -414,6 +485,8 @@ export type WorkflowActionPlanExecution =
   | { readonly _tag: "Complete"; readonly handOff: WorkflowNodeId | null }
   | { readonly _tag: "Retry" }
   | { readonly _tag: "Replan" }
+  | { readonly _tag: "AwaitingApproval" }
+  | { readonly _tag: "HandedToYou" }
   | { readonly _tag: "Parked" };
 
 interface ExecutionState {
@@ -433,12 +506,20 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   const tracker = yield* IssueTracker;
   const notifications = yield* WorkflowNotifications;
   const ledger = yield* RunLedger;
+  const observationStore = yield* TriggerObservationStore;
   const coordinationView = yield* coordination.read(admission.event.key);
   const handbackAfterPlan = coordinationView.barrierAtMillis > initial.createdAtMillis;
   const hasFreshHandback =
     coordinationView.barrierAtMillis > Math.max(initial.createdAtMillis, initial.consumedHandbackAtMillis);
   const hasFailedWrite = initial.steps.some(({ status }) => status === "failed");
   if (hasFailedWrite && !hasFreshHandback) return { _tag: "Parked" } as const;
+  const handedToPerson = initial.steps.some(
+    ({ entry, status }) => entry === "cogwork.hand-to-me" && status === "completed",
+  );
+  if (handedToPerson && hasFreshHandback) {
+    yield* store.remove(initial.item, initial.workflow, initial.attempt);
+    return { _tag: "Replan" } as const;
+  }
   const lacksWorkspace = initial.steps.some(
     ({ target, status }) => target._tag === "NoWorkspace" && status === "pending",
   );
@@ -467,7 +548,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
       digest: initial.digest,
       revision: initial.revision,
     });
-    return { _tag: "Parked" } as const;
+    return { _tag: "AwaitingApproval" } as const;
   }
   const planForParking = (plan: WorkflowActionPlan) =>
     hasFailedWrite
@@ -498,7 +579,17 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
           return { plan, result: { _tag: "Parked" } } satisfies ExecutionState;
         }
         const workspace = targetWorkspace(step);
-        const context = { plan: state.plan, step, workspace, tracker, notifications, ledger };
+        const context = {
+          plan: state.plan,
+          step,
+          workspace,
+          tracker,
+          notifications,
+          ledger,
+          actionPlans: store,
+          coordination,
+          observationStore,
+        };
         const result = yield* Effect.result(executor(context));
         if (result._tag === "Success") {
           const plan = replaceStep(state.plan, step, {
@@ -530,16 +621,17 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
       }),
   );
   if (state.result !== null) return state.result;
-  const handedToPerson = state.plan.steps.some(
+  const hasHandToMe = state.plan.steps.some(
     ({ entry, status }) => entry === "cogwork.hand-to-me" && status === "completed",
   );
   const stopped = state.plan.steps.some(
     ({ entry, status }) => entry === "cogwork.stop" && status === "completed",
   );
-  if (handedToPerson) {
+  if (hasHandToMe) {
     yield* coordination.park(admission.event.key, { _tag: "HandedToYou" });
+    return { _tag: "HandedToYou" } as const;
   }
   yield* store.remove(state.plan.item, state.plan.workflow, state.plan.attempt);
-  const clearsHandOff = handedToPerson || stopped;
+  const clearsHandOff = stopped;
   return { _tag: "Complete", handOff: clearsHandOff ? null : state.plan.handOff } as const;
 });

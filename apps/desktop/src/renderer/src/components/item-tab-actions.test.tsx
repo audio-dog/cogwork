@@ -109,7 +109,7 @@ describe("ItemTab Hand back", () => {
     expect(renderItem(item).match(/bg-warning\/15/g)).toHaveLength(2);
   });
 
-  it("dispatches HandBack for the selected item and default role", () => {
+  it("dispatches HandBack for the selected Workflow item", () => {
     const item = classifiedItem({
       _tag: "NeedsHuman",
       id: "42",
@@ -131,9 +131,7 @@ describe("ItemTab Hand back", () => {
       atom: handBackAtom,
       value: {
         payload: {
-          workspace: "acme",
-          workItem: "42",
-          role: "ready-for-agent",
+          item: { _tag: "Issue", workspace: "acme", id: "42" },
         },
       },
     });
