@@ -35,6 +35,7 @@ import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
+import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import {
   cogworkWorkflowCatalogContribution,
@@ -126,6 +127,8 @@ const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   triggerContribution,
   granolaWorkflowCatalogContribution,
   clockContribution,
+  issueTrackerWorkflowCatalogContribution("github"),
+  issueTrackerWorkflowCatalogContribution("linear"),
 ]);
 
 const testLayer = (
@@ -406,13 +409,65 @@ layer(NodeServices.layer)((it) => {
       const storePath = yield* temporaryStore();
       const result = yield* withWorkflows(storePath, ({ catalog }) => catalog);
 
-      assert.lengthOf(result.catalog.entries, 11);
+      assert.lengthOf(result.catalog.entries, 24);
       assert.deepStrictEqual(result.catalog.instructionPackages, [
         "triage-agent",
         "implement-agent",
         "follow-up-agent",
       ]);
       assert.deepStrictEqual(result.machine, machine);
+    }),
+  );
+
+  it.effect("creates every Staleness sweep template without blocking diagnostics", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const templates = yield* withWorkflows(storePath, ({ templates }) => templates);
+      const records = yield* Effect.forEach(templates, (template) =>
+        withWorkflows(storePath, ({ create }) => create({ document: template.document })),
+      );
+
+      assert.deepStrictEqual(
+        templates.map(({ id }) => id),
+        ["github-staleness-sweep", "linear-staleness-sweep"],
+      );
+      assert.deepStrictEqual(
+        templates.map(({ id, document }) => ({
+          id,
+          verdicts: document.operations[0]?.questions[0]?.choices.map(({ id: verdict }) => verdict),
+          routes: document.operations[0]?.transitions.map(({ actions }) =>
+            actions.map(({ entry, parameters }) =>
+              [entry, ...parameters.map(({ value }) => value)].join(":"),
+            ),
+          ),
+        })),
+        [
+          {
+            id: "github-staleness-sweep",
+            verdicts: ["keep", "retire", "refresh"],
+            routes: [
+              ["cogwork.stop"],
+              ["cogwork.wait-for-approval", "github.comment-this-item", "github.close-this-issue"],
+              ["github.add-label:needs-triage"],
+            ],
+          },
+          {
+            id: "linear-staleness-sweep",
+            verdicts: ["keep", "retire", "refresh"],
+            routes: [
+              ["cogwork.stop"],
+              ["cogwork.wait-for-approval", "linear.comment-this-item", "linear.close-this-issue"],
+              ["linear.add-label:state:needs-triage"],
+            ],
+          },
+        ],
+      );
+      assert.deepStrictEqual(
+        records.flatMap(({ diagnostics }) =>
+          diagnostics.filter(({ class: diagnosticClass }) => diagnosticClass !== "advisory"),
+        ),
+        [],
+      );
     }),
   );
 
