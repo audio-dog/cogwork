@@ -12,6 +12,7 @@ import {
   PrincipalMiddleware,
   type RunActivity,
   type RunId,
+  type WorkItemRef,
   type WorkspaceId,
 } from "@cogwork/contracts";
 
@@ -63,7 +64,7 @@ import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
 import { bootControlStoreLayer, ControlStore, type ControlStoreService } from "./control-store";
-import { Coordination } from "./coordination";
+import { Coordination, CoordinationError, type CoordinationService } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
@@ -440,6 +441,48 @@ const providerTriggerSourcesLayer = <E, R>(
     ),
   ).pipe(Layer.provide(issueTracker));
 
+const makeWorkflowCoordination = Effect.fn("Daemon.makeWorkflowCoordination")(function* () {
+  const control = yield* makeControlStoreCoordination;
+  const tracker = yield* IssueTracker;
+  const workspaceRegistry = yield* WorkspaceRegistry;
+  const unavailable = (message: string) =>
+    new CoordinationError({ reason: "unavailable", retryable: true, message });
+  const forItem = Effect.fn("WorkflowCoordination.forItem")(function* (ref: WorkItemRef) {
+    if (ref._tag !== "Issue") return control;
+    const state = yield* workspaceRegistry.state;
+    const workspace = state.workspaces.find(({ config }) => config.name === ref.workspace);
+    if (workspace === undefined) {
+      return yield* unavailable(`Workspace ${ref.workspace} is not registered`);
+    }
+    if (tracker.workflowCoordination === undefined) {
+      return yield* unavailable(`Workflow coordination is unavailable for ${ref.workspace}`);
+    }
+    const service = yield* tracker
+      .workflowCoordination(workspace, ref.id)
+      .pipe(Effect.mapError((error) => unavailable(error.message)));
+    return {
+      ...service,
+      observe: () => Effect.succeed("moved" as const),
+      markProcessed: () => Effect.void,
+    } satisfies CoordinationService;
+  });
+  const route = <A>(
+    ref: Parameters<CoordinationService["read"]>[0],
+    use: (service: CoordinationService) => Effect.Effect<A, CoordinationError>,
+  ) => Effect.flatMap(forItem(ref), use);
+  return {
+    fold: control.fold,
+    read: (ref) => route(ref, (service) => service.read(ref)),
+    claim: (ref, input) => route(ref, (service) => service.claim(ref, input)),
+    release: (ref, claim) => route(ref, (service) => service.release(ref, claim)),
+    recordAttempt: (ref, input) => route(ref, (service) => service.recordAttempt(ref, input)),
+    park: (ref, reason, operation) => route(ref, (service) => service.park(ref, reason, operation)),
+    handBack: (ref, input) => route(ref, (service) => service.handBack(ref, input)),
+    observe: (ref, revision, cause) => route(ref, (service) => service.observe(ref, revision, cause)),
+    markProcessed: (ref, revision) => route(ref, (service) => service.markProcessed(ref, revision)),
+  } satisfies CoordinationService;
+});
+
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
@@ -507,8 +550,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const machineReadiness = machineReadinessLayer.pipe(
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
   );
-  const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
-    Layer.provide(controlStore),
+  const coordination = Layer.effect(Coordination, makeWorkflowCoordination()).pipe(
+    Layer.provide(Layer.mergeAll(controlStore, issueTracker, registry)),
   );
   const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources: Layer.Layer<
