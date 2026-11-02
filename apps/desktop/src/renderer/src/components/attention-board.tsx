@@ -1,5 +1,5 @@
 import type { WorkItemRef } from "@cogwork/contracts";
-import { Alert, AlertDescription } from "@cogwork/ui/components/alert";
+import { Alert, AlertAction, AlertDescription } from "@cogwork/ui/components/alert";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@cogwork/ui/components/card";
@@ -122,6 +122,7 @@ export interface AttentionState {
   readonly layout: AttentionLayout;
   readonly focus: string | null;
   readonly failure: string | null;
+  readonly notificationFailure: string | null;
 }
 
 export interface AttentionActions {
@@ -133,6 +134,7 @@ export interface AttentionActions {
   readonly openItem: (item: WorkItemRef) => void;
   readonly setFocus: (id: string | null) => void;
   readonly setLayout: (layout: AttentionLayout) => void;
+  readonly openNotificationSettings: () => void;
 }
 
 export type AttentionMeta = Record<string, never>;
@@ -1003,8 +1005,8 @@ function AttentionLanes() {
 
 function AttentionFrame({ children }: { children: ReactNode }) {
   const {
-    state: { layout, failure },
-    actions: { setLayout },
+    state: { layout, failure, notificationFailure },
+    actions: { setLayout, openNotificationSettings },
   } = useAttention();
   return (
     <Tabs
@@ -1030,6 +1032,18 @@ function AttentionFrame({ children }: { children: ReactNode }) {
       {failure && (
         <Alert variant="destructive">
           <AlertDescription>{failure}</AlertDescription>
+        </Alert>
+      )}
+      {notificationFailure && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {notificationFailure}. Parks still appear here. Allow Cogwork notifications in System Settings.
+          </AlertDescription>
+          <AlertAction>
+            <Button size="xs" variant="outline" onClick={openNotificationSettings}>
+              System Settings
+            </Button>
+          </AlertAction>
         </Alert>
       )}
       <TabsContent value="board">{children}</TabsContent>

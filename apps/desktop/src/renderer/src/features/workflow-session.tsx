@@ -25,6 +25,8 @@ import {
   workflowTemplatesAtom,
 } from "../daemon/atoms";
 import { useActivitySession } from "./activity-session";
+import { DesktopNotificationCoordinator } from "./desktop-notifications";
+import { reportRendererError } from "./report-error";
 
 export interface WorkflowClient {
   readonly create: (document: WorkflowDocument) => Promise<WorkflowRecord>;
@@ -124,7 +126,15 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
     },
     edit: (id, edits) => edit({ payload: { id, edits } }),
     publish: (id, revision) => publish({ payload: { id, revision } }),
-    switchEnabled: async (id, enabled) => (await switchEnabled({ payload: { id, enabled } })).workflow,
+    switchEnabled: async (id, enabled) => {
+      const workflow = (await switchEnabled({ payload: { id, enabled } })).workflow;
+      if (workflow.enabled) {
+        window.cogwork.notifications
+          .enable()
+          .catch((error) => reportRendererError(error, "desktop notifications"));
+      }
+      return workflow;
+    },
     delete: async (id) => {
       const deleted = await deleteWorkflow({ payload: { id } });
       setCreatedWorkflows((current) => {
@@ -148,5 +158,10 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
     client,
     queried?.unreadable ?? [],
   );
-  return <WorkflowProvider value={value}>{children}</WorkflowProvider>;
+  return (
+    <WorkflowProvider value={value}>
+      <DesktopNotificationCoordinator workflows={workflows} activityOrdinal={session.ordinal} />
+      {children}
+    </WorkflowProvider>
+  );
 }

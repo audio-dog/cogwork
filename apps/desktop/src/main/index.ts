@@ -7,12 +7,24 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
-import { app, BrowserWindow, crashReporter, powerMonitor } from "electron";
+import { app, BrowserWindow, crashReporter, Notification, powerMonitor, shell } from "electron";
+import appIdentity from "../../app-identity.json";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveDesktopEnvironment } from "./desktop-environment";
+import {
+  createDesktopNotifications,
+  type DesktopNotifications,
+  notificationIdFromActivation,
+} from "./desktop-notifications";
 import { resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 import { EngineSupervisor, layer as engineSupervisorLayer } from "./engine-supervisor";
-import { broadcastEngineStatus, broadcastSystemResume, registerIpc } from "./ipc";
+import {
+  broadcastDesktopNotificationNavigation,
+  broadcastDesktopNotificationStatus,
+  broadcastEngineStatus,
+  broadcastSystemResume,
+  registerIpc,
+} from "./ipc";
 import { engineLoggerLayer, mainLogger } from "./logger";
 import { installShutdownBeforeQuit } from "./quit";
 import { isDaemonListening } from "./socket-probe";
@@ -38,6 +50,58 @@ const windowDeps: MainWindowDeps = {
 };
 
 const showWindow = () => showMainWindow(windowDeps);
+
+const notificationSettingsUrls: Partial<Record<NodeJS.Platform, string>> = {
+  darwin: "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
+  win32: "ms-settings:notifications",
+};
+
+const launchIdentifier = (launchInfo: unknown) => {
+  if (typeof launchInfo !== "object" || launchInfo === null || !("identifier" in launchInfo)) return null;
+  return typeof launchInfo.identifier === "string" ? launchInfo.identifier : null;
+};
+
+const cogworkUrls = (values: readonly string[]) => values.filter((value) => value.startsWith("cogwork://"));
+
+const shellState: {
+  notifications: DesktopNotifications | null;
+  launchIdentifier: string | null;
+  pendingUrls: string[];
+} = { notifications: null, launchIdentifier: null, pendingUrls: [] };
+
+const acceptCogworkUrl = (url: string) => {
+  const notifications = shellState.notifications;
+  if (notifications) return notifications.openUrl(url);
+  shellState.pendingUrls.push(url);
+};
+
+const makeDesktopNotifications = () =>
+  createDesktopNotifications({
+    create: (request) => new Notification(request),
+    getHistory: () => (process.platform === "darwin" ? Notification.getHistory() : Promise.resolve([])),
+    isSupported: Notification.isSupported,
+    remove: (id) => {
+      if (process.platform === "darwin") Notification.remove(id);
+    },
+    registerActivation: (listener) => {
+      if (process.platform === "win32") {
+        Notification.handleActivation(({ arguments: activation }) =>
+          listener(notificationIdFromActivation(activation)),
+        );
+      }
+    },
+    showWindow,
+    navigate: () => broadcastDesktopNotificationNavigation(BrowserWindow.getAllWindows()),
+    publishStatus: (status) => broadcastDesktopNotificationStatus(BrowserWindow.getAllWindows(), status),
+    logFailure: (message) => mainLogger.error(`OS notification failed: ${message}`),
+    openSettings: async () => {
+      const url = notificationSettingsUrls[process.platform];
+      if (!url) return false;
+      await shell.openExternal(url);
+      return true;
+    },
+    launchIdentifier: shellState.launchIdentifier,
+  });
 
 const makeSupervisorLayer = (environment: NodeJS.ProcessEnv) => {
   const socketPath = defaultSocketPath;
@@ -126,13 +190,22 @@ const bootstrap = () => {
   mkdirSync(diagnosticsDirectory, { recursive: true, mode: 0o700 });
   chmodSync(diagnosticsDirectory, 0o700);
   crashReporter.start({ uploadToServer: false });
+  app.setAsDefaultProtocolClient("cogwork");
+  app.once("ready", (_event, launchInfo: unknown) => {
+    shellState.launchIdentifier = launchIdentifier(launchInfo);
+  });
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    acceptCogworkUrl(url);
+  });
   app.whenReady().then(async () => {
     const runtime = ManagedRuntime.make(mainLayer);
     app.on("before-quit", () => {
       control.quitting = true;
+      shellState.notifications?.closeAll();
     });
     installShutdownBeforeQuit(app, () => runtime.dispose());
-    electronApp.setAppUserModelId("com.cogwork");
+    electronApp.setAppUserModelId(appIdentity.appId);
     app.on("browser-window-created", (_event, window) => optimizer.watchWindowShortcuts(window));
 
     // GPU/utility/network-service crashes (the `exit_code=15` that starts the white-screen cascade)
@@ -145,6 +218,8 @@ const bootstrap = () => {
       mainLogger.error(`Render process gone: ${details.reason} (exitCode ${details.exitCode})`);
     });
 
+    const notifications = makeDesktopNotifications();
+    shellState.notifications = notifications;
     const supervisor = await runtime.runPromise(EngineSupervisor);
     registerIpc({
       socketPath: defaultSocketPath,
@@ -155,6 +230,7 @@ const bootstrap = () => {
       isTrustedSender: (sender) =>
         BrowserWindow.getAllWindows().some((window) => window.webContents === sender),
       runtime,
+      notifications,
     });
 
     const startExit = await runtime.runPromiseExit(supervisor.start);
@@ -166,13 +242,26 @@ const bootstrap = () => {
     }
 
     showWindow();
+    [...shellState.pendingUrls, ...cogworkUrls(process.argv)].forEach((url) => {
+      notifications.openUrl(url);
+    });
+    shellState.pendingUrls.length = 0;
     createTray({
       onShow: showWindow,
       onQuit: requestQuit,
     });
 
     app.on("activate", showWindow);
-    app.on("second-instance", showWindow);
+    app.on("second-instance", (_event, commandLine) => {
+      const urls = cogworkUrls(commandLine);
+      if (urls.length === 0) {
+        showWindow();
+        return;
+      }
+      urls.forEach((url) => {
+        notifications.openUrl(url);
+      });
+    });
   });
 };
 
