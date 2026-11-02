@@ -1,0 +1,77 @@
+packages/contracts/src/rpc.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 13,38,52,128-132,177,221,224-257,393-395
+apps/cli/src/hand-back-command.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 1,16,25-29,32,44-48,55,62,64,68,73-76
+packages/engine/src/trigger-observation.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 76,125-135,158-159,191,195,303-308,756-769,771-777,779-796,798,800-801
+packages/engine/src/daemon.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 131,135,363,370-372,578-580,603
+packages/engine/src/workflow-attention.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 1-165
+packages/engine/src/workflow-run.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 7-8,13,15,17,31,47-51,60,133-137,167-170,219,224,226,232,259,283,286,329-332,393-410,462-469,530,533,560-561,587,607,627,642,646-648,656,664-839,841-986,993-1003
+packages/engine/src/coordination-fold.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 119-120
+packages/engine/src/coordination.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 101,173-177,193,241,258
+packages/engine/src/trigger-observation.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 808,873
+apps/cli/src/workflow-commands.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 19,61-76,160-168,172-175,201-203,209,218
+packages/engine/src/commands.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 44,89,287,290
+packages/engine/src/workflow-run.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 4,11,13,17,83,96-101,208-253,333,335,343-344,347-366,392-396,403,416,1190-1411,1472,1519,1524-1608,1668-1675,1683,1690-1693,1705-1708,1713-1756,1834,1858,1924,1980
+apps/desktop/src/renderer/src/components/item-tab-actions.test.tsx
+  s_d35c9dcd305d72::t_96f11ae117c123 112,134
+packages/engine/src/workflow-action-plan-store.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 17-21,59-66,129-147
+packages/engine/src/workflow-action-plan.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 24,32,64,78-88,338,341-342,347-349,387-389,443-498,596,622-623,644,663-669,698,743-745,789,795,797,800
+packages/engine/src/workflow-attention.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 1-22,24-35,37-159
+  s_d35c9dcd305d72::t_5af8654a28b7df 23,36
+packages/engine/src/commands.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 33,89,1204-1212,1214,1217,1219-1220,1223,1228-1231,1234
+packages/engine/src/workflow.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 38,127-128,183-258
+packages/engine/src/scheduler.test.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 496-499
+packages/engine/src/workflow-action-plan.test.ts
+  s_d35c9dcd305d72::t_5af8654a28b7df 382
+  s_d35c9dcd305d72::t_96f11ae117c123 30-33,325,329,563-581
+  s_814e7f77c8e38f::t_5779db9eeb5127 29,582-583
+packages/contracts/src/workflow.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 15-16,169-172,175-182,188-243
+  s_d35c9dcd305d72::t_855f6c5c99b861 244
+packages/engine/src/issue-workflow-catalog.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 1,6-16,50-117,134
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_d35c9dcd305d72::t_96f11ae117c123 8,72,152-160,172,174,356,366
+apps/cli/src/hand-back-command.ts
+  s_d35c9dcd305d72::t_96f11ae117c123 3,5,7,32,54-57,60,64-65,71-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "812a641d612711ee6d80e806a4241874f85cb6aa",
+  "prompts": {},
+  "sessions": {
+    "s_814e7f77c8e38f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d3f-c351-7c71-814e-0ed1f47be139",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d35c9dcd305d72": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d3f-ce67-7163-a4ed-32529a03c09a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
