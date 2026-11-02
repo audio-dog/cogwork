@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_ba08b7cf6195a4::t_8c64faf218cd3d 1-2,6-16,34-47,49-53,56-63,65-68,70-76,81
+  s_ba08b7cf6195a4::t_66bf705008d10c 33
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_ba08b7cf6195a4::t_bedcefdaf37409 423
+  s_ba08b7cf6195a4::t_5f9ec4204d2390 435-436,448
+  s_ba08b7cf6195a4::t_4388a0f04f2da9 1-2,15,124,128-133,220,261,266,395-397,408,428,432-434,437-438,452,543-551,560,661-669,678,898,1000,1024-1028
+  s_ba08b7cf6195a4::t_9c744ea0a56d6b 733-741,744
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_ba08b7cf6195a4::t_d1a94fd47cee64 146-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "689fa010199bd4640c3e604ac3358653e03eb1ee",
+  "prompts": {},
+  "sessions": {
+    "s_ba08b7cf6195a4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d57-75f5-7743-aa07-3fa49250abf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
