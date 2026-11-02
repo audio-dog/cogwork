@@ -1,0 +1,26 @@
+packages/engine/src/workflow-action-plan.test.ts
+  s_9fd7d719c90ee1::t_5b59c9f4cb76b5 126-131,139-144,165-166,264-279,303,385,428,442
+packages/engine/src/coordination.ts
+  s_9fd7d719c90ee1::t_dd5e77beebe687 236-240,242-243,247-248
+packages/engine/src/workflow-action-plan.ts
+  s_9fd7d719c90ee1::t_dd5e77beebe687 545-554
+packages/engine/src/coordination-fold.test.ts
+  s_9fd7d719c90ee1::t_5b59c9f4cb76b5 124-125,134,143-144
+  s_9fd7d719c90ee1::t_67e4cabb3f66c2 123,126-133,135-142,145-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "84ddc55d14defdfaccd230632a5a1ed5b2b33f49",
+  "prompts": {},
+  "sessions": {
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
