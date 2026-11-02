@@ -1,6 +1,7 @@
 import {
   type RunRecord,
   type WorkflowNotification,
+  WorkflowNotificationId,
   WorkflowNotification as WorkflowNotificationSchema,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -15,13 +16,13 @@ import { RunRecorder } from "./run-recorder";
 const eventName = "workflow.notification";
 const dismissedEventName = "workflow.notification-dismissed";
 const decodeNotification = Schema.decodeUnknownOption(WorkflowNotificationSchema);
-const NotificationDismissed = Schema.Struct({ id: Schema.String });
+const NotificationDismissed = Schema.Struct({ id: WorkflowNotificationId });
 const decodeDismissed = Schema.decodeUnknownOption(NotificationDismissed);
 
 const eventReducers = [
   {
     name: eventName,
-    reduce: (notifications: ReadonlyMap<string, WorkflowNotification>, value: unknown) =>
+    reduce: (notifications: ReadonlyMap<WorkflowNotificationId, WorkflowNotification>, value: unknown) =>
       Option.match(decodeNotification(value), {
         onNone: () => notifications,
         onSome: (notification) => new Map(notifications).set(notification.id, notification),
@@ -29,7 +30,7 @@ const eventReducers = [
   },
   {
     name: dismissedEventName,
-    reduce: (notifications: ReadonlyMap<string, WorkflowNotification>, value: unknown) =>
+    reduce: (notifications: ReadonlyMap<WorkflowNotificationId, WorkflowNotification>, value: unknown) =>
       Option.match(decodeDismissed(value), {
         onNone: () => notifications,
         onSome: ({ id }) => {
@@ -45,18 +46,21 @@ const notificationsIn = (recorder: Effect.Success<typeof RunRecorder>, run: RunR
   recorder.replay(run).pipe(
     Stream.runCollect,
     Effect.map((activities) =>
-      activities.reduce<ReadonlyMap<string, WorkflowNotification>>((notifications, { event }) => {
-        if (event.type !== "CUSTOM") return notifications;
-        const reducer = eventReducers.find(({ name }) => name === event.name);
-        return reducer?.reduce(notifications, event.value) ?? notifications;
-      }, new Map()),
+      activities.reduce<ReadonlyMap<WorkflowNotificationId, WorkflowNotification>>(
+        (notifications, { event }) => {
+          if (event.type !== "CUSTOM") return notifications;
+          const reducer = eventReducers.find(({ name }) => name === event.name);
+          return reducer?.reduce(notifications, event.value) ?? notifications;
+        },
+        new Map(),
+      ),
     ),
   );
 
 export interface WorkflowNotificationsService {
   readonly write: (run: RunRecord, notification: WorkflowNotification) => Effect.Effect<void, RunLedgerError>;
   readonly list: Effect.Effect<ReadonlyArray<WorkflowNotification>, RunLedgerError>;
-  readonly dismiss: (id: string) => Effect.Effect<void, RunLedgerError>;
+  readonly dismiss: (id: WorkflowNotificationId) => Effect.Effect<void, RunLedgerError>;
 }
 
 export const make = Effect.gen(function* () {

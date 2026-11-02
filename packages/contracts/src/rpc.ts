@@ -45,6 +45,7 @@ import {
   WorkflowId,
   WorkflowList,
   WorkflowNotification,
+  WorkflowNotificationId,
   WorkflowOptionList,
   WorkflowRecord,
   WorkflowSwitchResult,
@@ -258,7 +259,7 @@ export const ChooseWorkflowAnswer = Rpc.make("ChooseWorkflowAnswer", {
 });
 
 export const DismissWorkflowNotification = Rpc.make("DismissWorkflowNotification", {
-  payload: { id: TrimmedNonEmptyString },
+  payload: { id: WorkflowNotificationId },
   success: Schema.Void,
 });
 

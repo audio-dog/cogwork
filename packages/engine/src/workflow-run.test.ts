@@ -1345,6 +1345,8 @@ describe("WorkflowRun", () => {
 
       const [notification] = yield* notifications.list;
       assert.deepInclude(notification, { summary: "Edited", item: admission.event.key });
+      assert.include(notification?.id, keyOf(admission.event.key));
+      assert.include(notification?.id, plan.attempt);
       assert.notStrictEqual(approvedDigest, plan.digest);
       assert.isNull(yield* (yield* WorkflowActionPlanStore).pending(keyOf(admission.event.key), workflow));
       const run = yield* (yield* RunLedger).getRun(plan.attempt);

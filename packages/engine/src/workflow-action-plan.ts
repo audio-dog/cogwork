@@ -13,6 +13,7 @@ import {
   type WorkflowCatalogEntry,
   type WorkflowDocument,
   type WorkflowNodeId,
+  WorkflowNotificationId,
   type WorkflowOperation,
   type WorkflowParameterValue,
   WorkItemId,
@@ -439,7 +440,9 @@ const actionExecutors = {
     if (run === null) return yield* invalidTarget(context.step);
     yield* context.notifications
       .write(run, {
-        id: `${context.plan.workflow}:${context.plan.operation}:${context.plan.revision}`,
+        id: WorkflowNotificationId.make(
+          `${keyOf(context.item)}:${context.plan.attempt}:${context.step.writeKey}`,
+        ),
         item: context.item,
         workflow: context.plan.workflow,
         operation: context.plan.operation,

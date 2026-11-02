@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import {
   HarnessName,
   IssueTrackerType,
+  makeBrand,
   TrimmedNonEmptyString,
   WorkItemId,
   WorkspaceId,
@@ -262,8 +263,11 @@ export const WorkflowOperation = Schema.Struct({
 });
 export type WorkflowOperation = typeof WorkflowOperation.Type;
 
+export const WorkflowNotificationId = makeBrand("WorkflowNotificationId");
+export type WorkflowNotificationId = typeof WorkflowNotificationId.Type;
+
 export const WorkflowNotification = Schema.Struct({
-  id: TrimmedNonEmptyString,
+  id: WorkflowNotificationId,
   item: WorkItemRef,
   workflow: WorkflowId,
   operation: WorkflowNodeId,
