@@ -16,6 +16,7 @@ import {
   type WorkflowCatalogEntry,
   type WorkflowDocument,
   type WorkflowNodeId,
+  WorkflowNotificationId,
   type WorkflowOperation,
   type WorkflowParameterValue,
   WorkflowSlackActionArtifact,
@@ -471,6 +472,7 @@ const invalidTarget = (step: WorkflowActionPlanStep) =>
   });
 
 interface ActionContext {
+  readonly item: TriggerAdmission["event"]["key"];
   readonly plan: WorkflowActionPlan;
   readonly step: WorkflowActionPlanStep;
   readonly workspace: WorkspaceIssueTrackerBinding | null;
@@ -761,11 +763,17 @@ const actionExecutors: Record<string, ActionExecutor> = {
     if (run === null) return yield* invalidTarget(context.step);
     yield* context.notifications
       .write(run, {
-        id: `${context.plan.workflow}:${context.plan.operation}:${context.plan.revision}`,
+        id: WorkflowNotificationId.make(
+          `${keyOf(context.item)}:${context.plan.attempt}:${context.step.writeKey}`,
+        ),
+        item: context.item,
         workflow: context.plan.workflow,
         operation: context.plan.operation,
         summary: context.step.inputs.notification ?? "",
         answers: context.plan.answers,
+        artifacts: context.plan.steps.flatMap(({ artifact }) =>
+          Schema.is(WorkflowActionArtifact)(artifact) ? [artifact] : [],
+        ),
         atMillis: context.plan.createdAtMillis,
       })
       .pipe(
@@ -927,6 +935,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
         const workspace = targetWorkspace(executingStep);
         const sourceWorkspace = sourceTargetWorkspace(executingStep, registeredWorkspaces);
         const context = {
+          item: admission.event.key,
           plan: executingPlan,
           step: executingStep,
           workspace,

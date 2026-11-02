@@ -3,6 +3,8 @@ import {
   keyOf,
   LineageId,
   localOwnerId,
+  RunId,
+  WorkflowActionPlan,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -21,7 +23,10 @@ import {
   TriggerObservationStore,
 } from "./trigger-observation";
 import { Workflows, type WorkflowsService } from "./workflow";
-import { memoryLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
+import {
+  WorkflowActionPlanStore,
+  memoryLayer as workflowActionPlanStoreLayer,
+} from "./workflow-action-plan-store";
 import { make } from "./workflow-attention";
 
 const workflow = Schema.decodeSync(WorkflowId)("touchpoints");
@@ -30,6 +35,7 @@ const operation = Schema.decodeSync(WorkflowNodeId)("review");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("github.issue-changed");
 const workspace = Schema.decodeSync(WorkspaceId)("cogwork");
 const item = Schema.decodeSync(WorkItemId)("#814");
+const attempt = Schema.decodeSync(RunId)("run-814");
 const ref = { _tag: "Issue", workspace, id: item } as const;
 const document = Schema.decodeSync(WorkflowDocument)({
   name: "Touchpoints",
@@ -137,6 +143,25 @@ it.effect("lists one parked item and marks a later source revision", () =>
     yield* observationStore.putAll([rejected]);
     yield* observationStore.complete(rejected, Effect.void);
     yield* observationStore.putAll([admission("1", 1), admission("2", 3)]);
+    const frozenPlan = WorkflowActionPlan.make({
+      item: keyOf(ref),
+      workflow,
+      attempt,
+      operation,
+      revision: "1",
+      createdAtMillis: 1,
+      consumedHandbackAtMillis: 0,
+      digest: "plan-digest",
+      workflowRevision: 3,
+      summary: "Needs a decision",
+      answers: {},
+      inputs: {},
+      workspace,
+      lineage: admission("1", 1).lineage,
+      handOff: null,
+      steps: [],
+    });
+    yield* (yield* WorkflowActionPlanStore).create(frozenPlan);
 
     const attention = yield* make;
     const result = yield* attention.list;
@@ -152,13 +177,15 @@ it.effect("lists one parked item and marks a later source revision", () =>
       changedSinceParked: true,
       commands: ["hand-back"],
       reason: { _tag: "Stuck", summary: "Needs a decision" },
-      attempt: null,
+      attempt: frozenPlan.attempt,
+      parkedAtMillis: 2,
+      plan: frozenPlan,
     });
     assert.deepStrictEqual(result.skipped, [
       {
         workflow,
         steps: [],
-        events: [{ summary: entry, reason: "Granola note has no transcript" }],
+        events: [{ summary: entry, reason: "Granola note has no transcript", atMillis: 0 }],
       },
     ]);
   }).pipe(Effect.provide(requirements)),
