@@ -1,7 +1,6 @@
 import {
   applyDaemonEvent,
   type Board,
-  ClassifiedItem,
   DaemonEvent,
   initialBoard,
   type RunId,
@@ -66,7 +65,7 @@ export interface ActiveRun {
   readonly runId: RunId;
   readonly workspace: WorkspaceId;
   readonly workItem: WorkItemId;
-  readonly stage: RunSummary["stage"];
+  readonly operation: RunSummary["operation"];
   readonly status: RunStatus;
   readonly preview: RunActivityPreview | null;
 }
@@ -121,15 +120,6 @@ const settledRun = (board: Board, runId: RunId) => {
 };
 const stamp = (event: DaemonEvent, arrival: number) => event.emittedAtMillis ?? arrival;
 
-const classifiedState = (item: ClassifiedItem) =>
-  ClassifiedItem.match<{ readonly text: string; readonly severity: ActivitySeverity }>(item, {
-    Eligible: () => ({ text: "eligible", severity: "info" }),
-    Claimed: () => ({ text: "claimed", severity: "info" }),
-    Blocked: ({ openBlockers }) => ({ text: `blocked · ${openBlockers} open`, severity: "warn" }),
-    NeedsHuman: () => ({ text: "needs a person", severity: "warn" }),
-    ReadyToMerge: () => ({ text: "ready to merge", severity: "warn" }),
-  });
-
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
   running: "info",
   succeeded: "success",
@@ -152,17 +142,16 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
     WorkflowChanged: () => null,
     WorkflowDeleted: () => null,
     ItemChanged: ({ item, workspace }) => {
-      const state = classifiedState(item);
       return {
         id: rowId(ordinal),
         kind: "item",
         atMillis,
         label: activityLabels.item,
-        summary: `${item.title} → ${state.text}`,
-        severity: state.severity,
+        summary: `${item.title} → ready to merge`,
+        severity: "warn",
         entity: { type: "item", id: item.id, workspace },
         raw: pretty(item),
-        lowSignal: ClassifiedItem.guards.Eligible(item),
+        lowSignal: false,
       };
     },
     ItemRemoved: ({ workspace, id }) => ({

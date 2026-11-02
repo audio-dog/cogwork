@@ -1,55 +1,30 @@
-import type { TriageRole } from "@cogwork/contracts";
-import type { MarkerSpan, WireCodec } from "../coordination";
-import * as Coordination from "../coordination";
+export interface MarkerSpan {
+  readonly name: string;
+  readonly pairs: string;
+  readonly start: number;
+  readonly end: number;
+}
 
-const triageRoles = [
-  "needs-triage",
-  "ready-for-agent",
-  "needs-info",
-  "ready-for-human",
-  "wontfix",
-] as const satisfies ReadonlyArray<TriageRole>;
-
-const roleLabels = {
-  "needs-triage": "needs-triage",
-  "ready-for-agent": "ready-for-agent",
-  "needs-info": "needs-info",
-  "ready-for-human": "ready-for-human",
-  wontfix: "wontfix",
-} satisfies Record<TriageRole, string>;
-
-const labelToRole = new Map(triageRoles.map((role) => [roleLabels[role], role]));
-
-export const claimLabel = "cogwork:claimed";
-
-const compact = <A>(value: A | undefined): ReadonlyArray<A> => (value === undefined ? [] : [value]);
-
-export const rolesFromLabels = (labels: ReadonlyArray<string>) =>
-  labels.flatMap((label) => compact(labelToRole.get(label)));
-
-export const roleLabel = (role: TriageRole) => roleLabels[role];
-
-export const hasClaimLabel = (labels: ReadonlyArray<string>) => labels.includes(claimLabel);
+export interface WireCodec {
+  readonly ledgerMarker: string;
+  readonly encode: (marker: { readonly name: string; readonly pairs: string }) => string;
+  readonly scan: (body: string) => ReadonlyArray<MarkerSpan>;
+}
 
 export const ledgerMarker = "<!-- cogwork:ledger -->";
-
-// The coordination marker the engine appends to a round summary it posts on a pull request. It is a
-// `cogwork:` marker, so `hasCogworkMarker` keeps the daemon's own comment out of the human-feedback
-// and bot-trigger signals — the whole point being that the agent never writes this itself.
 export const agentNoteMarker = "<!-- cogwork:agent-note -->";
 
-// GitHub renders HTML comments invisibly, so markers can sit inline without a reader ever seeing them.
 const scanPattern = /<!--\s*cogwork:([^>]*)-->/g;
 
 export const wireCodec: WireCodec = {
   ledgerMarker,
   encode: ({ name, pairs }) => `<!-- cogwork:${name}${pairs ? ` ${pairs}` : ""} -->`,
-  scan: (body): ReadonlyArray<MarkerSpan> =>
+  scan: (body) =>
     [...body.matchAll(scanPattern)].flatMap((match) => {
       const inner = (match[1] ?? "").trim();
       const gap = inner.search(/\s/);
       const name = gap < 0 ? inner : inner.slice(0, gap);
-      if (name === "") return [];
+      if (!name) return [];
       return [
         {
           name,
@@ -61,6 +36,5 @@ export const wireCodec: WireCodec = {
     }),
 };
 
-export const hasLedgerMarker = (body: string) => Coordination.hasLedgerMarker(wireCodec, body);
-
-export const hasCogworkMarker = (body: string) => Coordination.hasCogworkMarker(wireCodec, body);
+export const hasLedgerMarker = (body: string) => body.includes(ledgerMarker);
+export const hasCogworkMarker = (body: string) => wireCodec.scan(body).length > 0;

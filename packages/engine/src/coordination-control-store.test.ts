@@ -1,4 +1,4 @@
-import { codingOperation, keyOf, LineageId, type WorkItemRef } from "@cogwork/contracts";
+import { keyOf, LineageId, type WorkItemRef } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -16,7 +16,7 @@ const item = {
   channel: "C1",
   ts: "1234.5",
 } as const satisfies WorkItemRef;
-const operation = codingOperation("implement");
+const operation = { workflow: "workflow", operation: "operate" };
 const lineage = { root: LineageId.make(keyOf(item)), parent: null, hop: 0 };
 
 const withCoordination = <A, E, R>(

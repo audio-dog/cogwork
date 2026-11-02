@@ -72,12 +72,10 @@ const replayRequest = (speed: ReplaySpeed) => ({
       reference: { workItem: "#690", url: null },
       prose: { body: "", comments: [] },
       facts: {
-        roles: [],
         assignees: [],
         openBlockers: 0,
         claim: null,
         priority: "medium",
-        pr: null,
       },
       observation: { generation: 1, observedAtMillis: 1 },
     },

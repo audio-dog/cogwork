@@ -262,8 +262,7 @@ function LoadedOperationSettings({
       value={{
         state: { catalogs, controlStore, readiness, workspace },
         actions: {
-          write: (operation, updates) =>
-            write({ payload: { updates: operationSettingBatch(workspace, operation, updates) } }),
+          write: (updates) => write({ payload: { updates: operationSettingBatch(workspace, updates) } }),
         },
         meta: { disabled },
       }}

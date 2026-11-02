@@ -59,7 +59,7 @@ const runValues = (record: RunRecord) => ({
   id: record.id,
   workspace: record.workspace,
   workItem: record.workItem,
-  stage: record.stage,
+  operation: record.operation,
   harness: record.harness,
   branch: record.branch,
   session: record.session,
@@ -113,7 +113,7 @@ const runRecordSelection = {
   id: runs.id,
   workspace: runs.workspace,
   workItem: runs.workItem,
-  stage: runs.stage,
+  operation: runs.operation,
   harness: runs.harness,
   branch: runs.branch,
   session: runs.session,
@@ -136,7 +136,7 @@ const runRecordFromRow = (row: {
   readonly id: string;
   readonly workspace: string;
   readonly workItem: string;
-  readonly stage: string;
+  readonly operation: string;
   readonly harness: string;
   readonly branch: string | null;
   readonly session: string | null;
@@ -151,7 +151,7 @@ const runRecordFromRow = (row: {
   id: row.id,
   workspace: row.workspace,
   workItem: row.workItem,
-  stage: row.stage,
+  operation: row.operation,
   harness: row.harness,
   branch: row.branch,
   session: row.session,

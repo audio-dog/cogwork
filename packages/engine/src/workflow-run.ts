@@ -510,7 +510,7 @@ export const make = Effect.gen(function* () {
           };
     const plan = RunPlan.make({
       id,
-      operation: "implement",
+      operation: operation.id,
       harness: {
         name: selectedHarness,
         model: operation.model.model,
@@ -547,7 +547,7 @@ export const make = Effect.gen(function* () {
       connections: [],
       workContext: {
         reference: { workItem: item, url: null },
-        facts: { roles: [], assignees: [], openBlockers: 0, claim, priority: "medium", pr: null },
+        facts: { assignees: [], openBlockers: 0, claim, priority: admission.event.priority ?? "medium" },
         prose: artifactProse,
         observation,
       },
@@ -565,7 +565,7 @@ export const make = Effect.gen(function* () {
       id,
       workspace: runWorkspace,
       workItem: item,
-      stage: "implement",
+      operation: operation.id,
       harness: selectedHarness,
       branch: checkout.branch,
       session,

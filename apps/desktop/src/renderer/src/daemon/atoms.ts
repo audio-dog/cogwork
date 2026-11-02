@@ -73,8 +73,6 @@ export const runActivityAtom = Atom.family((runId: RunId) =>
 
 export const cancelRunAtom = DaemonAtomRpc.mutation("CancelRun");
 
-export const reclassifyAtom = DaemonAtomRpc.mutation("Reclassify");
-
 export const handBackAtom = Atom.keepAlive(DaemonAtomRpc.mutation("HandBack"));
 
 export const handBackTargetAtom = Atom.keepAlive(

@@ -406,7 +406,7 @@ function RunNow() {
         <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
           <ElapsedTime />
           <span aria-hidden>·</span>
-          <span>{run.stage}</span>
+          <span>{run.operation}</span>
           <CancelButton />
         </div>
         {cancelError && <p className="mt-1.5 text-xs text-destructive">{cancelError}</p>}

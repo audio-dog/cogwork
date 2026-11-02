@@ -2,7 +2,6 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { AgUiCorrelation, AgUiEvent } from "./ag-ui";
 import { BranchName, HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
-import { LifecycleStage } from "./triage";
 
 export const RunId = TrimmedNonEmptyString.pipe(Schema.brand("RunId"));
 export type RunId = typeof RunId.Type;
@@ -76,7 +75,7 @@ export const RunRecord = Schema.Struct({
   id: RunId,
   workspace: WorkspaceId,
   workItem: WorkItemId,
-  stage: LifecycleStage,
+  operation: TrimmedNonEmptyString,
   harness: HarnessName,
   branch: Schema.NullOr(BranchName),
   session: Schema.NullOr(SessionId),
@@ -106,7 +105,7 @@ export const RunActivity = Schema.Struct({
   runId: RunId,
   workspace: WorkspaceId,
   workItem: WorkItemId,
-  stage: LifecycleStage,
+  operation: TrimmedNonEmptyString,
   seq: Schema.Natural,
   atMillis: Schema.Natural,
   correlation: AgUiCorrelation,

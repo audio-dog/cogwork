@@ -127,7 +127,7 @@ describe("SessionStore ledger-backed message store", () => {
           id: runId(id),
           workspace,
           workItem,
-          stage: "implement",
+          operation: "implement",
           harness,
           branch: branchName("b"),
           session,

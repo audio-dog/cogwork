@@ -1,6 +1,6 @@
 import type { ConnectionBindingId, ConnectionId } from "@cogwork/contracts";
-import type { BaseDivergence } from "../follow-up";
 import type { RegisteredWorkspace } from "../projector";
+import type { BaseDivergence } from "../source-control";
 import { type GitHubRepoRef, repoRefFromRepository } from "./client";
 
 export interface BotWakeMode {

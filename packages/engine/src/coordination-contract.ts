@@ -1,4 +1,4 @@
-import { codingOperation, keyOf, LineageId, type WorkItemRef } from "@cogwork/contracts";
+import { keyOf, LineageId, type WorkItemRef } from "@cogwork/contracts";
 import { assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
@@ -7,8 +7,8 @@ import type { CoordinationService } from "./coordination";
 
 export const verifyCoordinationContract = (coordination: CoordinationService, ref: WorkItemRef) =>
   Effect.gen(function* () {
-    const operation = codingOperation("implement");
-    const siblingOperation = codingOperation("triage");
+    const operation = { workflow: "workflow", operation: "operate" };
+    const siblingOperation = { workflow: "workflow", operation: "verify" };
     const lineage = { root: LineageId.make(keyOf(ref)), parent: null, hop: 0 };
     assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
 

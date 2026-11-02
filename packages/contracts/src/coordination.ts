@@ -60,8 +60,6 @@ export type OperationKey = typeof OperationKey.Type;
 export const AttemptReason = TrimmedNonEmptyString.check(Schema.isMaxLength(800));
 export type AttemptReason = typeof AttemptReason.Type;
 
-export const codingOperation = (operation: string) => ({ workflow: "coding", operation });
-
 export const Lineage = Schema.Struct({
   root: LineageId,
   parent: Schema.NullOr(LineageId),

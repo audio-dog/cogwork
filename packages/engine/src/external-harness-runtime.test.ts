@@ -56,7 +56,7 @@ import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import { fullProfile } from "./tools/policy";
+import { policyForProfile } from "./tools/policy";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -233,12 +233,10 @@ const request = Schema.decodeSync(RunPlan)({
       ],
     },
     facts: {
-      roles: ["ready-for-agent"],
       assignees: [],
       openBlockers: 0,
       claim: null,
       priority: "medium",
-      pr: null,
     },
     observation: { generation: 1, observedAtMillis: 1 },
   },
@@ -889,7 +887,7 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
 
         const chatOptions = probe.chatOptions[0];
         if (!chatOptions) return assert.fail("adapter received no chat options");
-        assert.strictEqual(getSandboxPolicy(runtimeCapabilities(chatOptions)), fullProfile);
+        assert.strictEqual(getSandboxPolicy(runtimeCapabilities(chatOptions)), policyForProfile("full"));
         assert.strictEqual(output.filter((event) => event.name === "structured-output.complete").length, 1);
         const diagnostic = output.find((event) => event.name === "controlled.diagnostic");
         assert.deepStrictEqual(diagnostic?.value, { native: true });
@@ -1080,7 +1078,7 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           id: request.id,
           workspace: secretWorkspace,
           workItem: secretWorkItem,
-          stage: "implement",
+          operation: "implement",
           harness: name,
           branch: null,
           session: freshSession,

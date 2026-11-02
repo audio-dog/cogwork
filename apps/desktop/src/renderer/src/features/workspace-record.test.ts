@@ -90,7 +90,6 @@ describe("workspace record draft", () => {
           connectionId: "linear/acme",
           teams: ["ENG"],
           organization: "acme",
-          roleLabels: { "ready-for-agent": "agent-ready" },
         },
         sourceControl: {
           type: "github",

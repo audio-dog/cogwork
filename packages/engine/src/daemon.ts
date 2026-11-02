@@ -7,12 +7,10 @@ import {
   defaultControlStore,
   HarnessCatalog,
   localOwner,
-  PollState,
   Principal,
   PrincipalMiddleware,
   type RunActivity,
   type RunId,
-  type WorkItemRef,
   type WorkspaceId,
 } from "@cogwork/contracts";
 
@@ -25,7 +23,6 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
-import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as References from "effect/References";
@@ -36,7 +33,6 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import type { SqlError } from "effect/unstable/sql/SqlError";
-import { Availability } from "./availability";
 import { makeClockSource } from "./clock-source";
 import {
   cancelRun,
@@ -48,7 +44,6 @@ import {
   loginGranola,
   loginSlack,
   rebindWorkspace,
-  reclassify,
   reconnectConnection,
   registerWorkspace,
   removeConnection,
@@ -64,7 +59,7 @@ import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";
 import type { ContextAssembler } from "./context-assembler";
 import { bootControlStoreLayer, ControlStore, type ControlStoreService } from "./control-store";
-import { Coordination, CoordinationError, type CoordinationService } from "./coordination";
+import { Coordination } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
@@ -73,7 +68,6 @@ import {
   DaemonEventPublisher,
   layer as eventPublisherLayer,
 } from "./event-publisher";
-import * as Executor from "./executor";
 import type { Git } from "./git";
 import * as GitHub from "./github";
 import { makeGranolaSource, makeGranolaSourceAdapters } from "./granola-source";
@@ -83,7 +77,6 @@ import { IssueTracker } from "./issue-tracker";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
-import * as OperationResolution from "./operation-resolution";
 import { PerformanceHealthSource } from "./performance-health-source";
 import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
 import {
@@ -91,21 +84,8 @@ import {
   layer as performanceRegressionSensorLayer,
 } from "./performance-regression-sensor";
 import { PluginManager, pluginManagerLayer } from "./plugin";
-import type { RegisteredWorkspace, RegistryState } from "./projector";
-import {
-  classifiedItemsOf,
-  currentReconcileStatesOf,
-  schedulerStatsOf,
-  workspaceInfoOf,
-  workspaceStatesOf,
-} from "./read-model";
-import {
-  makeRefreshing as makeReconcile,
-  type ReconcileSnapshot,
-  ReconcileWorker,
-  type WorkspaceReconcileState,
-} from "./reconcile";
-import { Recovery, layer as recoveryLayer } from "./recovery";
+import type { RegistryState } from "./projector";
+import { readyToMergeByWorkspace, schedulerStatsOf, workspaceInfoOf, workspaceStatesOf } from "./read-model";
 import { WorkspaceRegistry, layer as workspaceRegistryLayer } from "./registry";
 import { layer as runControlLayer } from "./run-control";
 import {
@@ -134,7 +114,7 @@ import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
 import { WorkflowNotifications, layer as workflowNotificationsLayer } from "./workflow-notification";
 import { WorkflowRun, layer as workflowRunLayer } from "./workflow-run";
-import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
+import type { WorktreeManager } from "./worktree";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
   "@cogwork/engine/daemon/DaemonInfo",
@@ -206,7 +186,6 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
 });
 
 const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
-  const worker = yield* ReconcileWorker;
   const scheduler = yield* Scheduler;
   const controlStore = yield* ControlStore;
   const plugins = yield* PluginManager;
@@ -215,16 +194,20 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const workflows = yield* Workflows;
   const ledger = yield* RunLedger;
   const emittedAtMillis = yield* Clock.currentTimeMillis;
-  const snapshot = yield* worker.snapshot;
   const config = yield* scheduler.config;
   const stats = yield* scheduler.stats;
   const running = yield* ledger.runningRuns;
   const registry = yield* (yield* WorkspaceRegistry).state;
-  const items = currentReconcileStatesOf(registry, snapshot).flatMap((state) =>
-    classifiedItemsOf(state).map((item) => ({ _tag: "ItemChanged", workspace: state.name, item }) as const),
-  );
-  const workspaces = workspaceStatesOf(registry, snapshot).map(
+  const readyToMerge = yield* readyToMergeByWorkspace(registry);
+  const workspaces = workspaceStatesOf(registry, readyToMerge).map(
     (workspace) => ({ _tag: "WorkspaceChanged", workspace }) as const,
+  );
+  const items = [...readyToMerge].flatMap(([workspace, entries]) =>
+    entries.map((item) => ({
+      _tag: "ItemChanged" as const,
+      workspace,
+      item: { _tag: "ReadyToMerge" as const, ...item },
+    })),
   );
   const runs = running.map((run) => ({ _tag: "RunChanged", run }) as const);
   const scheduling = {
@@ -258,8 +241,8 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     }),
   );
   return [
-    ...items,
     ...workspaces,
+    ...items,
     ...runs,
     ...controlStoreEvents,
     ...pluginEvents,
@@ -267,10 +250,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     ...workflowEvents,
     harnessEvent,
     scheduling,
-  ].map((event) => ({
-    ...event,
-    emittedAtMillis,
-  }));
+  ].map((event) => ({ ...event, emittedAtMillis }));
 });
 
 // Subscribe before reading the seed so an event published between the two is not lost.
@@ -285,15 +265,10 @@ export const watchEvents = Effect.fn("Daemon.watchEvents")(function* () {
   );
 });
 
-const statesByName = (snapshot: ReconcileSnapshot) =>
-  new Map(snapshot.workspaces.map((state) => [state.name, state]));
-
 export const handlersLayer = DaemonRpcs.toLayer({
   GetStatus: Effect.fn("Daemon.GetStatus")(function* () {
     const info = yield* DaemonInfo;
-    const worker = yield* ReconcileWorker;
     const scheduler = yield* Scheduler;
-    const snapshot = yield* worker.snapshot;
     const config = yield* scheduler.config;
     const stats = yield* scheduler.stats;
     const now = yield* Clock.currentTimeMillis;
@@ -301,7 +276,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const controlStore = yield* ControlStore;
     const triggerObservation = yield* TriggerObservation;
     const registry = yield* (yield* WorkspaceRegistry).state;
-    const stateByName = statesByName(snapshot);
+    const readyToMerge = yield* readyToMergeByWorkspace(registry);
     return {
       health: controlStore.health === "available" ? "running" : "store-unavailable",
       startedAtMillis: info.startedAtMillis,
@@ -309,7 +284,9 @@ export const handlersLayer = DaemonRpcs.toLayer({
       eventBusDroppedEvents: yield* bus.droppedEvents,
       scheduler: schedulerStatsOf(registry, config, stats),
       sources: yield* triggerObservation.health,
-      workspaces: registry.workspaces.map((w) => workspaceInfoOf(w, stateByName.get(w.config.name))),
+      workspaces: registry.workspaces.map((workspace) =>
+        workspaceInfoOf(workspace, readyToMerge.get(workspace.config.name)),
+      ),
       failures: registry.failures.map(({ name, displayName, source, message }) => ({
         ...(name === undefined ? {} : { name }),
         ...(displayName === undefined ? {} : { displayName }),
@@ -374,7 +351,6 @@ export const handlersLayer = DaemonRpcs.toLayer({
   DismissWorkflowNotification: (payload) =>
     Effect.flatMap(WorkflowNotifications, ({ dismiss }) => dismiss(payload.id)).pipe(Effect.orDie),
   HandBack: handBack,
-  Reclassify: reclassify,
   SetScheduling: setScheduling,
   ReportProcessHealth: Effect.fn("Daemon.ReportProcessHealth")(function* ({ samples }) {
     yield* Effect.forEach(samples, recordProcessHealth, { discard: true });
@@ -444,47 +420,7 @@ const providerTriggerSourcesLayer = <E, R>(
     ),
   ).pipe(Layer.provide(issueTracker));
 
-const makeWorkflowCoordination = Effect.fn("Daemon.makeWorkflowCoordination")(function* () {
-  const control = yield* makeControlStoreCoordination;
-  const tracker = yield* IssueTracker;
-  const workspaceRegistry = yield* WorkspaceRegistry;
-  const unavailable = (message: string) =>
-    new CoordinationError({ reason: "unavailable", retryable: true, message });
-  const forItem = Effect.fn("WorkflowCoordination.forItem")(function* (ref: WorkItemRef) {
-    if (ref._tag !== "Issue") return control;
-    const state = yield* workspaceRegistry.state;
-    const workspace = state.workspaces.find(({ config }) => config.name === ref.workspace);
-    if (workspace === undefined) {
-      return yield* unavailable(`Workspace ${ref.workspace} is not registered`);
-    }
-    if (tracker.workflowCoordination === undefined) {
-      return yield* unavailable(`Workflow coordination is unavailable for ${ref.workspace}`);
-    }
-    const service = yield* tracker
-      .workflowCoordination(workspace, ref.id)
-      .pipe(Effect.mapError((error) => unavailable(error.message)));
-    return {
-      ...service,
-      observe: () => Effect.succeed("moved" as const),
-      markProcessed: () => Effect.void,
-    } satisfies CoordinationService;
-  });
-  const route = <A>(
-    ref: Parameters<CoordinationService["read"]>[0],
-    use: (service: CoordinationService) => Effect.Effect<A, CoordinationError>,
-  ) => Effect.flatMap(forItem(ref), use);
-  return {
-    fold: control.fold,
-    read: (ref) => route(ref, (service) => service.read(ref)),
-    claim: (ref, input) => route(ref, (service) => service.claim(ref, input)),
-    release: (ref, claim) => route(ref, (service) => service.release(ref, claim)),
-    recordAttempt: (ref, input) => route(ref, (service) => service.recordAttempt(ref, input)),
-    park: (ref, reason, operation) => route(ref, (service) => service.park(ref, reason, operation)),
-    handBack: (ref, input) => route(ref, (service) => service.handBack(ref, input)),
-    observe: (ref, revision, cause) => route(ref, (service) => service.observe(ref, revision, cause)),
-    markProcessed: (ref, revision) => route(ref, (service) => service.markProcessed(ref, revision)),
-  } satisfies CoordinationService;
-});
+const makeWorkflowCoordination = makeControlStoreCoordination;
 
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
@@ -553,9 +489,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const machineReadiness = machineReadinessLayer.pipe(
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
   );
-  const coordination = Layer.effect(Coordination, makeWorkflowCoordination()).pipe(
-    Layer.provide(Layer.mergeAll(controlStore, issueTracker, registry)),
-  );
+  const coordination = Layer.effect(Coordination, makeWorkflowCoordination).pipe(Layer.provide(controlStore));
   const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources: Layer.Layer<
     TriggerSources,
@@ -649,16 +583,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     McpSkill.layer.pipe(Layer.provide(credentials)),
     runControlLayer,
   );
-  const availability = Availability.layer;
-  const operationResolution = OperationResolution.layer;
-  const services = Layer.mergeAll(
-    Layer.effect(ReconcileWorker, makeReconcile),
-    Layer.effect(Executor.Executor, Executor.make),
-  ).pipe(
-    Layer.provideMerge(operationResolution),
-    Layer.provide(availability),
-    Layer.provideMerge(Layer.mergeAll(base, adapters.worktrees)),
-  );
   return eventPublisherLayer.pipe(
     Layer.provideMerge(
       performanceRegressionSensorLayer({
@@ -666,17 +590,13 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         evidenceRoot: adapters.performanceEvidenceRoot,
       }).pipe(
         Layer.provideMerge(
-          recoveryLayer.pipe(
-            Layer.provideMerge(
-              Layer.unwrap(
-                Effect.map(ControlStore, (store) =>
-                  schedulerLayer(
-                    configFromControlStore(store.health === "available" ? store.seed : defaultControlStore),
-                  ),
-                ),
-              ).pipe(Layer.provideMerge(services)),
+          Layer.unwrap(
+            Effect.map(ControlStore, (store) =>
+              schedulerLayer(
+                configFromControlStore(store.health === "available" ? store.seed : defaultControlStore),
+              ),
             ),
-          ),
+          ).pipe(Layer.provideMerge(base)),
         ),
       ),
     ),
@@ -693,106 +613,6 @@ export const serverLayer = <E, R>(adapters: HostAdapters<E, R>) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-interface ReconcilableWorkspace {
-  readonly workspace: RegisteredWorkspace;
-  readonly state: WorkspaceReconcileState;
-}
-
-const activeTicketKeys = (state: WorkspaceReconcileState) =>
-  state.observed.flatMap((item) => [ticketSlug(item.id), ...(item.pr?.followable ? [item.pr.headRef] : [])]);
-
-const canonicalWorktreeRoot = Effect.fn("Daemon.canonicalWorktreeRoot")(function* (
-  workspace: RegisteredWorkspace,
-) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const configuredPath = path.resolve(
-    worktreeRoot(workspace.config.checkoutPath, workspace.config.worktrees),
-  );
-  return yield* fs.realPath(configuredPath).pipe(
-    Effect.match({
-      onFailure: () => ({ configuredPath, canonicalPath: configuredPath, resolved: false }),
-      onSuccess: (canonicalPath) => ({ configuredPath, canonicalPath, resolved: true }),
-    }),
-  );
-});
-
-const reconcileWorkspaceWorktrees = Effect.fn("Daemon.reconcileWorkspaceWorktrees")(function* (
-  workspace: RegisteredWorkspace,
-  workspaces: ReadonlyArray<RegisteredWorkspace>,
-  state: WorkspaceReconcileState,
-  now: number,
-) {
-  const manager = yield* WorktreeManager;
-  const ledger = yield* RunLedger;
-  const running = yield* ledger.runningRuns;
-  const workspaceByName = new Map(workspaces.map((candidate) => [candidate.config.name, candidate]));
-  const retainedRuns = running.map((record) => ({
-    branch: record.branch,
-    owner: workspaceByName.get(record.workspace),
-  }));
-  const ownershipRoot = yield* canonicalWorktreeRoot(workspace);
-  const ownershipPaths = new Set([ownershipRoot.configuredPath, ownershipRoot.canonicalPath]);
-  const retainedPaths = yield* Effect.forEach(retainedRuns, ({ branch, owner }) => {
-    const missingOwnership = owner === undefined || branch === null;
-    if (missingOwnership) return Effect.succeed([]);
-    return Effect.map(canonicalWorktreeRoot(owner), (ownerRoot) => {
-      const sharesOwnershipRoot =
-        !ownerRoot.resolved ||
-        !ownershipRoot.resolved ||
-        ownerRoot.canonicalPath === ownershipRoot.canonicalPath;
-      return sharesOwnershipRoot ? [...ownershipPaths].map((root) => worktreePathFor(root, branch)) : [];
-    });
-  });
-  const ownedWorktreePaths = retainedPaths.flat();
-  return yield* manager.reconcile(
-    workspace,
-    { activeTicketKeys: activeTicketKeys(state), ownedWorktreePaths },
-    now,
-  );
-});
-
-const maintainWorktrees = Effect.fn("Daemon.maintainWorktrees")(function* () {
-  const manager = yield* WorktreeManager;
-  const worker = yield* ReconcileWorker;
-  const snapshot = yield* worker.snapshot;
-  const now = yield* Clock.currentTimeMillis;
-  const registry = yield* (yield* WorkspaceRegistry).state;
-  const stateByName = statesByName(snapshot);
-  const reconcilable = registry.workspaces
-    .map((workspace) => ({ workspace, state: stateByName.get(workspace.config.name) }))
-    .filter(
-      (entry): entry is ReconcilableWorkspace =>
-        entry.workspace.config.worktrees !== undefined &&
-        entry.state !== undefined &&
-        PollState.guards.ok(entry.state.poll),
-    );
-  yield* Effect.forEach(
-    reconcilable,
-    ({ workspace, state }) => {
-      const correlation = { workspace: workspace.config.name };
-      return manager
-        .tryWithMaintenanceLock(reconcileWorkspaceWorktrees(workspace, registry.workspaces, state, now))
-        .pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: () => Effect.logInfo("worktree maintenance skipped; Run owns a worktree"),
-              onSome: (outcome) => Effect.logInfo("worktree maintenance", outcome),
-            }),
-          ),
-          Effect.catchTag("GitError", (error) =>
-            Effect.logWarning("worktree maintenance failed", {
-              message: error.message,
-            }),
-          ),
-          Effect.annotateLogs(correlation),
-          Effect.annotateSpans(correlation),
-        );
-    },
-    { discard: true },
-  );
-});
-
 const continueAfterHeartbeatFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, message: string) =>
   Effect.catchCauseIf(
     effect,
@@ -800,39 +620,14 @@ const continueAfterHeartbeatFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, 
     (cause) => Effect.logError(message, { cause }),
   );
 
-const reconcileTick = Effect.fn("Daemon.reconcileHeartbeat")(function* () {
-  const worker = yield* ReconcileWorker;
-  const publisher = yield* DaemonEventPublisher;
-  yield* continueAfterHeartbeatFailure(
-    worker.submit().pipe(Effect.tap((receipt) => Effect.logInfo("reconcile tick", receipt))),
-    "reconcile heartbeat failed",
-  );
-  yield* publisher.publishItems();
-  yield* publisher.publishWorkspaces();
-  yield* maintainWorktrees();
-});
-
-const reconcileHeartbeat = (pollIntervalMillis: number) =>
-  continueAfterHeartbeatFailure(reconcileTick(), "reconcile heartbeat failed").pipe(
-    Effect.repeat(Schedule.spaced(pollIntervalMillis)),
-  );
-
-export const bootstrap = Effect.gen(function* () {
-  const controlStore = yield* ControlStore;
-  if (controlStore.health === "unavailable") return;
-  const worker = yield* ReconcileWorker;
-  const recovery = yield* Recovery;
-  yield* continueAfterHeartbeatFailure(worker.submit(), "reconcile bootstrap failed");
-  yield* recovery.recoverWhenLive();
-});
+export const bootstrap = Effect.void;
 
 const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
-  const recovery = yield* Recovery;
   const scheduler = yield* Scheduler;
   const publisher = yield* DaemonEventPublisher;
-  yield* recovery.recoverWhenLive();
   yield* scheduler.tick();
   yield* publisher.publishScheduler();
+  yield* publisher.publishWorkspaces();
 });
 
 const executeHeartbeat = () => executeTick().pipe(Effect.repeat(Schedule.spaced("5 seconds")));
@@ -855,9 +650,9 @@ export interface HeartbeatOptions {
 }
 
 const activeHeartbeats = (options: HeartbeatOptions) =>
-  Effect.all([reconcileHeartbeat(options.pollIntervalMillis), executeHeartbeat()], {
-    concurrency: "unbounded",
-  }).pipe(Effect.onInterrupt(() => Effect.flatMap(Scheduler, (scheduler) => scheduler.drain(options.drain))));
+  executeHeartbeat().pipe(
+    Effect.onInterrupt(() => Effect.flatMap(Scheduler, (scheduler) => scheduler.drain(options.drain))),
+  );
 
 const awaitHeartbeatInterruption = () => Effect.callback<never>(() => Effect.void);
 

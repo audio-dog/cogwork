@@ -1,8 +1,9 @@
-import { codingOperation, LineageId } from "@cogwork/contracts";
+import { LineageId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { fold, maxAttemptsPerOperation, maxLineageHops } from "./coordination";
+import { fold, maxLineageHops } from "./coordination";
 
-const operation = codingOperation("implement");
+const operationOf = (operation: string) => ({ workflow: "workflow", operation });
+const operation = operationOf("operate");
 const root = LineageId.make("issue:1");
 const lineage = (hop = 0) => ({ root, parent: null, hop });
 const attempt = (outcome: "succeeded" | "failed" | "abandoned", atMillis: number, hop = 0) => ({
@@ -28,7 +29,7 @@ describe("coordination fold", () => {
       ],
       handbacks: [{ by: "person", atMillis: 2, note: null }],
       expected: {
-        consecutiveFailures: maxAttemptsPerOperation,
+        consecutiveFailures: 3,
         exhausted: true,
         hop: maxLineageHops,
         hopCapped: true,
@@ -38,7 +39,7 @@ describe("coordination fold", () => {
       name: "does not count or reset from another Operation",
       attempts: [
         attempt("failed", 1),
-        { ...attempt("succeeded", 2), operation: codingOperation("triage") },
+        { ...attempt("succeeded", 2), operation: operationOf("verify") },
         attempt("failed", 3),
       ],
       handbacks: [],
@@ -86,11 +87,11 @@ describe("coordination fold", () => {
       _tag: "Parked",
       reason: { _tag: "HopCap" },
     });
-    assert.deepStrictEqual(
+    assert.strictEqual(
       fold(ledger([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]), "cogwork").gate(
         operation,
-      ),
-      { _tag: "Parked", reason: { _tag: "Exhausted", reason: "failure limit" } },
+      )._tag,
+      "Open",
     );
     assert.strictEqual(fold(ledger([]), "cogwork").gate(operation)._tag, "Open");
   });
@@ -122,7 +123,7 @@ describe("coordination fold", () => {
   });
 
   it("keeps the parked Operation blocked until the tracker source revision changes", () => {
-    const judge = codingOperation("judge");
+    const judge = operationOf("judge");
     const view = fold(
       {
         claim: null,

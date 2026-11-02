@@ -3,11 +3,7 @@ import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from
 import { ConnectionOverview } from "./connection";
 import { LocalContribution } from "./contribution";
 import {
-  ActionableItem,
-  BlockedItem,
-  ClaimedItem,
   ControlStore,
-  NeedsHumanItem,
   OperationAvailabilityList,
   PollState,
   ReadyToMergeItem,
@@ -19,14 +15,10 @@ import { RunActivity, RunSummary } from "./run";
 import { WorkflowId, WorkflowRecord } from "./workflow";
 import { WorkspaceRegistration } from "./workspace";
 
-export const ClassifiedItem = Schema.TaggedUnion({
-  Eligible: ActionableItem.fields,
-  Claimed: ClaimedItem.fields,
-  Blocked: BlockedItem.fields,
-  NeedsHuman: NeedsHumanItem.fields,
+export const ReadModelItem = Schema.TaggedUnion({
   ReadyToMerge: ReadyToMergeItem.fields,
 });
-export type ClassifiedItem = typeof ClassifiedItem.Type;
+export type ReadModelItem = typeof ReadModelItem.Type;
 
 export const WorkspaceState = Schema.TaggedUnion({
   Registered: {
@@ -51,7 +43,7 @@ export type WorkspaceState = typeof WorkspaceState.Type;
 export const DaemonEvent = Schema.TaggedUnion({
   SeedEnd: { emittedAtMillis: Schema.Finite },
   RunActivity: { emittedAtMillis: Schema.Finite, activity: RunActivity },
-  ItemChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId, item: ClassifiedItem },
+  ItemChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId, item: ReadModelItem },
   ItemRemoved: { emittedAtMillis: Schema.Finite, workspace: WorkspaceId, id: WorkItemId },
   RunChanged: { emittedAtMillis: Schema.Finite, run: RunSummary },
   WorkspaceChanged: { emittedAtMillis: Schema.Finite, workspace: WorkspaceState },

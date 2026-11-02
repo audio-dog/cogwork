@@ -1,30 +1,41 @@
-import type { ActionableItem, ClassifiedItem, SchedulerStats } from "@cogwork/contracts";
+import type { ReadyToMergeItem, SchedulerStats } from "@cogwork/contracts";
 import { workspaceFailureState, workspaceStateFromInfo } from "@cogwork/contracts";
-import { classifiedItemOf, type EligibleWork } from "./classify";
-import type { ObservedItem } from "./issue-tracker";
+import * as Effect from "effect/Effect";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
-import type { ReconcileSnapshot, WorkspaceReconcileState } from "./reconcile";
 import type { SchedulerConfig, SchedulerState } from "./scheduler";
+import { SourceControlProvider } from "./source-control";
+import { WorkflowArtifactStore } from "./workflow-artifact-store";
 
-const pendingPoll = { status: "pending" as const };
-
-const actionableOf = (work: EligibleWork): ActionableItem => ({
-  id: work.id,
-  title: work.title,
-  ...(work.url !== undefined ? { url: work.url } : {}),
-  stage: work.stage,
-  ...(work.pr ? { pr: work.pr } : {}),
+export const readyToMergeByWorkspace = Effect.fn("ReadModel.readyToMergeByWorkspace")(function* (
+  registry: RegistryState,
+) {
+  const artifactStore = yield* WorkflowArtifactStore;
+  const artifacts = yield* (artifactStore.all ?? Effect.succeed([])).pipe(
+    Effect.catchTag("ControlStoreFailure", (error) =>
+      Effect.logWarning("Ready to merge artifacts unavailable", { message: error.message }).pipe(
+        Effect.map(() => []),
+      ),
+    ),
+  );
+  const sourceControl = yield* SourceControlProvider;
+  const entries = yield* Effect.forEach(registry.workspaces, (workspace) =>
+    (
+      sourceControl.readyToMerge?.(
+        workspace,
+        artifacts.filter((artifact) => artifact.workspace === workspace.config.name),
+      ) ?? Effect.succeed([])
+    ).pipe(
+      Effect.catchTag("IssueTrackerError", (error) =>
+        Effect.logWarning("Ready to merge read failed", {
+          workspace: workspace.config.name,
+          message: error.message,
+        }).pipe(Effect.map(() => [] as ReadonlyArray<ReadyToMergeItem>)),
+      ),
+      Effect.map((items) => [workspace.config.name, items] as const),
+    ),
+  );
+  return new Map(entries);
 });
-
-export const classifiedItemsOf = (state: WorkspaceReconcileState): ReadonlyArray<ClassifiedItem> => [
-  ...state.eligible.map((work) => ({ _tag: "Eligible", ...actionableOf(work) }) satisfies ClassifiedItem),
-  ...state.claimed.map((item) => ({ _tag: "Claimed", ...item }) satisfies ClassifiedItem),
-  ...state.blocked.map((item) => ({ _tag: "Blocked", ...item }) satisfies ClassifiedItem),
-  ...state.needsHuman.map((item) => ({ _tag: "NeedsHuman", ...item }) satisfies ClassifiedItem),
-  ...state.readyToMerge.map((item) => ({ _tag: "ReadyToMerge", ...item }) satisfies ClassifiedItem),
-];
-
-export const classifiedItemWithPr = (item: ObservedItem): ClassifiedItem | null => classifiedItemOf(item);
 
 const workspaceRecordOf = (workspace: RegisteredWorkspace) =>
   workspace.record ?? {
@@ -38,39 +49,30 @@ const workspaceRecordOf = (workspace: RegisteredWorkspace) =>
     ...(workspace.workspaceLimit ? { concurrency: workspace.workspaceLimit } : {}),
   };
 
-export const currentReconcileStatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot) => {
-  const names = new Set(registry.workspaces.map((workspace) => workspace.config.name));
-  return snapshot.workspaces.filter((state) => names.has(state.name));
-};
-
 export const workspaceInfoOf = (
   workspace: RegisteredWorkspace,
-  state: WorkspaceReconcileState | undefined,
+  readyToMerge: ReadonlyArray<ReadyToMergeItem> = [],
 ) => ({
   name: workspace.config.name,
   ...(workspace.config.displayName ? { displayName: workspace.config.displayName } : {}),
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
   record: workspaceRecordOf(workspace),
-  poll: state?.poll ?? pendingPoll,
+  poll: { status: "ok" as const },
   contributions: workspace.contributions,
-  availability: state?.availability ?? [],
-  eligible: (state?.eligible ?? []).map(actionableOf),
-  claimed: state?.claimed ?? [],
-  blocked: state?.blocked ?? [],
-  needsHuman: state?.needsHuman ?? [],
-  readyToMerge: state?.readyToMerge ?? [],
+  availability: [],
+  readyToMerge,
 });
 
-export const workspaceStatesOf = (registry: RegistryState, snapshot: ReconcileSnapshot) => {
-  const stateByName = new Map(snapshot.workspaces.map((state) => [state.name, state] as const));
-  return [
-    ...registry.workspaces.map((workspace) =>
-      workspaceStateFromInfo(workspaceInfoOf(workspace, stateByName.get(workspace.config.name))),
-    ),
-    ...registry.failures.map(workspaceFailureState),
-  ];
-};
+export const workspaceStatesOf = (
+  registry: RegistryState,
+  readyToMerge: ReadonlyMap<string, ReadonlyArray<ReadyToMergeItem>> = new Map(),
+) => [
+  ...registry.workspaces.map((workspace) =>
+    workspaceStateFromInfo(workspaceInfoOf(workspace, readyToMerge.get(workspace.config.name))),
+  ),
+  ...registry.failures.map(workspaceFailureState),
+];
 
 const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, state: SchedulerState) => [
   ...registry.workspaces.map((workspace) => ({

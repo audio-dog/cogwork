@@ -1,6 +1,5 @@
 import {
   type ControlStore,
-  defaultPermissionProfile,
   type HarnessCatalog,
   type HarnessCatalogChoice,
   HarnessModelOptionDescriptor,
@@ -10,36 +9,17 @@ import {
   HarnessState,
   harnessEnabled,
   harnessModelOptionAccepts,
-  LifecycleStage,
   ModelOptionSelections,
   type OperationSettingBatch,
   type OperationSettingName,
   type OperationSettingRow,
   OperationSettingUpdate,
-  operationDefaultProfiles,
   type RunPlanPolicyProfile,
   resolveOperationSetting,
   type WorkspaceId,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { providerLabel } from "./provider-presentation";
-
-/** `operationSettingRefusal` refuses any workflow but this one, so it is fixed today. */
-export const codingWorkflow = "coding";
-
-export const operations = LifecycleStage.literals;
-
-export const operationLabels: Record<LifecycleStage, string> = {
-  triage: "Triage",
-  implement: "Implement",
-  "follow-up": "Follow-up",
-};
-
-export const operationSummaries: Record<LifecycleStage, string> = {
-  triage: "Reads a new work item and proposes what happens to it.",
-  implement: "Writes the change and opens a pull request.",
-  "follow-up": "Answers failing checks and review comments on its own pull request.",
-};
 
 export type AvailableHarnessCatalog = HarnessOptionCatalog & { readonly harness: HarnessName };
 
@@ -192,7 +172,7 @@ export interface SettingCell {
   readonly stale: boolean;
 }
 
-export type DisplayedOperationSettingName = Exclude<OperationSettingName, "bindings" | "model-options">;
+export type DisplayedOperationSettingName = Exclude<OperationSettingName, "model-options">;
 
 export type OperationSettingChange =
   | { readonly setting: DisplayedOperationSettingName; readonly value: string | null }
@@ -214,7 +194,6 @@ const operationSettingRowProducers: Record<
   OperationSettingWriteName,
   (base: OperationSettingRowBase, value: OperationSettingWriteValue) => OperationSettingRow
 > = {
-  enabled: (base, value) => ({ ...base, setting: "enabled", value: value === "true" }),
   harness: (base, value) => ({
     ...base,
     setting: "harness",
@@ -230,35 +209,19 @@ const operationSettingRowProducers: Record<
     setting: "model-options",
     value: typeof value === "object" ? value : {},
   }),
-  "permission-profile": (base, value) => ({
-    ...base,
-    setting: "permission-profile",
-    value: typeof value === "string" ? value : "",
-  }),
 };
 
-export const harnessSelectionUpdates = (
-  currentHarness: string | null,
-  harness: string | null,
-  model: string | null,
-) => {
-  const profileReset: ReadonlyArray<OperationSettingChange> =
-    currentHarness === harness ? [] : [{ setting: "permission-profile", value: null }];
+export const harnessSelectionUpdates = (harness: string | null, model: string | null) => {
   const restoresInheritedSelection = harness === null && model === null;
   return [
     { setting: "harness", value: harness },
     { setting: "model", value: model },
     { setting: "model-options", value: restoresInheritedSelection ? null : {} },
-    ...profileReset,
   ] satisfies OperationSettingChanges;
 };
 
-const isOverride = (row: OperationSettingRow, operation: LifecycleStage, workspace: WorkspaceId) =>
-  row.level._tag === "Operation" &&
-  row.level.workflow === codingWorkflow &&
-  row.level.operation === operation &&
-  row.scope._tag === "PrivateWorkspaceOverlay" &&
-  row.scope.workspace === workspace;
+const isOverride = (row: OperationSettingRow, workspace: WorkspaceId) =>
+  row.scope._tag === "PrivateWorkspaceOverlay" && row.scope.workspace === workspace;
 
 const asDisplayValue = (value: ReturnType<typeof resolveOperationSetting>) => {
   if (value === null) return null;
@@ -270,19 +233,18 @@ const asDisplayValue = (value: ReturnType<typeof resolveOperationSetting>) => {
 const resolvedSettingValues = (
   controlStore: ControlStore | null,
   workspace: WorkspaceId,
-  operation: LifecycleStage,
   setting: DisplayedOperationSettingName,
 ) => {
   const rows = controlStore?.operationSettings ?? [];
-  const context = { workflow: codingWorkflow, operation, workspace };
+  const context = { workspace };
   const inherited = asDisplayValue(
     resolveOperationSetting(
-      rows.filter((row) => !isOverride(row, operation, workspace)),
+      rows.filter((row) => !isOverride(row, workspace)),
       setting,
       context,
     ),
   );
-  const stored = rows.find((row) => row.setting === setting && isOverride(row, operation, workspace));
+  const stored = rows.find((row) => row.setting === setting && isOverride(row, workspace));
   const own = stored ? asDisplayValue(stored.value) : null;
   const effective = own ?? inherited;
   return {
@@ -292,73 +254,39 @@ const resolvedSettingValues = (
   };
 };
 
-const permissionProfileDefault = (
-  controlStore: ControlStore | null,
-  catalogs: ReadonlyArray<AvailableHarnessCatalog>,
-  workspace: WorkspaceId,
-  operation: LifecycleStage,
-) => {
-  const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
-  const profiles = catalogFor(catalogs, harness)?.policyProfiles ?? [];
-  return defaultPermissionProfile(operationDefaultProfiles[operation], profiles);
-};
-
-interface SettingDefaultContext {
-  controlStore: ControlStore | null;
-  catalogs: ReadonlyArray<AvailableHarnessCatalog>;
-  workspace: WorkspaceId;
-  operation: LifecycleStage;
-}
-
-const nullDefault = () => null;
-
-const settingDefaults = {
-  enabled: nullDefault,
-  harness: nullDefault,
-  model: nullDefault,
-  "permission-profile": ({ controlStore, catalogs, workspace, operation }: SettingDefaultContext) =>
-    permissionProfileDefault(controlStore, catalogs, workspace, operation),
-} satisfies Record<DisplayedOperationSettingName, (context: SettingDefaultContext) => string | null>;
-
 export const settingCell = (
   controlStore: ControlStore | null,
   catalogs: ReadonlyArray<AvailableHarnessCatalog>,
   workspace: WorkspaceId,
-  operation: LifecycleStage,
   setting: DisplayedOperationSettingName,
 ) => {
-  const resolved = resolvedSettingValues(controlStore, workspace, operation, setting);
-  const fallback = settingDefaults[setting]({ controlStore, catalogs, workspace, operation });
+  const resolved = resolvedSettingValues(controlStore, workspace, setting);
   const values = {
     own: resolved.own,
-    inherited: resolved.inherited ?? fallback,
-    effective: resolved.own ?? resolved.inherited ?? fallback,
+    inherited: resolved.inherited,
+    effective: resolved.own ?? resolved.inherited,
   };
   return {
     ...values,
-    stale: isStale(setting, values.effective, controlStore, catalogs, workspace, operation),
+    stale: isStale(setting, values.effective, controlStore, catalogs, workspace),
   };
 };
 
 const asModelOptionSelections = (value: ReturnType<typeof resolveOperationSetting>) =>
   Schema.is(ModelOptionSelections)(value) ? value : null;
 
-export const modelOptionsCell = (
-  controlStore: ControlStore | null,
-  workspace: WorkspaceId,
-  operation: LifecycleStage,
-) => {
+export const modelOptionsCell = (controlStore: ControlStore | null, workspace: WorkspaceId) => {
   const rows = controlStore?.operationSettings ?? [];
-  const context = { workflow: codingWorkflow, operation, workspace };
+  const context = { workspace };
   const inherited = asModelOptionSelections(
     resolveOperationSetting(
-      rows.filter((row) => !isOverride(row, operation, workspace)),
+      rows.filter((row) => !isOverride(row, workspace)),
       "model-options",
       context,
     ),
   );
   const isStoredModelOptionsOverride = (row: OperationSettingRow) =>
-    row.setting === "model-options" && isOverride(row, operation, workspace);
+    row.setting === "model-options" && isOverride(row, workspace);
   const stored = rows.find(isStoredModelOptionsOverride);
   const own = stored?.setting === "model-options" ? stored.value : null;
   return { own, inherited, effective: own ?? inherited ?? {} } satisfies ModelOptionsCell;
@@ -450,25 +378,19 @@ interface StaleSelection {
   controlStore: ControlStore | null;
   catalogs: ReadonlyArray<AvailableHarnessCatalog>;
   workspace: WorkspaceId;
-  operation: LifecycleStage;
 }
 
 const catalogChoiceIsStale = (selection: StaleSelection) => {
-  const { value, controlStore, catalogs, workspace, operation } = selection;
-  const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
+  const { value, controlStore, catalogs, workspace } = selection;
+  const harness = resolvedSettingValues(controlStore, workspace, "harness").effective;
   if (harness === null) return false;
   const options = catalogFor(catalogs, harness)?.models ?? [];
   return !options.some((option) => option.value === value);
 };
 
 const staleChecks = {
-  enabled: () => false,
   harness: ({ value, catalogs }: StaleSelection) => catalogFor(catalogs, value) === null,
   model: catalogChoiceIsStale,
-  "permission-profile": ({ value, controlStore, catalogs, workspace, operation }: StaleSelection) => {
-    const harness = resolvedSettingValues(controlStore, workspace, operation, "harness").effective;
-    return !catalogFor(catalogs, harness)?.policyProfiles.some((profile) => profile === value);
-  },
 } satisfies Record<DisplayedOperationSettingName, (selection: StaleSelection) => boolean>;
 
 const isStale = (
@@ -477,18 +399,16 @@ const isStale = (
   controlStore: ControlStore | null,
   catalogs: ReadonlyArray<AvailableHarnessCatalog>,
   workspace: WorkspaceId,
-  operation: LifecycleStage,
-) => (value === null ? false : staleChecks[setting]({ value, controlStore, catalogs, workspace, operation }));
+) => (value === null ? false : staleChecks[setting]({ value, controlStore, catalogs, workspace }));
 
 /** A one-line summary of an operation, for a collapsed row. */
 export const operationSummaryLine = (
   controlStore: ControlStore | null,
   catalogs: ReadonlyArray<AvailableHarnessCatalog>,
   workspace: WorkspaceId,
-  operation: LifecycleStage,
 ) => {
-  const harness = settingCell(controlStore, catalogs, workspace, operation, "harness").effective;
-  const model = settingCell(controlStore, catalogs, workspace, operation, "model").effective;
+  const harness = settingCell(controlStore, catalogs, workspace, "harness").effective;
+  const model = settingCell(controlStore, catalogs, workspace, "model").effective;
   const harnessLabel = harness && catalogFor(catalogs, harness) ? providerLabel(harness) : harness;
   const parts = [harnessLabel, model].filter(
     (part): part is string => typeof part === "string" && part.length > 0,
@@ -499,23 +419,18 @@ export const operationSummaryLine = (
 /** The act that writes one setting, or clears it back onto the default. */
 export const operationSettingUpdate = (
   workspace: WorkspaceId,
-  operation: LifecycleStage,
   setting: OperationSettingChange["setting"],
   value: string | ModelOptionSelections | null,
 ) => {
-  const level = { _tag: "Operation" as const, workflow: codingWorkflow, operation };
+  const level = { _tag: "Default" as const };
   const scope = { _tag: "PrivateWorkspaceOverlay" as const, workspace };
   if (value === null) return OperationSettingUpdate.cases.Clear.make({ cell: { setting, level, scope } });
   const row = operationSettingRowProducers[setting]({ level, scope }, value);
   return OperationSettingUpdate.cases.Set.make({ row });
 };
 
-export const operationSettingBatch = (
-  workspace: WorkspaceId,
-  operation: LifecycleStage,
-  [first, ...rest]: OperationSettingChanges,
-) =>
+export const operationSettingBatch = (workspace: WorkspaceId, [first, ...rest]: OperationSettingChanges) =>
   [
-    operationSettingUpdate(workspace, operation, first.setting, first.value),
-    ...rest.map(({ setting, value }) => operationSettingUpdate(workspace, operation, setting, value)),
+    operationSettingUpdate(workspace, first.setting, first.value),
+    ...rest.map(({ setting, value }) => operationSettingUpdate(workspace, setting, value)),
   ] satisfies OperationSettingBatch;

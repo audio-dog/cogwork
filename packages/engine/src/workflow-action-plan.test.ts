@@ -954,7 +954,7 @@ describe("Workflow action plan", () => {
         id: initial.attempt,
         workspace: sourceWorkspace.config.name,
         workItem: item,
-        stage: "implement",
+        operation: "implement",
         harness: decodeHarness("scripted"),
         branch: decodeBranch("811-open-the-pull-request"),
         session: null,

@@ -18,11 +18,6 @@ export interface WorkspaceRecordDraft {
   readonly organization: string;
   readonly assigneeAllowlist: string;
   readonly trackerBotAllowlist: string;
-  readonly needsTriageLabel: string;
-  readonly readyForAgentLabel: string;
-  readonly needsInfoLabel: string;
-  readonly readyForHumanLabel: string;
-  readonly wontfixLabel: string;
   readonly priorityFieldId: string;
   readonly linearHistory: boolean;
   readonly sourceControlType: "none" | "github";
@@ -47,11 +42,6 @@ export const emptyDraft: WorkspaceRecordDraft = {
   organization: "",
   assigneeAllowlist: "",
   trackerBotAllowlist: "",
-  needsTriageLabel: "",
-  readyForAgentLabel: "",
-  needsInfoLabel: "",
-  readyForHumanLabel: "",
-  wontfixLabel: "",
   priorityFieldId: "",
   linearHistory: false,
   sourceControlType: "none",
@@ -90,11 +80,6 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     organization: tracker.organization ?? "",
     assigneeAllowlist: joined(tracker.assigneeAllowlist),
     trackerBotAllowlist: joined(tracker.botAllowlist),
-    needsTriageLabel: tracker.roleLabels?.["needs-triage"] ?? "",
-    readyForAgentLabel: tracker.roleLabels?.["ready-for-agent"] ?? "",
-    needsInfoLabel: tracker.roleLabels?.["needs-info"] ?? "",
-    readyForHumanLabel: tracker.roleLabels?.["ready-for-human"] ?? "",
-    wontfixLabel: tracker.roleLabels?.wontfix ?? "",
     priorityFieldId: tracker.priority?.field.toString() ?? "",
     linearHistory: record.linearHistory,
     sourceControlType: sourceControl?.type === "github" ? "github" : "none",
@@ -162,13 +147,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
   if (!connectionsAreBound(draft)) return null;
   const mcpSkills = Option.getOrUndefined(decodeMcpSkills(draft.mcpSkills.trim() || "[]"));
   if (!mcpSkills) return null;
-  const roleLabels = {
-    "needs-triage": optional(draft.needsTriageLabel),
-    "ready-for-agent": optional(draft.readyForAgentLabel),
-    "needs-info": optional(draft.needsInfoLabel),
-    "ready-for-human": optional(draft.readyForHumanLabel),
-    wontfix: optional(draft.wontfixLabel),
-  };
   const worktrees = {
     root: optional(draft.worktreeRoot),
     remote: optional(draft.worktreeRemote),
@@ -188,7 +166,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
         organization: optional(draft.organization),
         assigneeAllowlist: list(draft.assigneeAllowlist),
         botAllowlist: list(draft.trackerBotAllowlist),
-        roleLabels: Object.values(roleLabels).some(Boolean) ? roleLabels : undefined,
         priority: priorityFrom(draft),
       },
       sourceControl:

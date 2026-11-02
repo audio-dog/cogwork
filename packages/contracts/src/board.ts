@@ -2,14 +2,14 @@ import * as Stream from "effect/Stream";
 import type { WorkspaceId } from "./base-schemas";
 import type { ConnectionOverview } from "./connection";
 import type { ControlStore, SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
-import { type ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
+import { DaemonEvent, type ReadModelItem, WorkspaceState } from "./daemon-event";
 import type { HarnessReadiness } from "./harness";
 import type { PluginOverview } from "./plugin";
 import type { RunSummary } from "./run";
 
 export interface BoardItem {
   readonly workspace: WorkspaceId;
-  readonly item: ClassifiedItem;
+  readonly item: ReadModelItem;
 }
 
 export interface Board {

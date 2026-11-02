@@ -111,23 +111,11 @@ const contributionSettingScopeFlag = Flag.choice("scope", ["profile", "overlay"]
   Flag.withDefault("profile"),
 );
 const contributionSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
-const operationSettingArgument = Argument.choice("setting", [
-  "enabled",
-  "harness",
-  "model",
-  "model-options",
-  "permission-profile",
-  "bindings",
-]);
+const operationSettingArgument = Argument.choice("setting", ["harness", "model", "model-options"]);
 const operationSettingValueArgument = Argument.string("value");
 const operationSettingScopeFlag = Flag.choice("scope", ["profile", "host", "overlay"]).pipe(
   Flag.withDefault("profile"),
 );
-const operationSettingLevelFlag = Flag.choice("level", ["default", "workflow", "operation"]).pipe(
-  Flag.withDefault("default"),
-);
-const operationSettingWorkflowFlag = Flag.string("workflow").pipe(Flag.withDefault("coding"));
-const operationSettingOperationFlag = Flag.string("operation").pipe(Flag.withDefault("implement"));
 const operationSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
 
 export { formatDaemonLimits } from "./status";
@@ -226,9 +214,6 @@ export const makeContributionSettingUpdate = (
 interface OperationSettingOptions {
   readonly setting: OperationSettingName;
   readonly scope: "profile" | "host" | "overlay";
-  readonly level: "default" | "workflow" | "operation";
-  readonly workflow: string;
-  readonly operation: string;
   readonly workspace: Option.Option<string>;
 }
 
@@ -241,42 +226,22 @@ const operationSettingScope = (options: OperationSettingOptions) => {
   };
 };
 
-const operationSettingLevel = (options: OperationSettingOptions) => {
-  if (options.level === "default") return { _tag: "Default" };
-  if (options.level === "workflow") return { _tag: "Workflow", workflow: options.workflow };
-  return { _tag: "Operation", workflow: options.workflow, operation: options.operation };
-};
-
 const operationSettingCell = (options: OperationSettingOptions) => ({
   setting: options.setting,
   scope: operationSettingScope(options),
-  level: operationSettingLevel(options),
+  level: { _tag: "Default" as const },
 });
-
-const bindingValue = (value: string) =>
-  value.split(",").map((entry) => {
-    const [need = "", ...contribution] = entry.split("=");
-    return { need, contribution: contribution.join("=") };
-  });
-
-const enabledValues = new Map<string, string | boolean>([
-  ["on", true],
-  ["off", false],
-]);
 
 const operationSettingValueParsers: Record<
   OperationSettingName,
   (value: string) => Effect.Effect<unknown, CliError.UserError>
 > = {
-  enabled: (value: string) => Effect.succeed(enabledValues.get(value) ?? value),
   harness: Effect.succeed,
   model: Effect.succeed,
   "model-options": (value: string) =>
     decodeModelOptionSelections(value).pipe(
       Effect.mapError((error) => operationSettingInputError(error.message, error)),
     ),
-  "permission-profile": Effect.succeed,
-  bindings: (value: string) => Effect.succeed(bindingValue(value)),
 };
 
 const operationSettingValue = (setting: OperationSettingName, value: string) =>
@@ -288,14 +253,12 @@ const decodeOperationSettingUpdate = (input: unknown) =>
   );
 
 const operationSettingContext = Effect.fn("commands.operationSettingContext")(function* (options: {
-  readonly workflow: string;
-  readonly operation: string;
   readonly workspace: Option.Option<string>;
 }) {
   const workspace = Option.isSome(options.workspace)
     ? yield* Schema.decodeEffect(WorkspaceId)(options.workspace.value)
     : null;
-  return { workflow: options.workflow, operation: options.operation, workspace };
+  return { workspace };
 });
 
 export const formatOperationSettingRefusal = (refusal: OperationSettingRefused) =>
@@ -377,7 +340,7 @@ const formatRun = (run: RunSummary) => {
   const session = run.session ? `  session=${run.session}` : "";
   const prunedHistoryLabel =
     run.eventsPrunedAtMillis === null ? "" : `  history-pruned=${run.eventsPrunedAtMillis}`;
-  return `  ${run.id}  ${run.status}  ${run.stage}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${prunedHistoryLabel}${session}${usageLabel(run.usage)}`;
+  return `  ${run.id}  ${run.status}  ${run.operation}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${prunedHistoryLabel}${session}${usageLabel(run.usage)}`;
 };
 
 const formatRuns = (runs: ReadonlyArray<RunSummary>) =>
@@ -583,8 +546,6 @@ const setLimit = Effect.fn("commands.setLimit")(
 const showOperationSettings = Effect.fn("commands.showOperationSettings")(function* (options: {
   readonly socketPath: string;
   readonly controlStorePath: string;
-  readonly workflow: string;
-  readonly operation: string;
   readonly workspace: Option.Option<string>;
 }) {
   const context = yield* operationSettingContext(options);
@@ -737,16 +698,12 @@ export const limitsCommand = Command.make("limits").pipe(
 const operationSettingsShowCommand = Command.make("show", {
   socket: socketFlag,
   controlStore: controlStoreFlag,
-  workflow: operationSettingWorkflowFlag,
-  operation: operationSettingOperationFlag,
   workspace: operationSettingWorkspaceFlag,
 }).pipe(
-  Command.withHandler(({ socket, controlStore, workflow, operation, workspace }) =>
+  Command.withHandler(({ socket, controlStore, workspace }) =>
     showOperationSettings({
       socketPath: socket,
       controlStorePath: controlStore,
-      workflow,
-      operation,
       workspace,
     }),
   ),
@@ -756,9 +713,6 @@ const operationSettingOptions = {
   socket: socketFlag,
   setting: operationSettingArgument,
   scope: operationSettingScopeFlag,
-  level: operationSettingLevelFlag,
-  workflow: operationSettingWorkflowFlag,
-  operation: operationSettingOperationFlag,
   workspace: operationSettingWorkspaceFlag,
 };
 

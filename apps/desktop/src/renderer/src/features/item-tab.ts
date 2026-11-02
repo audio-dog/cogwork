@@ -1,12 +1,11 @@
-import {
-  ClassifiedItem,
-  type RunId,
-  type RunStatus,
-  type RunSummary,
-  type WorkItemId,
-  type WorkspaceId,
+import type {
+  ReadModelItem,
+  RunId,
+  RunStatus,
+  RunSummary,
+  WorkItemId,
+  WorkspaceId,
 } from "@cogwork/contracts";
-import { plural } from "./format";
 
 export type StateTone = "live" | "attention" | "ready" | "muted";
 
@@ -16,29 +15,11 @@ export interface ItemStateDescriptor {
   readonly running: boolean;
 }
 
-const calmDescriptor = (verb: "Queued" | "Working", detail: string | null): ItemStateDescriptor => {
-  return { label: detail ? `${verb} · ${detail}` : verb, tone: "muted", running: false };
-};
-
-export function describeItemState(item: ClassifiedItem, run: RunSummary | null): ItemStateDescriptor {
+export function describeItemState(_item: ReadModelItem, run: RunSummary | null): ItemStateDescriptor {
   if (run?.status === "running") {
-    return { label: `Running · ${run.stage}`, tone: "live", running: true };
+    return { label: `Running · ${run.operation}`, tone: "live", running: true };
   }
-  return ClassifiedItem.match(item, {
-    NeedsHuman: ({ reason }) => ({
-      label: `Needs a decision · ${reason}`,
-      tone: "attention",
-      running: false,
-    }),
-    Blocked: ({ openBlockers }) => ({
-      label: `Blocked · ${plural(openBlockers, "open blocker")}`,
-      tone: "muted",
-      running: false,
-    }),
-    ReadyToMerge: () => ({ label: "Ready to merge", tone: "ready", running: false }),
-    Eligible: (eligible) => calmDescriptor("Queued", eligible.stage),
-    Claimed: (claimed) => calmDescriptor("Working", claimed.claim.operation.operation),
-  });
+  return { label: "Ready to merge", tone: "ready", running: false };
 }
 
 export type SubTabKey = "main" | "run" | "pr";

@@ -17,7 +17,7 @@ import type { TranscriptEntry } from "./run-activity";
  * A harness puts three shapes on the wire that the AG-UI types do not describe,
  * and reading any of them as a plain string puts raw JSON on the screen:
  * a tool result rides on `content` as a JSON string holding
- * `{aggregated_output, exit_code, status}`; assistant text is the stage result
+ * `{aggregated_output, exit_code, status}`; assistant text is the Operation result
  * object (`{_tag, summary}`) rather than prose; and a file edit arrives as
  * `{changes:[{path, kind}]}` instead of a command.
  */

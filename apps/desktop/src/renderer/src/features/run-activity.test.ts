@@ -27,7 +27,7 @@ const activity = (
       runId,
       workspace: "acme",
       workItem: "1",
-      stage: "implement",
+      operation: "implement",
       seq,
       atMillis: seq,
       correlation: { threadId: null, messageId, toolCallId: agui.toolCallId ?? null },

@@ -25,7 +25,7 @@ const record = (id: string, status: "running" | "succeeded" = "running"): RunRec
   id: runId(id),
   workspace,
   workItem,
-  stage: "implement" as const,
+  operation: "implement" as const,
   harness,
   branch: branchName("49-backfill"),
   session: null,

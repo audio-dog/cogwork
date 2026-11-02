@@ -4,15 +4,6 @@ import { IssueTrackerType, SourceControlType, TrimmedNonEmptyString, WorkspaceId
 import { ConnectionBindingId } from "./connection";
 import { McpSkill } from "./mcp-skill";
 
-export const TriageRoleLabels = Schema.Struct({
-  "needs-triage": Schema.optional(TrimmedNonEmptyString),
-  "ready-for-agent": Schema.optional(TrimmedNonEmptyString),
-  "needs-info": Schema.optional(TrimmedNonEmptyString),
-  "ready-for-human": Schema.optional(TrimmedNonEmptyString),
-  wontfix: Schema.optional(TrimmedNonEmptyString),
-});
-export type TriageRoleLabels = typeof TriageRoleLabels.Type;
-
 export const OAuthAppConfig = Schema.Struct({
   clientId: TrimmedNonEmptyString,
   clientSecretEnv: Schema.optional(TrimmedNonEmptyString),
@@ -41,7 +32,6 @@ export const IssueTrackerConfig = Schema.Struct({
   organization: Schema.optional(TrimmedNonEmptyString),
   assigneeAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
   botAllowlist: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMinLength(1))),
-  roleLabels: Schema.optional(TriageRoleLabels),
   priority: Schema.optional(GitHubPrioritySource),
 });
 export type IssueTrackerConfig = typeof IssueTrackerConfig.Type;

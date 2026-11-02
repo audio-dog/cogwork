@@ -16,6 +16,7 @@ import { ControlStore } from "./control-store";
 
 export interface WorkflowArtifactStoreService {
   readonly record: (artifact: WorkflowActionArtifact) => Effect.Effect<void, ControlStoreFailure>;
+  readonly all?: Effect.Effect<ReadonlyArray<WorkflowActionArtifact>, ControlStoreFailure>;
   readonly byLineage: (
     root: LineageId,
   ) => Effect.Effect<ReadonlyArray<WorkflowActionArtifact>, ControlStoreFailure>;
@@ -52,6 +53,7 @@ export const makeMemory = Effect.gen(function* () {
           Ref.update(artifacts, (current) => new Map(current).set(artifactKey(stored), stored)),
         ),
       ),
+    all: Ref.get(artifacts).pipe(Effect.map((current) => [...current.values()])),
     byLineage: (root) =>
       Ref.get(artifacts).pipe(
         Effect.map((current) => [...current.values()].filter(({ origin }) => origin.lineage.root === root)),
@@ -108,6 +110,9 @@ export const makeControlStore = Effect.gen(function* () {
         Effect.asVoid,
         Effect.mapError(failure("record Workflow artifact")),
       ),
+    all: read(sql<StoredArtifact>`SELECT artifact FROM workflow_action_artifacts ORDER BY write_key`).pipe(
+      Effect.mapError(failure("read Workflow artifacts")),
+    ),
     byLineage: (root) =>
       read(sql<StoredArtifact>`
         SELECT artifact FROM workflow_action_artifacts WHERE root = ${root} ORDER BY write_key

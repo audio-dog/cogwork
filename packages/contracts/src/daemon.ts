@@ -3,11 +3,9 @@ import * as Schema from "effect/Schema";
 import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { Connection } from "./connection";
 import { LocalContribution } from "./contribution";
-import { Claim } from "./coordination";
 import { HarnessEnablement } from "./harness";
 import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
-import { LifecycleStage, NeedsHumanReason } from "./triage";
 import { OperationNeedKind, WorkspaceConcurrency, WorkspaceRegistration } from "./workspace";
 
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
@@ -80,43 +78,6 @@ export const PrSummary = Schema.Struct({
 });
 export type PrSummary = typeof PrSummary.Type;
 
-export const ActionableItem = Schema.Struct({
-  id: WorkItemId,
-  title: TrimmedNonEmptyString,
-  url: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
-  stage: LifecycleStage,
-  pr: Schema.optionalKey(PrSummary),
-});
-export type ActionableItem = typeof ActionableItem.Type;
-
-export const ClaimedItem = Schema.Struct({
-  id: WorkItemId,
-  title: TrimmedNonEmptyString,
-  url: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
-  claim: Claim,
-  pr: Schema.optionalKey(PrSummary),
-});
-export type ClaimedItem = typeof ClaimedItem.Type;
-
-export const BlockedItem = Schema.Struct({
-  id: WorkItemId,
-  title: TrimmedNonEmptyString,
-  url: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
-  openBlockers: Schema.Natural,
-  pr: Schema.optionalKey(PrSummary),
-});
-export type BlockedItem = typeof BlockedItem.Type;
-
-export const NeedsHumanItem = Schema.Struct({
-  id: WorkItemId,
-  title: TrimmedNonEmptyString,
-  reason: NeedsHumanReason,
-  proposal: Schema.NullOr(TrimmedNonEmptyString),
-  url: Schema.NullOr(TrimmedNonEmptyString),
-  pr: Schema.optionalKey(PrSummary),
-});
-export type NeedsHumanItem = typeof NeedsHumanItem.Type;
-
 export const ReadyToMergeItem = Schema.Struct({
   id: WorkItemId,
   title: TrimmedNonEmptyString,
@@ -145,7 +106,7 @@ export const AvailabilityCause = Schema.TaggedUnion({
 export type AvailabilityCause = typeof AvailabilityCause.Type;
 
 export const OperationAvailability = Schema.Struct({
-  operation: LifecycleStage,
+  operation: TrimmedNonEmptyString,
   available: Schema.Boolean,
   causes: Schema.Array(AvailabilityCause),
 });
@@ -179,10 +140,6 @@ export const WorkspaceInfo = Schema.Struct({
   poll: PollState,
   contributions: Schema.Array(LocalContribution),
   availability: OperationAvailabilityList,
-  eligible: Schema.Array(ActionableItem),
-  claimed: Schema.Array(ClaimedItem),
-  blocked: Schema.Array(BlockedItem),
-  needsHuman: Schema.Array(NeedsHumanItem),
   readyToMerge: Schema.Array(ReadyToMergeItem),
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;

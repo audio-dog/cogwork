@@ -1,5 +1,4 @@
-import { LifecycleStage } from "@cogwork/contracts";
-import { Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
+import { Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
@@ -163,28 +162,40 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
       "projects every Operation into a non-interactive native Sandbox posture",
       () =>
         Effect.gen(function* () {
-          const captures = yield* Effect.forEach(LifecycleStage.literals, captureOperation);
+          const captures = yield* Effect.forEach(["read-only", "full"] as const, (profile) =>
+            captureOperation("operate", profile),
+          );
+          yield* Effect.forEach(
+            captures,
+            ([profile, capture]) =>
+              Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings).pipe(
+                Effect.tap((settings) =>
+                  Effect.sync(() => {
+                    const readOnly = profile === "read-only";
+                    const disallowed = capturedDisallowedTools(capture);
 
-          for (const [operation, capture] of captures) {
-            const settings = yield* Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings);
-            const readOnly = OperationPolicy.operationDefaultProfile(operation) === "read-only";
-            const disallowed = capturedDisallowedTools(capture);
-
-            assert.deepStrictEqual(settings.sandbox, {
-              enabled: true,
-              failIfUnavailable: true,
-              allowUnsandboxedCommands: false,
-              autoAllowBashIfSandboxed: !readOnly,
-            });
-            assert.strictEqual(capture.settingSources, "");
-            assert.strictEqual(capture.permissionMode, readOnly ? "acceptEdits" : "bypassPermissions");
-            assert.deepStrictEqual(
-              disallowed,
-              readOnly
-                ? ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]
-                : ["Write", "Edit", "MultiEdit", "NotebookEdit"],
-            );
-          }
+                    assert.deepStrictEqual(settings.sandbox, {
+                      enabled: true,
+                      failIfUnavailable: true,
+                      allowUnsandboxedCommands: false,
+                      autoAllowBashIfSandboxed: !readOnly,
+                    });
+                    assert.strictEqual(capture.settingSources, "");
+                    assert.strictEqual(
+                      capture.permissionMode,
+                      readOnly ? "acceptEdits" : "bypassPermissions",
+                    );
+                    assert.deepStrictEqual(
+                      disallowed,
+                      readOnly
+                        ? ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]
+                        : ["Write", "Edit", "MultiEdit", "NotebookEdit"],
+                    );
+                  }),
+                ),
+              ),
+            { discard: true },
+          );
         }),
       10_000,
     );

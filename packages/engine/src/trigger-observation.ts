@@ -126,6 +126,22 @@ const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =
   });
 };
 
+const priorityRank = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+} as const;
+
+export const waitingAdmissionOrder = (
+  left: { readonly admission: TriggerAdmission; readonly actedOn: boolean },
+  right: { readonly admission: TriggerAdmission; readonly actedOn: boolean },
+) =>
+  Number(right.actedOn) - Number(left.actedOn) ||
+  priorityRank[left.admission.event.priority ?? "medium"] -
+    priorityRank[right.admission.event.priority ?? "medium"] ||
+  left.admission.event.atMillis - right.admission.event.atMillis;
+
 const revisionAdvancedParks = new Set<ParkReason["_tag"]>([
   "AwaitingApproval",
   "MissingOperation",
@@ -597,16 +613,21 @@ export const make = Effect.gen(function* () {
       return isSelected && matchesSystem;
     });
     const listed = yield* Effect.forEach(workspaces, (workspace) =>
-      tracker.observe(workspace).pipe(Effect.map((items) => items.map((item) => ({ item, workspace })))),
+      tracker.observe(workspace).pipe(
+        Effect.flatMap((items) =>
+          Effect.forEach(items, (item) => {
+            const key = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
+            return coordination.read(key).pipe(Effect.map((view) => ({ item, key, view, workspace })));
+          }),
+        ),
+      ),
     );
-    return listed.flat().flatMap(({ item, workspace }): ReadonlyArray<SweepCandidate> => {
-      const isParked = item.coordination?.park !== null && item.coordination?.park !== undefined;
-      const matchesState = state === "parked" ? isParked : (item.states ?? item.roles).includes(state);
+    return listed.flat().flatMap(({ item, key, view, workspace }): ReadonlyArray<SweepCandidate> => {
+      const matchesState = state === "parked" ? view.park !== null : (item.states ?? []).includes(state);
       if (!matchesState) return [];
-      const key = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
       const lastTouchedAtMillis = Math.max(
         item.lastTouchedAtMillis ?? tickInstant,
-        item.coordination?.park?.atMillis ?? 0,
+        view.park?.atMillis ?? 0,
         sweptAt.get(keyOf(key)) ?? 0,
       );
       return [
@@ -939,6 +960,7 @@ export const make = Effect.gen(function* () {
                   coordination.read(admission.event.key).pipe(
                     Effect.map((view) => ({
                       admission,
+                      actedOn: view.actedOn(admission.subscription.workflow),
                       isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
                       gate: view.gate(
                         {
@@ -958,6 +980,7 @@ export const make = Effect.gen(function* () {
       Effect.map((states) =>
         states
           .filter(({ gate, isUnprocessedRevision }) => isUnprocessedRevision && gate._tag === "Open")
+          .toSorted(waitingAdmissionOrder)
           .map(({ admission }) => admission),
       ),
       Effect.catchCause(() => Effect.succeed([])),

@@ -510,6 +510,27 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("starts with no Workflows and activates a coding template", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const initial = yield* withWorkflows(storePath, ({ list, templates }) =>
+        Effect.all({ list, templates }),
+      );
+      assert.deepStrictEqual(initial.list.workflows, []);
+      const template = initial.templates.find(({ id }) => id === "github-coding-pipeline");
+      if (!template) return assert.fail("GitHub coding template is missing");
+      yield* withWorkflows(storePath, ({ create, publish, switch: switchWorkflow }) =>
+        create({ document: template.document }).pipe(
+          Effect.flatMap((created) => publish({ id: created.id, revision: created.workingRevision })),
+          Effect.flatMap((published) => switchWorkflow({ id: published.id, enabled: true })),
+        ),
+      );
+      const active = yield* withWorkflows(storePath, ({ list }) => list);
+      assert.isTrue(active.workflows[0]?.enabled);
+      assert.isNotNull(active.workflows[0]?.publishedCopy);
+    }),
+  );
+
   it.effect("keeps an incomplete working copy and refuses to publish it", () =>
     Effect.gen(function* () {
       const storePath = yield* temporaryStore();

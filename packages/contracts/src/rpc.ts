@@ -21,7 +21,7 @@ import {
   SchedulingState,
   StaleControlStoreWrite,
 } from "./daemon";
-import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
+import { DaemonEvent, WorkspaceState } from "./daemon-event";
 import { HarnessCatalog, HarnessNotRegistered, HarnessReadiness } from "./harness";
 import { IssueTrackerError } from "./issue-tracker";
 import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
@@ -33,7 +33,6 @@ import {
   OperationSettingBatch,
   OperationSettingRefused,
 } from "./settings";
-import { TriageRole } from "./triage";
 import {
   WorkflowAttention,
   WorkflowCatalogKey,
@@ -194,27 +193,10 @@ export class WorkItemNotFound extends Schema.TaggedError<WorkItemNotFound>()("Wo
   workItem: WorkItemId,
 }) {}
 
-export const CancelRunResult = Schema.TaggedUnion({
-  Cancelled: { item: ClassifiedItem },
-  StillDraining: { item: ClassifiedItem },
-});
-export type CancelRunResult = typeof CancelRunResult.Type;
-
 export const CancelRun = Rpc.make("CancelRun", {
   payload: { runId: RunId, note: Schema.optional(TrimmedNonEmptyString) },
-  success: CancelRunResult,
+  success: Schema.Void,
   error: CancelRunError,
-});
-
-export const Reclassify = Rpc.make("Reclassify", {
-  payload: {
-    workspace: WorkspaceId,
-    workItem: WorkItemId,
-    role: TriageRole,
-    note: Schema.optional(TrimmedNonEmptyString),
-  },
-  success: Schema.NullOr(ClassifiedItem),
-  error: Schema.Union([WorkItemNotFound, IssueTrackerError]),
 });
 
 export const HandBack = Rpc.make("HandBack", {
@@ -401,7 +383,6 @@ export const DaemonCommands = RpcGroup.make(
   ChooseWorkflowAnswer,
   DismissWorkflowNotification,
   HandBack,
-  Reclassify,
   SetScheduling,
   ReportProcessHealth,
   CheckHarnesses,

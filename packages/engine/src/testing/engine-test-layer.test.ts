@@ -19,7 +19,7 @@ const run: RunRecord = {
   id: runId,
   workspace,
   workItem,
-  stage: "implement",
+  operation: "implement",
   harness,
   branch: null,
   session: null,

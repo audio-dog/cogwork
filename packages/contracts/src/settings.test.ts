@@ -4,9 +4,9 @@ import {
   admissibleSettingScope,
   applyOperationSettingBatch,
   ContributionSettingUpdate,
+  type DefaultSettingLevel,
   defaultContributionEnabled,
   OperationSettingBatch,
-  type OperationSettingLevel,
   OperationSettingUpdate,
   resolveContributionEnabled,
   resolveContributionUnion,
@@ -90,7 +90,7 @@ describe("OperationSettingUpdate", () => {
       Schema.is(OperationSettingUpdate)({
         _tag: "Set",
         row: {
-          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          level: { _tag: "Default" },
           scope: { _tag: "SettingsProfile" },
           setting: "model-options",
           value: { effort: "high", speed: true },
@@ -101,7 +101,7 @@ describe("OperationSettingUpdate", () => {
       Schema.is(OperationSettingUpdate)({
         _tag: "Set",
         row: {
-          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          level: { _tag: "Default" },
           scope: { _tag: "SettingsProfile" },
           setting: "effort",
           value: "high",
@@ -110,7 +110,7 @@ describe("OperationSettingUpdate", () => {
     );
   });
 
-  it("rejects an Operation level for an operation the build does not have", () => {
+  it("rejects every non-Default level", () => {
     assert.isFalse(
       Schema.is(OperationSettingUpdate)({
         _tag: "Set",
@@ -132,7 +132,7 @@ describe("OperationSettingUpdate", () => {
           _tag: "Clear",
           cell: {
             setting: "model-options",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+            level: { _tag: "Default" },
             scope: { _tag: "SettingsProfile" },
           },
         },
@@ -144,7 +144,7 @@ describe("OperationSettingUpdate", () => {
           _tag: "Clear",
           cell: {
             setting: "model-options",
-            level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+            level: { _tag: "Default" },
             scope: { _tag: "SettingsProfile" },
           },
         })),
@@ -153,11 +153,7 @@ describe("OperationSettingUpdate", () => {
   });
 
   it("applies every update in order", () => {
-    const level = {
-      _tag: "Operation",
-      workflow: "coding",
-      operation: "implement",
-    } satisfies OperationSettingLevel;
+    const level = { _tag: "Default" } satisfies DefaultSettingLevel;
     const scope = { _tag: "SettingsProfile" } satisfies SettingsProfileScope;
     const rows = applyOperationSettingBatch(
       [{ setting: "model", level, scope, value: "old" }],

@@ -8,16 +8,15 @@ import {
   WorkItemId,
   WorkItemRef,
 } from "@cogwork/contracts";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import { checkState, latestFailingCheckAtMillis } from "../ci";
-import type { PrReview } from "../follow-up";
+import { checkState } from "../ci";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { WorkspaceRegistry } from "../registry";
 import {
+  type PrReview,
   type PrSignals,
   type ResolvedPullRequest,
   SourceControlProvider,
@@ -29,22 +28,13 @@ import {
   GitHubClient,
   type GitHubClientService,
   type GitHubRepoRef,
-  type RawIssueComment,
   type RawPull,
-  type RawReview,
-  type RawReviewComment,
   type ReviewDecision,
   reviewDecisionOf,
 } from "./client";
-import { trustedBotFeedback } from "./feedback";
-import { agentNoteMarker, hasCogworkMarker, wireCodec } from "./markers";
+import { wireCodec } from "./markers";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
-import {
-  type BotAllowlist,
-  baseDivergenceOf,
-  type GitHubTargetConfig,
-  sourceControlTargetFor,
-} from "./source-control-target";
+import { baseDivergenceOf, type GitHubTargetConfig, sourceControlTargetFor } from "./source-control-target";
 
 export { baseDivergenceOf } from "./source-control-target";
 
@@ -122,63 +112,29 @@ export const prReview = (pull: RawPull, decision: ReviewDecision): PrReview => {
   return "pending";
 };
 
-const freshPattern = /\/fresh\b/i;
+const pullNumberFromUrl = (url: string) => {
+  const value = url.match(/\/pull\/(\d+)(?:$|[?#])/i)?.[1];
+  return value === undefined ? null : Number.parseInt(value, 10);
+};
+
+export const readyToMergeArtifact = (
+  pull: RawPull,
+  actorLogin: string,
+  artifacts: ReadonlyArray<WorkflowActionArtifact>,
+) =>
+  pull.authorLogin === actorLogin
+    ? (artifacts.find((artifact) => pullNumberFromUrl(artifact.url) === pull.number) ?? null)
+    : null;
+
+export const isReadyToMerge = (signals: PrSignals) =>
+  !signals.draft &&
+  signals.checks === "passing" &&
+  signals.baseDivergence !== "conflict" &&
+  signals.review === "ready";
+
 const numericIssue = /^#(\d+)$/;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-
-type Feedback = Pick<RawReviewComment, "authorLogin" | "authorAssociation" | "body" | "createdAtMillis">;
-
-// An allowlisted login is always the trusted-bot path, never the human one, even if it reports write
-// access — that keeps a bot from ever setting `/fresh` or resetting the no-progress counter.
-const isHumanFeedback = (feedback: Feedback, botAllowlist: BotAllowlist) =>
-  writeAccess.has(feedback.authorAssociation) &&
-  !botAllowlist.has(feedback.authorLogin) &&
-  !hasCogworkMarker(feedback.body);
-
-const isPullRequestFeedback = (
-  comment: RawIssueComment,
-): comment is RawIssueComment & { readonly authorLogin: string } =>
-  comment.authorLogin !== null && comment.body.length > 0;
-
-export const reviewFeedback = (reviews: ReadonlyArray<RawReview>) =>
-  reviews.flatMap((review) =>
-    review.body
-      ? [
-          {
-            authorLogin: review.authorLogin,
-            authorAssociation: review.authorAssociation,
-            body: review.body,
-            createdAtMillis: review.submittedAtMillis,
-          },
-        ]
-      : [],
-  );
-
-const newestOf = (feedback: ReadonlyArray<Feedback>) =>
-  feedback.reduce<Feedback | null>(
-    (max, item) => (max && max.createdAtMillis >= item.createdAtMillis ? max : item),
-    null,
-  );
-
-export const humanCommentSignal = (feedback: ReadonlyArray<Feedback>, botAllowlist: BotAllowlist) => {
-  const newest = newestOf(feedback.filter((item) => isHumanFeedback(item, botAllowlist)));
-  return {
-    latestAtMillis: newest?.createdAtMillis ?? null,
-    fresh: newest ? freshPattern.test(newest.body) : false,
-  };
-};
-
-// Returns no `fresh` flag: `/fresh` restarts stay human-only, so a bot can never trigger one.
-export const botTriggerSignal = (
-  reviewComments: ReadonlyArray<RawReviewComment>,
-  pullRequestFeedback: ReadonlyArray<Feedback>,
-  botAllowlist: BotAllowlist,
-) => {
-  // Bot-specific HTML markers are private strings; GitHub's comment and thread shape is the stable boundary.
-  const newest = newestOf(trustedBotFeedback([...reviewComments, ...pullRequestFeedback], botAllowlist));
-  return { latestAtMillis: newest?.createdAtMillis ?? null };
-};
 
 const make = (
   client: GitHubClientService,
@@ -192,10 +148,8 @@ const make = (
   });
 
   const observePr = Effect.fn("github.observePr")(function* (target: GitHubTarget, pull: RawPull) {
-    const [checks, comments, reviewComments, reviews, mergeableState] = yield* Effect.all([
+    const [checks, reviews, mergeableState] = yield* Effect.all([
       client.listCheckRuns(target, pull.headSha),
-      client.listComments(target, pull.number),
-      client.listReviewComments(target, pull.number),
       client.listReviews(target, pull.number),
       client.pullMergeableState(target, pull.number),
     ]);
@@ -204,25 +158,13 @@ const make = (
         .filter((review) => writeAccess.has(review.authorAssociation))
         .map((review) => ({ login: review.authorLogin, state: review.state })),
     );
-    const pullRequestFeedback = [...comments.filter(isPullRequestFeedback), ...reviewFeedback(reviews)];
-    const feedback = [...pullRequestFeedback, ...reviewComments];
-    const human = humanCommentSignal(feedback, target.botAllowlist);
-    const bot = botTriggerSignal(reviewComments, pullRequestFeedback, target.botAllowlist);
-    const observedAtMillis = yield* Clock.currentTimeMillis;
     return {
       number: pull.number,
       url: pull.url,
       review: prReview(pull, decision),
       checks: checkState(checks),
-      latestHumanCommentAtMillis: human.latestAtMillis,
-      latestBotTriggerAtMillis: bot.latestAtMillis,
-      latestFailingCheckAtMillis: latestFailingCheckAtMillis(checks),
-      observedAtMillis,
-      fresh: human.fresh,
       baseDivergence: baseDivergenceOf(mergeableState),
       waitingSinceMillis: pull.updatedAtMillis,
-      headRef: pull.headRef,
-      followable: pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase(),
       draft: pull.draft,
     } satisfies PrSignals;
   });
@@ -239,9 +181,6 @@ const make = (
 
   const sameRepositoryHead = (target: GitHubRepoRef, pull: RawPull) =>
     pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
-
-  const exactHeadPull = (target: GitHubRepoRef, headBranch: string, pulls: ReadonlyArray<RawPull>) =>
-    pulls.find((pull) => pull.headRef === headBranch && sameRepositoryHead(target, pull)) ?? null;
 
   const rank = (target: GitHubTarget, item: WorkItem, branch: string, pull: RawPull) =>
     [
@@ -279,44 +218,6 @@ const make = (
   const trustedPulls = Effect.fn("github.trustedPulls")(function* (target: GitHubTarget) {
     const pulls = yield* client.listPulls(target);
     return pulls.filter((pull) => daemonPull(target, pull));
-  });
-
-  const observeItems = Effect.fn("github.observeItems")(function* (
-    target: GitHubTarget,
-    workItems: ReadonlyArray<WorkItem>,
-  ) {
-    const trusted = yield* trustedPulls(target);
-    const matches = workItems.flatMap((item) => {
-      const pull = linkedPull(target, item, trusted);
-      return pull ? [[item.id, pull] as const] : [];
-    });
-    const entries = yield* Effect.forEach(
-      matches,
-      ([id, pull]) => Effect.map(observePr(target, pull), (signals) => [id, signals] as const),
-      { concurrency: 10 },
-    );
-    return new Map<WorkItemId, PrSignals>(entries);
-  });
-
-  // The marker rides on every comment the provider posts, so it is structurally impossible to write
-  // an unmarked daemon comment here — the engine owns the marker, and the agent never touches it.
-  const markedBody = (body: string) => `${body}\n\n${agentNoteMarker}`;
-
-  const commentOnPull = Effect.fn("github.commentOnPull")(function* (
-    target: GitHubTarget,
-    item: WorkItem,
-    body: string,
-  ) {
-    const trusted = yield* trustedPulls(target);
-    const pull = linkedPull(target, item, trusted);
-    if (!pull) {
-      return yield* Effect.logWarning("no linked pull request to comment on", {
-        owner: target.owner,
-        name: target.name,
-        item: item.id,
-      });
-    }
-    yield* client.createComment(target, pull.number, markedBody(body));
   });
 
   const writeMarker = (writeKey: string) =>
@@ -434,36 +335,44 @@ const make = (
     },
   };
 
-  const empty: ReadonlyMap<WorkItemId, PrSignals> = new Map();
+  const readyToMerge = Effect.fn("github.readyToMerge")(function* (
+    workspace: RegisteredWorkspace,
+    artifacts: ReadonlyArray<WorkflowActionArtifact>,
+  ) {
+    const configuredTarget = sourceControlTargetFor(workspace);
+    if (!configuredTarget) return [];
+    const target = yield* authenticatedTarget(configuredTarget);
+    const pulls = (yield* client.listPulls(target)).filter(
+      (pull) => readyToMergeArtifact(pull, target.actorLogin, artifacts) !== null,
+    );
+    const observed = yield* Effect.forEach(pulls, (pull) =>
+      observePr(target, pull).pipe(Effect.map((signals) => ({ pull, signals }))),
+    );
+    return observed.flatMap(({ pull, signals }) => {
+      const artifact = readyToMergeArtifact(pull, target.actorLogin, artifacts);
+      if (!artifact || !isReadyToMerge(signals)) return [];
+      return [
+        {
+          id: artifact.issue,
+          title: pull.title ?? `Pull request #${pull.number}`,
+          url: pull.url,
+          pr: {
+            number: signals.number,
+            url: signals.url,
+            checks: signals.checks,
+            review: signals.review,
+            baseDivergence: signals.baseDivergence,
+            waitingSinceMillis: signals.waitingSinceMillis,
+          },
+        },
+      ];
+    });
+  });
 
   return {
     triggerSources: [makeGitHubPullRequestTriggerSource(client, registry)],
     workflowCatalogContribution: contribution,
-    observe: (workspace, workItems) =>
-      Effect.gen(function* () {
-        const configuredTarget = sourceControlTargetFor(workspace);
-        if (!configuredTarget || workItems.length === 0) return empty;
-        const target = yield* authenticatedTarget(configuredTarget);
-        return yield* observeItems(target, workItems);
-      }),
-    comment: (workspace, item, body) =>
-      Effect.gen(function* () {
-        const configuredTarget = sourceControlTargetFor(workspace);
-        if (!configuredTarget) return;
-        const target = yield* authenticatedTarget(configuredTarget);
-        yield* commentOnPull(target, item, body);
-      }),
-    findOpenPullRequest: Effect.fn("github.findOpenPullRequest")(function* (workspace, headBranch) {
-      const target = yield* sourceControlTarget(workspace);
-      const pulls = yield* client.listPulls(target, headBranch);
-      const pull = exactHeadPull(target, headBranch, pulls);
-      return pull ? { number: pull.number, url: pull.url } : null;
-    }),
-    openPullRequest: (workspace, input) =>
-      Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace);
-        return yield* client.createPull(target, input);
-      }),
+    readyToMerge,
     resolvePullRequest,
     openWorkflowPullRequest: (workspace, input) =>
       Effect.gen(function* () {

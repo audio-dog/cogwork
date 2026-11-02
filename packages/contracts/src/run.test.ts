@@ -6,7 +6,7 @@ const summary = {
   id: "run-1",
   workspace: "acme",
   workItem: "#623",
-  stage: "implement",
+  operation: "implement",
   harness: "codex",
   branch: null,
   session: null,
