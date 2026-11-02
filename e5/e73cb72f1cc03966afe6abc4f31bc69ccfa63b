@@ -1,0 +1,167 @@
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 9,57,91,127,165
+docs/agent-patterns/effect-time-bounds.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 87
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 21,62,72-88,103,106,155,167,182,188-195,209,228-230
+packages/engine/src/workflow-action-plan-store.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 22-24,68-75,152-183
+packages/engine/src/provider-runner.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 13-19,356-375
+  s_d35c9dcd305d72::t_24f619c598e018 376-378
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 34,127
+docs/research/tanstack-ai-audit.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 3
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 21,277
+packages/contracts/src/workflow.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 605-610,613,621,624,644-672,674
+  s_d35c9dcd305d72::t_a0c3b5f987d563 673,675
+packages/engine/src/github/github.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 560,592,631,667,701,732
+docs/research/provider-auth-landscape.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 3
+docs/spec/desktop-shell-revamp.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 3
+apps/desktop/src/renderer/src/routes/settings/-providers.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 47
+packages/engine/src/workflow-artifact-store.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 1-127
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 11,123,157,203,208,232
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 3
+packages/engine/src/github/tracker-trigger-source.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 21,58,72-88,99,102,154,169,184,190-197,211,233-235
+packages/engine/src/issue-search-tool.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 1-57
+configs/sensor/CONTEXT.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 19
+packages/engine/src/workflow-action-plan.ts
+  s_d35c9dcd305d72::t_bce477402f80b1 669
+  s_d35c9dcd305d72::t_67fcbf2b3bfd2d 8,412
+  s_d35c9dcd305d72::t_8c1ef82fe00790 33,41-46,327,441,565,599
+packages/engine/src/coordination-tracker.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 123
+packages/engine/src/control-store-schema.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 1-6,268-282
+  s_d35c9dcd305d72::t_758ba9ce33a202 283-285
+docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 12-13,30,136-138
+packages/engine/src/daemon.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 130,447-448,456,566,593
+packages/engine/src/linear/linear.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 493,555,577,605,635,681
+docs/spec/per-workspace-operating-instructions.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 109,122,124
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 54,56,60,73,100,116,211
+docs/adr/0033-work-items-without-a-tracker-are-coordinated-in-the-control-store.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 13,18
+packages/engine/src/workflow-run.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 6,11,20,46-52,54,63,71,197-205,279,281-288,291,308-309,311,348,385-386,400-401,444-445,451-508,510-714,753-787,1014,1034-1098,1272,1374,1394-1396,1440
+packages/engine/src/coordination.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 27
+docs/spec/settings-and-plugins.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 5,170,181,200,204,241,268,316,350,411,435,482,515,517,594,598,607,618-621,629,652-669
+packages/engine/src/workflow-run.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 11,30,43,51-77,122-150,185,197,215-220,222-233,288,307,310,313,322,347-350,371,394-412,432,446,474-475,527-575
+  s_d35c9dcd305d72::t_a1e6e00d622bcb 576-577
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 17,61,63
+packages/engine/src/provider-runner.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 236,250
+packages/engine/src/issue-search-tool.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 1-122
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 17,19,58,102,105,148,184,228
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 14
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 8,32-33,36,40,42,104-108
+docs/spec/customizable-workflows.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 3,5,124-125,129-130,136,174-175,184,191,208,233,255,262,322,327,332,337,369,384,398-400,612
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 40
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 10
+packages/engine/src/trigger-observation.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 58,206-220,330-348,448-483,1291-1311,1313
+  s_d35c9dcd305d72::t_64055a9b72f788 1312,1314
+docs/adr/0005-trust-boundary-is-authentication-not-payload-redaction.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 60
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 11,20,67
+docs/adr/0007-autonomous-with-override-triage-self-halts.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 13-14
+packages/engine/src/issue-tracker-router.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 12,52,56,60
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 76,78,83
+packages/engine/src/trigger-observation.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 83-87,197-211,242-246,256,263-267,311-336,466-470
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 44,114,116,125-126,136,143,169,222,227,272
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 27,104
+apps/desktop/src/renderer/src/components/connections-surface.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 65,84,118,125
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 26,86,91
+apps/desktop/src/renderer/src/features/daemon-failure.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 1-11
+apps/desktop/src/renderer/src/routes/settings/scheduling.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 14,85
+docs/agents/product.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 26,145
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 9,28,58-63
+packages/engine/src/daemon-composition.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 389-455
+packages/engine/src/harness.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 17,47
+configs/lint/staging.grit
+  s_d35c9dcd305d72::t_8c1ef82fe00790 27
+packages/contracts/src/workflow.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 15,116,139-146,170,438,447-448,451-472
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 10,27,81,103,119,140,150
+packages/engine/src/github/trigger-source.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 3-6,27,262-293
+  s_d35c9dcd305d72::t_2db20bec5b463b 294-298
+packages/engine/src/coordination-tracker.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 14,16,676,680,684,687,690-728
+docs/spec/next-phase.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 4,13,20,63-64,106,112,117,126,156,183,200,225,244,258,267,365,391-401
+packages/contracts/src/coordination.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 74
+packages/engine/src/workflow-action-plan.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 35,113,321-326,676,680-694
+configs/lint/tests/rules.test.mjs
+  s_d35c9dcd305d72::t_8c1ef82fe00790 168
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_d35c9dcd305d72::t_8c1ef82fe00790 32,276
+packages/engine/src/control-store.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 133-134,154
+docs/agents/technical-disposition.md
+  s_d35c9dcd305d72::t_8c1ef82fe00790 46,48,92,99,157,269-270,323,372
+apps/desktop/src/renderer/src/features/daemon-failure.test.ts
+  s_d35c9dcd305d72::t_8c1ef82fe00790 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e5e73cb72f1cc03966afe6abc4f31bc69ccfa63b",
+  "prompts": {},
+  "sessions": {
+    "s_d35c9dcd305d72": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d3f-ce67-7163-a4ed-32529a03c09a",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
