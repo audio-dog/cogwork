@@ -1,0 +1,51 @@
+packages/engine/src/clock-source.ts
+  s_9fd7d719c90ee1::t_03d98b8fc9dba2 32-35,370-382,384
+  s_9fd7d719c90ee1::t_c0a10e48eb194c 26,81-90,141
+  s_9fd7d719c90ee1::t_34b615b32af096 48,57,91,93
+  s_9fd7d719c90ee1::t_44f3c7ef98cca1 2,18,268-288,290-292,294-295,312-313,322-336,346,348,350,354-360,387,390-393
+  s_9fd7d719c90ee1::t_80ccc24d322ae2 299-300
+  s_9fd7d719c90ee1::t_a3cad1b263e1df 289,296-298,301-311
+  s_9fd7d719c90ee1::t_f061cec5b4fbf4 293
+  s_9fd7d719c90ee1::t_d3f2b13fc849f5 92
+  s_9fd7d719c90ee1::t_2c46a446ddea11 142-144
+  s_9fd7d719c90ee1::t_cae9fe379aae41 145-148
+packages/engine/src/clock-source.test.ts
+  s_9fd7d719c90ee1::t_f31ea6afb4839f 50-58
+  s_9fd7d719c90ee1::t_31ed0efeab25f6 7,38-46,99-106,109,112-127,137-138,141-149
+  s_9fd7d719c90ee1::t_2bfef00a8155b2 4,128-136,139
+  s_9fd7d719c90ee1::t_23874a03f41f1d 107-108,110
+  s_9fd7d719c90ee1::t_54d995eaf3f349 1
+  s_9fd7d719c90ee1::t_bbf82d742c8c60 140
+  s_9fd7d719c90ee1::t_d90c76f9509dec 12
+  s_9fd7d719c90ee1::t_0421a4c7a1599a 111
+  s_814e7f77c8e38f::t_16790090ba3877 150-152
+packages/contracts/src/coordination.ts
+  s_9fd7d719c90ee1::t_54d995eaf3f349 74
+packages/engine/src/trigger-source.ts
+  s_9fd7d719c90ee1::t_a3cad1b263e1df 67
+  s_9fd7d719c90ee1::t_c16b95e3868014 63-66,68-76,95,118,125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "366ad58581215dc1e36ab6a31286b43a5899d2d7",
+  "prompts": {},
+  "sessions": {
+    "s_814e7f77c8e38f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d3f-c351-7c71-814e-0ed1f47be139",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9fd7d719c90ee1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d58-a706-72e1-9a2c-5b30c0af3f52",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
