@@ -1,6 +1,9 @@
 import {
   Connection,
   connectionIdOf,
+  SlackChannelId,
+  SlackMessageTs,
+  SlackWriteKey,
   WorkflowCatalogKey,
   WorkflowId,
   WorkflowNodeId,
@@ -34,6 +37,9 @@ import { SourceFailure, type TriggerSubscription } from "./trigger-source";
 const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
+const decodeSlackChannel = Schema.decodeSync(SlackChannelId);
+const decodeSlackTs = Schema.decodeSync(SlackMessageTs);
+const decodeSlackWriteKey = Schema.decodeSync(SlackWriteKey);
 const slackConnection = Connection.make({
   id: connectionIdOf("slack", "T123"),
   system: "slack",
@@ -132,6 +138,11 @@ const clientLayer: Layer.Layer<SlackClient | SlackClientStateRef> = Layer.effect
       history: () => read((state) => state.history),
       reactions: () => read((state) => state.reactions),
       replies: () => readContext((state) => state.replies),
+      findWrite: (_session, lookup) =>
+        readContext((state) => {
+          const messages = lookup.threadTs ? state.replies : state.history;
+          return messages.find(({ metadata }) => metadata?.writeKey === lookup.writeKey) ?? null;
+        }),
       channels: () => Effect.succeed([{ id: "C123", name: "reviews" }]),
       emojis: () => Effect.succeed(["eyes"]),
       channelName: () => readContext(() => "reviews"),
@@ -187,6 +198,7 @@ describe("Slack Trigger source", () => {
         team: "T123",
         channel: "C123",
         ts: "90.000",
+        threadTs: "90.000",
       });
       assert.strictEqual(event?.revision, "90.000");
       assert.include(event?.workContext?.body ?? "", "Taylor: Could @Morgan review this?");
@@ -515,7 +527,7 @@ describe("Slack Trigger source", () => {
         threadTs: root.ts,
         text: "Cogwork reply",
         appId: "A0CD4UYHKPX",
-        metadata: { eventPayload: { write_key: "run-1:step-1" } },
+        metadata: { eventType: "cogwork_write", writeKey: "run-1:step-1" },
       });
       yield* Ref.set(yield* SlackClientStateRef, {
         search: [],
@@ -577,6 +589,7 @@ describe("Slack Trigger source", () => {
         team: "T123",
         channel: "C123",
         ts: "900.000",
+        threadTs: "900.000",
       });
     }).pipe(Effect.provide(testLayer)),
   );
@@ -805,6 +818,117 @@ describe("Slack Trigger source", () => {
       });
 
       yield* makeHttpClient(http).history(session, "C123", 1_793_275_200_000);
+    }),
+  );
+
+  it.effect("finds write metadata through conversation history and replies", () =>
+    Effect.gen(function* () {
+      const methods = yield* Ref.make<ReadonlyArray<string>>([]);
+      const http = HttpClient.make((request, url) => {
+        const method = url.pathname.slice("/api/".length);
+        assert.strictEqual(url.searchParams.get("include_all_metadata"), "true");
+        const body = {
+          ok: true,
+          messages: [
+            {
+              ts: method === "conversations.replies" ? "902.000" : "901.000",
+              thread_ts: method === "conversations.replies" ? "900.000" : undefined,
+              metadata: {
+                event_type: "cogwork_write",
+                event_payload: { write_key: method === "conversations.replies" ? "reply-key" : "send-key" },
+              },
+            },
+          ],
+          response_metadata: { next_cursor: "" },
+        };
+        return Ref.update(methods, (current) => [...current, method]).pipe(
+          Effect.map(() =>
+            HttpClientResponse.fromWeb(
+              request,
+              new Response(JSON.stringify(body), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              }),
+            ),
+          ),
+        );
+      });
+      const client = makeHttpClient(http);
+
+      const sent = yield* client.findWrite(session, {
+        channel: decodeSlackChannel("C123"),
+        threadTs: null,
+        writeKey: decodeSlackWriteKey("send-key"),
+      });
+      const replied = yield* client.findWrite(session, {
+        channel: decodeSlackChannel("C123"),
+        threadTs: decodeSlackTs("900.000"),
+        writeKey: decodeSlackWriteKey("reply-key"),
+      });
+
+      assert.strictEqual(sent?.ts, "901.000");
+      assert.strictEqual(replied?.ts, "902.000");
+      assert.deepStrictEqual(yield* Ref.get(methods), ["conversations.history", "conversations.replies"]);
+    }),
+  );
+
+  it.effect("fails closed when a write lookup exceeds its page limit", () =>
+    Effect.gen(function* () {
+      const requests = yield* Ref.make(0);
+      const http = HttpClient.make((request) =>
+        Ref.updateAndGet(requests, (count) => count + 1).pipe(
+          Effect.map((count) =>
+            HttpClientResponse.fromWeb(
+              request,
+              new Response(
+                JSON.stringify({
+                  ok: true,
+                  messages: [],
+                  response_metadata: { next_cursor: `page-${count}` },
+                }),
+                { status: 200, headers: { "content-type": "application/json" } },
+              ),
+            ),
+          ),
+        ),
+      );
+
+      const failure = yield* Effect.flip(
+        makeHttpClient(http).findWrite(session, {
+          channel: decodeSlackChannel("C123"),
+          threadTs: null,
+          writeKey: decodeSlackWriteKey("send-key"),
+        }),
+      );
+
+      assert.strictEqual(yield* Ref.get(requests), 10);
+      assert.strictEqual(failure.reason, "unavailable");
+    }),
+  );
+
+  it.effect("lists Slack conversations for live channel options", () =>
+    Effect.gen(function* () {
+      const http = HttpClient.make((request, url) => {
+        assert.strictEqual(url.pathname, "/api/conversations.list");
+        assert.strictEqual(url.searchParams.get("types"), "public_channel,private_channel");
+        return Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(
+              JSON.stringify({
+                ok: true,
+                channels: [{ id: "C123", name: "reviews" }],
+                response_metadata: { next_cursor: "" },
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
+          ),
+        );
+      });
+
+      const channels = yield* makeHttpClient(http).channels(session);
+
+      assert.deepStrictEqual(channels, [{ id: "C123", name: "reviews" }]);
     }),
   );
 

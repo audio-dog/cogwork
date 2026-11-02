@@ -5,6 +5,9 @@ import * as Schema from "effect/Schema";
 import {
   HarnessName,
   IssueTrackerType,
+  SlackChannelId,
+  SlackMessageTs,
+  SlackTeamId,
   TrimmedNonEmptyString,
   WorkItemId,
   WorkspaceId,
@@ -93,6 +96,13 @@ const workflowActionTargetBinding = {
 export const WorkflowActionTarget = Schema.TaggedUnion({
   Cogwork: {},
   NoWorkspace: {},
+  SlackChannel: { channel: SlackChannelId },
+  SlackMessage: {
+    team: SlackTeamId,
+    channel: SlackChannelId,
+    ts: SlackMessageTs,
+    threadTs: SlackMessageTs,
+  },
   CurrentIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   ExistingIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   NewIssue: workflowActionTargetBinding,
@@ -114,6 +124,19 @@ export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>
   origin: WorkflowActionOrigin,
 }) {}
 
+export class WorkflowSlackActionArtifact extends Schema.Class<WorkflowSlackActionArtifact>(
+  "WorkflowSlackActionArtifact",
+)({
+  team: SlackTeamId,
+  channel: SlackChannelId,
+  ts: SlackMessageTs,
+  threadTs: Schema.NullOr(SlackMessageTs),
+  origin: WorkflowActionOrigin,
+}) {}
+
+export const WorkflowActionPlanArtifact = Schema.Union([WorkflowActionArtifact, WorkflowSlackActionArtifact]);
+export type WorkflowActionPlanArtifact = typeof WorkflowActionPlanArtifact.Type;
+
 export const WorkflowOperationElement = Schema.Struct({
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
@@ -129,9 +152,9 @@ export class WorkflowActionPlanStep extends Schema.Class<WorkflowActionPlanStep>
   inputs: Schema.Record(Schema.String, TrimmedNonEmptyString),
   target: WorkflowActionTarget,
   writeKey: TrimmedNonEmptyString,
-  status: Schema.Literals(["pending", "completed", "failed"]),
+  status: Schema.Literals(["pending", "executing", "completed", "failed"]),
   failures: Schema.Natural,
-  artifact: Schema.NullOr(WorkflowActionArtifact),
+  artifact: Schema.NullOr(WorkflowActionPlanArtifact),
 }) {}
 
 export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("WorkflowActionPlan")({
