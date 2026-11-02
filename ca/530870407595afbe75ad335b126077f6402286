@@ -1,0 +1,24 @@
+packages/engine/src/pull-request-tool.test.ts
+  s_1499f8cf284854::t_9762f066b7c388 1-85
+packages/engine/src/pull-request-tool.ts
+  s_1499f8cf284854::t_878c4082bbabec 1-26,28-34,38
+  s_1499f8cf284854::t_6d6679cb4207b9 36
+  s_1499f8cf284854::t_0f3022319d41dc 35,37
+  s_1499f8cf284854::t_c21a64f703983f 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ca530870407595afbe75ad335b126077f6402286",
+  "prompts": {},
+  "sessions": {
+    "s_1499f8cf284854": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-347d-7603-bbd8-088ebfebc478",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
