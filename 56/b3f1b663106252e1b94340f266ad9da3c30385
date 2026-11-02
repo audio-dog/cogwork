@@ -1,0 +1,70 @@
+packages/engine/src/workflow-run.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 44,208,218
+packages/engine/src/issue-workflow-catalog.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 1,6-16,50-117,134
+packages/contracts/src/workflow.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 9-11,100-106,128-140,156,158
+packages/engine/src/workflow-action-plan.ts
+  s_ba08b7cf6195a4::t_dc5be738c23fde 585-587
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 7-8,11,13,21,23,32,155,161,189-254,260,264,309-316,358,388,404-431,501,542-571,605,651,659-670,736-742,745-746,751,758,762,767-780
+packages/engine/src/index.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 47
+packages/engine/src/slack-write.test.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 1-357
+packages/contracts/src/base-schemas.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 27-38
+packages/contracts/CONTEXT.md
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 419
+apps/cli/src/workflow-commands.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 19,61-76,160-168,172-175,201-203,209,218
+packages/engine/src/slack-source.test.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 4-6,40-42,141-145,201,530,592,824-933
+  s_ba08b7cf6195a4::t_3bbef657733083 934
+packages/engine/src/granola-http.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 8,58-60
+packages/engine/src/slack-source.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 2-4,25,40-41,65-70,95-98,206-208,231,319-327,336,370-372,390-391,409-414,418,434-470,563,617,721-727
+packages/engine/src/slack-write.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 1-437
+packages/engine/src/workflow-attention.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 23,36
+packages/engine/src/workflow.test.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 38,127-128,183-258
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_ba08b7cf6195a4::t_e84c77beb6fe66 221
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_ba08b7cf6195a4::t_e84c77beb6fe66 6,17,117-118,128-129,137,140,149,162,220
+packages/engine/src/workflow-run.test.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 61,424-429
+packages/engine/src/daemon.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 120,548,575
+packages/engine/src/json-event-stream.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 1-109
+packages/engine/src/workflow-action-plan.test.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 5-7,10,12,27,34,45-48,94-104,142-169,176,185,207-214,262-321,335-562
+packages/engine/src/workflow-catalog.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 14,82-92,100
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_ba08b7cf6195a4::t_e84c77beb6fe66 21,162-165
+  s_ba08b7cf6195a4::t_a373919e5f6b4f 166
+packages/engine/src/daemon-composition.test.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 371,374-377,513-516
+packages/contracts/src/coordination.ts
+  s_ba08b7cf6195a4::t_3a1c5f71a994e4 20,114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "56b3f1b663106252e1b94340f266ad9da3c30385",
+  "prompts": {},
+  "sessions": {
+    "s_ba08b7cf6195a4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d57-75f5-7743-aa07-3fa49250abf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
