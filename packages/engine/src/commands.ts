@@ -41,6 +41,7 @@ import {
   type TriageRole,
   type WorkItemId,
   WorkItemNotFound,
+  type WorkItemRef,
   type WorkspaceId,
   type WorkspaceRegistration,
   WorkspaceRegistrationError,
@@ -58,7 +59,6 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
-import { fold } from "./coordination";
 import { CredentialStore } from "./credential-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
@@ -86,6 +86,7 @@ import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
 import { SlackLogin } from "./slack-login";
+import { WorkflowRun } from "./workflow-run";
 
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
@@ -283,39 +284,10 @@ export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
 });
 
 export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
-  readonly workspace: WorkspaceId;
-  readonly workItem: WorkItemId;
-  readonly role: TriageRole;
+  readonly item: WorkItemRef;
   readonly note?: string;
 }) {
-  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
-  const principal = yield* Principal;
-  const record = { by: principal.id, atMillis: yield* Clock.currentTimeMillis };
-  const issueTracker = yield* IssueTracker;
-  yield* issueTracker.handBack(workspace, payload.workItem, {
-    record,
-    changes: roleChanges(observed.roles, payload.role),
-    note: payload.note,
-  });
-
-  const handedBack = {
-    ...observed,
-    roles: [payload.role],
-    handback: record,
-    coordination: fold(
-      {
-        claim: observed.claim,
-        attempts: observed.attempts,
-        handbacks: [{ ...record, note: payload.note ?? null }],
-        parks: [],
-        revision: observed.coordination?.revision ?? null,
-      },
-      "cogwork",
-    ),
-  };
-  const item = classifiedItemWithPr(handedBack);
-  yield* publishChangedItem(payload.workspace, item);
-  return item;
+  yield* (yield* WorkflowRun).handBack(payload);
 });
 
 export const setScheduling = Effect.fn("Daemon.SetScheduling")(function* (payload: {

@@ -26,7 +26,11 @@ import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { SlackWrite, SlackWriteError, slackActionEntries } from "./slack-write";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import type { TriggerAdmission } from "./trigger-observation";
+import {
+  makeMemoryTriggerObservationStore,
+  type TriggerAdmission,
+  TriggerObservationStore,
+} from "./trigger-observation";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import {
   WorkflowActionPlanStore,
@@ -318,9 +322,11 @@ const adapterLayers = Layer.mergeAll(coordinationLayer, trackerLayer, slackLayer
   Layer.provideMerge(ActionPlanProbe.layer),
 );
 
+const triggerObservationStoreLayer = Layer.effect(TriggerObservationStore, makeMemoryTriggerObservationStore);
 const requirements = Layer.mergeAll(
   engineTestLayer(),
   workflowActionPlanStoreLayer,
+  triggerObservationStoreLayer,
   workflowArtifactStoreLayer,
   adapterLayers,
 );
@@ -373,6 +379,7 @@ describe("Workflow action plan", () => {
         output: { summary: "Respond", answers: {}, inputs: { message: "Hello", reply: "On it" } },
         attempt: decodeRun("slack-plan"),
         createdAtMillis: 20,
+        workflowRevision: 1,
       });
 
       assert.deepStrictEqual(
@@ -551,6 +558,27 @@ describe("Workflow action plan", () => {
       assert.deepStrictEqual(yield* Ref.get(probe.calls), ["draft:900.000:unknown"]);
       assert.strictEqual((yield* Ref.get(probe.parks))[0]?._tag, "DraftOutcomeUnknown");
     }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("withdraws the pending approval for this item", () =>
+    Effect.gen(function* () {
+      const store = yield* WorkflowActionPlanStore;
+      const observationStore = yield* TriggerObservationStore;
+      const waiting = WorkflowActionPlan.make({
+        ...plan([step(0, "cogwork.wait-for-approval")]),
+        attempt: decodeRun("waiting-attempt"),
+      });
+      const withdrawing = plan([step(0, "cogwork.withdraw-pending-approval")]);
+      yield* store.create(waiting);
+      yield* store.create(withdrawing);
+      yield* observationStore.putAll([admission]);
+
+      const result = yield* executeWorkflowActionPlan(withdrawing, admission);
+
+      assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
+      assert.isEmpty(yield* store.list);
+      assert.isEmpty(yield* observationStore.admissions);
+    }).pipe(Effect.provide(requirements)),
   );
 
   it.effect("a completed stop clears the hand-off", () =>

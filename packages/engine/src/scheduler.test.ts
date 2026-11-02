@@ -493,6 +493,10 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
               (deps.workflowExecute?.(state, admission) ?? Effect.void).pipe(
                 Effect.map(workflowRunOutcomeOf),
               ),
+            approve: () => Effect.die("Unexpected Workflow approval"),
+            reject: () => Effect.die("Unexpected Workflow rejection"),
+            chooseAnswer: () => Effect.die("Unexpected Workflow answer"),
+            handBack: () => Effect.die("Unexpected Workflow handback"),
           })),
         ).pipe(Layer.provide(probe)),
         engineServices,

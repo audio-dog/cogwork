@@ -5,6 +5,7 @@ import {
   type RunSummary,
   type TriageRole,
   type WorkItemId,
+  WorkItemRef,
   type WorkspaceId,
 } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
@@ -68,7 +69,7 @@ interface ItemTabActions {
   readonly setTriageNote: (note: string) => void;
   readonly cancel: () => void;
   readonly reclassify: (role: TriageRole, note?: string) => void;
-  readonly handBack: (role: TriageRole, note?: string) => void;
+  readonly handBack: (note?: string) => void;
 }
 
 interface MutationStatus {
@@ -148,6 +149,15 @@ function ItemTabProvider({
       },
     };
   };
+  const handBackPayload = (note?: string) => {
+    const trimmedNote = note?.trim();
+    return {
+      payload: {
+        item: WorkItemRef.cases.Issue.make({ workspace, id: item.id }),
+        ...(trimmedNote ? { note: trimmedNote } : {}),
+      },
+    };
+  };
 
   const actions: ItemTabActions = {
     setSubTab,
@@ -159,9 +169,9 @@ function ItemTabProvider({
     reclassify: (role, note) => {
       runReclassify(roleCommandPayload(role, note));
     },
-    handBack: (role, note) => {
+    handBack: (note) => {
       setHandBackTarget({ workspace, workItem: item.id });
-      runHandBack(roleCommandPayload(role, note));
+      runHandBack(handBackPayload(note));
     },
   };
 
@@ -343,7 +353,7 @@ function ReclassifyButton() {
 
 function HandBackButton() {
   const {
-    state: { item, triageRole, triageNote },
+    state: { item, triageNote },
     actions: { handBack: submitHandBack },
     meta: { handBack, roleCommandPending },
   } = useItemTab();
@@ -353,7 +363,7 @@ function HandBackButton() {
       size="sm"
       variant="outline"
       disabled={roleCommandPending}
-      onClick={() => submitHandBack(triageRole, triageNote)}
+      onClick={() => submitHandBack(triageNote)}
     >
       {handBack.pending && <Spinner data-icon="inline-start" />}
       Hand back
