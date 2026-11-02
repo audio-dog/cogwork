@@ -27,6 +27,7 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -41,6 +42,7 @@ import { clockEntries } from "./clock-source";
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, CoordinationError, type CoordinationService, fold } from "./coordination";
 import * as CredentialStore from "./credential-store";
+import { githubSourceControlActionEntries } from "./github/provider";
 import {
   fullHarnessExecution,
   Harness,
@@ -54,6 +56,7 @@ import {
   type IssueTrackerService,
   makeEmpty as makeEmptyIssueTracker,
 } from "./issue-tracker";
+import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry } from "./registry";
@@ -75,6 +78,7 @@ import {
   memoryLayer as workflowActionPlanStoreLayer,
 } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore, memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
+import { cogworkWorkflowCatalogContribution } from "./workflow-catalog";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
 import { PullRequestReadiness, WorktreeManager } from "./worktree";
@@ -413,6 +417,76 @@ const resultEvent = (object: unknown) => ({
   name: "structured-output.complete" as const,
   value: { object, raw: JSON.stringify(object) },
 });
+
+class CodingPipelineProbe extends Context.Service<CodingPipelineProbe, Ref.Ref<ReadonlyArray<string>>>()(
+  "@cogwork/engine/workflow-run.test/CodingPipelineProbe",
+) {
+  static readonly layer = Layer.effect(CodingPipelineProbe, Ref.make<ReadonlyArray<string>>([]));
+}
+
+const codingSourceControlLayer = Layer.effect(
+  SourceControlProvider,
+  Effect.map(CodingPipelineProbe, (calls) => ({
+    ...emptySourceControl,
+    workflowCatalogContribution: { entries: githubSourceControlActionEntries, templates: [] },
+    resolvePullRequest: (_workspace, item) => {
+      const isUnimplementedIssue = item._tag === "Issue" && item.id === "#802";
+      return Effect.succeed(
+        isUnimplementedIssue
+          ? null
+          : {
+              number: 900,
+              url: "https://example.test/pull/900",
+              headBranch: "900-follow-up",
+              baseBranch: "main",
+            },
+      );
+    },
+    openWorkflowPullRequest: (_workspace, input) =>
+      Ref.update(calls, (current) => [...current, `open:${input.title}`]).pipe(
+        Effect.map(() =>
+          WorkflowActionArtifact.make({
+            workspace: decodeWorkspace("github"),
+            issue: decodeWorkItem("#802"),
+            url: "https://example.test/pull/802",
+            origin: input.origin,
+          }),
+        ),
+      ),
+    recordPullRequestPush: (_workspace, pullRequest, origin) =>
+      Ref.update(calls, (current) => [...current, `push:${pullRequest.number}`]).pipe(
+        Effect.map(() =>
+          WorkflowActionArtifact.make({
+            workspace: decodeWorkspace("github"),
+            issue: decodeWorkItem("#900"),
+            url: pullRequest.url,
+            origin,
+          }),
+        ),
+      ),
+  })),
+);
+
+const codingWorktreeLayer = Layer.unwrap(
+  Effect.map(CodingPipelineProbe, (calls) =>
+    Layer.mock(WorktreeManager, {
+      ensure: (_workspace, item) =>
+        Effect.succeed({
+          branch: BranchName.make(`${item.id.slice(1)}-coding-template`),
+          path: `/worktrees/${item.id.slice(1)}`,
+          created: true,
+        }),
+      pullRequestReadiness: (_workspace, _item, branch) => {
+        if (!branch) return Effect.die("Test run has no branch");
+        return Effect.succeed(PullRequestReadiness.Ready({ headBranch: branch, baseBranch: "main" }));
+      },
+      pushBranch: (_workspace, branch) =>
+        Ref.update(calls, (current) => [...current, `push-branch:${branch}`]),
+      pushBranchIfAhead: (_workspace, branch) =>
+        Ref.update(calls, (current) => [...current, `push-if-ahead:${branch}`]).pipe(Effect.map(() => true)),
+    }),
+  ),
+);
 
 const requirements = Layer.mergeAll(
   engineTestLayer(),
@@ -786,6 +860,187 @@ describe("WorkflowRun", () => {
       ]);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
+
+  it.effect("runs the GitHub coding template through tracker and source-control seams", () => {
+    const workspace = {
+      source: "control-store:workspace",
+      repository: "owner/repo",
+      contributions: [],
+      config: Schema.decodeSync(WorkspaceConfig)({
+        name: "github",
+        checkoutPath: "/repos/github",
+        issueTracker: { type: "github" },
+      }),
+    } satisfies RegisteredWorkspace;
+    const contribution = issueTrackerWorkflowCatalogContribution("github");
+    const template = contribution.templates.find(({ id }) => id === "github-coding-pipeline");
+    if (!template) return Effect.die("GitHub coding template is missing");
+    const codingDocument = template.document;
+    const catalogEntries = [
+      ...cogworkWorkflowCatalogContribution.entries,
+      ...contribution.entries,
+      ...githubSourceControlActionEntries,
+    ];
+    const codingService = {
+      ...workflowServiceWith(codingDocument),
+      catalog: Effect.succeed({
+        catalog: {
+          entries: catalogEntries,
+          instructionPackages: ["triage-agent", "implement-agent", "follow-up-agent"],
+          harnesses: [],
+        },
+        machine: {
+          workspaces: [{ id: workspace.config.name, binds: ["github"] }],
+          connections: [],
+          harnesses: [{ name: harnessName, available: true }],
+          defaultHarness: harnessName,
+          readyNeeds: [],
+        },
+      }),
+    } satisfies WorkflowsService;
+    const admissionFor = (
+      triggerId: string,
+      item: string,
+      workContext?: TriggerAdmission["event"]["workContext"],
+    ) => {
+      const selected = codingDocument.triggers.find(({ id }) => id === triggerId);
+      if (!selected) throw new Error(`Missing coding Trigger ${triggerId}`);
+      const issue = decodeWorkItem(item);
+      return {
+        event: {
+          key: { _tag: "Issue", workspace: workspace.config.name, id: issue },
+          revision: `${triggerId}:${item}`,
+          cause: triggerId === "needs-info-comment" ? { _tag: "Person" } : { _tag: "Unknown" },
+          atMillis: 1_000,
+          entry: selected.entry,
+          workspace: workspace.config.name,
+          parameters: selected.parameters,
+          ...(workContext ? { workContext } : {}),
+        },
+        subscription: {
+          workflow,
+          trigger: selected.id,
+          operation: selected.start,
+          entry: selected.entry,
+          parameters: selected.parameters,
+          workspaces: [workspace.config.name],
+          catchUp: { since: 0 },
+        },
+        lineage: {
+          root: LineageId.make(`${triggerId}:${item}`),
+          parent: null,
+          hop: 0,
+        },
+      } satisfies TriggerAdmission;
+    };
+    const testLayer = Layer.mergeAll(requirements, codingSourceControlLayer, codingWorktreeLayer).pipe(
+      Layer.provideMerge(CodingPipelineProbe.layer),
+    );
+
+    return Effect.gen(function* () {
+      const calls = yield* CodingPipelineProbe;
+      const baseTracker = yield* makeEmptyIssueTracker;
+      const tracker = {
+        ...baseTracker,
+        commentIssue: (_workspace, issue, body) =>
+          Ref.update(calls, (current) => [...current, `comment:${issue}:${body}`]),
+        addLabels: (_workspace, issue, labels) =>
+          Ref.update(calls, (current) => [...current, `labels:${issue}:${labels.join(",")}`]),
+      } satisfies IssueTrackerService;
+      const needsInfo = admissionFor("needs-triage", "#800");
+      const reporterComment = admissionFor("needs-info-comment", "#801", {
+        body: "Implement retries.",
+        comments: [
+          {
+            author: "reporter",
+            authorAssociation: "OWNER",
+            body: "Here are the requested logs.",
+            createdAtMillis: 900,
+          },
+        ],
+      });
+      const implement = admissionFor("ready-for-agent", "#802");
+      const followUp = admissionFor("checks-failed", "#803");
+      const needsInfoProgram = yield* testProgram(
+        [
+          {
+            summary: "More information needed",
+            stuck: false,
+            answers: { role: "needs-info" },
+            inputs: { comment: "Please add the failing logs.", hand_off: "Waiting for logs." },
+            workspace: workspace.config.name,
+          },
+        ],
+        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
+        codingService,
+      );
+      yield* needsInfoProgram.observationStore.putAll([needsInfo]);
+      yield* needsInfoProgram.runner.execute(needsInfo);
+
+      const reporterProgram = yield* testProgram(
+        [
+          {
+            summary: "Ready after reporter reply",
+            stuck: false,
+            answers: { role: "ready-for-agent" },
+            inputs: { comment: "Thanks, this is ready.", hand_off: "" },
+            workspace: workspace.config.name,
+          },
+        ],
+        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
+        codingService,
+      );
+      yield* reporterProgram.observationStore.putAll([reporterComment]);
+      yield* reporterProgram.runner.execute(reporterComment);
+
+      const implementProgram = yield* testProgram(
+        [
+          {
+            summary: "Implementation complete",
+            stuck: false,
+            answers: {},
+            inputs: { pr_title: "Implement retries", pr_body: "Closes #802" },
+            workspace: workspace.config.name,
+          },
+        ],
+        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
+        codingService,
+      );
+      yield* implementProgram.observationStore.putAll([implement]);
+      yield* implementProgram.runner.execute(implement);
+
+      const followUpProgram = yield* testProgram(
+        [
+          {
+            summary: "Fixed failing check",
+            stuck: false,
+            answers: { reply: "no" },
+            inputs: { comment: "" },
+            workspace: workspace.config.name,
+          },
+        ],
+        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [workspace] } },
+        codingService,
+      );
+      yield* followUpProgram.observationStore.putAll([followUp]);
+      yield* followUpProgram.runner.execute(followUp);
+
+      assert.deepStrictEqual(yield* Ref.get(calls), [
+        "comment:#800:Please add the failing logs.",
+        "labels:#800:needs-info",
+        "comment:#801:Thanks, this is ready.",
+        "labels:#801:ready-for-agent",
+        "push-branch:802",
+        "open:Implement retries",
+        "push-if-ahead:900-follow-up",
+        "push:900",
+      ]);
+      assert.strictEqual(
+        (yield* Ref.get(needsInfoProgram.coordination.parks)).at(-1)?.reason._tag,
+        "HandedToYou",
+      );
+    }).pipe(Effect.provide(testLayer), Effect.scoped);
+  });
 
   it.effect("freezes the complete Granola note in Work context", () =>
     Effect.gen(function* () {
