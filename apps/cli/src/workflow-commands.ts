@@ -16,6 +16,7 @@ const socketFlag = Flag.string("socket").pipe(
 );
 
 const documentArgument = Argument.string("document-json");
+const templateIdArgument = Argument.string("template-id");
 const editsArgument = Argument.string("edits-json");
 const idArgument = Argument.string("id");
 const revisionArgument = Argument.integer("revision");
@@ -54,6 +55,22 @@ const create = ({ socket, documentJson }: { readonly socket: string; readonly do
       const document = yield* decodeDocument(documentJson);
       const client = yield* makeDaemonClient();
       yield* printJson(yield* client.CreateWorkflow({ document }));
+    }),
+  );
+
+const createTemplate = ({ socket, templateId }: { readonly socket: string; readonly templateId: string }) =>
+  withClient(
+    socket,
+    Effect.gen(function* () {
+      const client = yield* makeDaemonClient();
+      const template = (yield* client.GetWorkflowTemplates()).find(({ id }) => id === templateId);
+      if (!template) {
+        return yield* new CliError.UserError({
+          cause: templateId,
+          userMessage: terminalLine(`Unknown Workflow template ${templateId}`),
+        });
+      }
+      yield* printJson(yield* client.CreateWorkflow({ document: template.document }));
     }),
   );
 
@@ -140,9 +157,22 @@ const catalog = ({ socket }: { readonly socket: string }) =>
     }),
   );
 
+const templates = ({ socket }: { readonly socket: string }) =>
+  withClient(
+    socket,
+    Effect.gen(function* () {
+      const client = yield* makeDaemonClient();
+      yield* printJson(yield* client.GetWorkflowTemplates());
+    }),
+  );
+
 const createCommand = Command.make("create", { socket: socketFlag, documentJson: documentArgument }).pipe(
   Command.withHandler(create),
 );
+const createTemplateCommand = Command.make("create-template", {
+  socket: socketFlag,
+  templateId: templateIdArgument,
+}).pipe(Command.withHandler(createTemplate));
 const editCommand = Command.make("edit", {
   socket: socketFlag,
   id: idArgument,
@@ -168,11 +198,15 @@ const validateCommand = Command.make("validate", {
   documentJson: documentArgument,
 }).pipe(Command.withHandler(validate));
 const catalogCommand = Command.make("catalog", { socket: socketFlag }).pipe(Command.withHandler(catalog));
+const templatesCommand = Command.make("templates", { socket: socketFlag }).pipe(
+  Command.withHandler(templates),
+);
 
 export const workflowCommand = Command.make("workflow").pipe(
   Command.withDescription("Create, edit, publish, switch, inspect, and delete Workflows"),
   Command.withSubcommands([
     createCommand,
+    createTemplateCommand,
     editCommand,
     publishCommand,
     switchCommand,
@@ -181,5 +215,6 @@ export const workflowCommand = Command.make("workflow").pipe(
     getCommand,
     validateCommand,
     catalogCommand,
+    templatesCommand,
   ]),
 );

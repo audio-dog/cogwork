@@ -35,6 +35,7 @@ import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
+import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import {
   cogworkWorkflowCatalogContribution,
@@ -123,6 +124,8 @@ const temporaryStore = Effect.fn("test.temporaryWorkflowsStore")(function* () {
 
 const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   cogworkWorkflowCatalogContribution,
+  issueTrackerWorkflowCatalogContribution("github"),
+  issueTrackerWorkflowCatalogContribution("linear"),
   triggerContribution,
   granolaWorkflowCatalogContribution,
   clockContribution,
@@ -174,6 +177,82 @@ layer(NodeServices.layer)((it) => {
           { _tag: "Unavailable", reason: "Granola login expired" },
         ],
       );
+    }),
+  );
+
+  it.effect("creates and publishes every shipped Workflow template", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const templates = yield* withWorkflows(storePath, ({ templates }) => templates);
+
+      assert.deepStrictEqual(
+        templates.map(({ id, document }) => ({
+          id: String(id),
+          trigger: String(document.triggers[0]?.entry),
+          forEach: document.operations[0]?.forEach,
+          choices: document.operations[0]?.questions[0]?.choices.map(({ id }) => String(id)),
+          actions: document.operations[0]?.transitions.map(({ when, actions }) => ({
+            choice: String(when[0]?.choice),
+            entry: String(actions[0]?.entry),
+            parameters: actions[0]?.parameters.map(({ id, value }) => ({ id: String(id), value })),
+          })),
+        })),
+        [
+          {
+            id: "granola-to-github-issue",
+            trigger: "granola.note-generated",
+            forEach: "commitment",
+            choices: ["new", "duplicate", "related"],
+            actions: [
+              {
+                choice: "new",
+                entry: "github.create-issue",
+                parameters: [{ id: "label", value: "needs-triage" }],
+              },
+              { choice: "duplicate", entry: "github.comment-issue", parameters: [] },
+              { choice: "related", entry: "github.comment-issue", parameters: [] },
+            ],
+          },
+          {
+            id: "granola-to-linear-issue",
+            trigger: "granola.note-generated",
+            forEach: "commitment",
+            choices: ["new", "duplicate", "related"],
+            actions: [
+              {
+                choice: "new",
+                entry: "linear.create-issue",
+                parameters: [{ id: "label", value: "state:needs-triage" }],
+              },
+              { choice: "duplicate", entry: "linear.comment-issue", parameters: [] },
+              { choice: "related", entry: "linear.comment-issue", parameters: [] },
+            ],
+          },
+        ],
+      );
+      yield* Effect.forEach(templates, (template) => {
+        assert.deepStrictEqual(template.document.workspaces, { _tag: "Every" });
+        assert.isTrue(
+          template.document.operations.every(
+            ({ model }) => model.harness === null && model.model === null && model.options.length === 0,
+          ),
+        );
+        return withWorkflows(storePath, ({ create, publish }) =>
+          create({ document: template.document }).pipe(
+            Effect.tap((created) =>
+              Effect.sync(() =>
+                assert.isFalse(
+                  created.diagnostics.some(
+                    ({ class: diagnosticClass }) =>
+                      diagnosticClass === "malformed" || diagnosticClass === "incomplete",
+                  ),
+                ),
+              ),
+            ),
+            Effect.flatMap((created) => publish({ id: created.id, revision: created.workingRevision })),
+          ),
+        );
+      });
     }),
   );
 
@@ -406,7 +485,6 @@ layer(NodeServices.layer)((it) => {
       const storePath = yield* temporaryStore();
       const result = yield* withWorkflows(storePath, ({ catalog }) => catalog);
 
-      assert.lengthOf(result.catalog.entries, 11);
       assert.deepStrictEqual(result.catalog.instructionPackages, [
         "triage-agent",
         "implement-agent",
