@@ -12,6 +12,7 @@ import {
   validateWorkflow,
   validateWorkflowInput,
   type WorkflowCatalog,
+  WorkflowCatalogKey,
   WorkflowCatalog as WorkflowCatalogSchema,
   type WorkflowDiagnosticCode,
   type WorkflowDocument,
@@ -28,7 +29,10 @@ const decodeMachine = Schema.decodeUnknownSync(MachineReadiness);
 const decodeHarness = Schema.decodeUnknownSync(HarnessName);
 const decodeNeed = Schema.decodeUnknownSync(NeedIdentity);
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
+const decodeCatalogKey = Schema.decodeUnknownSync(WorkflowCatalogKey);
 const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
+const jsonMember = (value: unknown, key: string) =>
+  typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
 const cogworkWorkspace = decodeWorkspaceId("cogwork");
 
 const baseDocument = decodeDocument({
@@ -639,6 +643,51 @@ describe("Workflow Operation result", () => {
     assert.strictEqual(json.type, "object");
     assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs", "workspace"]);
     assert.strictEqual(json.additionalProperties, false);
+  });
+
+  it("builds review comments as one required list shape", () => {
+    const reviewEntry = {
+      ...baseCatalog.entries[1],
+      key: decodeCatalogKey("github.post-review"),
+      agentInputs: ["pull_request", "review_body", "review_comments"],
+    };
+    const reviewCatalog = { ...baseCatalog, entries: [reviewEntry] };
+    const reviewOperation = {
+      ...operation,
+      transitions: [
+        {
+          ...transition,
+          actions: [{ entry: reviewEntry.key, parameters: [] }],
+        },
+      ],
+    };
+    const json = workflowOperationResultJsonSchema(reviewOperation, reviewCatalog)[
+      "~standard"
+    ].jsonSchema.input({ target: "draft-2020-12" });
+    const inputs = jsonMember(jsonMember(json, "properties"), "inputs");
+
+    assert.isObject(inputs);
+    if (typeof inputs !== "object" || inputs === null || !("properties" in inputs)) {
+      return assert.fail("expected input properties");
+    }
+    assert.deepStrictEqual(jsonMember(inputs, "required"), [
+      "pull_request",
+      "review_body",
+      "review_comments",
+    ]);
+    assert.deepStrictEqual(jsonMember(jsonMember(inputs, "properties"), "review_comments"), {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          line: { type: "integer", exclusiveMinimum: 0 },
+          body: { type: "string" },
+        },
+        required: ["path", "line", "body"],
+        additionalProperties: false,
+      },
+    });
   });
 
   it("decodes at most 50 for-each elements", () => {
