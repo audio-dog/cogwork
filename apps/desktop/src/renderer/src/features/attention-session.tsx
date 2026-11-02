@@ -119,6 +119,8 @@ const targetLabel = (target: WorkflowActionTarget) =>
     CurrentIssue: ({ issue }) => issue,
     ExistingIssue: ({ issue }) => issue,
     NewIssue: ({ workspace }) => workspace,
+    NewPullRequest: ({ issue }) => issue,
+    CurrentPullRequest: ({ item }) => sourceOf(item).label,
   });
 
 const targetApp = (target: WorkflowActionTarget) =>
@@ -130,6 +132,8 @@ const targetApp = (target: WorkflowActionTarget) =>
     CurrentIssue: ({ app }) => catalogIcon(app),
     ExistingIssue: ({ app }) => catalogIcon(app),
     NewIssue: ({ app }) => catalogIcon(app),
+    NewPullRequest: ({ app }) => catalogIcon(app),
+    CurrentPullRequest: ({ app }) => catalogIcon(app),
   });
 
 const stepStates = {
