@@ -1,0 +1,88 @@
+packages/engine/src/workflow-attention.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 6-7,26-29,38,146-164,180-182,188
+packages/engine/src/workflow-run.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 1706,1734,1741-1745,1754-1758
+packages/engine/src/coordination-tracker.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 58-59,382-396,398,431-432
+packages/engine/src/issue-tracker-router.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 6,23-33
+packages/engine/src/daemon-composition.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 372,541
+packages/engine/src/issue-workflow-catalog.ts
+  s_f29dff91b8e93b::t_28ede9c5546926 376
+  s_f29dff91b8e93b::t_209f2beabd66d2 53-134
+packages/engine/src/workflow-notification.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 4,17,19-58,63,73-80,83-93,100-106
+packages/engine/src/clock-source.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 1,9-10,36-44,88-124,139-168
+  s_f29dff91b8e93b::t_dfc4b56c00d479 169-170
+packages/engine/src/workflow.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 225-239,255-269,751-792
+  s_f29dff91b8e93b::t_d688260fc46653 793-795
+packages/engine/src/coordination.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 236-240,242-243,247-248
+packages/contracts/src/rpc.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 48,236,261-265,402
+packages/engine/src/trigger-observation.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 20,32,396-411,442,478-487,511-691
+  s_f29dff91b8e93b::t_38f5cb5f8469e6 692-694
+packages/engine/src/github/host.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 326-327
+packages/contracts/src/coordination.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 75
+packages/engine/src/issue-tracker.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 19,51-52,239-242
+packages/engine/src/coordination-fold.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 123-146
+packages/engine/src/issue-tracker-router.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 32,66-70,122-133
+  s_f29dff91b8e93b::t_17bc8c36df855a 134-136
+packages/engine/src/daemon.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 15,40,67,374-375,440-443,447-488,556-557
+packages/engine/src/trigger-source.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 63-76,95,118,125
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 146-157
+packages/engine/src/clock-source.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 2,18,26,32-34,47,56,80-92,126-134,141-142,262-308,317-331,341,343,345,349-355,359-396,400-403,405-417,419,422,425-431
+packages/engine/src/workflow-attention.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 104-105,117,123,133
+packages/engine/src/workflow-action-plan.test.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 219-224,234-239,262,269,566,592,615,621,632,639,658-673,697,779,822,836
+packages/contracts/src/workflow.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 8,219-220,227,299-301,303-304,309
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 1,8-9,13,16,18-21,26,71-72,93-94,136,140,150,155-165,218,220
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_f29dff91b8e93b::t_209f2beabd66d2 1-364
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_f29dff91b8e93b::t_209f2beabd66d2 1-410
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_f29dff91b8e93b::t_209f2beabd66d2 1-2,15,115,124,128-133,161,164,220-221,262,267,396-398,409,411,423,428,432-438,448,452,543-551,560,655,661-671,676-680,684,695,697,739-747,750,904,1006,1030-1034
+packages/engine/src/workflow-run.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 978
+packages/engine/src/linear/host.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 340-341
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_f29dff91b8e93b::t_209f2beabd66d2 1-2,6-16,33-47,49-53,56-63,65-68,70-76,81
+packages/engine/src/trigger-observation.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 9,28,35-36,38,144,148-167,507-508,562-690,802
+packages/engine/src/workflow-action-plan.ts
+  s_f29dff91b8e93b::t_209f2beabd66d2 19,30,475,628-630,769-772,777-779,896-905,945
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d3ccfe12cc46a60a13069e880ee8e5617551ede",
+  "prompts": {},
+  "sessions": {
+    "s_f29dff91b8e93b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d7b-3603-7a30-b771-959684067fe4",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
