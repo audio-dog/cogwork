@@ -1205,6 +1205,7 @@ describe("HandBack", () => {
   it.effect("addresses a Workflow item and carries the person's note", () => {
     const handedBack = Ref.makeUnsafe<ReadonlyArray<unknown>>([]);
     const workflowRun = Layer.succeed(WorkflowRun, {
+      refreshReviewPlans: () => Effect.void,
       execute: () => Effect.succeed("completed" as const),
       approve: () => Effect.die("Unexpected approval"),
       reject: () => Effect.die("Unexpected rejection"),

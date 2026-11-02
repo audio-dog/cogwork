@@ -489,6 +489,7 @@ const schedulerLayer = (config: Scheduler.SchedulerConfig, deps: SchedulerLayerD
         Layer.effect(
           WorkflowRun,
           Effect.map(SchedulerProbe, (state) => ({
+            refreshReviewPlans: () => Effect.void,
             execute: (admission: TriggerAdmission) =>
               (deps.workflowExecute?.(state, admission) ?? Effect.void).pipe(
                 Effect.map(workflowRunOutcomeOf),
