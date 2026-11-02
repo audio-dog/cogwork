@@ -383,6 +383,73 @@ describe("daemon server composition", () => {
     }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
   );
 
+  it.effect("round-trips the Granola fan-out document through DaemonRpcs", () =>
+    Effect.gen(function* () {
+      yield* Daemon.bootstrap;
+      const rpc = yield* RpcClient.make(DaemonRpcs);
+      const document = yield* Schema.decodeEffect(WorkflowDocument)({
+        name: "Granola commitments",
+        workspaces: { _tag: "Every" },
+        triggers: [
+          {
+            id: "note-generated",
+            entry: "granola.note-generated",
+            parameters: [],
+            start: "route-commitments",
+          },
+        ],
+        operations: [
+          {
+            id: "route-commitments",
+            name: "Route commitments",
+            instructionPackage: null,
+            instruction: "Route each commitment to an issue.",
+            permissionProfile: "read-only",
+            requires: [],
+            model: { harness: "cursor", model: "test", options: [] },
+            forEach: "commitment",
+            questions: [
+              {
+                id: "match",
+                text: "Match?",
+                choices: [
+                  { id: "new", name: "New" },
+                  { id: "duplicate", name: "Duplicate" },
+                ],
+              },
+            ],
+            transitions: [
+              {
+                when: [{ question: "match", choice: "new" }],
+                actions: [{ entry: "github.create-issue", parameters: [] }],
+                handOff: null,
+              },
+              {
+                when: [{ question: "match", choice: "duplicate" }],
+                actions: [{ entry: "github.comment-issue", parameters: [] }],
+                handOff: null,
+              },
+            ],
+            hints: [],
+          },
+        ],
+      });
+
+      const created = yield* rpc.CreateWorkflow({ document });
+      const fetched = yield* rpc.GetWorkflow({ id: created.id });
+      const deleted = yield* rpc.DeleteWorkflow({ id: created.id });
+
+      assert.strictEqual(fetched.workingCopy.operations[0]?.forEach, "commitment");
+      assert.deepStrictEqual(
+        fetched.workingCopy.operations[0]?.transitions.flatMap(({ actions }) =>
+          actions.map(({ entry }) => entry),
+        ),
+        ["github.create-issue", "github.comment-issue"],
+      );
+      assert.strictEqual(deleted, created.id);
+    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
+  );
+
   it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
     Effect.gen(function* () {
       const result = yield* inspectUnavailableDaemon();

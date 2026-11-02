@@ -18,6 +18,7 @@ import {
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
+import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import type { GitHubClientService, GitHubRepoRef, RawIssue, RawIssueComment } from "./client";
 import { targetFor } from "./host";
 import { hasCogworkMarker } from "./markers";
@@ -54,6 +55,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
   selected: ReadonlyArray<TriggerSubscription>,
   issue: RawIssue,
   now: number,
+  artifacts: WorkflowArtifactStoreService | null,
 ) {
   const issueSubscriptions = selected.filter((subscription) => {
     const label = parameterValue(subscription.parameters, "label");
@@ -67,6 +69,23 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
     needsLabels ? client.listIssueEvents(target, issue.number) : Effect.succeed([]),
     needsComments ? client.listTriggerComments(target, issue.number) : Effect.succeed([]),
   ]);
+  const issueId = itemId(`#${issue.number}`);
+  const origin =
+    artifacts === null
+      ? null
+      : yield* artifacts
+          .origin(workspace.config.name, issueId)
+          .pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Workflow artifact origin read failed", { error }).pipe(
+                Effect.map(() => null),
+              ),
+            ),
+          );
+  const issueCause =
+    origin === null
+      ? ({ _tag: "Unknown" } as const)
+      : ({ _tag: "Cogwork", origin: origin.item, lineage: origin.lineage } as const);
   const labelEvents = issueSubscriptions.flatMap((subscription) => {
     if (subscription.entry !== issueHasLabelKey) return [];
     const label = parameterValue(subscription.parameters, "label") ?? "";
@@ -77,10 +96,10 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
         key: {
           _tag: "Issue",
           workspace: workspace.config.name,
-          id: itemId(`#${issue.number}`),
+          id: issueId,
         },
         revision: `label:${label}:${atMillis}`,
-        cause: { _tag: "Unknown" },
+        cause: issueCause,
         atMillis,
         entry: issueHasLabelKey,
         workspace: workspace.config.name,
@@ -132,6 +151,7 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
   subscriptions: ReadonlyArray<TriggerSubscription>,
   workspace: RegistryState["workspaces"][number],
   now: number,
+  artifacts: WorkflowArtifactStoreService | null,
 ) {
   const selected = workspaceSubscriptions(workspace.config.name, subscriptions);
   if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
@@ -146,7 +166,7 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
   const events = yield* Effect.forEach(trackerIssues, (issue) =>
     isolateProviderItemRead(
       { source: "github", workspace: workspace.config.name, item: `issue #${issue.number}` },
-      eventsForIssue(client, target, workspace, selected, issue, now),
+      eventsForIssue(client, target, workspace, selected, issue, now, artifacts),
     ),
   );
   return {
@@ -161,12 +181,20 @@ const read = Effect.fn("GitHubTrackerTriggerSource.read")(function* (
   registry: Effect.Effect<RegistryState>,
   subscriptions: ReadonlyArray<TriggerSubscription>,
   checkpoint: ProviderPollCheckpoint,
+  artifacts: WorkflowArtifactStoreService | null,
 ) {
   const now = yield* Clock.currentTimeMillis;
   const state = yield* registry;
   const workspaces = state.workspaces.filter(({ config }) => config.issueTracker.type === "github");
   const reads = yield* Effect.forEach(workspaces, (workspace) =>
-    readWorkspace(client, checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
+    readWorkspace(
+      client,
+      checkpoint.cursors.get(workspace.config.name),
+      subscriptions,
+      workspace,
+      now,
+      artifacts,
+    ),
   );
   return {
     events: reads.flatMap(({ events }) => events),
@@ -180,6 +208,7 @@ const read = Effect.fn("GitHubTrackerTriggerSource.read")(function* (
 export const makeGitHubTrackerTriggerSource = (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
+  artifacts: WorkflowArtifactStoreService | null = null,
 ): TriggerSource => {
   const listOptions: TriggerSource["listOptions"] = (_entry, parameter, workspace) =>
     Effect.gen(function* () {
@@ -201,6 +230,8 @@ export const makeGitHubTrackerTriggerSource = (
     availability: () => Effect.succeed({ _tag: "Available" }),
     listOptions,
     observe: (subscriptions) =>
-      providerPollingStream("github", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
+      providerPollingStream("github", (checkpoint) =>
+        read(client, registry, subscriptions, checkpoint, artifacts),
+      ),
   };
 };

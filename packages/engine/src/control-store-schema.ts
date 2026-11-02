@@ -1,4 +1,9 @@
-import { maxSchedulerLimit, type WorkflowActionPlan, type WorkflowDocument } from "@cogwork/contracts";
+import {
+  maxSchedulerLimit,
+  type WorkflowActionArtifact,
+  type WorkflowActionPlan,
+  type WorkflowDocument,
+} from "@cogwork/contracts";
 import { desc, sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -257,6 +262,24 @@ export const workflowActionPlans = sqliteTable(
     check("workflow_action_plans_attempt", sql`length(trim(${table.attempt})) > 0`),
     check("workflow_action_plans_created_at", sql`${table.createdAtMillis} >= 0`),
     check("workflow_action_plans_plan_json", sql`json_valid(${table.plan})`),
+  ],
+);
+
+export const workflowActionArtifacts = sqliteTable(
+  "workflow_action_artifacts",
+  {
+    root: text("root").notNull(),
+    writeKey: text("write_key").primaryKey(),
+    workspace: text("workspace").notNull(),
+    issue: text("issue").notNull(),
+    artifact: text("artifact", { mode: "json" }).$type<WorkflowActionArtifact>().notNull(),
+  },
+  (table) => [
+    index("workflow_action_artifacts_lineage").on(table.root),
+    uniqueIndex("workflow_action_artifacts_issue").on(table.workspace, table.issue),
+    check("workflow_action_artifacts_root", sql`length(trim(${table.root})) > 0`),
+    check("workflow_action_artifacts_write_key", sql`length(trim(${table.writeKey})) > 0`),
+    check("workflow_action_artifacts_json", sql`json_valid(${table.artifact})`),
   ],
 );
 

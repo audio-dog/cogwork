@@ -8,7 +8,7 @@ import type {
   WorkspaceUpdate,
 } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
-import * as Cause from "effect/Cause";
+import type * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
   deregisterWorkspaceAtom,
@@ -17,6 +17,7 @@ import {
   updateWorkspaceAtom,
 } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import { useDaemonLimit } from "../features/use-daemon-limit";
 
 type WorkspacesStatus = "loading" | "offline" | "ready";
@@ -63,7 +64,7 @@ export interface WorkspacesValue {
 const WorkspacesContext = createContext<WorkspacesValue | null>(null);
 
 const resultError = (result: { readonly _tag: string; readonly cause?: Cause.Cause<unknown> }) =>
-  result._tag === "Failure" && result.cause ? Cause.pretty(result.cause) : null;
+  result._tag === "Failure" && result.cause ? daemonFailureMessage(result.cause) : null;
 
 const resultValue = <T,>(result: { readonly _tag: string; readonly value?: T }) =>
   result._tag === "Success" ? (result.value ?? null) : null;

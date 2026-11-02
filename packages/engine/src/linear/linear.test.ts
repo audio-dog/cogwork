@@ -490,6 +490,7 @@ describe("linear work source adapter", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
 
       const artifact = yield* tracker.createIssue(workspace, {
@@ -551,6 +552,7 @@ describe("linear work source adapter", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
 
       const artifact = yield* tracker.createIssue(multiTeamWorkspace, {
@@ -572,6 +574,7 @@ describe("linear work source adapter", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
 
       const error = yield* tracker
@@ -599,6 +602,7 @@ describe("linear work source adapter", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
       const error = yield* tracker
         .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
@@ -628,6 +632,7 @@ describe("linear work source adapter", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
       const error = yield* tracker
         .createIssue(workspace, { title: "Created", body: "Body", labels: [], origin })
@@ -673,6 +678,7 @@ describe("linear work source adapter", () => {
         workflow: WorkflowId.make("issue-actions"),
         attempt: RunId.make("issue-actions-attempt"),
         writeKey: "create-key",
+        lineage,
       });
 
       const artifact = yield* tracker

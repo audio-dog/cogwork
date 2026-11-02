@@ -14,6 +14,7 @@ import {
   stageResultJsonSchema,
   unsupportedHarnessModelOption,
 } from "@cogwork/contracts";
+import type { AnyTool } from "@tanstack/ai";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -43,6 +44,7 @@ export interface HarnessRequest {
   readonly plan: RunPlan;
   readonly session: SessionId | null;
   readonly mcpCredentials: ReadonlyMap<string, Redacted.Redacted<string>>;
+  readonly engineTools?: ReadonlyArray<AnyTool>;
 }
 
 export const resolvedMcpSkills = (request: HarnessRequest): ReadonlyArray<ResolvedMcpSkill> =>

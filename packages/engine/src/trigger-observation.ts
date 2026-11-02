@@ -80,6 +80,11 @@ export interface TriggerObservationStoreService {
     admission: TriggerAdmission,
     closeRevision: Effect.Effect<void, E, R>,
   ) => Effect.Effect<void, TriggerObservationStoreError | E, R>;
+  readonly fanOut: <E, R>(
+    admission: TriggerAdmission,
+    children: ReadonlyArray<TriggerAdmission>,
+    closeRevision: Effect.Effect<void, E, R>,
+  ) => Effect.Effect<void, TriggerObservationStoreError | E, R>;
   readonly activate: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
     atMillis: number,
@@ -189,6 +194,21 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
           }),
         ),
       ),
+    fanOut: (admission, children, closeRevision) =>
+      completionGate.withPermit(
+        Effect.uninterruptible(
+          Ref.get(admissions).pipe(
+            Effect.flatMap((current) => {
+              const hasSibling = [...current.pending.values()].some(
+                (candidate) =>
+                  admissionKey(candidate) !== admissionKey(admission) && sameRevision(candidate, admission),
+              );
+              const beforeFinish = hasSibling ? Effect.void : closeRevision;
+              return putAll(children).pipe(Effect.andThen(beforeFinish), Effect.andThen(finish(admission)));
+            }),
+          ),
+        ),
+      ),
     activate: (subscriptions, atMillis) =>
       Ref.modify(checkpoints, (current) => {
         const activated = activateSubscriptions(subscriptions, current, atMillis);
@@ -219,14 +239,11 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const controlStore = yield* ControlStore;
   const completionGate = Semaphore.makeUnsafe(1);
-  const putAll = (admissions: ReadonlyArray<TriggerAdmission>) =>
-    controlStore
-      .withWrite(
-        sql.withTransaction(
-          Effect.forEach(
-            admissions,
-            (admission) =>
-              sql`
+  const putStatements = (admissions: ReadonlyArray<TriggerAdmission>) =>
+    Effect.forEach(
+      admissions,
+      (admission) =>
+        sql`
                 INSERT INTO trigger_admissions (work_item, revision, payload)
                 VALUES (
                   ${keyOf(admission.event.key)},
@@ -236,17 +253,18 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
                 ON CONFLICT (work_item, revision, workflow, trigger)
                 DO UPDATE SET payload = excluded.payload
               `.pipe(
-                Effect.andThen(sql`
+          Effect.andThen(sql`
                   UPDATE trigger_subscription_checkpoints
                   SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
                   WHERE workflow = ${admission.subscription.workflow}
                     AND trigger = ${admission.subscription.trigger}
                 `),
-              ),
-            { discard: true },
-          ),
         ),
-      )
+      { discard: true },
+    );
+  const putAll = (admissions: ReadonlyArray<TriggerAdmission>) =>
+    controlStore
+      .withWrite(sql.withTransaction(putStatements(admissions)))
       .pipe(Effect.asVoid, Effect.mapError(storeError));
   const finishStatement = (admission: TriggerAdmission) =>
     sql`
@@ -288,6 +306,32 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
             const hasSibling = (rows[0]?.remaining ?? 0) > 0;
             return hasSibling ? finish(admission) : closeAndFinish(admission, closeRevision);
           }),
+        ),
+      ),
+    fanOut: (admission, children, closeRevision) =>
+      completionGate.withPermit(
+        sql<StoredAdmissionCount>`
+          SELECT COUNT(*) AS remaining
+          FROM trigger_admissions
+          WHERE work_item = ${keyOf(admission.event.key)}
+            AND revision = ${admission.event.revision}
+            AND processed = 0
+            AND NOT (
+              workflow = ${admission.subscription.workflow}
+              AND trigger = ${admission.subscription.trigger}
+            )
+        `.pipe(
+          Effect.flatMap((rows) => {
+            const hasSibling = (rows[0]?.remaining ?? 0) > 0;
+            const beforeFinish = hasSibling ? Effect.void : closeRevision;
+            return sql.withTransaction(
+              putStatements(children).pipe(
+                Effect.andThen(beforeFinish),
+                Effect.andThen(finishStatement(admission)),
+              ),
+            );
+          }),
+          Effect.mapError((error) => (SqlError.isSqlError(error) ? storeError(error) : error)),
         ),
       ),
     activate: (subscriptions, atMillis) =>
@@ -419,8 +463,11 @@ const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
 const lineageOf = (event: TriggerEvent): Lineage => {
   const current = Schema.decodeSync(LineageId)(keyOf(event.key));
   if (event.cause._tag !== "Cogwork") return { root: current, parent: null, hop: 0 };
-  const origin = Schema.decodeSync(LineageId)(event.cause.origin);
-  return { root: origin, parent: origin, hop: 1 };
+  return {
+    root: event.cause.lineage.root,
+    parent: Schema.decodeSync(LineageId)(event.cause.origin),
+    hop: event.cause.lineage.hop + 1,
+  };
 };
 
 const planRejectionOf = (event: TriggerEvent) =>

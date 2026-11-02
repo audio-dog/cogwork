@@ -165,7 +165,7 @@ const ruleCases = [
   },
   {
     message:
-      "Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/colonylabs/cogwork/issues/102.",
+      "Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/taylorfsteele/cogwork/issues/102.",
     plugin: "staging",
     name: "no-switch",
   },
