@@ -13,6 +13,7 @@ import {
 } from "@cogwork/contracts";
 import {
   type AnyTextAdapter,
+  type AnyTool,
   type ChatMiddleware,
   chat,
   type JSONSchema,
@@ -106,6 +107,7 @@ export interface ExternalHarnessResolvedRequest {
   readonly checkout: ExternalHarnessCheckout;
   readonly prompt: ReadonlyArray<RunPlanMessage>;
   readonly outputSchema: JSONSchema | null;
+  readonly tools: ReadonlyArray<AnyTool>;
 }
 
 export interface ExternalHarnessCapabilities {
@@ -492,6 +494,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     checkout: { path: checkoutPath, gitWritablePaths: writablePaths },
     prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
+    tools: request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [],
   } satisfies ExternalHarnessResolvedRequest;
 });
 
@@ -598,6 +601,7 @@ const makeChatStream = <Adapter extends AnyTextAdapter>(
     abortController,
     modelOptions: descriptor.projectOptions(request),
     outputSchema: request.outputSchema ?? undefined,
+    tools: request.tools,
     threadId: request.identity.session,
     runId: request.identity.run,
     stream: true,
