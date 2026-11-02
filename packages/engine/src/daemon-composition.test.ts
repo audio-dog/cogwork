@@ -454,6 +454,34 @@ describe("daemon server composition", () => {
     }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
   );
 
+  it.effect("publishes both coding templates through DaemonRpcs", () =>
+    Effect.gen(function* () {
+      yield* Daemon.bootstrap;
+      const rpc = yield* RpcClient.make(DaemonRpcs);
+      const templates = (yield* rpc.GetWorkflowTemplates()).filter(({ id }) =>
+        id.endsWith("-coding-pipeline"),
+      );
+      const created = yield* Effect.forEach(templates, ({ document }) => rpc.CreateWorkflow({ document }));
+      const published = yield* Effect.forEach(created, ({ id, workingRevision }) =>
+        rpc.PublishWorkflow({ id, revision: workingRevision }),
+      );
+
+      assert.deepStrictEqual(
+        templates.map(({ id }) => id),
+        ["github-coding-pipeline", "linear-coding-pipeline"],
+      );
+      const rejectedDiagnostics = created.flatMap(({ diagnostics }) =>
+        diagnostics.filter(({ class: diagnosticClass, code }) => {
+          const isBlocking = diagnosticClass === "malformed" || diagnosticClass === "incomplete";
+          const isForbiddenAdvisory = ["hand-off-and-trigger", "unreachable-operation"].includes(code);
+          return isBlocking || isForbiddenAdvisory;
+        }),
+      );
+      assert.deepStrictEqual(rejectedDiagnostics, []);
+      assert.lengthOf(published, 2);
+    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
+  );
+
   it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
     Effect.gen(function* () {
       const result = yield* inspectUnavailableDaemon();

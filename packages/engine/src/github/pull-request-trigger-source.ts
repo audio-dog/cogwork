@@ -1,4 +1,4 @@
-import { WorkflowCatalogKey, type WorkflowOption, WorkItemId, type WorkItemRef } from "@cogwork/contracts";
+import { WorkflowCatalogKey, type WorkflowOption, type WorkItemRef } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -63,7 +63,6 @@ export const githubPullRequestEntries = [
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const conditionEntries = new Set([checksFailedKey, conflictsKey]);
-const workItemId = Schema.decodeSync(WorkItemId);
 
 interface Feedback {
   readonly id: string;
@@ -121,23 +120,11 @@ const feedbackOf = (
   ),
 ];
 
-const linkedItemByTracker: Readonly<Record<string, (pull: RawPull) => WorkItemId | null>> = {
-  github: (pull) => {
-    const closing = pull.closingIssueNumbers.at(0);
-    return closing === undefined ? null : workItemId(`#${closing}`);
-  },
-  linear: (pull) => {
-    const linear = /^([A-Z][A-Z0-9]+-\d+)(?:-|$)/.exec(pull.headRef)?.[1];
-    return linear ? workItemId(linear) : null;
-  },
-};
-
-const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull): WorkItemRef => {
-  const linked = linkedItemByTracker[workspace.config.issueTracker.type]?.(pull) ?? null;
-  return linked
-    ? { _tag: "Issue", workspace: workspace.config.name, id: linked }
-    : { _tag: "PullRequest", workspace: workspace.config.name, number: pull.number };
-};
+const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull): WorkItemRef => ({
+  _tag: "PullRequest",
+  workspace: workspace.config.name,
+  number: pull.number,
+});
 
 const proseOf = (pull: RawPull, feedback: ReadonlyArray<Feedback>) => ({
   body: `Pull request #${pull.number}`,

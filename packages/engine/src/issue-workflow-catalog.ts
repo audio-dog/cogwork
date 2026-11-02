@@ -15,6 +15,9 @@ const triageLabels = {
   linear: "state:needs-triage",
 } as const;
 
+const roleLabel = (system: "github" | "linear", role: string) =>
+  system === "github" ? role : `state:${role}`;
+
 const parameter = (id: string, required: boolean) =>
   ({
     id,
@@ -197,6 +200,163 @@ const granolaIssueTemplate = (system: "github" | "linear") => {
   });
 };
 
+const codingPipelineTemplate = (system: "github" | "linear") => {
+  const tracker = trackerNames[system];
+  const issueTrigger = `${system}.issue-has-label`;
+  const issueCommentTrigger = `${system}.new-comment-from-person`;
+  const trackerAction = (id: string) => `${system}.${id}`;
+  const labelAction = (role: string) => ({
+    entry: trackerAction("add-label"),
+    parameters: [{ id: "label", value: roleLabel(system, role) }],
+  });
+  const commentAction = { entry: trackerAction("comment-this-item"), parameters: [] };
+  const triageTransition = (
+    role: string,
+    trailingActions: ReadonlyArray<{ readonly entry: string; readonly parameters: ReadonlyArray<never> }>,
+  ) => ({
+    when: [{ question: "role", choice: role }],
+    actions: [commentAction, labelAction(role), ...trailingActions],
+    handOff: null,
+  });
+  const handToMe = { entry: "cogwork.hand-to-me", parameters: [] };
+  return decodeTemplate({
+    id: `${system}-coding-pipeline`,
+    name: `${tracker} coding pipeline`,
+    description: `Triage ${tracker} issues, implement ready work, and follow up on pull requests.`,
+    document: {
+      name: `${tracker} coding pipeline`,
+      workspaces: { _tag: "Every" },
+      triggers: [
+        {
+          id: "needs-triage",
+          entry: issueTrigger,
+          parameters: [{ id: "label", value: roleLabel(system, "needs-triage") }],
+          start: "triage",
+        },
+        {
+          id: "ready-for-agent",
+          entry: issueTrigger,
+          parameters: [{ id: "label", value: roleLabel(system, "ready-for-agent") }],
+          start: "implement",
+        },
+        {
+          id: "needs-info-comment",
+          entry: issueCommentTrigger,
+          parameters: [{ id: "label", value: roleLabel(system, "needs-info") }],
+          start: "triage",
+        },
+        {
+          id: "checks-failed",
+          entry: "github.pull-request-checks-failed",
+          parameters: [],
+          start: "follow-up",
+        },
+        {
+          id: "base-conflict",
+          entry: "github.pull-request-conflicts-with-base",
+          parameters: [],
+          start: "follow-up",
+        },
+        {
+          id: "review-comment",
+          entry: "github.new-review-comment-from-person",
+          parameters: [],
+          start: "follow-up",
+        },
+        {
+          id: "bot-finding",
+          entry: "github.new-finding-from-bot",
+          parameters: [{ id: "bot", value: "cursor[bot]" }],
+          start: "follow-up",
+        },
+      ],
+      operations: [
+        {
+          id: "triage",
+          name: "Triage",
+          instructionPackage: "triage-agent",
+          instruction: "",
+          permissionProfile: "read-only",
+          requires: [],
+          model: { harness: null, model: null, options: [] },
+          forEach: null,
+          questions: [
+            {
+              id: "role",
+              text: "What should happen next?",
+              choices: [
+                { id: "ready-for-agent", name: "Ready for agent" },
+                { id: "needs-info", name: "Needs info" },
+                { id: "ready-for-human", name: "Ready for human" },
+                { id: "wontfix", name: "Won't fix" },
+              ],
+            },
+          ],
+          transitions: [
+            triageTransition("ready-for-agent", []),
+            triageTransition("needs-info", [handToMe]),
+            triageTransition("ready-for-human", [handToMe]),
+            triageTransition("wontfix", [{ entry: trackerAction("close-this-issue"), parameters: [] }]),
+          ],
+          hints: [],
+        },
+        {
+          id: "implement",
+          name: "Implement",
+          instructionPackage: "implement-agent",
+          instruction: "",
+          permissionProfile: "full",
+          requires: [],
+          model: { harness: null, model: null, options: [] },
+          forEach: null,
+          questions: [],
+          transitions: [
+            {
+              when: [],
+              actions: [{ entry: "github.open-pull-request", parameters: [] }],
+              handOff: null,
+            },
+          ],
+          hints: [],
+        },
+        {
+          id: "follow-up",
+          name: "Follow-up",
+          instructionPackage: "follow-up-agent",
+          instruction: "",
+          permissionProfile: "full",
+          requires: [],
+          model: { harness: null, model: null, options: [] },
+          forEach: null,
+          questions: [
+            {
+              id: "reply",
+              text: "Should this follow-up add a comment?",
+              choices: [
+                { id: "yes", name: "Yes" },
+                { id: "no", name: "No" },
+              ],
+            },
+          ],
+          transitions: [
+            {
+              when: [],
+              actions: [{ entry: "github.push-to-this-pull-request", parameters: [] }],
+              handOff: null,
+            },
+            {
+              when: [{ question: "reply", choice: "yes" }],
+              actions: [{ entry: "github.comment-on-this-pull-request", parameters: [] }],
+              handOff: null,
+            },
+          ],
+          hints: [],
+        },
+      ],
+    },
+  });
+};
+
 export const issueTrackerWorkflowCatalogContribution = (system: "github" | "linear") =>
   ({
     entries: [
@@ -213,5 +373,5 @@ export const issueTrackerWorkflowCatalogContribution = (system: "github" | "line
       action(system, "remove-label", "Remove a label", [], [parameter("label", true)], ["issue"]),
       action(system, "close-this-issue", "Close this issue", [], [], ["issue"]),
     ],
-    templates: [granolaIssueTemplate(system), stalenessSweepTemplate(system)],
+    templates: [granolaIssueTemplate(system), stalenessSweepTemplate(system), codingPipelineTemplate(system)],
   }) satisfies WorkflowCatalogContribution;
