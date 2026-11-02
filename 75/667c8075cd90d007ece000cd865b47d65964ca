@@ -1,0 +1,36 @@
+apps/desktop/src/main/desktop-notifications.ts
+  s_dab70cd82002cf::t_0b89265b42a9bf 48,58,104,125,137
+  s_dab70cd82002cf::t_0f97a4fc750f1d 96
+  s_dab70cd82002cf::t_32547cbbc19db7 163-170,178
+  s_dab70cd82002cf::t_8b1d9fa6303b5f 31
+  s_dab70cd82002cf::t_262637c4c9698f 129
+  s_dab70cd82002cf::t_3f03123a79efe3 35-39
+  s_dab70cd82002cf::t_af70e2ac461697 44
+  s_dab70cd82002cf::t_a4e42e68d1e17d 123
+  s_dab70cd82002cf::t_226ece4b63271a 43
+  s_dab70cd82002cf::t_323fca55179534 18,106
+  s_dab70cd82002cf::t_41aa3f0123124c 83
+  s_dab70cd82002cf::t_13c994f79cb5eb 97
+  s_dab70cd82002cf::t_c577337aa19327 9-10
+  s_dab70cd82002cf::t_84cc7c1a0ad6ad 1-8,11-17,19-30,32-34,40-42,45-47,49-57,59-82,84-95,98-103,105,107-122,124,126-128,130-136,138-162,171-177,179-182
+apps/desktop/src/main/desktop-notifications.test.ts
+  s_dab70cd82002cf::t_323fca55179534 37
+  s_dab70cd82002cf::t_af70e2ac461697 3-7,65-69
+  s_dab70cd82002cf::t_cc8ee12fc7b0c4 1-2,8-36,38-64,70-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "75667c8075cd90d007ece000cd865b47d65964ca",
+  "prompts": {},
+  "sessions": {
+    "s_dab70cd82002cf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d85-0bcd-7902-b31c-987efe96e20d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
