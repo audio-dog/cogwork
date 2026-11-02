@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_ba08b7cf6195a4::t_76ec8eee02a971 122-123,135-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aa424f846ac777ed1a39766f812ea4e68ab7ba1f",
+  "prompts": {},
+  "sessions": {
+    "s_ba08b7cf6195a4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d57-75f5-7743-aa07-3fa49250abf0",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
