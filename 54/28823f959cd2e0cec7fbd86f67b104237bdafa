@@ -1,0 +1,28 @@
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_dab70cd82002cf::t_96ed6607501628 15,45,79-82
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_dab70cd82002cf::t_96ed6607501628 335-336,347-348,383,409
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_dab70cd82002cf::t_99924c4a3c3608 211-216,229-230,371-384
+  s_dab70cd82002cf::t_70b6e3486adfcc 385-386
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_dab70cd82002cf::t_70b6e3486adfcc 1047-1048
+  s_dab70cd82002cf::t_96ed6607501628 2,125,137,1008-1009,1038-1046
+  s_dab70cd82002cf::t_bf732c518dba16 1037
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5428823f959cd2e0cec7fbd86f67b104237bdafa",
+  "prompts": {},
+  "sessions": {
+    "s_dab70cd82002cf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19d85-0bcd-7902-b31c-987efe96e20d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
