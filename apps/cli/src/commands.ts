@@ -310,6 +310,7 @@ const runDaemon = Effect.fn("commands.runDaemon")(
     yield* installProcessProfileIpc();
     const abort = yield* secondStopSignal;
     yield* Daemon.heartbeats({
+      pollIntervalMillis: options.pollIntervalMillis,
       drain: { graceMillis: options.drainGraceMillis, abort },
     });
   },

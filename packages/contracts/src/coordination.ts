@@ -1,3 +1,4 @@
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionId } from "./connection";
@@ -50,6 +51,39 @@ const keyProducers = {
 };
 
 export const keyOf = (ref: WorkItemRef) => WorkItemKey.make(keyProducers[ref._tag](ref as never));
+
+const keyParsers = new Map<string, (segments: ReadonlyArray<string>) => unknown>([
+  ["issue", ([workspace, id]) => ({ _tag: "Issue", workspace, id })],
+  ["pull-request", ([workspace, number]) => ({ _tag: "PullRequest", workspace, number: Number(number) })],
+  ["granola-note", ([connection, noteId]) => ({ _tag: "GranolaNote", connection, noteId })],
+  ["slack-message", ([team, channel, ts]) => ({ _tag: "SlackMessage", team, channel, ts })],
+  [
+    "slack-conversation",
+    ([team, channel, threadTs]) => ({ _tag: "SlackConversation", team, channel, threadTs }),
+  ],
+  [
+    "schedule",
+    ([workflow, instant]) => ({ _tag: "ScheduleInstant", workflow, instantMillis: Number(instant) }),
+  ],
+  [
+    "fan-out",
+    ([parent, run, position]) => ({ _tag: "FanOutChild", parent, run, position: Number(position) }),
+  ],
+]);
+
+const decodeKeySegment = Option.liftThrowable(decodeURIComponent);
+const decodeRef = Schema.decodeUnknownOption(WorkItemRef);
+
+export const refOfKey = (key: string) => {
+  const [kind = "", ...encoded] = key.split(":");
+  const parse = keyParsers.get(kind);
+  if (parse === undefined) return null;
+  return Option.all(encoded.map(decodeKeySegment)).pipe(
+    Option.flatMap((segments) => decodeRef(parse(segments))),
+    Option.filter((ref) => keyOf(ref) === key),
+    Option.getOrNull,
+  );
+};
 
 export const OperationKey = Schema.Struct({
   workflow: TrimmedNonEmptyString,

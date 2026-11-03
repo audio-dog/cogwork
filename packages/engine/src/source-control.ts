@@ -77,6 +77,9 @@ export interface SourceControlProviderService {
     workspace: RegisteredWorkspace,
     artifacts: ReadonlyArray<WorkflowActionArtifact>,
   ) => Effect.Effect<ReadonlyArray<ReadyToMergeItem>, IssueTrackerError>;
+  readonly openPullRequestBranches: (
+    workspace: RegisteredWorkspace,
+  ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
   readonly resolvePullRequest: (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
@@ -144,6 +147,7 @@ const unavailable = () =>
 export const emptyService: SourceControlProviderService = {
   workflowCatalogContribution: { entries: [], templates: [] },
   readyToMerge: () => Effect.succeed([]),
+  openPullRequestBranches: () => Effect.succeed([]),
   resolvePullRequest: () => Effect.succeed(null),
   readPullRequest: () => Effect.succeed(null),
   openWorkflowPullRequest: unavailable,

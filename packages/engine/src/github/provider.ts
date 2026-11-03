@@ -647,10 +647,20 @@ const make = (
     });
   });
 
+  const openPullRequestBranches = Effect.fn("github.openPullRequestBranches")(function* (
+    workspace: RegisteredWorkspace,
+  ) {
+    const target = sourceControlTargetFor(workspace);
+    if (!target) return [];
+    const pulls = yield* client.listPulls(target);
+    return pulls.map(({ headRef }) => headRef);
+  });
+
   return {
     triggerSources: [makeGitHubPullRequestTriggerSource(client, registry)],
     workflowCatalogContribution: contribution,
     readyToMerge,
+    openPullRequestBranches,
     resolvePullRequest,
     readPullRequest,
     openWorkflowPullRequest: (workspace, input) =>

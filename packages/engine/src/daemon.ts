@@ -61,12 +61,14 @@ import type { ContextAssembler } from "./context-assembler";
 import { bootControlStoreLayer, ControlStore, type ControlStoreService } from "./control-store";
 import { Coordination } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
+import { recoverCrashedRuns } from "./crash-recovery";
 import type { CredentialStore } from "./credential-store";
 import { DaemonEventBus, layer as daemonEventBusLayer, runActivityStream } from "./daemon-event-bus";
 import {
   controlStoreWithDiagnostics,
   DaemonEventPublisher,
   layer as eventPublisherLayer,
+  readyToMergeEvents,
 } from "./event-publisher";
 import type { Git } from "./git";
 import * as GitHub from "./github";
@@ -85,7 +87,7 @@ import {
 } from "./performance-regression-sensor";
 import { PluginManager, pluginManagerLayer } from "./plugin";
 import type { RegistryState } from "./projector";
-import { readyToMergeByWorkspace, schedulerStatsOf, workspaceInfoOf, workspaceStatesOf } from "./read-model";
+import { schedulerStatsOf, workspaceInfoOf, workspaceStatesOf } from "./read-model";
 import { WorkspaceRegistry, layer as workspaceRegistryLayer } from "./registry";
 import { layer as runControlLayer } from "./run-control";
 import {
@@ -116,6 +118,7 @@ import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
 import { WorkflowNotifications, layer as workflowNotificationsLayer } from "./workflow-notification";
 import { WorkflowRun, layer as workflowRunLayer } from "./workflow-run";
 import type { WorktreeManager } from "./worktree";
+import { maintainWorktrees } from "./worktree-maintenance";
 
 export class DaemonInfo extends Context.Service<DaemonInfo, { readonly startedAtMillis: number }>()(
   "@cogwork/engine/daemon/DaemonInfo",
@@ -199,17 +202,11 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const stats = yield* scheduler.stats;
   const running = yield* ledger.runningRuns;
   const registry = yield* (yield* WorkspaceRegistry).state;
-  const readyToMerge = yield* readyToMergeByWorkspace(registry);
+  const readyToMerge = yield* (yield* DaemonEventPublisher).readyToMerge;
   const workspaces = workspaceStatesOf(registry, readyToMerge).map(
     (workspace) => ({ _tag: "WorkspaceChanged", workspace }) as const,
   );
-  const items = [...readyToMerge].flatMap(([workspace, entries]) =>
-    entries.map((item) => ({
-      _tag: "ItemChanged" as const,
-      workspace,
-      item: { _tag: "ReadyToMerge" as const, ...item },
-    })),
-  );
+  const items = readyToMergeEvents(readyToMerge);
   const runs = running.map((run) => ({ _tag: "RunChanged", run }) as const);
   const scheduling = {
     _tag: "SchedulerChanged",
@@ -277,7 +274,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     const controlStore = yield* ControlStore;
     const triggerObservation = yield* TriggerObservation;
     const registry = yield* (yield* WorkspaceRegistry).state;
-    const readyToMerge = yield* readyToMergeByWorkspace(registry);
+    const readyToMerge = yield* (yield* DaemonEventPublisher).readyToMerge;
     return {
       health: controlStore.health === "available" ? "running" : "store-unavailable",
       startedAtMillis: info.startedAtMillis,
@@ -586,6 +583,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     workflowAttention,
     McpSkill.layer.pipe(Layer.provide(credentials)),
     runControlLayer,
+    adapters.worktrees,
   );
   return eventPublisherLayer.pipe(
     Layer.provideMerge(
@@ -629,10 +627,20 @@ const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
   const publisher = yield* DaemonEventPublisher;
   yield* scheduler.tick();
   yield* publisher.publishScheduler();
-  yield* publisher.publishWorkspaces();
 });
 
 const executeHeartbeat = () => executeTick().pipe(Effect.repeat(Schedule.spaced("5 seconds")));
+
+const maintenanceTick = Effect.fn("Daemon.maintenanceHeartbeat")(function* () {
+  const publisher = yield* DaemonEventPublisher;
+  yield* publisher.publishWorkspaces();
+  yield* maintainWorktrees();
+});
+
+const maintenanceHeartbeat = (pollIntervalMillis: number) =>
+  continueAfterHeartbeatFailure(maintenanceTick(), "maintenance heartbeat failed").pipe(
+    Effect.repeat(Schedule.spaced(pollIntervalMillis)),
+  );
 
 const performanceRegressionTick = Effect.fn("Daemon.performanceRegressionHeartbeat")(function* () {
   const source = yield* PerformanceHealthSource;
@@ -647,11 +655,17 @@ const performanceRegressionHeartbeat = () =>
   );
 
 export interface HeartbeatOptions {
+  readonly pollIntervalMillis: number;
   readonly drain: DrainOptions;
 }
 
 const activeHeartbeats = (options: HeartbeatOptions) =>
-  executeHeartbeat().pipe(
+  continueAfterHeartbeatFailure(recoverCrashedRuns(), "crashed Run recovery failed").pipe(
+    Effect.andThen(
+      Effect.all([maintenanceHeartbeat(options.pollIntervalMillis), executeHeartbeat()], {
+        concurrency: "unbounded",
+      }),
+    ),
     Effect.onInterrupt(() => Effect.flatMap(Scheduler, (scheduler) => scheduler.drain(options.drain))),
   );
 

@@ -4,7 +4,6 @@ import {
   type ControlStore as ControlStorePicture,
   type PluginOverview,
   type ReadyToMergeItem,
-  type WorkItemId,
   type WorkspaceId,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -87,54 +86,47 @@ export const controlStoreWithDiagnostics = (controlStore: ControlStorePicture, r
   } satisfies ControlStorePicture;
 };
 
+type ReadyToMergeView = ReadonlyMap<WorkspaceId, ReadonlyArray<ReadyToMergeItem>>;
+
+export const readyToMergeEvents = (view: ReadyToMergeView) =>
+  [...view].flatMap(([workspace, items]) =>
+    items.map(
+      (item) => ({ _tag: "ItemChanged", workspace, item: { _tag: "ReadyToMerge", ...item } }) as const,
+    ),
+  );
+
+const removedItems = (previous: ReadyToMergeView, current: ReadyToMergeView) =>
+  [...previous].flatMap(([workspace, items]) => {
+    const kept = new Set(current.get(workspace)?.map(({ id }) => id));
+    return items
+      .filter(({ id }) => !kept.has(id))
+      .map(({ id }) => ({ _tag: "ItemRemoved", workspace, id }) as const);
+  });
+
 export const make = Effect.gen(function* () {
   const scheduler = yield* Scheduler;
   const registry = yield* WorkspaceRegistry;
   const bus = yield* DaemonEventBus;
-  const publishedItems = yield* Ref.make(
-    new Map<string, { readonly workspace: WorkspaceId; readonly id: WorkItemId }>(),
-  );
-
-  const publishItems = Effect.fn("DaemonEventPublisher.publishItems")(function* (
-    readyToMerge: ReadonlyMap<WorkspaceId, ReadonlyArray<ReadyToMergeItem>>,
-  ) {
-    const current = new Map<string, { readonly workspace: WorkspaceId; readonly id: WorkItemId }>(
-      [...readyToMerge].flatMap(([workspace, items]) =>
-        items.map((item) => [`${workspace}::${item.id}`, { workspace, id: item.id }] as const),
-      ),
-    );
-    const previous = yield* Ref.get(publishedItems);
-    yield* Effect.forEach(
-      [...previous].filter(([key]) => !current.has(key)),
-      ([, item]) => bus.publish({ _tag: "ItemRemoved", ...item }),
-      { discard: true },
-    );
-    yield* Effect.forEach(
-      [...readyToMerge],
-      ([workspace, items]) =>
-        Effect.forEach(
-          items,
-          (item) =>
-            bus.publish({
-              _tag: "ItemChanged",
-              workspace,
-              item: { _tag: "ReadyToMerge", ...item },
-            }),
-          { discard: true },
-        ),
-      { discard: true },
-    );
-    yield* Ref.set(publishedItems, current);
-  });
+  const readyToMergeView = yield* Ref.make<ReadyToMergeView>(new Map());
 
   const publishWorkspaces = Effect.fn("DaemonEventPublisher.publishWorkspaces")(function* () {
     const state = yield* registry.state;
-    const readyToMerge = yield* readyToMergeByWorkspace(state);
-    const workspaces = workspaceStatesOf(state, readyToMerge);
+    const read = yield* readyToMergeByWorkspace(state);
+    const previous = yield* Ref.get(readyToMergeView);
+    const current: ReadyToMergeView = new Map(
+      state.workspaces.map(({ config }) => [
+        config.name,
+        read.get(config.name) ?? previous.get(config.name) ?? [],
+      ]),
+    );
+    yield* Ref.set(readyToMergeView, current);
+    const workspaces = workspaceStatesOf(state, current);
     yield* Effect.forEach(workspaces, (workspace) => bus.publish({ _tag: "WorkspaceChanged", workspace }), {
       discard: true,
     });
-    yield* publishItems(readyToMerge);
+    yield* Effect.forEach([...removedItems(previous, current), ...readyToMergeEvents(current)], bus.publish, {
+      discard: true,
+    });
     return workspaces;
   });
 
@@ -165,6 +157,7 @@ export const make = Effect.gen(function* () {
     bus.publish({ _tag: "ConnectionsChanged", connections, danglingWorkspaces });
 
   return {
+    readyToMerge: Ref.get(readyToMergeView),
     publishWorkspaces,
     publishWorkspaceRemoved,
     publishScheduler,
