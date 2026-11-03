@@ -35,9 +35,6 @@ export type OperationSettingScope = typeof OperationSettingScope.Type;
 export const DefaultSettingLevel = Schema.TaggedStruct("Default", {});
 export type DefaultSettingLevel = typeof DefaultSettingLevel.Type;
 
-export const SettingLevel = DefaultSettingLevel;
-export type SettingLevel = typeof SettingLevel.Type;
-
 export const OperationSettingName = Schema.Literals(["harness", "model", "model-options"]);
 export type OperationSettingName = typeof OperationSettingName.Type;
 export const operationSettingNames = OperationSettingName.literals;
@@ -57,7 +54,7 @@ export const ModelOptionSelections = Schema.Record(
 export type ModelOptionSelections = typeof ModelOptionSelections.Type;
 
 const principalOperationScope = Schema.Union([SettingsProfileScope, PrivateWorkspaceOverlayScope]);
-const operationCellFields = { level: SettingLevel };
+const operationCellFields = { level: DefaultSettingLevel };
 
 const harnessCell = Schema.Struct({
   ...operationCellFields,

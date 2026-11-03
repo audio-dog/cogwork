@@ -9,7 +9,7 @@ import {
   initialBoard,
   ModelOptionSelections,
   type OperationSettingContext,
-  type OperationSettingName,
+  OperationSettingName,
   type OperationSettingRefused,
   OperationSettingUpdate,
   operationSettingNames,
@@ -111,7 +111,7 @@ const contributionSettingScopeFlag = Flag.choice("scope", ["profile", "overlay"]
   Flag.withDefault("profile"),
 );
 const contributionSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
-const operationSettingArgument = Argument.choice("setting", ["harness", "model", "model-options"]);
+const operationSettingArgument = Argument.choice("setting", OperationSettingName.literals);
 const operationSettingValueArgument = Argument.string("value");
 const operationSettingScopeFlag = Flag.choice("scope", ["profile", "host", "overlay"]).pipe(
   Flag.withDefault("profile"),
