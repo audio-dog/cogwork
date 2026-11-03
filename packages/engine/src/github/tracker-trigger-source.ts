@@ -1,4 +1,10 @@
-import { WorkflowCatalogKey, type WorkflowOption, WorkItemId } from "@cogwork/contracts";
+import {
+  defaultPriority,
+  type Priority,
+  WorkflowCatalogKey,
+  type WorkflowOption,
+  WorkItemId,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -20,7 +26,7 @@ import {
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import type { GitHubClientService, GitHubRepoRef, RawIssue, RawIssueComment } from "./client";
-import { targetFor } from "./host";
+import { issuePriorities, targetFor } from "./host";
 import { hasCogworkMarker } from "./markers";
 import { sourceControlTargetFor } from "./source-control-target";
 
@@ -54,6 +60,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
   workspace: RegistryState["workspaces"][number],
   selected: ReadonlyArray<TriggerSubscription>,
   issue: RawIssue,
+  priority: Priority,
   now: number,
   artifacts: WorkflowArtifactStoreService | null,
 ) {
@@ -103,6 +110,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
         atMillis,
         entry: issueHasLabelKey,
         workspace: workspace.config.name,
+        priority,
         parameters: [{ id: "label", value: label }],
         workContext: proseOf(issue, comments),
       } satisfies TriggerEvent,
@@ -136,6 +144,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
             atMillis: comment.createdAtMillis,
             entry: newIssueCommentKey,
             workspace: workspace.config.name,
+            priority,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
             workContext: proseOf(issue, comments),
@@ -163,10 +172,24 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
     ...(since === undefined ? {} : { since }),
   });
   const trackerIssues = issues.filter(({ isPullRequest }) => !isPullRequest);
+  const priorities = yield* issuePriorities(
+    client,
+    target,
+    trackerIssues.filter(({ state }) => state === "open"),
+  );
   const events = yield* Effect.forEach(trackerIssues, (issue) =>
     isolateProviderItemRead(
       { source: "github", workspace: workspace.config.name, item: `issue #${issue.number}` },
-      eventsForIssue(client, target, workspace, selected, issue, now, artifacts),
+      eventsForIssue(
+        client,
+        target,
+        workspace,
+        selected,
+        issue,
+        priorities.get(issue.number) ?? defaultPriority,
+        now,
+        artifacts,
+      ),
     ),
   );
   return {

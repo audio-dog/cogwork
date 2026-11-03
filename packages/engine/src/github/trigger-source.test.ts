@@ -1,4 +1,5 @@
 import {
+  GitHubIssueFieldId,
   IssueTrackerError,
   keyOf,
   LineageId,
@@ -55,6 +56,15 @@ const botWorkspace: RegisteredWorkspace = {
   }),
 };
 const botRegistryState = { workspaces: [botWorkspace], failures: [] };
+const prioritizedWorkspace: RegisteredWorkspace = {
+  ...workspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: workspaceId,
+    checkoutPath: "/repos/example",
+    issueTracker: { type: "github", priority: { field: 42 } },
+  }),
+};
+const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
 const workflow = Schema.decodeSync(WorkflowId)("coding");
 const operation = Schema.decodeSync(WorkflowNodeId)("follow-up");
 const reviewTrigger = Schema.decodeSync(WorkflowNodeId)("review");
@@ -291,6 +301,36 @@ describe("GitHub Trigger sources", () => {
           listIssueEvents: () =>
             Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 1_500 }]),
           listTriggerComments: () => Effect.succeed([]),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("ranks issue events by the configured priority field", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const events = yield* makeGitHubTrackerTriggerSource(
+        client,
+        Effect.succeed({ workspaces: [prioritizedWorkspace], failures: [] }),
+      )
+        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .pipe(Stream.take(2), Stream.runCollect);
+
+      assert.deepStrictEqual(
+        Array.from(events, (event) => [event.key, event.priority]),
+        [
+          [{ _tag: "Issue", workspace: workspaceId, id: firstIssueId }, "urgent"],
+          [{ _tag: "Issue", workspace: workspaceId, id: secondIssueId }, "medium"],
+        ],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([issue(1), issue(2)]),
+          listIssueEvents: () => Effect.succeed([]),
+          listTriggerComments: () => Effect.succeed([]),
+          listPriorityFields: () => Effect.succeed([{ id: priorityFieldId, name: "Priority" }]),
+          listIssueFieldValues: () => Effect.succeed(new Map([[1, new Map([[42, "Urgent"]])]])),
         }),
       ),
     ),
