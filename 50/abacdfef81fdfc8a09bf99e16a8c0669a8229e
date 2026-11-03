@@ -1,0 +1,92 @@
+packages/engine/src/workflow-artifact-store.ts
+  s_6fa8fc2659e726::t_8add024da05c69 19
+packages/engine/src/github/provider.ts
+  s_6fa8fc2659e726::t_ed5e58ea4c53f0 121-123
+  s_6fa8fc2659e726::t_3690b593dbb2da 2,108
+  s_6fa8fc2659e726::t_1aacd9c3f3c550 231,237,344,350,403,409,417,427
+  s_6fa8fc2659e726::t_38a59204ee3a72 120
+packages/engine/src/trigger-observation.test.ts
+  s_6fa8fc2659e726::t_cdc79f1d067bac 345,351,353,358,360-362,370,377
+  s_6fa8fc2659e726::t_bc4eed2f4ed4f2 364-368,388
+  s_6fa8fc2659e726::t_00552e8a37a514 343-344,346-350,352,354-357,359,363,369,371-376,378-387,389-413
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_6fa8fc2659e726::t_617584d4715e18 38
+packages/engine/src/trigger-observation.ts
+  s_6fa8fc2659e726::t_ada1e52ea8b56e 8,131,136-137
+  s_6fa8fc2659e726::t_7a6e5954fb481e 3
+packages/contracts/src/workflow.ts
+  s_6fa8fc2659e726::t_1aacd9c3f3c550 132
+apps/desktop/src/renderer/src/features/attention.ts
+  s_6fa8fc2659e726::t_643e564012d3f1 1,10-11
+packages/engine/src/github/source-control-target.ts
+  s_6fa8fc2659e726::t_3690b593dbb2da 1,49
+packages/engine/src/source-control.ts
+  s_6fa8fc2659e726::t_8add024da05c69 2,16,42
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_6fa8fc2659e726::t_643e564012d3f1 11,25,28
+  s_6fa8fc2659e726::t_81126e0d372831 1
+packages/engine/src/read-model.ts
+  s_6fa8fc2659e726::t_8add024da05c69 13,22-23,26-27
+  s_6fa8fc2659e726::t_f1d98ed37c6c87 28-30
+  s_6fa8fc2659e726::t_8fd58d48423ba0 31-34
+packages/engine/src/github/host.ts
+  s_6fa8fc2659e726::t_1aacd9c3f3c550 96
+packages/engine/src/github/ready-to-merge.test.ts
+  s_6fa8fc2659e726::t_730fe0a36779de 34,49-53,65-67
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_6fa8fc2659e726::t_643e564012d3f1 13,34,75
+packages/engine/src/coordination-control-store.test.ts
+  s_6fa8fc2659e726::t_4696ec1e1b89ad 19-23,33-50
+  s_6fa8fc2659e726::t_daee901578b22a 1
+packages/engine/src/workflow-action-plan.test.ts
+  s_6fa8fc2659e726::t_8b1489d641323a 872,920
+packages/engine/src/coordination-control-store.ts
+  s_6fa8fc2659e726::t_a55995678f44b3 254,278,299,314,331,340,359,374,417-420
+  s_6fa8fc2659e726::t_1cb5dfce128c48 421
+packages/engine/src/daemon-composition.test.ts
+  s_6fa8fc2659e726::t_bbadec43eea71d 1,4,6-19,21-35,37-40,49,51-78,92-121,124-126,129-181,184-185,200,202-203,214-216,222-223,225,227-249,251-256,258-277,282-284,287-288,292-305,307-330,332-340
+  s_6fa8fc2659e726::t_0be4c0e74a8a41 189-199
+  s_6fa8fc2659e726::t_9072970a0395c1 281,289
+  s_6fa8fc2659e726::t_4b91830cebe1be 43-46
+  s_6fa8fc2659e726::t_fdd9668f11e629 41
+  s_6fa8fc2659e726::t_272769f267156d 2,122-123,186-188,278-280,285
+  s_6fa8fc2659e726::t_788c69245c0524 286
+  s_6fa8fc2659e726::t_20d577576d1e13 331
+  s_6fa8fc2659e726::t_a0f0ee5d0b3fd3 183,201,204-213,217-221,224,226
+  s_6fa8fc2659e726::t_b78f91bbdebc9f 20,42,47-48,50,79-91,182,250,257
+  s_6fa8fc2659e726::t_c4269cf6774a82 290-291,306
+  s_6fa8fc2659e726::t_f3204a7156c4f5 5,36,127
+  s_05b12cb6523d13::t_b744e7bee2cdea 3,128
+packages/engine/src/linear/host.ts
+  s_6fa8fc2659e726::t_1aacd9c3f3c550 165,181
+packages/engine/src/github/trigger-source.test.ts
+  s_6fa8fc2659e726::t_bc4eed2f4ed4f2 273
+packages/engine/src/workflow-run.test.ts
+  s_6fa8fc2659e726::t_8b1489d641323a 449,461,811,1053
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_6fa8fc2659e726::t_643e564012d3f1 106-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "50abacdfef81fdfc8a09bf99e16a8c0669a8229e",
+  "prompts": {},
+  "sessions": {
+    "s_05b12cb6523d13": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7167411b-b123-41a5-b2ab-9138d04f8549",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_6fa8fc2659e726": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19e59-969e-78e0-8ffb-2723729ca8b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
