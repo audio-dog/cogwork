@@ -4,7 +4,7 @@ The work control plane packaged as an embeddable library — the machinery that 
 and runs work. It owns the *verbs*; the nouns live in the shared kernel
 ([contracts](../contracts/CONTEXT.md)). It has no process identity of its own; the daemon hosts it.
 
-Role in the flow: **reconcile → schedule → execute → dispatch to a harness**. See the root
+Role in the flow: **observe → schedule → run → dispatch to a harness**. See the root
 `CONTEXT-MAP.md` for the end-to-end story.
 
 ## Language
@@ -18,7 +18,7 @@ The background service that asks every active Trigger source for source revision
 _Avoid_: Reconcile worker, snapshot, classifier
 
 **Rate-limit scope**:
-The key an issue tracker hands the reconcile worker to say *whose* request budget a poll spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. GitHub returns none: its client already fails fast inside its own cooldown, so there is nothing for reconcile to add.
+The key the Linear client backs off on to say *whose* request budget a call spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. The GitHub client fails fast inside its own cooldown instead.
 _Avoid_: Credential id (the credential store's business), workspace key (the point is that it is *not* per workspace)
 
 **Cooldown window**:
@@ -31,7 +31,7 @@ _Avoid_: Classification, merge stage, role
 
 **Assignee ownership gate**:
 A per-workspace Trigger-observation precondition: when `issueTracker.assigneeAllowlist` is set, an observed item is admitted only when an assignee is on the list. Absent means no gate. The bound Connection's account is distinct from whose work the daemon may take.
-_Avoid_: Assignee filter (it gates all stages, not just a view), permission check
+_Avoid_: Assignee filter (it gates every Workflow, not just a view), permission check
 
 **Scheduler**:
 The in-memory concurrency gate. It picks eligible Trigger admissions under global, per-workspace, and daily-budget limits, then forks a Workflow Run. Waiting work orders by whether the Workflow already acted on the item, priority, then oldest observed revision.
@@ -41,17 +41,9 @@ _Avoid_: Queue, dispatcher, runner
 The scheduler's graceful stop: it picks no further candidates and gives the runs already in flight a **grace window** to finish on their own and record their normal outcome. Whatever is still running when the window closes — or when a second stop signal ends the wait early — is recorded `interrupted` and its agent torn down.
 _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
 
-**Claim recovery**:
-The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when no current run requires it and the scheduler does not hold the work item in flight.
-_Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
-
-**Claim hold-off**:
-What the executor does after a **refused claim** or failed admission read: the item is held out of claiming for a growing window, keyed by workspace, item and operation, so one tracker failure cannot repeat claim and release traffic on every generation. A refusal the port reports as permanent also parks the item. A refused claim is posted as a note *before* the role writes, since those writes can hit the very refusal being reported; a permanent admission failure carries its detail into the handoff. A successful claim clears a claim-refusal window, and a successful admission read clears an admission window, so the item recovers on its own once the tracker recovers.
-_Avoid_: Rate-limit cooldown (the reconcile worker's, keyed by credential scope — same mechanism, different scope), backoff, retry, exhausted (a run that gave up after trying)
-
-**Admit**:
-The narrow scheduler capability that reserves capacity for a recovered run and starts it. It always launches because recovery is resuming work this daemon already claimed; the scheduler separately exposes whether a work item is in flight so the live sweep cannot release a claim while its run starts.
-_Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue
+**Crash recovery**:
+The boot pass that runs once before the first scheduler tick. Each Run still `running` from a daemon that stopped without draining is marked `crashed`, the Claim this daemon holds on its item is released so the item is admitted again, and three crashed Runs in a row since the last handback park the item `exhausted` (ADR 0036).
+_Avoid_: Claim recovery (the fixed pipeline's sweep, deleted), drain (the graceful stop, the mirror image of this)
 
 **Candidate**:
 A schedulable Trigger admission plus the reservation keys that keep it from being picked twice.
@@ -66,11 +58,11 @@ The one seam a run's harness events cross between the harness runner and everyth
 _Avoid_: Run ledger (the store it writes to), daemon event bus (the transport it publishes on), event log, persistence (the TanStack adapter the session store hands the provider runner)
 
 **Session store**:
-The place sessions are minted and the read model a runner pulls a session's history from, given a `SessionId`. `mint` takes a harness name and the harness service's kind lookup, chooses the session kind from that runner's declaration, and inserts the row — owned-transcript for the provider runner (the run ledger holds the conversation), opaque-handle for a CLI harness (the harness holds its own history, with a null handle until one is captured). The executor asks for a session and never names a kind itself. It hands the provider runner a real `@tanstack/ai-persistence` adapter (`persistence`) that the runner runs under via `withPersistence`. Its **message store** is a ledger projection: `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first), including terminal structured results, projected into ordered model messages — and `saveThread` is a no-op, because the run recorder already appends every event, so the event-sourced ledger stays the one source of truth. Beside the message store sit process-scoped **run** and **interrupt** stores that wire durable pause/resume ahead of the interactive phase; they live in memory, matching the run ledger's own durability, and a persistent ledger backend will carry them too. `resumeHandle` still hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second transcript store: the run ledger is the only place a conversation lives.
+The place sessions are minted and the read model a runner pulls a session's history from, given a `SessionId`. `mint` takes a harness name and the harness service's kind lookup, chooses the session kind from that runner's declaration, and inserts the row — owned-transcript for the provider runner (the run ledger holds the conversation), opaque-handle for a CLI harness (the harness holds its own history, with a null handle until one is captured). The Workflow runner asks for a session and never names a kind itself. It hands the provider runner a real `@tanstack/ai-persistence` adapter (`persistence`) that the runner runs under via `withPersistence`. Its **message store** is a ledger projection: `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first), including terminal structured results, projected into ordered model messages — and `saveThread` is a no-op, because the run recorder already appends every event, so the event-sourced ledger stays the one source of truth. Beside the message store sit process-scoped **run** and **interrupt** stores that wire durable pause/resume ahead of the interactive phase; they live in memory, matching the run ledger's own durability, and a persistent ledger backend will carry them too. `resumeHandle` still hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second transcript store: the run ledger is the only place a conversation lives.
 _Avoid_: Message store (that's the persistence library's term for the one piece of the adapter), transcript database, second store
 
 **Harness request**:
-The projection the executor hands the harness for one accepted Run Plan, plus secret MCP credentials and a `session` reference — the `SessionId` this run continues, or null for a fresh start. The harness consumes the Plan's frozen Messages, Instructions, model, model options, and policy. It references a session rather than shipping one; no frozen transcript crosses the seam, so compaction can live inside the runner's loop where context actually grows.
+The projection the Workflow runner hands the harness for one accepted Run Plan, plus secret MCP credentials and a `session` reference — the `SessionId` this run continues, or null for a fresh start. The harness consumes the Plan's frozen Messages, Instructions, model, model options, and policy. It references a session rather than shipping one; no frozen transcript crosses the seam, so compaction can live inside the runner's loop where context actually grows.
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
@@ -186,11 +178,11 @@ One organization's OAuth grant as it is persisted: the token pair, its expiry an
 _Avoid_: Session, Connection record (the `login linear` command mints the grant; the Connection only references it)
 
 **Coordination module**:
-The authority-neutral fold over claims, attempts, parks, handbacks, source revisions, and lineage. Issue-backed items and engine-minted items use different stores behind the same service. A **hand-off** means only a Workflow Transition routing to another Operation; coordination never uses it to mean escalation or explanation.
+The authority-neutral fold over claims, attempts, parks, handbacks, source revisions, and lineage. Every item's records live in the Control store, issue-backed items included (ADR 0036). A **hand-off** means only a Workflow Transition routing to another Operation; coordination never uses it to mean escalation or explanation.
 _Avoid_: Coordination tracker, role write, hand-off explanation, follow-up marker
 
 **Worktree manager**:
-The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list it, remove it, and reconcile away idle ones. An implement worktree blocks its normal push path with a worktree-only invalid `pushurl`; follow-up retains agent-owned push. Before the Engine opens a pull request, it refreshes the base and requires the local Engine-cut head to be ahead. The Engine then pushes that head through the selected remote's explicit URL. Pull request readiness does not depend on a Run worktree still existing. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
+The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list it, remove it, and reconcile away idle ones. An implement worktree blocks its normal push path with a worktree-only invalid `pushurl`; follow-up retains agent-owned push. Before the Engine opens a pull request, it refreshes the base and requires the local Engine-cut head to be ahead. The Engine then pushes that head through the selected remote's explicit URL. Pull request readiness does not depend on a Run worktree still existing. "Reconcile" here means worktree cleanup: the maintenance heartbeat keeps the worktrees of open tracker items, open pull requests, and running Runs, and removes the rest. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
 _Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)
 
 **Branch divergence**:
@@ -198,7 +190,7 @@ A worktree branch holding commits its remote branch lacks while the remote holds
 _Avoid_: Conflict (that's one reason a rebase fails), drift, stale branch (that's just being behind)
 
 **Base divergence**:
-A pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the source control provider's mergeable signal (GitHub's `dirty`) on the reconcile poll and treats it as a **follow-up trigger** in its own right — one the agent clears by working, which is what qualifies it (see ADR 0013); the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
+A pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the source control provider's mergeable signal (GitHub's `dirty`) on the pull request Trigger source's poll and treats it as a **follow-up trigger** in its own right — one the agent clears by working, which is what qualifies it (see ADR 0013); the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
 _Avoid_: Branch divergence (that's the branch versus its own remote, not the base), merge conflict (one reason integrating the base fails), stale branch (that's merely behind)
 
 **Workspace registry**:

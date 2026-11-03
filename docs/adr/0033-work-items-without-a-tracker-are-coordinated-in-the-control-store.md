@@ -1,6 +1,7 @@
 # 0033 — Work items without a tracker are coordinated in the Control store
 
-- **Status:** accepted
+- **Status:** accepted; amended by ADR [0036](./0036-every-work-item-is-coordinated-in-the-control-store.md),
+  which moves tracker items to the Control store as well
 - **Date:** 2026-10-27
 - **Amends:** ADR [0003](./0003-work-source-as-coordination-substrate.md)
 

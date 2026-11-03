@@ -31,12 +31,12 @@ When either Engine port uses GitHub, its `owner/repository` is runtime data deri
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:
-Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It stamps claims and coordination comments and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
+Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It authors the daemon's tracker writes and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
 Because that account is the person's own, it cannot tell Cogwork's writes from the person's. In a Workflow the **origin record** decides which writes are Cogwork's, never the account.
 _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
-`issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced in the engine's classification, not here.
+`issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
 **Bot allowlist**:
@@ -152,7 +152,7 @@ Every **output action** acts through the person's Connection for its app, so a W
 _Avoid_: Plugin (a Plugin requires a Connection, never contains one), credential (that is the secret it holds), MCP server, contribution kind, provider key (that one buys inference, not access to the work), Integration, connector
 
 **Connection readiness**:
-The Engine-owned conclusion that a Connection is established, unrevoked, and usable. It is an **input** to MCP server readiness for a contributed server that requires one, and it stands alone for an Engine port, where it gates the reconcile heartbeat. Deliberately **not** generalized: there is no `Readiness` umbrella, because the two are not peers — one feeds the other.
+The Engine-owned conclusion that a Connection is established, unrevoked, and usable. It is an **input** to MCP server readiness for a contributed server that requires one, and it stands alone for an Engine port, where it gates that port's Trigger source. Deliberately **not** generalized: there is no `Readiness` umbrella, because the two are not peers — one feeds the other.
 _Avoid_: Readiness (unqualified), MCP server readiness, established (one of its inputs)
 
 **Tool**:
@@ -428,11 +428,11 @@ _Avoid_: Alert, park, Daemon event (the client feed)
 ### Coordination
 
 **Claim**:
-A coordination record marking an item as being worked: `by`, `claimedAtMillis`, an optional operation, and its **lineage**. Persisted in the item's one coordination authority — onto the issue tracker (a label plus a marker) for a tracker item, in the Control store for an engine-minted one — so it survives a daemon restart.
+A coordination record marking an item as being worked: `by`, `claimedAtMillis`, an optional operation, and its **lineage**. Persisted in the Control store for every item, tracker items included (ADR 0036), so it survives a daemon restart; crash recovery releases one a stopped daemon left behind.
 _Avoid_: Lock, lease, reservation
 
 **Refused claim**:
-A claim the issue tracker will not accept — a write the credential is not permitted to make, such as creating the claim label in a team that forbids it. Distinct from a *contended* claim, which cannot happen: classify only ever offers unclaimed work. A refusal the port reports as permanent (`IssueTrackerError.retryable === false`) is one every retry gets the same answer to; absent that field a refusal is worth polling again. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`. What the engine does about one is the executor's, in the engine glossary.
+A claim the coordination authority will not accept, such as a claim on an item whose source revision was never observed. Distinct from a *contended* claim (`claim-held`), which the scheduler avoids by offering only unclaimed admissions. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`.
 _Avoid_: Contended claim, stale claim (one we release), exhausted (a run that gave up after trying)
 
 **Attempt record**:
@@ -474,11 +474,11 @@ _Avoid_: Run manifest, resolved stage, harness request, operation settings
 **Run**:
 One execution of one run plan by one harness, captured with its events, outcome, usage, and timings. The run records what was projected and observed without changing its plan.
 A Run is `declined` when the Harness finished its work but the Engine refused the requested pull request because the pushed head was missing or not ahead of its base. The decline is an Engine outcome, records a failed coordination attempt, and releases the claim for normal retry or a park. In a Workflow the same refusal is the precondition of *Open a pull request*, checked when the engine builds the action plan.
-_Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
+_Avoid_: Attempt (the durable coordination form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
-The daemon's local store of runs, their immutable Run Plans, and their events — in-memory, or a region of the Control store on disk. A Run and its Plan are accepted together before dispatch, keyed by Run ID. It also holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because each item's coordination authority — the issue tracker, or the Control store outside the ledger's region — stays authoritative.
-_Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it). Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
+The daemon's local store of runs, their immutable Run Plans, and their events — in-memory, or a region of the Control store on disk. A Run and its Plan are accepted together before dispatch, keyed by Run ID. It also holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because coordination lives in the Control store outside the ledger's region and stays authoritative.
+_Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it).
 
 **Run event**:
 One persisted, sequenced entry in a run's stream — an encoded harness event stored with a `seq` and timestamp.
