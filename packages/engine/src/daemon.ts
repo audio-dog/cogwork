@@ -620,8 +620,6 @@ const continueAfterHeartbeatFailure = <A, E, R>(effect: Effect.Effect<A, E, R>, 
     (cause) => Effect.logError(message, { cause }),
   );
 
-export const bootstrap = Effect.void;
-
 const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
   const scheduler = yield* Scheduler;
   const publisher = yield* DaemonEventPublisher;
@@ -645,7 +643,6 @@ const performanceRegressionHeartbeat = () =>
   );
 
 export interface HeartbeatOptions {
-  readonly pollIntervalMillis: number;
   readonly drain: DrainOptions;
 }
 

@@ -103,8 +103,8 @@ function ItemTabProvider({
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
   const now = useNow();
 
-  const descriptor = describeItemState(item, run);
-  const tabs = subTabs(item.pr !== undefined);
+  const descriptor = describeItemState(run);
+  const tabs = subTabs();
   const resolved = resolveSubTab(subTab, tabs);
   const actions: ItemTabActions = {
     setSubTab,

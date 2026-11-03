@@ -1,11 +1,4 @@
-import type {
-  ReadModelItem,
-  RunId,
-  RunStatus,
-  RunSummary,
-  WorkItemId,
-  WorkspaceId,
-} from "@cogwork/contracts";
+import type { RunId, RunStatus, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 
 export type StateTone = "live" | "attention" | "ready" | "muted";
 
@@ -15,7 +8,7 @@ export interface ItemStateDescriptor {
   readonly running: boolean;
 }
 
-export function describeItemState(_item: ReadModelItem, run: RunSummary | null): ItemStateDescriptor {
+export function describeItemState(run: RunSummary | null): ItemStateDescriptor {
   if (run?.status === "running") {
     return { label: `Running · ${run.operation}`, tone: "live", running: true };
   }
@@ -29,10 +22,10 @@ export interface SubTab {
   readonly label: string;
 }
 
-export const subTabs = (hasPr: boolean): readonly SubTab[] => [
+export const subTabs = (): readonly SubTab[] => [
   { key: "main", label: "Main" },
   { key: "run", label: "Live run" },
-  ...(hasPr ? [{ key: "pr" as const, label: "Pull request" }] : []),
+  { key: "pr", label: "Pull request" },
 ];
 
 export const resolveSubTab = (active: SubTabKey, tabs: readonly SubTab[]): SubTabKey =>

@@ -1,4 +1,5 @@
 import {
+  type PrReviewStatus,
   WorkflowActionArtifact,
   type WorkflowActionOrigin,
   type WorkflowCatalogEntry,
@@ -16,7 +17,6 @@ import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { WorkspaceRegistry } from "../registry";
 import {
-  type PrReview,
   type PrSignals,
   type ResolvedPullRequest,
   SourceControlProvider,
@@ -105,7 +105,7 @@ const sourceControlTarget = (workspace: RegisteredWorkspace) => {
 
 export const branchBelongsToSlug = branchBelongsToTicketSlug;
 
-export const prReview = (pull: RawPull, decision: ReviewDecision): PrReview => {
+export const prReview = (pull: RawPull, decision: ReviewDecision): PrReviewStatus => {
   if (pull.draft) return "pending";
   if (decision === "changes-requested") return "changes-requested";
   if (decision === "approved") return "ready";
@@ -117,14 +117,10 @@ const pullNumberFromUrl = (url: string) => {
   return value === undefined ? null : Number.parseInt(value, 10);
 };
 
-export const readyToMergeArtifact = (
-  pull: RawPull,
-  actorLogin: string,
-  artifacts: ReadonlyArray<WorkflowActionArtifact>,
-) =>
-  pull.authorLogin === actorLogin
-    ? (artifacts.find((artifact) => pullNumberFromUrl(artifact.url) === pull.number) ?? null)
-    : null;
+export const readyToMergeArtifact = (pull: RawPull, artifacts: ReadonlyArray<WorkflowActionArtifact>) =>
+  artifacts.find(
+    (artifact) => artifact.kind === "PullRequestOpened" && pullNumberFromUrl(artifact.url) === pull.number,
+  ) ?? null;
 
 export const isReadyToMerge = (signals: PrSignals) =>
   !signals.draft &&
@@ -232,11 +228,13 @@ const make = (
     [body.trim(), writeMarker(writeKey)].filter((part) => part.length > 0).join("\n\n");
 
   const workflowArtifact = (
+    kind: WorkflowActionArtifact["kind"],
     workspace: RegisteredWorkspace,
     pullRequest: ResolvedPullRequest,
     origin: WorkflowActionOrigin,
   ) =>
     WorkflowActionArtifact.make({
+      kind,
       workspace: workspace.config.name,
       issue: WorkItemId.make(`#${pullRequest.number}`),
       url: pullRequest.url,
@@ -343,13 +341,13 @@ const make = (
     if (!configuredTarget) return [];
     const target = yield* authenticatedTarget(configuredTarget);
     const pulls = (yield* client.listPulls(target)).filter(
-      (pull) => readyToMergeArtifact(pull, target.actorLogin, artifacts) !== null,
+      (pull) => readyToMergeArtifact(pull, artifacts) !== null,
     );
     const observed = yield* Effect.forEach(pulls, (pull) =>
       observePr(target, pull).pipe(Effect.map((signals) => ({ pull, signals }))),
     );
     return observed.flatMap(({ pull, signals }) => {
-      const artifact = readyToMergeArtifact(pull, target.actorLogin, artifacts);
+      const artifact = readyToMergeArtifact(pull, artifacts);
       if (!artifact || !isReadyToMerge(signals)) return [];
       return [
         {
@@ -402,13 +400,13 @@ const make = (
               headBranch: input.headBranch,
               baseBranch: input.baseBranch,
             };
-        return workflowArtifact(workspace, opened, input.origin);
+        return workflowArtifact("PullRequestOpened", workspace, opened, input.origin);
       }),
     recordPullRequestPush: (workspace, pullRequest, origin) =>
       Effect.gen(function* () {
         const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
         yield* markPullRequest(target, pullRequest.number, origin.writeKey);
-        return workflowArtifact(workspace, pullRequest, origin);
+        return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
       }),
     commentPullRequest: (workspace, pullRequest, body, origin) =>
       Effect.gen(function* () {
@@ -416,7 +414,7 @@ const make = (
         if (!(yield* commentsCarry(target, pullRequest.number, origin.writeKey))) {
           yield* client.createComment(target, pullRequest.number, workflowMarkedBody(body, origin.writeKey));
         }
-        return workflowArtifact(workspace, pullRequest, origin);
+        return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
       }),
     requestReview: (workspace, pullRequest, reviewer, origin) =>
       Effect.gen(function* () {
@@ -426,7 +424,7 @@ const make = (
           yield* client.requestReview(target, pullRequest.number, reviewer);
         }
         yield* markPullRequest(target, pullRequest.number, origin.writeKey);
-        return workflowArtifact(workspace, pullRequest, origin);
+        return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
       }),
   };
 };

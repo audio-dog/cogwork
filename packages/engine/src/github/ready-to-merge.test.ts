@@ -31,6 +31,7 @@ const signals = (over: Partial<PrSignals> = {}): PrSignals => ({
 });
 
 const artifact = Schema.decodeSync(WorkflowActionArtifact)({
+  kind: "PullRequestOpened",
   workspace: "workspace",
   issue: "#1",
   url: "https://github.com/owner/repo/pull/1",
@@ -45,9 +46,11 @@ const artifact = Schema.decodeSync(WorkflowActionArtifact)({
 
 describe("ready to merge", () => {
   it("requires Cogwork origin", () => {
-    assert.deepStrictEqual(readyToMergeArtifact(pull(), "cogwork[bot]", [artifact]), artifact);
-    assert.isNull(readyToMergeArtifact(pull({ authorLogin: "person" }), "cogwork[bot]", [artifact]));
-    assert.isNull(readyToMergeArtifact(pull({ number: 2 }), "cogwork[bot]", [artifact]));
+    const updated = WorkflowActionArtifact.make({ ...artifact, kind: "PullRequestUpdated" });
+    assert.deepStrictEqual(readyToMergeArtifact(pull(), [artifact]), artifact);
+    assert.deepStrictEqual(readyToMergeArtifact(pull({ authorLogin: "person" }), [artifact]), artifact);
+    assert.isNull(readyToMergeArtifact(pull(), [updated]));
+    assert.isNull(readyToMergeArtifact(pull({ number: 2 }), [artifact]));
   });
 
   it("requires a non-draft, green, conflict-free, approved pull request", () => {
@@ -59,6 +62,8 @@ describe("ready to merge", () => {
       signals({ baseDivergence: "conflict" }),
       signals({ review: "pending" }),
       signals({ review: "changes-requested" }),
-    ].forEach((candidate) => assert.isFalse(isReadyToMerge(candidate)));
+    ].forEach((candidate) => {
+      assert.isFalse(isReadyToMerge(candidate));
+    });
   });
 });

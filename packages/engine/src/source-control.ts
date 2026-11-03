@@ -1,4 +1,5 @@
 import type {
+  PrSummary,
   ReadyToMergeItem,
   WorkflowActionArtifact,
   WorkflowActionOrigin,
@@ -12,18 +13,7 @@ import type { RegisteredWorkspace } from "./projector";
 import type { TriggerSource } from "./trigger-source";
 import type { WorkflowCatalogContribution } from "./workflow-catalog";
 
-export type BaseDivergence = "conflict" | "clean" | "none";
-export type PrReview = "changes-requested" | "ready" | "pending";
-
-export interface PrSignals {
-  readonly number: number;
-  readonly url: string;
-  readonly review: PrReview;
-  readonly checks: "failing" | "passing" | "pending";
-  readonly baseDivergence: BaseDivergence;
-  readonly waitingSinceMillis: number;
-  readonly draft: boolean;
-}
+export type PrSignals = PrSummary & { readonly draft: boolean };
 
 export interface OpenPullRequestInput {
   readonly headBranch: string;
@@ -49,7 +39,7 @@ export interface WorkflowPullRequestInput extends OpenPullRequestInput {
 export interface SourceControlProviderService {
   readonly triggerSources?: ReadonlyArray<TriggerSource>;
   readonly workflowCatalogContribution: WorkflowCatalogContribution;
-  readonly readyToMerge?: (
+  readonly readyToMerge: (
     workspace: RegisteredWorkspace,
     artifacts: ReadonlyArray<WorkflowActionArtifact>,
   ) => Effect.Effect<ReadonlyArray<ReadyToMergeItem>, IssueTrackerError>;

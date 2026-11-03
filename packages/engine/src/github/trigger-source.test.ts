@@ -270,6 +270,7 @@ describe("GitHub Trigger sources", () => {
       });
       const artifacts = {
         record: () => Effect.die("unused"),
+        all: Effect.die("unused"),
         byLineage: () => Effect.die("unused"),
         origin: () => Effect.succeed(origin),
       } satisfies WorkflowArtifactStoreService;

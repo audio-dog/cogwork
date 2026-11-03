@@ -1,16 +1,14 @@
-import type { Board, PrSummary, ReadModelItem, WorkspaceId } from "@cogwork/contracts";
+import type { Board, ReadModelItem, WorkspaceId } from "@cogwork/contracts";
 
 export interface AttentionEntry {
   readonly workspace: WorkspaceId;
   readonly item: ReadModelItem;
-  readonly kind: "ready-to-merge";
-  readonly pr: PrSummary;
 }
 
 export const attentionEntries = (board: Board): ReadonlyArray<AttentionEntry> =>
   [...board.items.values()]
-    .map(({ workspace, item }) => ({ workspace, item, kind: "ready-to-merge" as const, pr: item.pr }))
-    .toSorted((left, right) => left.pr.waitingSinceMillis - right.pr.waitingSinceMillis);
+    .map(({ workspace, item }) => ({ workspace, item }))
+    .toSorted((left, right) => left.item.pr.waitingSinceMillis - right.item.pr.waitingSinceMillis);
 
 export const filterAttention = (
   entries: ReadonlyArray<AttentionEntry>,

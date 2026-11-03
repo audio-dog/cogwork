@@ -53,7 +53,6 @@ import {
   TriggerObservationStore,
   TriggerObservationStoreError,
   type TriggerObservationStoreService,
-  waitingAdmissionOrder,
 } from "./trigger-observation";
 import {
   SourceFailure,
@@ -150,35 +149,6 @@ const selectedTrackerItem: TrackerItem = {
   openBlockers: 0,
   priority: "medium",
 };
-
-describe("waiting admission order", () => {
-  const waiting = (
-    revision: string,
-    priority: TriggerEvent["priority"],
-    atMillis: number,
-    actedOn = false,
-  ) => ({
-    actedOn,
-    admission: {
-      event: { ...event, revision, priority, atMillis },
-      subscription,
-      lineage,
-    } satisfies TriggerAdmission,
-  });
-
-  it("orders prior Workflow action, then priority, then oldest revision", () => {
-    const ordered = [
-      waiting("old-low", "low", 1),
-      waiting("new-urgent", "urgent", 3),
-      waiting("old-urgent", "urgent", 2),
-      waiting("acted", "low", 4, true),
-    ].toSorted(waitingAdmissionOrder);
-    assert.deepStrictEqual(
-      ordered.map(({ admission }) => admission.event.revision),
-      ["acted", "old-urgent", "new-urgent", "old-low"],
-    );
-  });
-});
 
 const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* (
   options: {
@@ -370,6 +340,77 @@ const exerciseFailedFanOutFinish = Effect.fn("TriggerObservationTest.exerciseFai
 });
 
 describe("TriggerObservation", () => {
+  it.effect("orders waiting work by prior Workflow action, priority, then oldest revision", () =>
+    Effect.gen(function* () {
+      const waiting = (revision: string, priority: TriggerEvent["priority"], atMillis: number) => {
+        const key = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis: atMillis } as const;
+        return {
+          event: { ...event, key, revision, priority, atMillis },
+          subscription,
+          lineage: { root: LineageId.make(keyOf(key)), parent: null, hop: 0 },
+        } satisfies TriggerAdmission;
+      };
+      const actedAdmission = waiting("acted", "low", 4);
+      const admissions = [
+        waiting("old-low", "low", 1),
+        waiting("new-urgent", "urgent", 3),
+        waiting("old-urgent", "urgent", 2),
+        actedAdmission,
+      ];
+      const revisions = new Map(
+        admissions.map(({ event: candidate }) => [keyOf(candidate.key), candidate.revision]),
+      );
+      const coordination = {
+        ...coordinationService(
+          yield* Ref.make<string | null>(null),
+          yield* Ref.make(0),
+          yield* Ref.make<string | null>(null),
+        ),
+        read: (ref: WorkItemRef) => {
+          const actedOn = keyOf(ref) === keyOf(actedAdmission.event.key);
+          const attempts = actedOn
+            ? [
+                AttemptRecord.make({
+                  operation: { workflow: workflowId, operation: subscription.operation },
+                  outcome: "succeeded",
+                  atMillis: 1,
+                  lineage: actedAdmission.lineage,
+                }),
+              ]
+            : [];
+          return Effect.succeed(
+            fold(
+              {
+                claim: null,
+                attempts,
+                handbacks: [],
+                parks: [],
+                revision: { observed: revisions.get(keyOf(ref)) ?? event.revision, processed: null },
+              },
+              "cogwork",
+            ),
+          );
+        },
+      } satisfies CoordinationService;
+      const store = yield* makeMemoryTriggerObservationStore;
+      yield* store.putAll(admissions);
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(yield* Ref.make(record(true)))),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, []),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+      );
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        ["acted", "old-urgent", "new-urgent", "old-low"],
+      );
+    }).pipe(Effect.scoped),
+  );
+
   it("matches a schedule event to one Trigger with the scheduled parameters", () => {
     const other = { ...subscription, workflow: Schema.decodeSync(WorkflowId)("other") };
     const later = {

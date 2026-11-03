@@ -35,10 +35,7 @@ describe("attentionEntries", () => {
       ]),
     );
 
-    expect(entries.map(({ kind, item }) => [kind, item.id])).toEqual([
-      ["ready-to-merge", "4"],
-      ["ready-to-merge", "3"],
-    ]);
+    expect(entries.map(({ item }) => item.id)).toEqual(["4", "3"]);
   });
 });
 

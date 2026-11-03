@@ -129,6 +129,7 @@ export class WorkflowActionOrigin extends Schema.Class<WorkflowActionOrigin>("Wo
 }) {}
 
 export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>("WorkflowActionArtifact")({
+  kind: Schema.Literals(["IssueCreated", "PullRequestOpened", "PullRequestUpdated"]),
   workspace: WorkspaceId,
   issue: WorkItemId,
   url: TrimmedNonEmptyString,

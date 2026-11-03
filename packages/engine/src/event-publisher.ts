@@ -165,15 +165,12 @@ export const make = Effect.gen(function* () {
     bus.publish({ _tag: "ConnectionsChanged", connections, danglingWorkspaces });
 
   return {
-    publishItems: () =>
-      registry.state.pipe(Effect.flatMap(readyToMergeByWorkspace), Effect.flatMap(publishItems)),
     publishWorkspaces,
     publishWorkspaceRemoved,
     publishScheduler,
     publishControlStore,
     publishPlugins,
     publishConnections,
-    requestSnapshotRefresh: () => Effect.void,
   } as const;
 });
 

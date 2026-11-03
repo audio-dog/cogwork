@@ -1,9 +1,11 @@
 import {
   DaemonEvent,
+  defaultPriority,
   keyOf,
   Lineage,
   LineageId,
   type ParkReason,
+  priorityRank,
   type TriggerSourceHealth,
   type WorkflowCatalog,
   type WorkflowDocument,
@@ -126,20 +128,13 @@ const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =
   });
 };
 
-const priorityRank = {
-  urgent: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-} as const;
-
-export const waitingAdmissionOrder = (
+const waitingAdmissionOrder = (
   left: { readonly admission: TriggerAdmission; readonly actedOn: boolean },
   right: { readonly admission: TriggerAdmission; readonly actedOn: boolean },
 ) =>
   Number(right.actedOn) - Number(left.actedOn) ||
-  priorityRank[left.admission.event.priority ?? "medium"] -
-    priorityRank[right.admission.event.priority ?? "medium"] ||
+  priorityRank.indexOf(left.admission.event.priority ?? defaultPriority) -
+    priorityRank.indexOf(right.admission.event.priority ?? defaultPriority) ||
   left.admission.event.atMillis - right.admission.event.atMillis;
 
 const revisionAdvancedParks = new Set<ParkReason["_tag"]>([

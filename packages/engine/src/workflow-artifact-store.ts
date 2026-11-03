@@ -16,7 +16,7 @@ import { ControlStore } from "./control-store";
 
 export interface WorkflowArtifactStoreService {
   readonly record: (artifact: WorkflowActionArtifact) => Effect.Effect<void, ControlStoreFailure>;
-  readonly all?: Effect.Effect<ReadonlyArray<WorkflowActionArtifact>, ControlStoreFailure>;
+  readonly all: Effect.Effect<ReadonlyArray<WorkflowActionArtifact>, ControlStoreFailure>;
   readonly byLineage: (
     root: LineageId,
   ) => Effect.Effect<ReadonlyArray<WorkflowActionArtifact>, ControlStoreFailure>;

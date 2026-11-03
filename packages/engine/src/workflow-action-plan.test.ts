@@ -869,6 +869,7 @@ describe("Workflow action plan", () => {
                 Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
                   Effect.map(() =>
                     WorkflowActionArtifact.make({
+                      kind: "PullRequestUpdated",
                       workspace: sourceWorkspace.config.name,
                       issue: decodeItem(`#${resolved.number}`),
                       url: resolved.url,
@@ -916,6 +917,7 @@ describe("Workflow action plan", () => {
                 Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
                   Effect.map(() =>
                     WorkflowActionArtifact.make({
+                      kind: "PullRequestUpdated",
                       workspace: sourceWorkspace.config.name,
                       issue: decodeItem(`#${resolved.number}`),
                       url: resolved.url,

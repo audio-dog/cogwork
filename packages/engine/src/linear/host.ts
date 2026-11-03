@@ -162,6 +162,7 @@ export const makeIssueActions = (client: LinearClientService) => {
       const existing = yield* client.findActionIssue(target, writeMarker(input.origin.writeKey));
       if (existing) {
         return WorkflowActionArtifact.make({
+          kind: "IssueCreated",
           workspace: workspace.config.name,
           issue: yield* itemId(existing.identifier),
           url: existing.url,
@@ -177,6 +178,7 @@ export const makeIssueActions = (client: LinearClientService) => {
         .pipe(Effect.catch((error) => recoverCreatedIssue(target, input.origin.writeKey, error)));
       yield* confirmCreatedIssue(target, created, input.origin.writeKey);
       return WorkflowActionArtifact.make({
+        kind: "IssueCreated",
         workspace: workspace.config.name,
         issue: yield* itemId(created.identifier),
         url: created.url,

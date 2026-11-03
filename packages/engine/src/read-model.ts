@@ -10,7 +10,7 @@ export const readyToMergeByWorkspace = Effect.fn("ReadModel.readyToMergeByWorksp
   registry: RegistryState,
 ) {
   const artifactStore = yield* WorkflowArtifactStore;
-  const artifacts = yield* (artifactStore.all ?? Effect.succeed([])).pipe(
+  const artifacts = yield* artifactStore.all.pipe(
     Effect.catchTag("ControlStoreFailure", (error) =>
       Effect.logWarning("Ready to merge artifacts unavailable", { message: error.message }).pipe(
         Effect.map(() => []),
@@ -19,20 +19,20 @@ export const readyToMergeByWorkspace = Effect.fn("ReadModel.readyToMergeByWorksp
   );
   const sourceControl = yield* SourceControlProvider;
   const entries = yield* Effect.forEach(registry.workspaces, (workspace) =>
-    (
-      sourceControl.readyToMerge?.(
+    sourceControl
+      .readyToMerge(
         workspace,
         artifacts.filter((artifact) => artifact.workspace === workspace.config.name),
-      ) ?? Effect.succeed([])
-    ).pipe(
-      Effect.catchTag("IssueTrackerError", (error) =>
-        Effect.logWarning("Ready to merge read failed", {
-          workspace: workspace.config.name,
-          message: error.message,
-        }).pipe(Effect.map(() => [] as ReadonlyArray<ReadyToMergeItem>)),
+      )
+      .pipe(
+        Effect.catchTag("IssueTrackerError", (error) =>
+          Effect.logWarning("Ready to merge read failed", {
+            workspace: workspace.config.name,
+            message: error.message,
+          }).pipe(Effect.map(() => [] as ReadonlyArray<ReadyToMergeItem>)),
+        ),
+        Effect.map((items) => [workspace.config.name, items] as const),
       ),
-      Effect.map((items) => [workspace.config.name, items] as const),
-    ),
   );
   return new Map(entries);
 });

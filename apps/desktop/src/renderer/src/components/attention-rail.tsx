@@ -10,7 +10,7 @@ import { relativeTime } from "../features/format";
 import { useRightPanelStore } from "../store/right-panel";
 import { FunnelFilter, useFunnelSelection } from "./funnel-filter";
 
-const signalFor = (entry: AttentionEntry) => `waiting ${relativeTime(entry.pr.waitingSinceMillis)}`;
+const signalFor = (entry: AttentionEntry) => `waiting ${relativeTime(entry.item.pr.waitingSinceMillis)}`;
 
 function PrStatusDot({
   status,
@@ -31,7 +31,7 @@ function PrStatusDot({
 }
 
 function PrStatus({ entry, onOpen }: { entry: AttentionEntry; onOpen: () => void }) {
-  const { checks, review, baseDivergence } = entry.pr;
+  const { checks, review, baseDivergence } = entry.item.pr;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -72,7 +72,7 @@ function ReadyToMergeQuickOpen({ entry }: { entry: AttentionEntry }) {
         className:
           "relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
       })}
-      href={entry.pr.url}
+      href={entry.item.pr.url}
       rel="noreferrer"
       target="_blank"
       onClick={(event) => event.stopPropagation()}

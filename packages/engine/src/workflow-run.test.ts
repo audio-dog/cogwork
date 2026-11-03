@@ -446,6 +446,7 @@ const codingSourceControlLayer = Layer.effect(
       Ref.update(calls, (current) => [...current, `open:${input.title}`]).pipe(
         Effect.map(() =>
           WorkflowActionArtifact.make({
+            kind: "PullRequestOpened",
             workspace: decodeWorkspace("github"),
             issue: decodeWorkItem("#802"),
             url: "https://example.test/pull/802",
@@ -457,6 +458,7 @@ const codingSourceControlLayer = Layer.effect(
       Ref.update(calls, (current) => [...current, `push:${pullRequest.number}`]).pipe(
         Effect.map(() =>
           WorkflowActionArtifact.make({
+            kind: "PullRequestUpdated",
             workspace: decodeWorkspace("github"),
             issue: decodeWorkItem(`#${pullRequest.number}`),
             url: pullRequest.url,
@@ -806,6 +808,7 @@ describe("WorkflowRun", () => {
             const issue = WorkItemId.make(`#${current.length + 100}`);
             return [
               WorkflowActionArtifact.make({
+                kind: "IssueCreated",
                 workspace: workspace.config.name,
                 issue,
                 url: `https://example.test/issues/${issue.slice(1)}`,
@@ -1047,6 +1050,7 @@ describe("WorkflowRun", () => {
   it.effect("includes artifacts already created by the lineage in Work context", () =>
     Effect.gen(function* () {
       const artifact = WorkflowActionArtifact.make({
+        kind: "IssueCreated",
         workspace: decodeWorkspace("cogwork"),
         issue: decodeWorkItem("#99"),
         url: "https://example.test/issues/99",

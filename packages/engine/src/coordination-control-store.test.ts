@@ -1,4 +1,4 @@
-import { keyOf, LineageId, type WorkItemRef } from "@cogwork/contracts";
+import { keyOf, LineageId, WorkItemId, type WorkItemRef, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -16,6 +16,11 @@ const item = {
   channel: "C1",
   ts: "1234.5",
 } as const satisfies WorkItemRef;
+const issue = {
+  _tag: "Issue",
+  workspace: WorkspaceId.make("workspace"),
+  id: WorkItemId.make("#1"),
+} as const satisfies WorkItemRef;
 const operation = { workflow: "workflow", operation: "operate" };
 const lineage = { root: LineageId.make(keyOf(item)), parent: null, hop: 0 };
 
@@ -25,6 +30,24 @@ const withCoordination = <A, E, R>(
 ) => Effect.flatMap(makeControlStoreCoordination, use).pipe(Effect.provide(bootControlStoreLayer(storePath)));
 
 layer(NodeServices.layer)((it) => {
+  it.effect("coordinates tracker issues in the Control store", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-issue-coordination-" });
+      yield* withCoordination(path.join(directory, "control.db"), (coordination) =>
+        coordination.observe(issue, "issue:1", { _tag: "Unknown" }).pipe(
+          Effect.andThen(coordination.read(issue)),
+          Effect.tap((view) =>
+            Effect.sync(() => {
+              assert.deepStrictEqual(view.revision, { observed: "issue:1", processed: null });
+            }),
+          ),
+        ),
+      );
+    }),
+  );
+
   it.effect("satisfies the shared coordination contract", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

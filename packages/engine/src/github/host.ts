@@ -93,6 +93,7 @@ export const makeIssueActions = (client: GitHubClientService) => {
     origin: WorkflowActionOrigin,
   ) {
     return WorkflowActionArtifact.make({
+      kind: "IssueCreated",
       workspace: workspace.config.name,
       issue: yield* itemId(issue.number),
       url: issue.url,
