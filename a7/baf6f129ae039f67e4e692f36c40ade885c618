@@ -1,0 +1,77 @@
+packages/engine/src/workflow-run.test.ts
+  s_6fa8fc2659e726::t_15ad87923b01af 1987,2006
+  s_6fa8fc2659e726::t_87f2b6f0016570 15,58,69-73,100,420,546,607,949,960,1408-1510,1878-1986,1988-2005,2007-2038
+  s_6fa8fc2659e726::t_1cbca63232dacd 2039
+packages/engine/src/workflow-run.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 15,43,49,80,82,85,92,96-108,446-447,553-556,598-613,666-667,711-712,733-734,863-908,913,948,967,1023,1159,1172
+packages/engine/src/daemon.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 106,409,522-524
+packages/contracts/src/workflow.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 120-127,160-169,173,182,205,538-543
+packages/engine/src/scheduler.ts
+  s_6fa8fc2659e726::t_3de2b43a257db4 268
+packages/engine/src/pull-request-tool.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 1-41
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_6fa8fc2659e726::t_87f2b6f0016570 8,125,139,142-149,171,174,213
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 374-377
+packages/engine/src/pull-request-tool.test.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 1-59
+packages/engine/src/workflow-action-plan.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 15,23,38-43,64,78-82,213,222,234-235,247-249,252-288,293-294,296-298,302-335,337,363,366,430,432,434-436,440,443-446,453-459,461-464,503,505,546-561,584-586,682-692,708,778-779,834-835,859,870-914,922,930,942,956
+packages/engine/src/daemon-composition.test.ts
+  s_6fa8fc2659e726::t_f642f5cdd696ad 183,652
+  s_6fa8fc2659e726::t_6b14435977de80 477-487,531-566,568,570,573,576-581,649
+  s_6fa8fc2659e726::t_79b3424afb94a4 488-500,502-514,518-530,567,569,650
+  s_6fa8fc2659e726::t_6b35d2269ffaf2 11,25,39-45
+  s_6fa8fc2659e726::t_1b3a464357dcc5 184-188,190-198,200-240,242-263,266-347,349-433,435-451,458-476
+  s_6fa8fc2659e726::t_02eb4ab5fe7b2d 651,653-816
+  s_6fa8fc2659e726::t_15ad87923b01af 15,59,189,199,452-455
+  s_6fa8fc2659e726::t_36f16287b8ebf3 501
+  s_6fa8fc2659e726::t_aa316ac75363c6 515-517
+packages/engine/src/external-harness-runtime.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 16,110,497,604
+packages/engine/src/github/provider.ts
+  s_6fa8fc2659e726::t_434bea0a41b060 554
+  s_6fa8fc2659e726::t_87f2b6f0016570 8,22-24,46,55-61,100-123,126-251,413-481,529-553,555-561,563-574,576,580,655,692,703-707
+  s_6fa8fc2659e726::t_8a1418ac2b6df8 562,575
+  s_6fa8fc2659e726::t_4467eb4be03dbd 577
+packages/engine/src/source-control.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 6,36-68,84-87,109-127,135-143,148-155
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_6fa8fc2659e726::t_87f2b6f0016570 265-321
+packages/engine/src/github/client.test.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 7,771-882
+  s_6fa8fc2659e726::t_f12ec368ed2f17 883
+packages/engine/src/external-harness-runtime.test.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 24,488-521
+  s_6fa8fc2659e726::t_98287243dee475 522-523
+packages/engine/src/workflow-action-plan.test.ts
+  s_6fa8fc2659e726::t_15ad87923b01af 543,555
+  s_6fa8fc2659e726::t_87f2b6f0016570 27,30,188-214,420-542,544-554,556-574
+packages/engine/src/workflow.test.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 36,43-44,84,97-102,146,279-291
+  s_6fa8fc2659e726::t_e1c0f7e09d70b7 292-293
+packages/engine/src/github/client.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 97-117,134-135,210-215,219-228,266-267,291-292,547,805-807,842-845,1384-1434,1590-1606,1611-1614,1718
+packages/contracts/src/workflow.test.ts
+  s_6fa8fc2659e726::t_87f2b6f0016570 15,32,34-35,648-690
+  s_6fa8fc2659e726::t_7ed142e2a2fc74 691-692
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a7baf6f129ae039f67e4e692f36c40ade885c618",
+  "prompts": {},
+  "sessions": {
+    "s_6fa8fc2659e726": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19e59-969e-78e0-8ffb-2723729ca8b9",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
