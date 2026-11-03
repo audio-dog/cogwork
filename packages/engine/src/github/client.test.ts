@@ -31,6 +31,7 @@ const jsonResponse = (body: unknown = {}, status = 200, headers?: HeadersInit) =
 
 const pullResponse = (number: number) => ({
   number,
+  title: `Pull ${number}`,
   html_url: `https://github.com/colonylabs/cogwork/pull/${number}`,
   user: { login: "cogwork[bot]" },
   head: {

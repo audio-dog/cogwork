@@ -16,7 +16,6 @@ import {
   type HarnessExecution,
   type HarnessRunner,
   make,
-  stageResultSchema,
 } from "./harness";
 import { SessionStore } from "./session-store";
 import { LogProbe } from "./testing/log-probe";
@@ -107,12 +106,10 @@ const request = {
       reference: { workItem: "#1", url: null },
       prose: { body: "", comments: [] },
       facts: {
-        roles: [],
         assignees: [],
         openBlockers: 0,
         claim: null,
         priority: "medium",
-        pr: null,
       },
       observation: { generation: 1, observedAtMillis: 1 },
     },
@@ -136,122 +133,6 @@ const requestFor = (harness: typeof name, model: string | null = null) => ({
     ...request.plan,
     harness: { ...request.plan.harness, name: harness, model },
   }),
-});
-
-describe("stageResultSchema", () => {
-  it.effect("prepares the triage result as a validating Standard JSON Schema", () =>
-    Effect.gen(function* () {
-      const schema = stageResultSchema("triage");
-
-      const jsonSchema = schema["~standard"].jsonSchema.input({ target: "draft-2020-12" });
-      const root = yield* Schema.decodeUnknownEffect(
-        Schema.Struct({
-          type: Schema.Literal("object"),
-          properties: Schema.Record(Schema.String, Schema.Unknown),
-          required: Schema.Array(Schema.String),
-        }),
-      )(jsonSchema);
-      assert.hasAllKeys(root.properties, ["_tag", "role", "proposal"]);
-      assert.deepStrictEqual([...root.required].sort(), ["_tag", "proposal", "role"]);
-
-      const result = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "triage",
-            role: "ready-for-agent",
-            proposal: "Verified and ready.",
-          }),
-        ),
-      );
-      assert.isUndefined(result.issues);
-
-      const invalid = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "triage",
-            role: "needs-triage",
-            proposal: "Run triage again.",
-          }),
-        ),
-      );
-      assert.isDefined(invalid.issues);
-    }),
-  );
-
-  it.effect("prepares the implement result as a validating Standard JSON Schema", () =>
-    Effect.gen(function* () {
-      const schema = stageResultSchema("implement");
-
-      const result = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "implement",
-            outcome: "opened-pr",
-            summary: "Opened PR #110.",
-            title: null,
-            body: null,
-          }),
-        ),
-      );
-      assert.isUndefined(result.issues);
-
-      const ready = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "implement",
-            outcome: "ready-for-pr",
-            summary: "Implementation complete.",
-            title: "Open pull requests from the engine",
-            body: "Closes #474",
-          }),
-        ),
-      );
-      assert.isUndefined(ready.issues);
-
-      const invalid = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "implement",
-            outcome: "opened-pr",
-            summary: " ",
-            title: null,
-            body: null,
-          }),
-        ),
-      );
-      assert.isDefined(invalid.issues);
-    }),
-  );
-
-  it.effect("prepares the follow-up result as a validating Standard JSON Schema", () =>
-    Effect.gen(function* () {
-      const schema = stageResultSchema("follow-up");
-
-      const result = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "follow-up",
-            outcome: "pushed",
-            summary: "Fixed the failing check and pushed.",
-            speak: null,
-          }),
-        ),
-      );
-      assert.isUndefined(result.issues);
-
-      const invalid = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "follow-up",
-            outcome: "pushed",
-            summary: " ",
-            speak: null,
-          }),
-        ),
-      );
-      assert.isDefined(invalid.issues);
-    }),
-  );
 });
 
 describe("Harness", () => {

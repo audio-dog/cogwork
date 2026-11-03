@@ -1,8 +1,8 @@
 import {
   type AgUiEvent,
-  ClassifiedItem,
   DaemonEvent,
   initialBoard,
+  ReadModelItem,
   RunSummary,
   WorkflowRecord,
 } from "@cogwork/contracts";
@@ -19,16 +19,30 @@ import { previewMap } from "./run-activity";
 
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const decodeRun = Schema.decodeSync(RunSummary);
-const decodeItem = Schema.decodeSync(ClassifiedItem);
+const decodeItem = Schema.decodeSync(ReadModelItem);
 const decodeWorkflow = Schema.decodeUnknownSync(WorkflowRecord);
 const event = (value: Record<string, unknown>) => decodeEvent({ emittedAtMillis: 0, ...value });
+const readyToMerge = (id: string, title: string) =>
+  decodeItem({
+    _tag: "ReadyToMerge",
+    id,
+    title,
+    pr: {
+      number: 1,
+      url: "https://example.test/pull/1",
+      checks: "passing",
+      review: "ready",
+      baseDivergence: "clean",
+      waitingSinceMillis: 0,
+    },
+  });
 
 const run = (over: Partial<Parameters<typeof decodeRun>[0]> = {}) =>
   decodeRun({
     id: "run-1",
     workspace: "acme",
     workItem: "42",
-    stage: "implement",
+    operation: "implement",
     harness: "cursor",
     branch: null,
     session: null,
@@ -47,7 +61,7 @@ const activity = (runId: string, agui: AgUiEvent & { type: string }) =>
       runId,
       workspace: "acme",
       workItem: "42",
-      stage: "implement",
+      operation: "implement",
       seq: 0,
       atMillis: 0,
       correlation: { threadId: null, messageId: null, toolCallId: agui.toolCallId ?? null },
@@ -101,13 +115,13 @@ describe("activity session", () => {
     const seed = event({
       _tag: "ItemChanged",
       workspace: "acme",
-      item: decodeItem({ _tag: "Eligible", id: "old", title: "Old", stage: "implement" }),
+      item: readyToMerge("old", "Old"),
     });
     const live = event({ _tag: "RunChanged", run: run() });
     const replacement = event({
       _tag: "ItemChanged",
       workspace: "acme",
-      item: decodeItem({ _tag: "Eligible", id: "new", title: "New", stage: "implement" }),
+      item: readyToMerge("new", "New"),
     });
     const first = [seed, event({ _tag: "SeedEnd" }), live].reduce(
       (session, next) => ingestDaemonEvent(session, next, 1),

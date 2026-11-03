@@ -117,15 +117,12 @@ user's own, brought to cogwork.
 
 Named so future work knows the reopen cost. None of this is in scope to build.
 
-**The issue tracker plays three roles at once** — sensor, work-item identity, and coordination
-store (ADR [0003](../adr/0003-work-source-as-coordination-substrate.md)). Non-coding work has no
-tracker, so the roles separate eventually.
+**The issue tracker plays two roles** — sensor and work-item identity. Coordination moved to the
+Control store for every Work item (ADR [0036](../adr/0036-every-work-item-is-coordinated-in-the-control-store.md)),
+so a second machine cannot take over an issue by reading the tracker.
 
 **"Act" generalises to an actuator.** The coding harness is one actuator and the owned provider
 layer is another. Nothing may assume that acting means running a harness.
-
-**The coordination store becomes ours when a work item has no tracker.** The full store waits for the
-first non-coding workflow.
 
 **A knowledge layer — what cogwork knows about you — is deferred.** Meeting ingestion is its seed.
 

@@ -1,19 +1,15 @@
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import {
   connectionIdOf,
-  DaemonEvent,
   DaemonRpcs,
   HarnessName,
-  WorkflowDocument,
-  WorkflowPublishRefused,
-  WorkflowSwitchRefused,
-  WorkspaceConfig,
-  type WorkspaceId,
+  IssueTrackerType,
+  keyOf,
+  LineageId,
+  RunId,
+  type RunRecord,
+  SourceControlType,
+  WorkItemId,
+  WorkspaceId,
   WorkspaceRegistration,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -21,30 +17,27 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
-import * as Latch from "effect/Latch";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { TestClock } from "effect/testing";
+import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as Socket from "effect/unstable/socket/Socket";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
-import { afterEach, vi } from "vitest";
+import { vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
+import { Coordination } from "./coordination";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import { Git, type GitService } from "./git";
 import { fullHarnessExecution, type HarnessRunner } from "./harness";
-import { IssueTracker } from "./issue-tracker";
 import { PerformanceHealthSource } from "./performance-health-source";
-import type { RegisteredWorkspace } from "./projector";
-import { ReconcileWorker } from "./reconcile";
 import * as RunLedger from "./run-ledger";
 import { Scheduler } from "./scheduler";
 import {
@@ -52,22 +45,65 @@ import {
   TriggerObservation,
   TriggerObservationStore,
 } from "./trigger-observation";
-import { WorktreeManager } from "./worktree";
+import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 
-const pushSchemaMock = vi.hoisted(() => vi.fn());
-vi.mock("drizzle-kit/payload/sqlite", () =>
-  vi
-    .importActual<typeof import("drizzle-kit/payload/sqlite")>("drizzle-kit/payload/sqlite")
-    .then((actual) => {
-      pushSchemaMock.mockImplementation(actual.pushSchema);
-      return { ...actual, pushSchema: pushSchemaMock };
+const harnessName = HarnessName.make("scripted");
+const githubType = Schema.decodeSync(IssueTrackerType)("github");
+const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
+const structuredOutput = (workspace: string) => ({
+  summary: "Ready for implementation",
+  stuck: false,
+  answers: { role: "ready-for-agent" },
+  inputs: { comment: "Ready for implementation.", hand_off: "" },
+  workspace,
+});
+
+const runner = <Workspace extends string>(workspace: Ref.Ref<Workspace>): HarnessRunner => ({
+  name: harnessName,
+  sessionKind: "owned-transcript",
+  projectedMembers: [],
+  planMiddleware: ["sandbox", "persistence", "instruction-context"],
+  execution: fullHarnessExecution,
+  capabilities: {
+    authenticationModes: ["host"],
+    session: { affinity: "portable", fork: false, humanAttach: false },
+    structuredOutput: "native",
+    policyFidelity: "exact",
+    fileEventFidelity: "absent",
+    usageQuality: "none",
+    readinessDiagnostics: false,
+    journal: false,
+    takeover: false,
+  },
+  authentication: { mode: "host", reference: "test" },
+  catalog: { models: [] },
+  readiness: () =>
+    Effect.succeed({
+      operational: { status: "ready", retryable: false, diagnostic: "ready" },
+      installation: { status: "installed", version: "1" },
+      compatibility: { status: "compatible", requirement: null },
+      authentication: { mode: "host", status: "available", diagnostic: "ready" },
+      diagnostics: [],
     }),
+  preflight: () => Effect.void,
+  run: () =>
+    Stream.fromEffect(
+      Ref.get(workspace).pipe(
+        Effect.map((selected) => {
+          const object = structuredOutput(selected);
+          return {
+            type: "CUSTOM" as const,
+            name: "structured-output.complete" as const,
+            value: { object, raw: JSON.stringify(object) },
+          };
+        }),
+      ),
+    ),
+});
+
+const reconcileWorktrees = vi.fn<WorktreeManagerService["reconcile"]>(() =>
+  Effect.succeed({ tornDown: [], reaped: [] }),
 );
-
-const healthSourceLayer = (snapshot: Effect.Effect<{ readonly sampledAtMillis: number }>) =>
-  Layer.succeed(PerformanceHealthSource, { snapshot });
-
-const interruptionGate = Latch.makeUnsafe();
 
 const worktreeLayer = Layer.succeed(WorktreeManager, {
   withRunOwnershipLock: (effect) => effect,
@@ -78,7 +114,7 @@ const worktreeLayer = Layer.succeed(WorktreeManager, {
   pushBranchIfAhead: () => Effect.die("unused"),
   list: () => Effect.succeed([]),
   remove: () => Effect.void,
-  reconcile: () => Effect.succeed({ tornDown: [], reaped: [] }),
+  reconcile: reconcileWorktrees,
 });
 
 const gitLayer = Layer.succeed(Git, {
@@ -97,44 +133,28 @@ const gitLayer = Layer.succeed(Git, {
   pushBranch: () => Effect.die("unused"),
 } satisfies GitService);
 
-const stubRunner: HarnessRunner = {
-  name: Schema.decodeSync(HarnessName)("cursor"),
-  sessionKind: "opaque-handle",
-  projectedMembers: [],
-  planMiddleware: [],
-  execution: fullHarnessExecution,
-  capabilities: {
-    authenticationModes: ["host"],
-    session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
-    structuredOutput: "none",
-    policyFidelity: "exact",
-    fileEventFidelity: "absent",
-    usageQuality: "none",
-    readinessDiagnostics: false,
-    journal: false,
-    takeover: false,
-  },
-  authentication: { mode: "host", reference: "test login" },
-  catalog: {
-    models: [{ value: "test", label: "Test" }],
-  },
-  readiness: () =>
+const credentialsLayer = Layer.succeed(CredentialStore.CredentialStore, {
+  resolveSource: () =>
+    Effect.succeed({ source: "stored-key", token: Redacted.make("token"), identity: null }),
+  bearerToken: () =>
     Effect.succeed({
-      operational: { status: "ready", retryable: false, diagnostic: "Test runner is ready" },
-      installation: { status: "installed", version: "1" },
-      compatibility: { status: "compatible", requirement: ">=1" },
-      authentication: { mode: "host", status: "available", diagnostic: "test login available" },
-      diagnostics: [],
+      source: "stored-key",
+      token: Redacted.make("token"),
+      identity: null,
     }),
-  preflight: () => Effect.void,
-  run: () => Stream.empty,
-};
+  persist: () => Effect.void,
+  invalidate: () => Effect.void,
+  providerKey: () => Effect.die("unused"),
+  persistProviderKey: () => Effect.die("unused"),
+  configureConnection: () => Effect.void,
+  removeConnection: () => Effect.void,
+} satisfies CredentialStore.CredentialStoreService);
 
 const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
   assemble: () =>
     Effect.succeed({
       layers: [],
-      operatingInstructionsName: "implement-agent",
+      operatingInstructionsName: "triage-agent",
       operatingInstructionsPath: "/skills",
       operatingInstructionResources: [],
       sources: [],
@@ -145,124 +165,26 @@ const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
 const socketServerLayer = (socket: Socket.Socket) =>
   Layer.succeed(SocketServer.SocketServer, {
     address: { _tag: "UnixAddress", path: "memory" },
-    run: (handler) =>
-      handler(socket).pipe(
-        Effect.ignore,
-        Effect.andThen(
-          interruptionGate.await.pipe(Effect.flatMap(() => Effect.die("interruption gate opened"))),
-        ),
-      ),
+    run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
   });
 
-const inspectUnavailableDaemon = Effect.fn("test.inspectUnavailableDaemon")(function* () {
-  yield* Daemon.bootstrap;
-  const heartbeats = yield* Effect.forkChild(
-    Daemon.heartbeats({ pollIntervalMillis: 1000, drain: { graceMillis: 0, abort: Effect.void } }),
-  );
-  yield* TestClock.adjust("1 minute");
-  const worker = yield* ReconcileWorker;
-  const reconciled = yield* worker.snapshot;
-  const heartbeatsExit = heartbeats.pollUnsafe();
-  yield* Fiber.interrupt(heartbeats);
-  const rpc = yield* RpcClient.make(DaemonRpcs);
-  const runs = yield* rpc.ListRuns();
-  const status = yield* rpc.GetStatus();
-  const catalogs = yield* rpc.GetHarnessCatalogs();
-  const workflowCatalog = yield* rpc.GetWorkflowCatalog();
-  const readiness = yield* Effect.result(rpc.GetHarnessReadiness());
-  return { runs, status, reconciled, heartbeatsExit, catalogs, workflowCatalog, readiness };
+const issueResponse = (labels: ReadonlyArray<string>) => ({
+  node_id: "I_issue_1",
+  number: 1,
+  title: "Triage me",
+  html_url: "https://github.com/owner/repo/issues/1",
+  labels,
+  assignees: [],
+  body: "Please triage this issue.",
+  state: "open",
+  created_at: "2026-11-01T12:00:00Z",
 });
 
-const connectedWorkspace: RegisteredWorkspace = {
-  source: "control-store:github",
-  repository: "owner/repo",
-  contributions: [],
-  config: Schema.decodeSync(WorkspaceConfig)({
-    name: "github",
-    checkoutPath: "/repos/github",
-    issueTracker: {
-      type: "github",
-      connectionId: connectionIdOf("github", "acme"),
-    },
-  }),
-};
-
-const storedGitHubCredentials = Layer.succeed(CredentialStore.CredentialStore, {
-  resolveSource: () => Effect.die("unexpected credential source resolution"),
-  bearerToken: () =>
-    Effect.succeed({ source: "stored-key", token: Redacted.make("stored-token"), identity: null }),
-  persist: () => Effect.void,
-  invalidate: () => Effect.void,
-  providerKey: () => Effect.die("unexpected provider key"),
-  persistProviderKey: () => Effect.die("unexpected provider key persist"),
-  configureConnection: () => Effect.void,
-  removeConnection: () => Effect.void,
-} satisfies CredentialStore.CredentialStoreService);
-
-function makeGitHubServerFixture() {
-  return Effect.gen(function* () {
-    const root = yield* Effect.acquireRelease(
-      Effect.sync(() => mkdtempSync(join(tmpdir(), "cogwork-github-credential-"))),
-      (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-    );
-    vi.stubEnv("GITHUB_TOKEN", "fallback-token");
-    const fetchStub = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
-      const url = input instanceof Request ? input.url : String(input);
-      const body = url === "https://api.github.com/user" ? { login: "connected-account" } : [];
-      return Promise.resolve(
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
-      );
-    });
-    vi.stubGlobal("fetch", fetchStub);
-    const toServer = new TransformStream<Uint8Array, Uint8Array>();
-    const toClient = new TransformStream<Uint8Array, Uint8Array>();
-    const client = yield* Socket.fromTransformStream(
-      Effect.succeed({ readable: toClient.readable, writable: toServer.writable }),
-    );
-    const server = yield* Socket.fromTransformStream(
-      Effect.succeed({ readable: toServer.readable, writable: toClient.writable }),
-    );
-    const transport = RpcServer.layerProtocolSocketServer.pipe(Layer.provide(socketServerLayer(server)));
-    const clientLayer = RpcClient.layerProtocolSocket().pipe(
-      Layer.provide(Layer.succeed(Socket.Socket, client)),
-      Layer.provide(Daemon.serializationLayer),
-    );
-    return {
-      fetchStub,
-      clientLayer,
-      serverLayer: Daemon.serverLayer({
-        transport,
-        credentials: storedGitHubCredentials,
-        contextAssembler: contextAssemblerLayer,
-        runLedger: RunLedger.layerMemoryCore,
-        controlStorePath: join(root, "control.db"),
-        userAgentsDir: join(root, ".agents"),
-        worktrees: worktreeLayer,
-        harnessRunners: [stubRunner],
-        appVersion: "test",
-        performanceEvidenceRoot: join(root, "perf"),
-        performanceHealth: healthSourceLayer(Effect.succeed({ sampledAtMillis: 0 })),
-      }).pipe(Layer.provide(gitLayer)),
-    };
+const jsonResponse = (body: unknown = {}, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
   });
-}
-
-class GitHubServerFixture extends Context.Service<
-  GitHubServerFixture,
-  Effect.Success<ReturnType<typeof makeGitHubServerFixture>>
->()("@cogwork/engine/daemon-composition.test/GitHubServerFixture") {
-  static readonly layer = Layer.effect(GitHubServerFixture, makeGitHubServerFixture());
-}
-
-const githubServerTestLayer = () =>
-  Layer.unwrap(
-    Effect.map(GitHubServerFixture, ({ clientLayer, serverLayer }) =>
-      Layer.merge(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer)),
-    ),
-  ).pipe(Layer.provideMerge(GitHubServerFixture.layer));
 
 interface PullRequestToolCall {
   readonly workspace: WorkspaceId;
@@ -270,7 +192,7 @@ interface PullRequestToolCall {
 }
 
 interface SlackReviewProbeService {
-  readonly workspace: Ref.Ref<WorkspaceId | null>;
+  readonly workspace: Ref.Ref<WorkspaceId>;
   readonly pullRequestToolCalls: Ref.Ref<ReadonlyArray<PullRequestToolCall>>;
 }
 
@@ -280,7 +202,7 @@ class SlackReviewProbe extends Context.Service<SlackReviewProbe, SlackReviewProb
   static readonly layer = Layer.effect(
     SlackReviewProbe,
     Effect.all({
-      workspace: Ref.make<WorkspaceId | null>(null),
+      workspace: Ref.make(WorkspaceId.make("none")),
       pullRequestToolCalls: Ref.make<ReadonlyArray<PullRequestToolCall>>([]),
     }),
   );
@@ -293,8 +215,8 @@ const resultEvent = (object: unknown) => ({
 });
 
 const slackReviewRunner = (probe: SlackReviewProbeService): HarnessRunner => ({
-  ...stubRunner,
-  capabilities: { ...stubRunner.capabilities, structuredOutput: "native" },
+  ...runner(probe.workspace),
+  capabilities: { ...runner(probe.workspace).capabilities, structuredOutput: "native" },
   run: (request) => {
     const body = request.plan.workContext.prose.body;
     const executePullRequest = request.engineTools?.find(({ name }) => name === "pull-request")?.execute;
@@ -326,7 +248,6 @@ const slackReviewRunner = (probe: SlackReviewProbeService): HarnessRunner => ({
     return Stream.fromEffect(
       Effect.gen(function* () {
         const workspace = yield* Ref.get(probe.workspace);
-        if (workspace === null) return yield* Effect.die("Slack review Workspace is missing");
         const toolCall = { workspace, pull_request: "#827" } satisfies PullRequestToolCall;
         yield* Ref.update(probe.pullRequestToolCalls, (calls) => [...calls, toolCall]);
         yield* Effect.promise(() => Promise.resolve(executePullRequest(toolCall)));
@@ -395,10 +316,9 @@ const slackReviewCredentials = Layer.succeed(CredentialStore.CredentialStore, {
 
 function makeSlackReviewServerFixture() {
   return Effect.gen(function* () {
-    const root = yield* Effect.acquireRelease(
-      Effect.sync(() => mkdtempSync(join(tmpdir(), "cogwork-slack-review-"))),
-      (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-    );
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-slack-review-" });
     const probe = yield* SlackReviewProbe;
     const observationStore = yield* makeMemoryTriggerObservationStore;
     const baseSeconds = 1_000;
@@ -505,13 +425,15 @@ function makeSlackReviewServerFixture() {
         credentials: slackReviewCredentials,
         contextAssembler: contextAssemblerLayer,
         runLedger: RunLedger.layerMemoryCore,
-        controlStorePath: join(root, "control.db"),
-        userAgentsDir: join(root, ".agents"),
+        controlStorePath: path.join(root, "control.db"),
+        userAgentsDir: path.join(root, ".agents"),
         worktrees: worktreeLayer,
         harnessRunners: [slackReviewRunner(probe)],
         appVersion: "test",
-        performanceEvidenceRoot: join(root, "perf"),
-        performanceHealth: healthSourceLayer(Effect.succeed({ sampledAtMillis: 0 })),
+        performanceEvidenceRoot: path.join(root, "perf"),
+        performanceHealth: Layer.succeed(PerformanceHealthSource, {
+          snapshot: Effect.succeed({ sampledAtMillis: 0 }),
+        }),
         triggerObservationStore: Layer.succeed(TriggerObservationStore, observationStore),
       }).pipe(Layer.provide(gitLayer)),
     };
@@ -533,7 +455,11 @@ const slackReviewServerTestLayer = () =>
         Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
       ),
     ),
-  ).pipe(Layer.provideMerge(SlackReviewServerFixture.layer), Layer.provideMerge(SlackReviewProbe.layer));
+  ).pipe(
+    Layer.provideMerge(SlackReviewServerFixture.layer),
+    Layer.provideMerge(SlackReviewProbe.layer),
+    Layer.provide(NodeServices.layer),
+  );
 
 const advancingClock = () => {
   const state = { millis: 0 };
@@ -554,19 +480,65 @@ const advancingClock = () => {
   } satisfies Clock.Clock;
 };
 
-function makeUnavailableServerFixture() {
+function makeFixture() {
   return Effect.gen(function* () {
-    pushSchemaMock.mockRejectedValueOnce(new Error("unexpected converge failure"));
-    const controlStore = yield* Effect.acquireRelease(
-      Effect.sync(() => {
-        const dir = mkdtempSync(join(tmpdir(), "cogwork-poisoned-store-"));
-        const path = join(dir, "control.db");
-        const db = new DatabaseSync(path);
-        db.close();
-        return { dir, path };
-      }),
-      ({ dir }) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-    );
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-daemon-composition-" });
+    const checkoutPath = path.join(root, "repo");
+    yield* fs.makeDirectory(checkoutPath);
+    const labels = ["needs-triage"];
+    const comments: Array<Record<string, unknown>> = [];
+    const selectedWorkspace = yield* Ref.make("none");
+    const fetchStub = vi.fn<typeof globalThis.fetch>((input, init) => {
+      const request = new Request(input, init);
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname === "/user") {
+        return Promise.resolve(jsonResponse({ login: "owner" }));
+      }
+      if (request.method === "POST" && url.pathname === "/graphql") {
+        return Promise.resolve(
+          jsonResponse({
+            data: {
+              repository: {
+                pullRequests: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
+              },
+            },
+          }),
+        );
+      }
+      if (request.method === "GET" && url.pathname.endsWith("/issues/1/comments")) {
+        return Promise.resolve(jsonResponse(comments));
+      }
+      if (request.method === "POST" && url.pathname.endsWith("/issues/1/comments")) {
+        return request.json().then((unknown) => {
+          const payload = unknown as { readonly body: string };
+          comments.push({
+            id: 1,
+            body: payload.body,
+            created_at: "2026-11-01T12:01:00Z",
+            author_association: "MEMBER",
+            user: { login: "cogwork", type: "Bot" },
+          });
+          return jsonResponse({}, 201);
+        });
+      }
+      if (request.method === "POST" && url.pathname.endsWith("/issues/1/labels")) {
+        return request.json().then((unknown) => {
+          const payload = unknown as { readonly labels: ReadonlyArray<string> };
+          labels.push(...payload.labels);
+          return jsonResponse(payload.labels.map((name) => ({ name })));
+        });
+      }
+      if (request.method === "GET" && url.pathname.endsWith("/issues/1")) {
+        return Promise.resolve(jsonResponse(issueResponse(labels)));
+      }
+      if (request.method === "GET" && url.pathname.endsWith("/issues")) {
+        return Promise.resolve(jsonResponse([issueResponse(labels)]));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+    vi.stubGlobal("fetch", fetchStub);
     const toServer = new TransformStream<Uint8Array, Uint8Array>();
     const toClient = new TransformStream<Uint8Array, Uint8Array>();
     const client = yield* Socket.fromTransformStream(
@@ -581,211 +553,216 @@ function makeUnavailableServerFixture() {
       Layer.provide(Daemon.serializationLayer),
     );
     return {
+      checkoutPath,
+      fetchStub,
+      selectedWorkspace,
       clientLayer,
       serverLayer: Daemon.serverLayer({
         transport,
-        credentials: CredentialStore.layerEnv,
+        credentials: credentialsLayer,
         contextAssembler: contextAssemblerLayer,
         runLedger: RunLedger.layerMemoryCore,
-        controlStorePath: controlStore.path,
-        userAgentsDir: join(controlStore.dir, ".agents"),
+        controlStorePath: path.join(root, "control.db"),
+        userAgentsDir: path.join(root, ".agents"),
         worktrees: worktreeLayer,
-        harnessRunners: [stubRunner],
+        harnessRunners: [runner(selectedWorkspace)],
         appVersion: "test",
-        performanceEvidenceRoot: join(controlStore.dir, "perf"),
-        performanceHealth: healthSourceLayer(Effect.succeed({ sampledAtMillis: 0 })),
+        performanceEvidenceRoot: path.join(root, "perf"),
+        performanceHealth: Layer.succeed(PerformanceHealthSource, {
+          snapshot: Effect.succeed({ sampledAtMillis: 0 }),
+        }),
       }).pipe(Layer.provide(gitLayer)),
     };
   });
 }
 
-class UnavailableServerFixture extends Context.Service<
-  UnavailableServerFixture,
-  Effect.Success<ReturnType<typeof makeUnavailableServerFixture>>
->()("@cogwork/engine/daemon-composition.test/UnavailableServerFixture") {
-  static readonly layer = Layer.effect(UnavailableServerFixture, makeUnavailableServerFixture());
+class Fixture extends Context.Service<Fixture, Effect.Success<ReturnType<typeof makeFixture>>>()(
+  "@cogwork/engine/daemon-composition.test/Fixture",
+) {
+  static readonly layer = Layer.effect(Fixture, makeFixture());
 }
 
-const unavailableServerTestLayer = () =>
+const testLayer = () =>
   Layer.unwrap(
-    Effect.map(UnavailableServerFixture, ({ clientLayer, serverLayer }) =>
-      Layer.mergeAll(serverLayer, clientLayer).pipe(Layer.provide(NodeServices.layer)),
+    Effect.map(Fixture, ({ clientLayer, fetchStub, serverLayer }) =>
+      Layer.merge(serverLayer, clientLayer).pipe(
+        Layer.provide(NodeServices.layer),
+        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
+      ),
     ),
-  ).pipe(Layer.provideMerge(UnavailableServerFixture.layer));
+  ).pipe(Layer.provideMerge(Fixture.layer), Layer.provide(NodeServices.layer));
 
-describe("daemon server composition", () => {
-  afterEach(() => {
-    pushSchemaMock.mockClear();
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
+const crashedIssue = {
+  _tag: "Issue",
+  workspace: WorkspaceId.make("github"),
+  id: WorkItemId.make("#1"),
+} as const;
+
+const claimCrashedIssue = Effect.fn("DaemonCompositionTest.claimCrashedIssue")(function* () {
+  const coordination = yield* Coordination;
+  yield* coordination.observe(crashedIssue, "label:needs-triage:1", { _tag: "Unknown" });
+  yield* coordination.claim(crashedIssue, {
+    operation: { workflow: "coding", operation: "triage" },
+    lineage: { root: LineageId.make(keyOf(crashedIssue)), parent: null, hop: 0 },
   });
+  yield* TestClock.adjust("1 minute");
+});
 
-  it.effect("uses a GitHub Connection credential through the composed daemon", () =>
-    Effect.gen(function* () {
-      const { fetchStub } = yield* GitHubServerFixture;
-      yield* (yield* IssueTracker).observe(connectedWorkspace);
-      const authorization = new Headers(fetchStub.mock.calls[0]?.[1]?.headers).get("authorization");
-      assert.strictEqual(authorization, "Bearer stored-token");
-    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
+const issueRun = (id: string, status: RunRecord["status"], startedAtMillis: number) =>
+  ({
+    id: RunId.make(id),
+    workspace: crashedIssue.workspace,
+    workItem: WorkItemId.make(keyOf(crashedIssue)),
+    operation: "triage",
+    harness: harnessName,
+    branch: null,
+    session: null,
+    usage: null,
+    status,
+    startedAtMillis,
+    endedAtMillis: status === "running" ? null : startedAtMillis,
+  }) satisfies RunRecord;
+
+const startHeartbeats = Effect.fn("DaemonCompositionTest.startHeartbeats")(function* () {
+  yield* Effect.forkScoped(
+    Daemon.heartbeats({ pollIntervalMillis: 60_000, drain: { graceMillis: 0, abort: Effect.never } }),
   );
+  yield* TestClock.adjust("1 second");
+});
 
-  it.effect("authors and observes an incomplete Workflow through DaemonRpcs", () =>
+describe("daemon composition", () => {
+  it.effect("creates, publishes, and enables the coding template before triaging through the daemon", () =>
     Effect.gen(function* () {
-      yield* Daemon.bootstrap;
+      const fixture = yield* Fixture;
       const rpc = yield* RpcClient.make(DaemonRpcs);
-      const document = yield* Schema.decodeEffect(WorkflowDocument)({
-        name: "Draft",
-        workspaces: { _tag: "Every" },
-        triggers: [],
-        operations: [],
+      assert.deepStrictEqual((yield* rpc.ListWorkflows()).workflows, []);
+      yield* rpc.EstablishConnection({
+        establishment: { system: "github", source: { _tag: "Stored" } },
       });
-      const created = yield* rpc.CreateWorkflow({ document });
-      const edited = yield* rpc.EditWorkflow({
-        id: created.id,
-        edits: [{ _tag: "Rename", name: "Edited" }],
+      const registration = yield* rpc.RegisterWorkspace({
+        registration: {
+          name: WorkspaceId.make("github"),
+          checkoutPath: fixture.checkoutPath,
+          issueTracker: { type: githubType, connectionId: connectionIdOf("github", "owner") },
+          linearHistory: false,
+        },
       });
-      const listed = yield* rpc.ListWorkflows();
-      const fetched = yield* rpc.GetWorkflow({ id: created.id });
-      const diagnostics = yield* rpc.ValidateWorkflow({ document: { name: "Malformed" } });
-      const publish = yield* Effect.result(
-        rpc.PublishWorkflow({ id: created.id, revision: edited.workingRevision }),
-      );
-      const switched = yield* Effect.result(rpc.SwitchWorkflow({ id: created.id, enabled: true }));
-      const catalog = yield* rpc.GetWorkflowCatalog();
-      const status = yield* rpc.GetStatus();
-      const seed = yield* rpc
-        .WatchEvents()
-        .pipe(Stream.takeUntil(DaemonEvent.guards.SeedEnd), Stream.runCollect);
-      const deleted = yield* rpc.DeleteWorkflow({ id: created.id });
-
-      assert.strictEqual(edited.workingCopy.name, "Edited");
-      assert.deepStrictEqual(
-        listed.workflows.map(({ id }) => id),
-        [created.id],
-      );
-      assert.strictEqual(fetched.id, created.id);
-      assert.deepStrictEqual(
-        diagnostics.map(({ code }) => code),
-        ["schema"],
-      );
-      assert.isTrue(Result.isFailure(publish) && Schema.is(WorkflowPublishRefused)(publish.failure));
-      assert.isTrue(Result.isFailure(switched) && Schema.is(WorkflowSwitchRefused)(switched.failure));
-      assert.lengthOf(catalog.catalog.entries, 45);
-      assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "schedule.daily"));
-      assert.isTrue(catalog.catalog.entries.some(({ key }) => key === "slack.i-am-mentioned"));
-      assert.deepInclude(
-        catalog.catalog.entries.find(({ key }) => key === "slack.send-message"),
-        { parameters: [{ id: "channel", required: true, source: "live", values: [] }] },
-      );
-      assert.deepStrictEqual(
-        status.sources.map(({ source }) => source),
-        ["github", "linear", "clock", "granola", "slack"],
-      );
-      assert.isTrue(
-        [...seed].some((event) => event._tag === "WorkflowChanged" && event.workflow.id === created.id),
-      );
-      assert.strictEqual(deleted, created.id);
-    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
-  );
-
-  it.effect("round-trips the Granola fan-out document through DaemonRpcs", () =>
-    Effect.gen(function* () {
-      yield* Daemon.bootstrap;
-      const rpc = yield* RpcClient.make(DaemonRpcs);
-      const document = yield* Schema.decodeEffect(WorkflowDocument)({
-        name: "Granola commitments",
-        workspaces: { _tag: "Every" },
-        triggers: [
+      assert.strictEqual(registration._tag, "Registered");
+      if (registration._tag !== "Registered") return;
+      yield* Ref.set(fixture.selectedWorkspace, registration.name);
+      yield* rpc.SetOperationSetting({
+        updates: [
           {
-            id: "note-generated",
-            entry: "granola.note-generated",
-            parameters: [],
-            start: "route-commitments",
-          },
-        ],
-        operations: [
-          {
-            id: "route-commitments",
-            name: "Route commitments",
-            instructionPackage: null,
-            instruction: "Route each commitment to an issue.",
-            permissionProfile: "read-only",
-            requires: [],
-            model: { harness: "cursor", model: "test", options: [] },
-            forEach: "commitment",
-            questions: [
-              {
-                id: "match",
-                text: "Match?",
-                choices: [
-                  { id: "new", name: "New" },
-                  { id: "duplicate", name: "Duplicate" },
-                ],
-              },
-            ],
-            transitions: [
-              {
-                when: [{ question: "match", choice: "new" }],
-                actions: [{ entry: "github.create-issue", parameters: [] }],
-                handOff: null,
-              },
-              {
-                when: [{ question: "match", choice: "duplicate" }],
-                actions: [{ entry: "github.comment-issue", parameters: [] }],
-                handOff: null,
-              },
-            ],
-            hints: [],
+            _tag: "Set",
+            row: {
+              setting: "harness",
+              level: { _tag: "Default" },
+              scope: { _tag: "SettingsProfile" },
+              value: harnessName,
+            },
           },
         ],
       });
-
-      const created = yield* rpc.CreateWorkflow({ document });
-      const fetched = yield* rpc.GetWorkflow({ id: created.id });
-      const deleted = yield* rpc.DeleteWorkflow({ id: created.id });
-
-      assert.strictEqual(fetched.workingCopy.operations[0]?.forEach, "commitment");
-      assert.deepStrictEqual(
-        fetched.workingCopy.operations[0]?.transitions.flatMap(({ actions }) =>
-          actions.map(({ entry }) => entry),
-        ),
-        ["github.create-issue", "github.comment-issue"],
-      );
-      assert.strictEqual(deleted, created.id);
-    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
-  );
-
-  it.effect("publishes both coding templates through DaemonRpcs", () =>
-    Effect.gen(function* () {
-      yield* Daemon.bootstrap;
-      const rpc = yield* RpcClient.make(DaemonRpcs);
-      const templates = (yield* rpc.GetWorkflowTemplates()).filter(({ id }) =>
-        id.endsWith("-coding-pipeline"),
-      );
-      const created = yield* Effect.forEach(templates, ({ document }) => rpc.CreateWorkflow({ document }));
-      const published = yield* Effect.forEach(created, ({ id, workingRevision }) =>
-        rpc.PublishWorkflow({ id, revision: workingRevision }),
-      );
-
-      assert.deepStrictEqual(
+      const templates = yield* rpc.GetWorkflowTemplates();
+      assert.includeMembers(
         templates.map(({ id }) => id),
         ["github-coding-pipeline", "linear-coding-pipeline"],
       );
-      const rejectedDiagnostics = created.flatMap(({ diagnostics }) =>
-        diagnostics.filter(({ class: diagnosticClass, code }) => {
-          const isBlocking = diagnosticClass === "malformed" || diagnosticClass === "incomplete";
-          const isForbiddenAdvisory = ["hand-off-and-trigger", "unreachable-operation"].includes(code);
-          return isBlocking || isForbiddenAdvisory;
-        }),
+      const template = templates.find(({ id }) => id === "github-coding-pipeline");
+      if (!template) return assert.fail("GitHub coding template is missing");
+      const created = yield* rpc.CreateWorkflow({ document: template.document });
+      const published = yield* rpc.PublishWorkflow({ id: created.id, revision: created.workingRevision });
+      yield* rpc.SwitchWorkflow({ id: published.id, enabled: true });
+      yield* TestClock.adjust("1 minute");
+      const eligible = yield* (yield* TriggerObservation).eligible;
+      assert.deepStrictEqual(
+        eligible.map(({ event }) => event.key),
+        [{ _tag: "Issue", workspace: registration.name, id: WorkItemId.make("#1") }],
       );
-      assert.deepStrictEqual(rejectedDiagnostics, []);
-      assert.lengthOf(published, 2);
-    }).pipe(Effect.provide(githubServerTestLayer()), Effect.scoped),
+      yield* rpc.SetScheduling({ desired: "running" });
+      const scheduler = yield* Scheduler;
+      assert.strictEqual(yield* scheduler.tick(), 1);
+      yield* scheduler.awaitIdle;
+
+      const labelWrite = fixture.fetchStub.mock.calls.some(([input, init]) => {
+        const request = new Request(input, init);
+        return request.method === "POST" && request.url.endsWith("/issues/1/labels");
+      });
+      assert.isTrue(labelWrite);
+    }).pipe(Effect.provide(testLayer()), Effect.scoped),
+  );
+
+  it.effect("marks a Run the stopped daemon left running as crashed and releases its Claim", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      const coordination = yield* Coordination;
+      yield* claimCrashedIssue();
+      yield* ledger.insertRun(issueRun("left-running", "running", 1));
+
+      yield* startHeartbeats();
+
+      assert.strictEqual((yield* ledger.getRun(RunId.make("left-running")))?.status, "crashed");
+      const view = yield* coordination.read(crashedIssue);
+      assert.isNull(view.claim);
+      assert.isNull(view.park);
+    }).pipe(Effect.provide(testLayer()), Effect.scoped),
+  );
+
+  it.effect("parks an item exhausted after its third Run in a row dies with the daemon", () =>
+    Effect.gen(function* () {
+      const ledger = yield* RunLedger.RunLedger;
+      yield* claimCrashedIssue();
+      yield* ledger.insertRun(issueRun("first-crash", "crashed", 1));
+      yield* ledger.insertRun(issueRun("second-crash", "crashed", 2));
+      yield* ledger.insertRun(issueRun("left-running", "running", 3));
+
+      yield* startHeartbeats();
+
+      const view = yield* (yield* Coordination).read(crashedIssue);
+      assert.strictEqual(view.park?.reason._tag, "Exhausted");
+    }).pipe(Effect.provide(testLayer()), Effect.scoped),
+  );
+
+  it.effect("maintains worktrees and reads pull requests once per poll interval", () =>
+    Effect.gen(function* () {
+      const fixture = yield* Fixture;
+      const rpc = yield* RpcClient.make(DaemonRpcs);
+      reconcileWorktrees.mockClear();
+      yield* rpc.EstablishConnection({ establishment: { system: "github", source: { _tag: "Stored" } } });
+      const connectionId = connectionIdOf("github", "owner");
+      const registration = yield* rpc.RegisterWorkspace({
+        registration: {
+          name: WorkspaceId.make("github"),
+          checkoutPath: fixture.checkoutPath,
+          issueTracker: { type: githubType, connectionId },
+          sourceControl: { type: githubSourceControl, connectionId },
+          worktrees: { reapAfterMillis: 1 },
+          linearHistory: false,
+        },
+      });
+      if (registration._tag !== "Registered") return assert.fail("Workspace registration failed");
+      const pullListReads = () =>
+        fixture.fetchStub.mock.calls.filter(([input, init]) => {
+          const request = new Request(input, init);
+          return request.method === "GET" && new URL(request.url).pathname.endsWith("/pulls");
+        }).length;
+      const readsBeforeHeartbeats = pullListReads();
+
+      yield* startHeartbeats();
+      yield* TestClock.adjust("50 seconds");
+
+      assert.deepStrictEqual(
+        reconcileWorktrees.mock.calls.map(([workspace]) => workspace.config.name),
+        [registration.name],
+      );
+      const heartbeatReads = pullListReads() - readsBeforeHeartbeats;
+      assert.isAbove(heartbeatReads, 0);
+      assert.isAtMost(heartbeatReads, 2);
+    }).pipe(Effect.provide(testLayer()), Effect.scoped),
   );
 
   it.effect("runs the Slack review template through the composed daemon", () =>
     Effect.gen(function* () {
-      yield* Daemon.bootstrap;
       const rpc = yield* RpcClient.make(DaemonRpcs);
       const fixture = yield* SlackReviewServerFixture;
       const probe = yield* SlackReviewProbe;
@@ -797,7 +774,7 @@ describe("daemon server composition", () => {
               setting: "harness",
               level: { _tag: "Default" },
               scope: { _tag: "SettingsProfile" },
-              value: "cursor",
+              value: harnessName,
             },
           },
         ],
@@ -949,80 +926,5 @@ describe("daemon server composition", () => {
       Effect.provideService(Clock.Clock, advancingClock()),
       Effect.scoped,
     ),
-  );
-
-  it.effect("serves RPC without booting dispatch when the Control store is unavailable", () =>
-    Effect.gen(function* () {
-      const result = yield* inspectUnavailableDaemon();
-
-      assert.deepStrictEqual(result.runs, []);
-      assert.strictEqual(result.status.health, "store-unavailable");
-      assert.strictEqual(result.reconciled.generation, 0);
-      assert.deepStrictEqual(result.reconciled.workspaces, []);
-      assert.isUndefined(result.heartbeatsExit);
-      assert.strictEqual(result.status.scheduler.globalInFlight, 0);
-      assert.deepStrictEqual(result.status.workspaces, []);
-    }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
-  );
-
-  it.effect("serves catalogs without the Control store and fails readiness closed", () =>
-    Effect.gen(function* () {
-      const result = yield* inspectUnavailableDaemon();
-      assert.deepStrictEqual(
-        result.catalogs.map(({ harness }) => harness),
-        ["cursor"],
-      );
-      assert.deepStrictEqual(
-        result.workflowCatalog.catalog.entries.map(({ name }) => name),
-        [
-          "Notify me",
-          "Wait for my approval",
-          "Withdraw the pending approval",
-          "Hand to me",
-          "Stop",
-          "Create an issue",
-          "Comment on this item",
-          "Comment on an existing issue",
-          "Add a label",
-          "Remove a label",
-          "Close this issue",
-          "Create an issue",
-          "Comment on this item",
-          "Comment on an existing issue",
-          "Add a label",
-          "Remove a label",
-          "Close this issue",
-          "Open a pull request",
-          "Push to this pull request",
-          "Comment on this pull request",
-          "Request a review",
-          "Comment on a named pull request",
-          "Post a review",
-          "Draft a review",
-          "Issue has label",
-          "New comment from a person",
-          "Pull request checks failed",
-          "Pull request conflicts with its base",
-          "New review comment from a person",
-          "New finding from a bot",
-          "Issue has label",
-          "New comment from a person",
-          "Every hour",
-          "Every day",
-          "Every week",
-          "Sweep idle items",
-          "Note generated",
-          "Note edited",
-          "I am mentioned",
-          "Message in a channel",
-          "Reaction added",
-          "Send a message",
-          "Reply in thread",
-          "Add a reaction",
-          "Draft a reply in Slack",
-        ],
-      );
-      assert.isTrue(Result.isFailure(result.readiness));
-    }).pipe(Effect.provide(unavailableServerTestLayer()), Effect.scoped),
   );
 });

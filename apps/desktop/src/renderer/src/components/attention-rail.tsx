@@ -1,33 +1,16 @@
 import { buttonVariants } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
-import { ToggleGroup, ToggleGroupItem } from "@cogwork/ui/components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiExternalLinkLine, RiGitPullRequestLine, RiQuestionAnswerLine } from "@remixicon/react";
-import { useState } from "react";
+import { RiExternalLinkLine, RiGitPullRequestLine } from "@remixicon/react";
 import { BoardResult, useBoard } from "../features/activity-session";
-import {
-  type AttentionEntry,
-  type AttentionKind,
-  type AttentionKindFilter,
-  attentionCounts,
-  attentionEntries,
-  filterAttention,
-  type NeedsDecisionAttentionEntry,
-  type ReadyToMergeAttentionEntry,
-} from "../features/attention";
-import { needsHumanReasonLabel, registeredWorkspaces } from "../features/feed";
+import { type AttentionEntry, attentionEntries, filterAttention } from "../features/attention";
+import { registeredWorkspaces } from "../features/feed";
 import { relativeTime } from "../features/format";
 import { useRightPanelStore } from "../store/right-panel";
 import { FunnelFilter, useFunnelSelection } from "./funnel-filter";
 
-const trackerLabel = (tracker: NeedsDecisionAttentionEntry["tracker"]) =>
-  tracker === "linear" ? "Linear" : "GitHub";
-
-const signalFor = (entry: AttentionEntry) => {
-  if (entry.kind === "ready-to-merge") return `waiting ${relativeTime(entry.pr.waitingSinceMillis)}`;
-  return needsHumanReasonLabel[entry.reason] ?? "needs a person";
-};
+const signalFor = (entry: AttentionEntry) => `waiting ${relativeTime(entry.item.pr.waitingSinceMillis)}`;
 
 function PrStatusDot({
   status,
@@ -47,8 +30,8 @@ function PrStatusDot({
   );
 }
 
-function PrStatus({ entry, onOpen }: { entry: ReadyToMergeAttentionEntry; onOpen: () => void }) {
-  const { checks, review, baseDivergence } = entry.pr;
+function PrStatus({ entry, onOpen }: { entry: AttentionEntry; onOpen: () => void }) {
+  const { checks, review, baseDivergence } = entry.item.pr;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -70,15 +53,7 @@ function PrStatus({ entry, onOpen }: { entry: ReadyToMergeAttentionEntry; onOpen
   );
 }
 
-function KindMarker({ kind }: { kind: AttentionKind }) {
-  if (kind === "needs-decision") {
-    return (
-      <>
-        <span className="pointer-events-none h-8 w-0.5 shrink-0 rounded-full bg-warning" aria-hidden />
-        <RiQuestionAnswerLine className="pointer-events-none size-4 shrink-0 text-warning" />
-      </>
-    );
-  }
+function KindMarker() {
   return (
     <>
       <span className="pointer-events-none h-8 w-0.5 shrink-0 rounded-full bg-success" aria-hidden />
@@ -87,7 +62,7 @@ function KindMarker({ kind }: { kind: AttentionKind }) {
   );
 }
 
-function ReadyToMergeQuickOpen({ entry }: { entry: ReadyToMergeAttentionEntry }) {
+function ReadyToMergeQuickOpen({ entry }: { entry: AttentionEntry }) {
   return (
     <a
       aria-label="Open PR on code host"
@@ -97,31 +72,7 @@ function ReadyToMergeQuickOpen({ entry }: { entry: ReadyToMergeAttentionEntry })
         className:
           "relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
       })}
-      href={entry.pr.url}
-      rel="noreferrer"
-      target="_blank"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <RiExternalLinkLine />
-    </a>
-  );
-}
-
-function DecisionQuickOpen({ entry }: { entry: NeedsDecisionAttentionEntry }) {
-  const label = `Open in ${trackerLabel(entry.tracker)}`;
-  if (!entry.url) {
-    return <span className="size-7 shrink-0" aria-hidden />;
-  }
-  return (
-    <a
-      aria-label={label}
-      className={buttonVariants({
-        size: "icon-sm",
-        variant: "ghost",
-        className:
-          "relative z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
-      })}
-      href={entry.url}
+      href={entry.item.pr.url}
       rel="noreferrer"
       target="_blank"
       onClick={(event) => event.stopPropagation()}
@@ -145,7 +96,7 @@ function AttentionRow({ entry }: { entry: AttentionEntry }) {
           openItem(entry.workspace, entry.item.id);
         }}
       />
-      <KindMarker kind={entry.kind} />
+      <KindMarker />
       <div className="pointer-events-none min-w-0 flex-1">
         <span className="block truncate text-sm">{entry.item.title}</span>
         <span className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
@@ -155,17 +106,11 @@ function AttentionRow({ entry }: { entry: AttentionEntry }) {
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-        {entry.kind === "ready-to-merge" && (
-          <PrStatus entry={entry} onOpen={() => openItem(entry.workspace, entry.item.id)} />
-        )}
+        <PrStatus entry={entry} onOpen={() => openItem(entry.workspace, entry.item.id)} />
         <span className="pointer-events-none w-28 truncate text-right" title={signal}>
           {signal}
         </span>
-        {entry.kind === "ready-to-merge" ? (
-          <ReadyToMergeQuickOpen entry={entry} />
-        ) : (
-          <DecisionQuickOpen entry={entry} />
-        )}
+        <ReadyToMergeQuickOpen entry={entry} />
       </div>
     </div>
   );
@@ -178,11 +123,9 @@ function AttentionContent({
   entries: ReadonlyArray<AttentionEntry>;
   workspaces: ReadonlyArray<string>;
 }) {
-  const [kind, setKind] = useState<AttentionKindFilter>("all");
   const workspace = useFunnelSelection();
-  const counts = attentionCounts(entries);
-  const rows = filterAttention(entries, kind, workspace.selected);
-  const hasActiveFilters = kind !== "all" || workspace.selected.size > 0;
+  const rows = filterAttention(entries, workspace.selected);
+  const hasActiveFilters = workspace.selected.size > 0;
   const options = workspaces.map((name) => ({
     key: name,
     label: name,
@@ -199,29 +142,7 @@ function AttentionContent({
     >
       <div className="flex size-full min-h-0 flex-col">
         <div className="flex items-center gap-2 border-b px-3 py-2">
-          <ToggleGroup
-            spacing={0}
-            value={[kind]}
-            onValueChange={(next) => {
-              const selection = next[0];
-              if (selection === "all" || selection === "needs-decision" || selection === "ready-to-merge") {
-                setKind(selection);
-              }
-            }}
-          >
-            <ToggleGroupItem value="all" variant="outline" size="sm" className="gap-1.5">
-              All
-              <span className="text-muted-foreground">{counts.all}</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem value="needs-decision" variant="outline" size="sm" className="gap-1.5">
-              Needs a decision
-              <span className="text-muted-foreground">{counts["needs-decision"]}</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem value="ready-to-merge" variant="outline" size="sm" className="gap-1.5">
-              Ready to merge
-              <span className="text-muted-foreground">{counts["ready-to-merge"]}</span>
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <h2 className="text-sm font-medium">Ready to merge ({entries.length})</h2>
           {workspaces.length > 1 && <FunnelFilter.Control />}
         </div>
         <FunnelFilter.Banner />

@@ -1,5 +1,6 @@
 import {
   Cause,
+  Priority,
   RunPlanWorkContextProse,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
@@ -37,6 +38,7 @@ export const TriggerEvent = Schema.Struct({
   atMillis: Schema.Natural,
   entry: WorkflowCatalogKey,
   workspace: Schema.NullOr(WorkspaceId),
+  priority: Schema.optional(Priority),
   target: Schema.optional(
     Schema.Struct({
       workflow: WorkflowId,

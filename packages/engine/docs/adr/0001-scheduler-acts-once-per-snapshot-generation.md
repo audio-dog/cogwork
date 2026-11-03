@@ -1,5 +1,7 @@
 # Scheduler acts at most once per reconcile snapshot generation
 
+Superseded by ADR 0015. Workflows and Trigger observation replace reconcile snapshots and generations.
+
 The execute heartbeat ticks far faster than the reconcile worker refreshes its snapshot, and the scheduler's only guard against re-running a work item — the in-flight reservation — is released the moment a run completes. So a finished item stays `eligible` in the stale snapshot until the next reconcile, and the next tick re-claims it (this is how a single triage produced two proposals on FEL-156). We stamp each snapshot with a monotonic generation and have the scheduler act on a given work item at most once per generation, keeping the in-flight reservation only as a second guard for runs that outlive a generation boundary.
 
 ## Considered Options

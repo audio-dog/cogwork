@@ -262,8 +262,7 @@ function LoadedOperationSettings({
       value={{
         state: { catalogs, controlStore, readiness, workspace },
         actions: {
-          write: (operation, updates) =>
-            write({ payload: { updates: operationSettingBatch(workspace, operation, updates) } }),
+          write: (updates) => write({ payload: { updates: operationSettingBatch(workspace, updates) } }),
         },
         meta: { disabled },
       }}
@@ -287,8 +286,6 @@ function HealthDot({ tone }: { readonly tone: WorkspaceHealth["tone"] }) {
       className={cn(
         "size-2 shrink-0 rounded-full",
         tone === "ok" && "bg-emerald-500 shadow-[0_0_8px] shadow-emerald-500/60",
-        tone === "pending" && "bg-sky-500",
-        tone === "paused" && "bg-amber-500 shadow-[0_0_8px] shadow-amber-500/60",
         tone === "failed" && "bg-destructive",
       )}
     />
@@ -328,7 +325,7 @@ function PageHeader({ settings }: { readonly settings: WorkspaceSettings }) {
 function HealthAlert({ health }: { readonly health: WorkspaceHealth | null }) {
   if (!health || health.tone === "ok") return null;
   return (
-    <Alert variant={health.tone === "failed" ? "destructive" : "default"}>
+    <Alert variant="destructive">
       <RiAlertLine />
       <AlertTitle>{health.label}</AlertTitle>
       <AlertDescription>{health.detail}</AlertDescription>

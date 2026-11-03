@@ -1,6 +1,5 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
-import { LifecycleStage } from "./triage";
 
 export const SettingsProfileScope = Schema.TaggedStruct("SettingsProfile", {});
 export type SettingsProfileScope = typeof SettingsProfileScope.Type;
@@ -36,54 +35,17 @@ export type OperationSettingScope = typeof OperationSettingScope.Type;
 export const DefaultSettingLevel = Schema.TaggedStruct("Default", {});
 export type DefaultSettingLevel = typeof DefaultSettingLevel.Type;
 
-export const WorkflowSettingLevel = Schema.TaggedStruct("Workflow", {
-  workflow: TrimmedNonEmptyString,
-});
-export type WorkflowSettingLevel = typeof WorkflowSettingLevel.Type;
-
-export const OperationSettingLevel = Schema.TaggedStruct("Operation", {
-  workflow: TrimmedNonEmptyString,
-  operation: LifecycleStage,
-});
-export type OperationSettingLevel = typeof OperationSettingLevel.Type;
-
-export const SettingLevel = Schema.Union([
-  DefaultSettingLevel,
-  WorkflowSettingLevel,
-  OperationSettingLevel,
-]).pipe(Schema.toTaggedUnion("_tag"));
-export type SettingLevel = typeof SettingLevel.Type;
-
-export const OperationSettingName = Schema.Literals([
-  "enabled",
-  "harness",
-  "model",
-  "model-options",
-  "permission-profile",
-  "bindings",
-]);
+export const OperationSettingName = Schema.Literals(["harness", "model", "model-options"]);
 export type OperationSettingName = typeof OperationSettingName.Type;
 export const operationSettingNames = OperationSettingName.literals;
 
 export const RunPlanPolicyProfile = Schema.Literals(["read-only", "full"]);
 export type RunPlanPolicyProfile = typeof RunPlanPolicyProfile.Type;
 
-export const operationDefaultProfiles = {
-  triage: "read-only",
-  implement: "full",
-  "follow-up": "full",
-} as const satisfies Record<LifecycleStage, RunPlanPolicyProfile>;
-
 export const defaultPermissionProfile = (
   preferredProfile: RunPlanPolicyProfile,
   declaredProfiles: ReadonlyArray<RunPlanPolicyProfile>,
 ) => declaredProfiles.find((profile) => profile === preferredProfile) ?? declaredProfiles[0] ?? null;
-
-export const OperationBinding = Schema.Struct({
-  need: TrimmedNonEmptyString,
-  contribution: TrimmedNonEmptyString,
-});
-export type OperationBinding = typeof OperationBinding.Type;
 
 export const ModelOptionSelections = Schema.Record(
   TrimmedNonEmptyString,
@@ -92,13 +54,8 @@ export const ModelOptionSelections = Schema.Record(
 export type ModelOptionSelections = typeof ModelOptionSelections.Type;
 
 const principalOperationScope = Schema.Union([SettingsProfileScope, PrivateWorkspaceOverlayScope]);
-const operationCellFields = { level: SettingLevel };
+const operationCellFields = { level: DefaultSettingLevel };
 
-const enabledCell = Schema.Struct({
-  ...operationCellFields,
-  setting: Schema.Literal("enabled"),
-  scope: principalOperationScope,
-});
 const harnessCell = Schema.Struct({
   ...operationCellFields,
   setting: Schema.Literal("harness"),
@@ -114,34 +71,14 @@ const modelOptionsCell = Schema.Struct({
   setting: Schema.Literal("model-options"),
   scope: principalOperationScope,
 });
-const permissionProfileCell = Schema.Struct({
-  ...operationCellFields,
-  setting: Schema.Literal("permission-profile"),
-  scope: principalOperationScope,
-});
-const bindingsCell = Schema.Struct({
-  ...operationCellFields,
-  setting: Schema.Literal("bindings"),
-  scope: principalOperationScope,
-});
 
-export const OperationSettingCell = Schema.Union([
-  enabledCell,
-  harnessCell,
-  modelCell,
-  modelOptionsCell,
-  permissionProfileCell,
-  bindingsCell,
-]);
+export const OperationSettingCell = Schema.Union([harnessCell, modelCell, modelOptionsCell]);
 export type OperationSettingCell = typeof OperationSettingCell.Type;
 
 export const OperationSettingRow = Schema.Union([
-  Schema.Struct({ ...enabledCell.fields, value: Schema.Boolean }),
   Schema.Struct({ ...harnessCell.fields, value: TrimmedNonEmptyString }),
   Schema.Struct({ ...modelCell.fields, value: TrimmedNonEmptyString }),
   Schema.Struct({ ...modelOptionsCell.fields, value: ModelOptionSelections }),
-  Schema.Struct({ ...permissionProfileCell.fields, value: TrimmedNonEmptyString }),
-  Schema.Struct({ ...bindingsCell.fields, value: Schema.Array(OperationBinding) }),
 ]);
 export type OperationSettingRow = typeof OperationSettingRow.Type;
 
@@ -156,12 +93,6 @@ export const OperationSettingBatch = Schema.NonEmptyArray(OperationSettingUpdate
 );
 export type OperationSettingBatch = typeof OperationSettingBatch.Type;
 
-const settingLevelKey = SettingLevel.match({
-  Default: () => "Default",
-  Workflow: ({ workflow }) => JSON.stringify(["Workflow", workflow]),
-  Operation: ({ workflow, operation }) => JSON.stringify(["Operation", workflow, operation]),
-});
-
 const operationSettingScopeKey = OperationSettingScope.match({
   SettingsProfile: () => "SettingsProfile",
   RuntimeHost: () => "RuntimeHost",
@@ -170,7 +101,6 @@ const operationSettingScopeKey = OperationSettingScope.match({
 
 const sameOperationSettingCell = (left: OperationSettingCell, right: OperationSettingCell) =>
   left.setting === right.setting &&
-  settingLevelKey(left.level) === settingLevelKey(right.level) &&
   operationSettingScopeKey(left.scope) === operationSettingScopeKey(right.scope);
 
 export const applyOperationSettingBatch = (
@@ -253,8 +183,6 @@ export const ResolutionOperator = Schema.Literals(["override-scalar", "union-val
 export type ResolutionOperator = typeof ResolutionOperator.Type;
 
 export interface OperationSettingContext {
-  readonly workflow: string;
-  readonly operation: string;
   readonly workspace: WorkspaceId | null;
 }
 
@@ -283,14 +211,6 @@ const scopeRank = (scope: SettingScope) =>
     PrivateWorkspaceOverlay: () => 3,
   });
 
-const levelRank = (level: SettingLevel, context: OperationSettingContext) =>
-  SettingLevel.match(level, {
-    Default: () => 0,
-    Workflow: ({ workflow }) => (workflow === context.workflow ? 1 : -1),
-    Operation: ({ workflow, operation }) =>
-      workflow === context.workflow && operation === context.operation ? 2 : -1,
-  });
-
 const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSettingContext) =>
   SettingScope.match(scope, {
     SettingsProfile: () => true,
@@ -302,35 +222,17 @@ const scopeApplies = (scope: OperationSettingRow["scope"], context: OperationSet
 export const operationSettingRowsForContext = (
   rows: readonly OperationSettingRow[],
   context: OperationSettingContext,
-) => rows.filter((row) => scopeApplies(row.scope, context) && levelRank(row.level, context) >= 0);
-
-const selectedLevelRows = (rows: readonly OperationSettingRow[], context: OperationSettingContext) => {
-  const matching = operationSettingRowsForContext(rows, context);
-  const selectedRank = Math.max(-1, ...matching.map((row) => levelRank(row.level, context)));
-  return matching.filter((row) => levelRank(row.level, context) === selectedRank);
-};
-
-const uniqueBindings = (bindings: readonly OperationBinding[]) =>
-  bindings.filter(
-    (binding, index) =>
-      bindings.findIndex(
-        (candidate) => candidate.need === binding.need && candidate.contribution === binding.contribution,
-      ) === index,
-  );
+) => rows.filter((row) => scopeApplies(row.scope, context));
 
 export const resolveOperationSetting = (
   rows: readonly OperationSettingRow[],
   setting: OperationSettingName,
   context: OperationSettingContext,
 ) => {
-  const selected = selectedLevelRows(
+  const selected = operationSettingRowsForContext(
     rows.filter((row) => row.setting === setting),
     context,
   ).toSorted((left, right) => scopeRank(left.scope) - scopeRank(right.scope));
-  if (setting === "bindings") {
-    const bindings = selected.flatMap((row) => (row.setting === "bindings" ? row.value : []));
-    return uniqueBindings(bindings);
-  }
   return selected.at(-1)?.value ?? null;
 };
 
@@ -397,19 +299,18 @@ export type SettingResolutionCase =
       readonly setting: OperationSettingName;
       readonly operator: ResolutionOperator;
       readonly context: OperationSettingContext;
-      readonly expected: boolean | string | ModelOptionSelections | readonly OperationBinding[] | null;
+      readonly expected: string | ModelOptionSelections | null;
     };
 
 const profile: SettingsProfileScope = { _tag: "SettingsProfile" };
 const host: RuntimeHostScope = { _tag: "RuntimeHost" };
 const workspace = Schema.decodeSync(WorkspaceId)("workspace");
-const foreignWorkspace = Schema.decodeSync(WorkspaceId)("foreign-workspace");
 const workspaceInput: WorkspaceInputScope = { _tag: "WorkspaceInput", workspace };
 const overlay: PrivateWorkspaceOverlayScope = {
   _tag: "PrivateWorkspaceOverlay",
   workspace,
 };
-const codingImplement = { workflow: "coding", operation: "implement", workspace };
+const operationContext = { workflow: "workflow", operation: "operation", workspace };
 
 export const settingResolutionCases: readonly SettingResolutionCase[] = [
   {
@@ -536,114 +437,36 @@ export const settingResolutionCases: readonly SettingResolutionCase[] = [
   },
   {
     _tag: "Operation",
-    name: "resolves the level before Scope for an override scalar",
+    name: "resolves a default in Scope direction",
     setting: "model",
     operator: "override-scalar",
-    context: codingImplement,
+    context: operationContext,
     rows: [
+      { setting: "model", level: { _tag: "Default" }, scope: profile, value: "profile-default" },
       { setting: "model", level: { _tag: "Default" }, scope: overlay, value: "overlay-default" },
-      {
-        setting: "model",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: profile,
-        value: "profile-operation",
-      },
-      {
-        setting: "model",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "PrivateWorkspaceOverlay", workspace: foreignWorkspace },
-        value: "foreign-operation",
-      },
     ],
-    expected: "profile-operation",
+    expected: "overlay-default",
   },
   {
     _tag: "Operation",
-    name: "uses a matching Workflow value before a default",
-    setting: "model",
-    operator: "override-scalar",
-    context: codingImplement,
-    rows: [
-      { setting: "model", level: { _tag: "Default" }, scope: overlay, value: "overlay-default" },
-      {
-        setting: "model",
-        level: { _tag: "Workflow", workflow: "coding" },
-        scope: profile,
-        value: "profile-workflow",
-      },
-      {
-        setting: "model",
-        level: { _tag: "Operation", workflow: "coding", operation: "triage" },
-        scope: overlay,
-        value: "overlay-triage",
-      },
-    ],
-    expected: "profile-workflow",
-  },
-  {
-    _tag: "Operation",
-    name: "uses Scope direction inside the selected Operation level",
+    name: "uses Runtime host for the default Harness",
     setting: "harness",
     operator: "override-scalar",
-    context: codingImplement,
+    context: operationContext,
     rows: [
       {
         setting: "harness",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        level: { _tag: "Default" },
         scope: profile,
         value: "cursor",
       },
       {
         setting: "harness",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+        level: { _tag: "Default" },
         scope: host,
         value: "codex",
       },
     ],
     expected: "codex",
-  },
-  {
-    _tag: "Operation",
-    name: "unions bindings only at the most specific matching level",
-    setting: "bindings",
-    operator: "union-values",
-    context: codingImplement,
-    rows: [
-      {
-        setting: "bindings",
-        level: { _tag: "Default" },
-        scope: overlay,
-        value: [{ need: "tracker", contribution: "plugin:github/mcp/github" }],
-      },
-      {
-        setting: "bindings",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: profile,
-        value: [
-          { need: "tracker", contribution: "plugin:linear/mcp/linear" },
-          { need: "source-control", contribution: "plugin:github/mcp/github" },
-        ],
-      },
-      {
-        setting: "bindings",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: overlay,
-        value: [
-          { need: "tracker", contribution: "plugin:linear/mcp/linear" },
-          { need: "review", contribution: "local:private/skill/review" },
-        ],
-      },
-      {
-        setting: "bindings",
-        level: { _tag: "Operation", workflow: "coding", operation: "implement" },
-        scope: { _tag: "PrivateWorkspaceOverlay", workspace: foreignWorkspace },
-        value: [{ need: "deploy", contribution: "local:private/skill/deploy" }],
-      },
-    ],
-    expected: [
-      { need: "tracker", contribution: "plugin:linear/mcp/linear" },
-      { need: "source-control", contribution: "plugin:github/mcp/github" },
-      { need: "review", contribution: "local:private/skill/review" },
-    ],
   },
 ];

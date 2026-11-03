@@ -5,7 +5,6 @@ import {
   HarnessName,
   RunPlan,
   SessionId,
-  stageResultJsonSchema,
 } from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
@@ -174,20 +173,18 @@ const contextLayer = (layers: ReadonlyArray<InstructionLayer>) =>
 interface RequestOverrides {
   readonly checkoutPath?: string | null;
   readonly session?: HarnessRequest["session"];
-  readonly stage?: "triage" | "implement";
+  readonly operation?: string;
   readonly model?: string;
 }
 
 const request = (overrides: RequestOverrides): HarnessRequest => {
-  const stage = overrides.stage ?? "implement";
-  const profile = stage === "triage" ? "read-only" : "full";
-  const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
-    target: "draft-2020-12",
-  });
+  const operation = overrides.operation ?? "operate";
+  const profile = operation === "triage" ? "read-only" : "full";
+  const structuredOutput = { type: "object" as const };
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-provider-test",
-      operation: stage,
+      operation,
       harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", options: {}, profile },
       instructions: [{ ...sampleLayer, kind: "repo" }],
       operatingInstructions: {
@@ -218,7 +215,7 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
             },
           ],
         },
-        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        facts: { assignees: [], openBlockers: 0, claim: null, priority: "medium" },
         observation: { generation: 1, observedAtMillis: 1 },
       },
       sandbox: {
@@ -425,7 +422,7 @@ describe("providerRunner", { timeout: 30_000 }, () => {
       });
       const runner = providerRunner({ name: harnessName, runChat });
 
-      yield* Stream.runDrain(runner.run(request({ stage: "triage", checkoutPath })));
+      yield* Stream.runDrain(runner.run(request({ operation: "triage", checkoutPath })));
 
       assert.isFalse(yield* fs.exists(`${checkoutPath}/changed.txt`));
     }).pipe(Effect.provide(providerRunnerLayer())),
@@ -566,9 +563,9 @@ describe("providerRunner", { timeout: 30_000 }, () => {
         makeAdapter: () => nativeStructuredAdapter,
       });
 
-      const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
-        Effect.provide(providerRunnerLayer()),
-      );
+      const events = yield* Stream.runCollect(
+        runner.run(request({ operation: "triage", checkoutPath })),
+      ).pipe(Effect.provide(providerRunnerLayer()));
 
       assert.strictEqual(
         events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")

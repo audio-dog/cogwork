@@ -118,7 +118,7 @@ describe("DaemonEventBus", () => {
   it.effect("projects only run activity out of a mixed event stream", () =>
     Effect.gen(function* () {
       const activity = DaemonEventBus.activityOf(
-        { id: runId("run-1"), workspace, workItem, stage: "implement" },
+        { id: runId("run-1"), workspace, workItem, operation: "implement" },
         0,
         1000,
         { type: "RUN_STARTED" },

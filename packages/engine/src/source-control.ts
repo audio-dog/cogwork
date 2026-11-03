@@ -1,23 +1,20 @@
 import type {
+  PrSummary,
+  ReadyToMergeItem,
   WorkflowActionArtifact,
   WorkflowActionOrigin,
   WorkflowReviewComment,
-  WorkItem,
-  WorkItemId,
   WorkItemRef,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { ObservedPr } from "./follow-up";
 import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import type { TriggerSource } from "./trigger-source";
 import type { WorkflowCatalogContribution } from "./workflow-catalog";
 
-// Everything the provider can learn about a pull request by reading it. The follow-up marker is the
-// tracker's coordination state, not the PR's, so it is attached during composition rather than here.
-export type PrSignals = Omit<ObservedPr, "followUp">;
+export type PrSignals = PrSummary & { readonly draft: boolean };
 
 export interface OpenPullRequestInput {
   readonly headBranch: string;
@@ -76,29 +73,13 @@ export interface WorkflowPullRequestInput extends OpenPullRequestInput {
 export interface SourceControlProviderService {
   readonly triggerSources?: ReadonlyArray<TriggerSource>;
   readonly workflowCatalogContribution: WorkflowCatalogContribution;
-  readonly observe: (
+  readonly readyToMerge: (
     workspace: RegisteredWorkspace,
-    workItems: ReadonlyArray<WorkItem>,
-  ) => Effect.Effect<ReadonlyMap<WorkItemId, PrSignals>, IssueTrackerError>;
-
-  // Post the daemon's round summary as a comment on the item's pull request. The provider appends
-  // its own coordination marker, so the engine — never the agent — owns the marker, and a comment
-  // written here is never read back as human feedback. A no-op when the item has no linked PR.
-  readonly comment: (
+    artifacts: ReadonlyArray<WorkflowActionArtifact>,
+  ) => Effect.Effect<ReadonlyArray<ReadyToMergeItem>, IssueTrackerError>;
+  readonly openPullRequestBranches: (
     workspace: RegisteredWorkspace,
-    item: WorkItem,
-    body: string,
-  ) => Effect.Effect<void, IssueTrackerError>;
-
-  readonly findOpenPullRequest: (
-    workspace: RegisteredWorkspace,
-    headBranch: string,
-  ) => Effect.Effect<OpenedPullRequest | null, IssueTrackerError>;
-
-  readonly openPullRequest: (
-    workspace: RegisteredWorkspace,
-    input: OpenPullRequestInput,
-  ) => Effect.Effect<OpenedPullRequest, IssueTrackerError>;
+  ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
   readonly resolvePullRequest: (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
@@ -165,10 +146,8 @@ const unavailable = () =>
 
 export const emptyService: SourceControlProviderService = {
   workflowCatalogContribution: { entries: [], templates: [] },
-  observe: () => Effect.succeed(new Map()),
-  comment: () => Effect.void,
-  findOpenPullRequest: () => Effect.succeed(null),
-  openPullRequest: unavailable,
+  readyToMerge: () => Effect.succeed([]),
+  openPullRequestBranches: () => Effect.succeed([]),
   resolvePullRequest: () => Effect.succeed(null),
   readPullRequest: () => Effect.succeed(null),
   openWorkflowPullRequest: unavailable,
@@ -180,6 +159,4 @@ export const emptyService: SourceControlProviderService = {
   draftReview: unavailable,
 };
 
-// The binding for a workspace with no source control provider — a Linear tracker with no
-// `sourceControl` block. It reports no pull request for any item.
 export const emptyLayer = Layer.succeed(SourceControlProvider, emptyService);

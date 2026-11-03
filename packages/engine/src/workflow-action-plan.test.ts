@@ -540,6 +540,7 @@ describe("Workflow action plan", () => {
                 Ref.update(probe.calls, (calls) => [...calls, `review:${event}:${input.commitId}`]).pipe(
                   Effect.map(() =>
                     WorkflowActionArtifact.make({
+                      kind: "PullRequestUpdated",
                       workspace: sourceWorkspace.config.name,
                       issue: decodeItem("#826"),
                       url: "https://github.com/owner/repo/pull/826",
@@ -551,6 +552,7 @@ describe("Workflow action plan", () => {
                 Ref.update(probe.calls, (calls) => [...calls, `draft:${input.commitId}`]).pipe(
                   Effect.map(() =>
                     WorkflowActionArtifact.make({
+                      kind: "PullRequestUpdated",
                       workspace: sourceWorkspace.config.name,
                       issue: decodeItem("#826"),
                       url: "https://github.com/owner/repo/pull/826",
@@ -1051,6 +1053,7 @@ describe("Workflow action plan", () => {
                 Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
                   Effect.map(() =>
                     WorkflowActionArtifact.make({
+                      kind: "PullRequestUpdated",
                       workspace: sourceWorkspace.config.name,
                       issue: decodeItem(`#${resolved.number}`),
                       url: resolved.url,
@@ -1098,6 +1101,7 @@ describe("Workflow action plan", () => {
                 Ref.update(probe.pushOrigins, (current) => [...current, origin]).pipe(
                   Effect.map(() =>
                     WorkflowActionArtifact.make({
+                      kind: "PullRequestUpdated",
                       workspace: sourceWorkspace.config.name,
                       issue: decodeItem(`#${resolved.number}`),
                       url: resolved.url,
@@ -1136,7 +1140,7 @@ describe("Workflow action plan", () => {
         id: initial.attempt,
         workspace: sourceWorkspace.config.name,
         workItem: item,
-        stage: "implement",
+        operation: "implement",
         harness: decodeHarness("scripted"),
         branch: decodeBranch("811-open-the-pull-request"),
         session: null,

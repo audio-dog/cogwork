@@ -1,6 +1,6 @@
 # 0003 — The work source is the coordination substrate
 
-- **Status:** accepted
+- **Status:** superseded by ADR [0036](./0036-every-work-item-is-coordinated-in-the-control-store.md)
 - **Date:** 2026-07-28
 
 ## Context

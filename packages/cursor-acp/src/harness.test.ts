@@ -3,12 +3,10 @@ import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
   HarnessName,
-  type LifecycleStage,
   RunPlan,
   SessionId,
-  stageResultJsonSchema,
 } from "@cogwork/contracts";
-import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it, layer } from "@effect/vitest";
 import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -157,8 +155,8 @@ const harnessRunnerLayer = Layer.mergeAll(
   FetchHttpClient.layer,
 );
 
-const request = (checkoutPath: string, operation: LifecycleStage = "triage") => {
-  const profile = OperationPolicy.operationDefaultProfile(operation);
+const request = (checkoutPath: string, operation = "operate") => {
+  const profile = "read-only" as const;
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-cursor-test",
@@ -182,15 +180,13 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
       commands: [],
       hooks: [],
       middleware: ["sandbox"],
-      structuredOutput: stageResultJsonSchema(operation)["~standard"].jsonSchema.input({
-        target: "draft-2020-12",
-      }),
+      structuredOutput: { type: "object" },
       connections: [],
       messages: [{ role: "user", content: "triage the issue" }],
       workContext: {
         reference: { workItem: "#1", url: null },
         prose: { body: "", comments: [] },
-        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        facts: { assignees: [], openBlockers: 0, claim: null, priority: "medium" },
         observation: { generation: 1, observedAtMillis: 1 },
       },
       sandbox: { workspace: checkoutPath, policy: profile },

@@ -831,15 +831,15 @@ layer(NodeServices.layer)((it) => {
       yield* Effect.flatMap(SqlClient.SqlClient, (sql) =>
         Effect.all([
           sql`INSERT INTO runs (
-              id, workspace, work_item, stage, harness, status, started_at
+              id, workspace, work_item, operation, harness, status, started_at
             ) VALUES (
               'run-before-deregister', ${workspace}, '#222', 'implement', 'codex', 'succeeded', 1
             )`,
           sql`INSERT INTO operation_settings (
-              setting, level, workflow, operation, scope, workspace, value
+              setting, scope, workspace, value
             ) VALUES
-              ('model', 'default', '', '', 'private-workspace-overlay', ${workspace}, '"overlay-model"'),
-              ('model', 'default', '', '', 'private-workspace-overlay', 'other-workspace', '"other-model"')`,
+              ('model', 'private-workspace-overlay', ${workspace}, '"overlay-model"'),
+              ('model', 'private-workspace-overlay', 'other-workspace', '"other-model"')`,
           sql`INSERT INTO contribution_settings (
               contribution, scope, workspace, enabled
             ) VALUES
