@@ -104,6 +104,7 @@ export class TriggerObservationStore extends Context.Service<
 
 const admissionJson = Schema.fromJsonString(TriggerAdmission);
 const encodeAdmission = Schema.encodeSync(admissionJson);
+const decodeTriggerEvent = Schema.decodeUnknownEffect(TriggerEvent);
 const decodeAdmission = Schema.decodeUnknownEffect(admissionJson);
 const storeError = (error: unknown) => new TriggerObservationStoreError({ message: String(error) });
 const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
@@ -816,7 +817,19 @@ export const make = Effect.gen(function* () {
     fingerprint: string,
   ) =>
     source.observe(subscriptions, sweepReadPort).pipe(
-      Stream.runForEach((event) => admit(source, subscriptions, event)),
+      Stream.runForEach((event) =>
+        decodeTriggerEvent(event).pipe(
+          Effect.matchEffect({
+            onFailure: (error) =>
+              Effect.logWarning("Trigger event does not decode; skipping it", {
+                source: source.id,
+                item: keyOf(event.key),
+                message: error.message,
+              }),
+            onSuccess: (decoded) => admit(source, subscriptions, decoded),
+          }),
+        ),
+      ),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(Effect.andThen(waitForRetry(error))),
       ),
