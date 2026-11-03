@@ -53,7 +53,7 @@ Boot converges the live Control store to `control-store-schema.ts` with drizzle-
 SQLite differ, applies the statements through the engine's `SqlClient`, and verifies convergence with
 an empty second diff. After changing the schema, restart the daemon; do not run `drizzle-kit push` or
 delete `~/.cogwork/control.db`. Rename-shaped diffs are the pre-alpha exception: boot moves the store
-to a timestamped backup and creates a new one. See ADR 0015.
+to a timestamped backup and creates a new one. See `docs/adr/0015-one-control-store-with-engine-owned-migrations.md`.
 
 ## Never start the dev server
 

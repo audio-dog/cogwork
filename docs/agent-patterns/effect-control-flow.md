@@ -156,6 +156,5 @@ Do not flatten a cause into an ordinary error merely to make control flow conven
 - `.repos/effect/packages/effect/src/internal/effect.ts`: `flatMap` installs an `OnSuccess` continuation.
 - `.agents/skills/effect-ts/references/guide-effect.md`.
 - `.agents/skills/effect-ts/references/guide-error-handling.md`.
-- `packages/engine/src/executor.ts`: session candidate selection, run settlement, and
-  structured-result handling.
+- `packages/engine/src/workflow-run.ts`: run settlement and structured-result handling.
 - `packages/engine/src/github/client.ts`: typed `HttpClientError` recovery.
