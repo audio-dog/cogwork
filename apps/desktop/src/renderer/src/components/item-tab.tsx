@@ -1,4 +1,4 @@
-import type { PrSummary, ReadModelItem, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import type { PrSummary, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@cogwork/ui/components/collapsible";
@@ -20,12 +20,14 @@ import {
   attemptTone,
   describeItemState,
   type ItemStateDescriptor,
+  type ItemTabSubject,
+  itemTabSubject,
   previousAttempts,
   resolveSubTab,
   type SubTab,
   type SubTabKey,
   selectedRunForItem,
-  subTabs,
+  subTabsFor,
 } from "../features/item-tab";
 import { useRunTranscript } from "../features/run-activity";
 import { runStatusLabel } from "../features/run-status";
@@ -40,7 +42,7 @@ import { SurfaceTab } from "./surface-tab";
 
 interface ItemTabState {
   readonly workspace: WorkspaceId;
-  readonly item: ReadModelItem;
+  readonly item: ItemTabSubject;
   readonly run: RunSummary | null;
   readonly attempts: readonly RunSummary[];
   readonly descriptor: ItemStateDescriptor;
@@ -91,7 +93,7 @@ function ItemTabProvider({
   children,
 }: {
   workspace: WorkspaceId;
-  item: ReadModelItem;
+  item: ItemTabSubject;
   run: RunSummary | null;
   attempts: readonly RunSummary[];
   initialSubTab?: SubTabKey;
@@ -103,8 +105,8 @@ function ItemTabProvider({
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
   const now = useNow();
 
-  const descriptor = describeItemState(run);
-  const tabs = subTabs();
+  const descriptor = describeItemState(run, item);
+  const tabs = subTabsFor(item);
   const resolved = resolveSubTab(subTab, tabs);
   const actions: ItemTabActions = {
     setSubTab,
@@ -192,7 +194,6 @@ function StateBadge({ descriptor }: { descriptor: ItemStateDescriptor }) {
       className={cn(
         "self-start",
         descriptor.tone === "live" && "border-transparent bg-primary/15 text-primary",
-        descriptor.tone === "attention" && "border-transparent bg-warning/15 text-warning",
         descriptor.tone === "ready" && "border-transparent bg-success/15 text-success",
         descriptor.tone === "muted" && "border-transparent bg-muted text-muted-foreground",
       )}
@@ -203,7 +204,7 @@ function StateBadge({ descriptor }: { descriptor: ItemStateDescriptor }) {
   );
 }
 
-export function ItemTitle({ title, url }: Pick<ReadModelItem, "title" | "url">) {
+export function ItemTitle({ title, url }: Pick<ItemTabSubject, "title" | "url">) {
   if (!url) return title;
   return (
     <a href={url} rel="noreferrer" target="_blank">
@@ -489,24 +490,23 @@ export function ItemTab({ selection }: { selection: ItemSelection & { runId?: Ru
 
   const { board } = result;
   const entry = boardItem(board, selection.workspace, selection.workItem);
-  if (!entry) return <ItemGone />;
+  const itemRuns = runsForItem(board, selection.workspace, selection.workItem);
+  if (!entry && itemRuns.length === 0) return <ItemGone />;
 
+  const subject = itemTabSubject(entry, selection.workItem);
   const selectedRun = selectedRunForItem(
     selection.runId ? board.runs.get(selection.runId) : null,
     selection.workspace,
     selection.workItem,
   );
   const run = selection.runId ? selectedRun : runForItem(board, selection.workspace, selection.workItem);
-  const attempts = previousAttempts(
-    runsForItem(board, selection.workspace, selection.workItem),
-    run?.id ?? null,
-  );
+  const attempts = previousAttempts(itemRuns, run?.id ?? null);
 
   return (
     <ItemTabProvider
-      key={`${selection.workspace}:${entry.item.id}`}
+      key={`${selection.workspace}:${subject.id}`}
       workspace={selection.workspace}
-      item={entry.item}
+      item={subject}
       run={run}
       attempts={attempts}
       initialSubTab={selectedRun ? "run" : undefined}

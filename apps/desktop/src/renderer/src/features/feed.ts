@@ -1,26 +1,11 @@
 import {
   type Board,
   itemKey,
-  ParkReason,
   type RunSummary,
   type WorkItemId,
   type WorkspaceId,
   WorkspaceState,
 } from "@cogwork/contracts";
-
-export const parkReasonLabel = (reason: ParkReason) =>
-  ParkReason.match(reason, {
-    Stuck: () => "Stuck",
-    Exhausted: () => "Exhausted",
-    HopCap: () => "Hop cap",
-    MissingOperation: () => "Missing operation",
-    PlanRejected: () => "Plan rejected",
-    WriteFailed: () => "Write failed",
-    DraftOutcomeUnknown: () => "Draft outcome unknown",
-    NoWorkspaceRecognized: () => "No workspace recognized",
-    AwaitingApproval: () => "Awaiting approval",
-    HandedToYou: () => "Handed to you",
-  });
 
 export interface FeedRun {
   readonly run: RunSummary;
