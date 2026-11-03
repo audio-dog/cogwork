@@ -419,8 +419,6 @@ const providerTriggerSourcesLayer = <E, R>(
     ),
   ).pipe(Layer.provide(issueTracker));
 
-const makeWorkflowCoordination = makeControlStoreCoordination;
-
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
   // within one instance — so the issue-tracker reads and the MCP-skill bearer must draw from the same
@@ -488,7 +486,9 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const machineReadiness = machineReadinessLayer.pipe(
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
   );
-  const coordination = Layer.effect(Coordination, makeWorkflowCoordination).pipe(Layer.provide(controlStore));
+  const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
+    Layer.provide(controlStore),
+  );
   const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources: Layer.Layer<
     TriggerSources,

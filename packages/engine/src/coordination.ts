@@ -10,6 +10,7 @@ import {
   type ParkReason,
   type ParkRecord,
   type SourceRevision,
+  type WorkflowId,
   type WorkItemRef,
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
@@ -20,6 +21,7 @@ import * as Schema from "effect/Schema";
 
 export const defaultClaimant = "cogwork";
 export const maxLineageHops = 25;
+const maxConsecutiveFailures = 3;
 
 export interface CoordinationLedger {
   readonly claim: ClaimType | null;
@@ -52,7 +54,7 @@ export interface CoordinationView {
   readonly handback: HandbackRecordType | null;
   readonly park: ParkRecord | null;
   readonly revision: SourceRevision | null;
-  readonly actedOn: (workflow: string) => boolean;
+  readonly actedOn: (workflow: WorkflowId) => boolean;
   readonly counters: (key: OperationKey) => CoordinationCounters;
   readonly gate: (key: OperationKey, sourceRevision?: string) => CoordinationGate;
 }
@@ -72,7 +74,8 @@ const failureStateFor = (
   const failures = relevant.slice(lastNonFailure + 1);
   return {
     consecutiveFailures: failures.length,
-    terminal: failures.length >= 3 || failures.some((attempt) => attempt.terminal === true),
+    terminal:
+      failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true),
   };
 };
 

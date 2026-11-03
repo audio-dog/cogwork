@@ -620,15 +620,15 @@ const make = (
     const configuredTarget = sourceControlTargetFor(workspace);
     if (!configuredTarget) return [];
     const target = yield* authenticatedTarget(configuredTarget);
-    const pulls = (yield* client.listPulls(target)).filter(
-      (pull) => readyToMergeArtifact(pull, artifacts) !== null,
-    );
-    const observed = yield* Effect.forEach(pulls, (pull) =>
-      observePr(target, pull).pipe(Effect.map((signals) => ({ pull, signals }))),
-    );
-    return observed.flatMap(({ pull, signals }) => {
+    const opened = (yield* client.listPulls(target)).flatMap((pull) => {
       const artifact = readyToMergeArtifact(pull, artifacts);
-      if (!artifact || !isReadyToMerge(signals)) return [];
+      return artifact === null ? [] : [{ pull, artifact }];
+    });
+    const observed = yield* Effect.forEach(opened, ({ pull, artifact }) =>
+      observePr(target, pull).pipe(Effect.map((signals) => ({ pull, artifact, signals }))),
+    );
+    return observed.flatMap(({ pull, artifact, signals }) => {
+      if (!isReadyToMerge(signals)) return [];
       return [
         {
           id: artifact.issue,

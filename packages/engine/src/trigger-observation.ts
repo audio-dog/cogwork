@@ -129,10 +129,12 @@ const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =
   });
 };
 
-const waitingAdmissionOrder = (
-  left: { readonly admission: TriggerAdmission; readonly actedOn: boolean },
-  right: { readonly admission: TriggerAdmission; readonly actedOn: boolean },
-) =>
+interface WaitingAdmission {
+  readonly admission: TriggerAdmission;
+  readonly actedOn: boolean;
+}
+
+const waitingAdmissionOrder = (left: WaitingAdmission, right: WaitingAdmission) =>
   Number(right.actedOn) - Number(left.actedOn) ||
   priorityRank.indexOf(left.admission.event.priority ?? defaultPriority) -
     priorityRank.indexOf(right.admission.event.priority ?? defaultPriority) ||

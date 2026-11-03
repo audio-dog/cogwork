@@ -3,6 +3,7 @@ import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
   BranchName,
+  defaultPriority,
   keyOf,
   LineageId,
   matchWorkflowTransitions,
@@ -566,7 +567,12 @@ export const make = Effect.gen(function* () {
       connections: [],
       workContext: {
         reference: { workItem: item, url: null },
-        facts: { assignees: [], openBlockers: 0, claim, priority: admission.event.priority ?? "medium" },
+        facts: {
+          assignees: [],
+          openBlockers: 0,
+          claim,
+          priority: admission.event.priority ?? defaultPriority,
+        },
         prose: artifactProse,
         observation,
       },

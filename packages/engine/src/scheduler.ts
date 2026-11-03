@@ -155,11 +155,13 @@ const bumped = (map: ReadonlyMap<WorkspaceId, number>, key: WorkspaceId, delta: 
   return next;
 };
 
+const workspaceLoad = (state: SchedulerState, candidate: WorkflowCandidate, delta: number) =>
+  candidate.workspace === null ? state.perWorkspace : bumped(state.perWorkspace, candidate.workspace, delta);
+
 const reserve = (state: SchedulerState, candidate: WorkflowCandidate) => ({
   ...state,
   global: state.global + 1,
-  perWorkspace:
-    candidate.workspace === null ? state.perWorkspace : bumped(state.perWorkspace, candidate.workspace, 1),
+  perWorkspace: workspaceLoad(state, candidate, 1),
   inflight: new Set([...state.inflight, ...candidate.reservationKeys]),
   acted: new Set([...state.acted, ...candidate.keys]),
   budgetUsed: state.budgetUsed + 1,
@@ -168,8 +170,7 @@ const reserve = (state: SchedulerState, candidate: WorkflowCandidate) => ({
 const release = (state: SchedulerState, candidate: WorkflowCandidate, retry: boolean) => ({
   ...state,
   global: Math.max(0, state.global - 1),
-  perWorkspace:
-    candidate.workspace === null ? state.perWorkspace : bumped(state.perWorkspace, candidate.workspace, -1),
+  perWorkspace: workspaceLoad(state, candidate, -1),
   inflight: new Set([...state.inflight].filter((key) => !candidate.reservationKeys.includes(key))),
   acted: retry ? new Set([...state.acted].filter((key) => !candidate.keys.includes(key))) : state.acted,
 });
