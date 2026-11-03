@@ -1,0 +1,25 @@
+docs/research/harness-native-projection-channels.md
+  s_a785565860b8c9::t_66669419e17411 1-519
+docs/research/subagent-and-skill-file-standards.md
+  s_a785565860b8c9::t_0299da6b8139c9 1-544
+docs/research/t3code-opencode-capability-delivery.md
+  s_a785565860b8c9::t_60cc57b9b32b0c 1-571
+docs/research/tanstack-ai-capability-projection.md
+  s_a785565860b8c9::t_70f68845598591 1-514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "98c34c6a4326606e3e6a53a3c239b7e5cc6eea76",
+  "prompts": {},
+  "sessions": {
+    "s_a785565860b8c9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "96b07dfc-e668-4e11-8bc2-b9e905067b96",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
