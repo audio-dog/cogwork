@@ -1,0 +1,50 @@
+packages/engine/docs/adr/0002-restart-recovery-resumes-sessions.md
+  s_095df1b8de8b26::t_88f435aac96096 3-4
+docs/spec/customizable-workflows.md
+  s_095df1b8de8b26::t_237cc675887d02 494
+  s_095df1b8de8b26::t_e3bf76a5ee48c1 236
+docs/adr/0003-work-source-as-coordination-substrate.md
+  s_095df1b8de8b26::t_908a78f80bd885 3
+packages/contracts/CONTEXT.md
+  s_095df1b8de8b26::t_8a469237005094 39
+  s_095df1b8de8b26::t_3158e8807425a5 431
+  s_095df1b8de8b26::t_18c121316d582d 155
+  s_095df1b8de8b26::t_57299021ffb925 34
+  s_095df1b8de8b26::t_aac4d557fd8b9d 435
+  s_095df1b8de8b26::t_8e57733010ac39 477
+  s_095df1b8de8b26::t_7fc252f0b0188f 480-481
+docs/adr/0033-work-items-without-a-tracker-are-coordinated-in-the-control-store.md
+  s_095df1b8de8b26::t_e5208030638ce5 3-4
+packages/engine/CONTEXT.md
+  s_095df1b8de8b26::t_205db989d63f5c 65
+  s_095df1b8de8b26::t_d2d8833c60d748 7
+  s_095df1b8de8b26::t_3f6cba191bdde3 185
+  s_095df1b8de8b26::t_2085966691a657 193
+  s_095df1b8de8b26::t_ecc72ee650abe1 61
+  s_095df1b8de8b26::t_d18e6377fb410a 181
+  s_095df1b8de8b26::t_b59bfe9b1614b3 34
+  s_095df1b8de8b26::t_6419839eb5739e 44-46
+  s_095df1b8de8b26::t_458d5653dd1f17 21
+docs/adr/0036-every-work-item-is-coordinated-in-the-control-store.md
+  s_095df1b8de8b26::t_92cbf846b5b027 1-47
+docs/agents/technical-disposition.md
+  s_095df1b8de8b26::t_f4764edbc42cce 232-235
+docs/agents/product.md
+  s_095df1b8de8b26::t_7dfe4204f95738 120-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45853d045e30378a0d1527063afa80097bf4ba8f",
+  "prompts": {},
+  "sessions": {
+    "s_095df1b8de8b26": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ad6d4af1-d894-4a16-9c5f-d415b0e456d5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
