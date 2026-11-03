@@ -33,9 +33,7 @@ export {
   isPolicyDenied,
   type OwnedToolName,
   type PolicyDenied,
-  policyForOperation,
   policyForProfile,
-  profileForStage,
   readOnlyProfile,
 } from "./policy";
 export { openWorktreeSandbox, resolveBaseSha, type WorktreeSandbox } from "./sandbox";

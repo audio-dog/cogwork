@@ -75,22 +75,12 @@ export const operationSettings = sqliteTable(
   "operation_settings",
   {
     setting: text("setting").notNull(),
-    level: text("level").notNull(),
-    workflow: text("workflow").notNull(),
-    operation: text("operation").notNull(),
     scope: text("scope").notNull(),
     workspace: text("workspace").notNull(),
     value: text("value").notNull(),
   },
   (table) => [
-    // Storage tags deliberately duplicate SettingLevel and OperationSettingScope; update both together.
-    primaryKey({
-      columns: [table.setting, table.level, table.workflow, table.operation, table.scope, table.workspace],
-    }),
-    check(
-      "operation_settings_level",
-      sql`(${table.level} = 'default' AND ${table.workflow} = '' AND ${table.operation} = '') OR (${table.level} = 'workflow' AND ${table.workflow} <> '' AND ${table.operation} = '') OR (${table.level} = 'operation' AND ${table.workflow} <> '' AND ${table.operation} <> '')`,
-    ),
+    primaryKey({ columns: [table.setting, table.scope, table.workspace] }),
     check(
       "operation_settings_scope",
       sql`(${table.scope} IN ('settings-profile', 'runtime-host') AND ${table.workspace} = '') OR (${table.scope} = 'private-workspace-overlay' AND ${table.workspace} <> '')`,
@@ -354,7 +344,7 @@ export const runs = sqliteTable(
     id: text("id").primaryKey(),
     workspace: text("workspace").notNull(),
     workItem: text("work_item").notNull(),
-    stage: text("stage").notNull(),
+    operation: text("operation").notNull(),
     harness: text("harness").notNull(),
     branch: text("branch"),
     session: text("session"),

@@ -2,21 +2,12 @@ import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   HarnessName,
-  ImplementStageResult,
-  type LifecycleStage,
   RunId,
   RunPlan,
   SessionId,
-  stageResultJsonSchema,
   WorkItemId,
 } from "@cogwork/contracts";
-import {
-  ContextAssembler,
-  CredentialStore,
-  type Harness,
-  OperationPolicy,
-  SessionStore,
-} from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, type Harness, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert } from "@effect/vitest";
@@ -87,7 +78,7 @@ interface RequestOverrides {
   readonly checkoutPath: string;
   readonly effort?: string | null;
   readonly session?: Harness.HarnessRequest["session"];
-  readonly stage?: LifecycleStage;
+  readonly operation?: string;
   readonly prompt?: string;
   readonly mcpSkills?: ReadonlyArray<Harness.ResolvedMcpSkill>;
 }
@@ -96,12 +87,10 @@ const projectedMcpName = (name: string, index: number) =>
   `test__${name.toLowerCase().replace(/[^a-z0-9_]+/g, "_")}__${index}`;
 
 const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
-  const stage = overrides.stage ?? "implement";
-  const profile = OperationPolicy.operationDefaultProfile(stage);
+  const operation = overrides.operation ?? "operate";
+  const profile = "full" as const;
   const mcpSkills = overrides.mcpSkills ?? [];
-  const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
-    target: "draft-2020-12",
-  });
+  const structuredOutput = { type: "object" as const };
   const mcp = mcpSkills.map((server, index) => ({
     identity: `test/mcp/${index}`,
     name: server.name,
@@ -113,7 +102,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
   return {
     plan: RunPlan.make({
       id: runId,
-      operation: stage,
+      operation,
       harness: {
         name,
         model: defaultModel,
@@ -122,8 +111,8 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
       },
       instructions,
       operatingInstructions: {
-        name: `${stage}-agent`,
-        path: `/operating-instructions/${stage}`,
+        name: `${operation}-agent`,
+        path: `/operating-instructions/${operation}`,
         resources: [],
       },
       tools: [],
@@ -140,12 +129,10 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
         reference: { workItem: workItemId, url: null },
         prose: { body: "", comments: [] },
         facts: {
-          roles: ["ready-for-agent"],
           assignees: [],
           openBlockers: 0,
           claim: null,
           priority: "medium",
-          pr: null,
         },
         observation: { generation: 1, observedAtMillis: 1 },
       },
@@ -304,17 +291,19 @@ const collectEvents = <Error, Requirements>(stream: Stream.Stream<Harness.AgUiEv
 const structuredCapture = (events: ReadonlyArray<Harness.AgUiEvent>) => {
   const completion = structuredCompletions(events)[0];
   if (!completion) return Effect.die(new Error("fake Codex emitted no structured result"));
-  return Schema.decodeUnknownEffect(ImplementStageResult)(completion.object).pipe(
-    Effect.flatMap((result) => Schema.decodeEffect(Capture)(result.summary)),
-  );
+  const summary =
+    typeof completion.object === "object" && completion.object !== null
+      ? Reflect.get(completion.object, "summary")
+      : null;
+  return Schema.decodeUnknownEffect(Capture)(summary);
 };
 
-const operationCapture = (stage: LifecycleStage, events: ReadonlyArray<Harness.AgUiEvent>) => {
+const operationCapture = (operation: string, events: ReadonlyArray<Harness.AgUiEvent>) => {
   const object = structuredCompletions(events)[0]?.object;
   if (typeof object !== "object" || object === null) {
-    return Effect.die(new Error(`fake Codex emitted no ${stage} structured result`));
+    return Effect.die(new Error(`fake Codex emitted no ${operation} structured result`));
   }
-  const value = Reflect.get(object, stage === "triage" ? "proposal" : "summary");
+  const value = Reflect.get(object, "summary");
   return Schema.decodeUnknownEffect(Capture)(value);
 };
 
@@ -330,18 +319,16 @@ const runInRepository = (
     );
   });
 
-// Callers run the stages concurrently against one shared session store, so each needs its own
-// session id. A shared one interleaves their threads and returns another stage's structured result.
-const runOperation = (harness: Harness.HarnessService, stage: LifecycleStage) =>
+const runOperation = (harness: Harness.HarnessService, operation: string) =>
   createSandbox().pipe(
     Effect.flatMap((handle) =>
       runInRepository(harness, handle, {
-        stage,
-        session: Schema.decodeSync(SessionId)(`session-codex-${stage}`),
+        operation,
+        session: Schema.decodeSync(SessionId)(`session-codex-${operation}`),
       }),
     ),
-    Effect.flatMap((events) => operationCapture(stage, events)),
-    Effect.map((capture) => [stage, capture] satisfies [LifecycleStage, typeof Capture.Type]),
+    Effect.flatMap((events) => operationCapture(operation, events)),
+    Effect.map((capture) => [operation, capture] as const),
   );
 
 const authenticatedMcp = (secret: string): ReadonlyArray<Harness.ResolvedMcpSkill> => [

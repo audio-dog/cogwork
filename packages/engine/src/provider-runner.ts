@@ -40,7 +40,7 @@ import {
   makeOwnedToolSet,
   mergeFileDiffFeed,
   openWorktreeSandbox,
-  policyForOperation,
+  policyForProfile,
   resolveBaseSha,
   watchWorktreeDiffs,
 } from "./tools";
@@ -223,11 +223,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             Effect.mapError((error) => launchError(true, error.message)),
           );
           const runPromise = yield* FiberSet.makeRuntimePromise<HttpClient.HttpClient>();
-          const toolSet = makeOwnedToolSet(
-            sandbox,
-            runPromise,
-            policyForOperation(plan.operation, plan.harness.profile),
-          );
+          const toolSet = makeOwnedToolSet(sandbox, runPromise, policyForProfile(plan.harness.profile));
           const toolsByName: ReadonlyMap<string, AnyTool> = new Map(Object.entries(toolSet));
           const tools = plan.tools.flatMap((name) => {
             const tool = toolsByName.get(name);

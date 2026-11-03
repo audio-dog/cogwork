@@ -5,6 +5,7 @@ import {
   LineageId,
   localOwnerId,
   ParkRecord,
+  type RunPlanWorkContextProse,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -17,7 +18,6 @@ import {
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it, layer } from "@effect/vitest";
-import * as Clock from "effect/Clock";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -142,20 +142,12 @@ const selectedEvent = {
   revision: "issue-1",
 } as const;
 const selectedTrackerItem: TrackerItem = {
-  claimHeld: false,
-  claim: null,
-  claimedByUs: false,
-  attempts: [],
-  handback: null,
   id: selectedIssueId,
   title: "Selected issue",
   url: "https://github.com/acme/example/issues/1",
-  roles: [],
   assignees: ["owner"],
   openBlockers: 0,
-  proposal: null,
   priority: "medium",
-  followUp: null,
 };
 
 const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* (
@@ -348,6 +340,77 @@ const exerciseFailedFanOutFinish = Effect.fn("TriggerObservationTest.exerciseFai
 });
 
 describe("TriggerObservation", () => {
+  it.effect("orders waiting work by prior Workflow action, priority, then oldest revision", () =>
+    Effect.gen(function* () {
+      const waiting = (revision: string, priority: TriggerEvent["priority"], atMillis: number) => {
+        const key = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis: atMillis } as const;
+        return {
+          event: { ...event, key, revision, priority, atMillis },
+          subscription,
+          lineage: { root: LineageId.make(keyOf(key)), parent: null, hop: 0 },
+        } satisfies TriggerAdmission;
+      };
+      const actedAdmission = waiting("acted", "low", 4);
+      const admissions = [
+        waiting("old-low", "low", 1),
+        waiting("new-urgent", "urgent", 3),
+        waiting("old-urgent", "urgent", 2),
+        actedAdmission,
+      ];
+      const revisions = new Map(
+        admissions.map(({ event: candidate }) => [keyOf(candidate.key), candidate.revision]),
+      );
+      const coordination = {
+        ...coordinationService(
+          yield* Ref.make<string | null>(null),
+          yield* Ref.make(0),
+          yield* Ref.make<string | null>(null),
+        ),
+        read: (ref: WorkItemRef) => {
+          const actedOn = keyOf(ref) === keyOf(actedAdmission.event.key);
+          const attempts = actedOn
+            ? [
+                AttemptRecord.make({
+                  operation: { workflow: workflowId, operation: subscription.operation },
+                  outcome: "succeeded",
+                  atMillis: 1,
+                  lineage: actedAdmission.lineage,
+                }),
+              ]
+            : [];
+          return Effect.succeed(
+            fold(
+              {
+                claim: null,
+                attempts,
+                handbacks: [],
+                parks: [],
+                revision: { observed: revisions.get(keyOf(ref)) ?? event.revision, processed: null },
+              },
+              "cogwork",
+            ),
+          );
+        },
+      } satisfies CoordinationService;
+      const store = yield* makeMemoryTriggerObservationStore;
+      yield* store.putAll(admissions);
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(yield* Ref.make(record(true)))),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, []),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+      );
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        ["acted", "old-urgent", "new-urgent", "old-low"],
+      );
+    }).pipe(Effect.scoped),
+  );
+
   it("matches a schedule event to one Trigger with the scheduled parameters", () => {
     const other = { ...subscription, workflow: Schema.decodeSync(WorkflowId)("other") };
     const later = {
@@ -560,26 +623,6 @@ describe("TriggerObservation", () => {
           title: `Parked issue ${index}`,
           url: `https://github.com/acme/example/issues/${index}`,
           lastTouchedAtMillis,
-          coordination: fold(
-            {
-              claim: null,
-              attempts: [],
-              handbacks: [],
-              parks: [
-                ParkRecord.make({
-                  reason: {
-                    _tag: "AwaitingApproval",
-                    plan: `retire-${index}`,
-                    digest: `digest-${index}`,
-                    revision: "1",
-                  },
-                  atMillis: lastTouchedAtMillis,
-                }),
-              ],
-              revision: null,
-            },
-            "cogwork",
-          ),
         }) satisfies TrackerItem;
       const candidates = [
         ...Array.from({ length: 60 }, (_, index) => parked(index + 1, start - (120 - index) * day)),
@@ -606,7 +649,10 @@ describe("TriggerObservation", () => {
                   claim: null,
                   attempts: [],
                   handbacks: [],
-                  parks: [],
+                  parks:
+                    ref._tag === "Issue"
+                      ? [{ reason: { _tag: "Stuck", summary: "parked" }, atMillis: 1 }]
+                      : [],
                   revision: {
                     observed: revisions.get(keyOf(ref)) ?? "unobserved",
                     processed: null,
@@ -631,18 +677,58 @@ describe("TriggerObservation", () => {
       };
       const store = yield* makeMemoryTriggerObservationStore;
       const emptyTracker = yield* makeEmptyIssueTracker;
-      const testClock = yield* TestClock.testClockWith(Effect.succeed);
-      const refreshClock = yield* TestClock.make();
-      yield* refreshClock.setTime(start);
-      const sweepClockSource = {
+      const startSweep = yield* Deferred.make<void>();
+      const sweepSource = {
         ...clockSource,
-        observe: (subscriptions, readPort) =>
-          clockSource.observe(subscriptions, readPort).pipe(Stream.provideService(Clock.Clock, testClock)),
+        observe: (subscriptions, readPort) => {
+          const subscription = subscriptions[0];
+          if (subscription === undefined || readPort === undefined) {
+            return Stream.empty as ReturnType<TriggerSource["observe"]>;
+          }
+          const tick = (instant: number) =>
+            Stream.fromEffect(readPort.sweep(subscription, instant)).pipe(
+              Stream.flatMap((read) =>
+                Stream.fromIterable(
+                  read
+                    .filter(({ lastTouchedAtMillis }) => lastTouchedAtMillis <= instant - 30 * day)
+                    .toSorted(
+                      (left, right) =>
+                        left.lastTouchedAtMillis - right.lastTouchedAtMillis ||
+                        keyOf(left.key).localeCompare(keyOf(right.key)),
+                    )
+                    .slice(0, 50),
+                ),
+              ),
+              Stream.mapEffect((candidate) => {
+                const noWorkContext: RunPlanWorkContextProse | undefined = undefined;
+                const loadWorkContext: Effect.Effect<RunPlanWorkContextProse | undefined, SourceFailure> =
+                  candidate.loadWorkContext ?? Effect.succeed(noWorkContext);
+                return loadWorkContext.pipe(
+                  Effect.map(
+                    (workContext) =>
+                      ({
+                        key: candidate.key,
+                        revision: `${subscription.workflow}:${instant}`,
+                        cause: { _tag: "Clock" as const },
+                        atMillis: instant,
+                        entry: subscription.entry,
+                        workspace: candidate.workspace,
+                        target: { workflow: subscription.workflow, trigger: subscription.trigger },
+                        ...(workContext === undefined ? {} : { workContext }),
+                      }) satisfies TriggerEvent,
+                  ),
+                );
+              }),
+            );
+          return Stream.fromEffect(Deferred.await(startSweep)).pipe(
+            Stream.flatMap(() => Stream.concat(tick(start + 60_000), tick(start + day + 60_000))),
+          );
+        },
       } satisfies TriggerSource;
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
         Effect.provideService(Coordination, coordination),
-        Effect.provideService(TriggerSources, [sweepClockSource]),
+        Effect.provideService(TriggerSources, [sweepSource]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
         Effect.provideService(IssueTracker, {
@@ -657,38 +743,26 @@ describe("TriggerObservation", () => {
           WorkspaceRegistry,
           readOnlyRegistry({ workspaces: [selectedWorkspace, linearWorkspace], failures: [] }),
         ),
-        Effect.provideService(Clock.Clock, refreshClock),
       );
-      yield* observation.refresh.pipe(Effect.provideService(Clock.Clock, refreshClock));
-      const firstBatch = yield* Deferred.make<void>();
-      const seen = yield* Ref.make(0);
       const changed = yield* observation.changes.pipe(
-        Stream.tap(() =>
-          Ref.updateAndGet(seen, (count) => count + 1).pipe(
-            Effect.flatMap((count) => (count === 50 ? Deferred.succeed(firstBatch, undefined) : Effect.void)),
-          ),
-        ),
         Stream.take(60),
         Stream.runCollect,
-        Effect.timeoutOption("2 days"),
         Effect.forkChild({ startImmediately: true }),
       );
 
-      yield* TestClock.adjust("1 minute");
-      yield* Deferred.await(firstBatch);
-      yield* TestClock.adjust("1 day");
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      yield* Deferred.succeed(startSweep, undefined);
       const admitted = yield* Fiber.join(changed);
 
-      assert.isTrue(Option.isSome(admitted));
-      if (Option.isNone(admitted)) return;
       assert.deepStrictEqual(
-        admitted.value.map(({ event }) => (event.key._tag === "Issue" ? event.key.id : "")),
+        admitted.map(({ event }) => (event.key._tag === "Issue" ? event.key.id : "")),
         Array.from({ length: 60 }, (_, index) => `#${index + 1}`),
       );
-      assert.isTrue(admitted.value.every(({ event }) => event.cause._tag === "Clock"));
-      assert.strictEqual(new Set(admitted.value.map(({ event }) => event.revision)).size, 2);
-      assert.strictEqual(new Set(admitted.value.map(({ lineage }) => lineage.root)).size, 60);
-      assert.strictEqual(admitted.value[0]?.event.workContext?.body, "Parked body #1");
+      assert.isTrue(admitted.every(({ event }) => event.cause._tag === "Clock"));
+      assert.strictEqual(new Set(admitted.map(({ event }) => event.revision)).size, 2);
+      assert.strictEqual(new Set(admitted.map(({ lineage }) => lineage.root)).size, 60);
+      assert.strictEqual(admitted[0]?.event.workContext?.body, "Parked body #1");
     }).pipe(Effect.scoped),
   );
 

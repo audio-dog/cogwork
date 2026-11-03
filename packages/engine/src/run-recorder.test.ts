@@ -33,7 +33,7 @@ const run = (id: string, over: Partial<RunRecord> = {}): RunRecord => ({
   id: runId(id),
   workspace,
   workItem,
-  stage: "implement",
+  operation: "implement",
   harness: cursor,
   branch: null,
   session: null,

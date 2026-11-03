@@ -1,4 +1,4 @@
-import type { AgUiEvent, LifecycleStage, RunActivity } from "@cogwork/contracts";
+import type { AgUiEvent, RunActivity } from "@cogwork/contracts";
 import {
   agUiCorrelation,
   applyDaemonEvent,
@@ -21,7 +21,7 @@ const workspace = Schema.decodeSync(WorkspaceId)("ws");
 interface ActivityOverrides {
   readonly runId?: string;
   readonly workItem?: string;
-  readonly stage?: LifecycleStage;
+  readonly operation?: string;
   readonly event: AgUiEvent;
 }
 
@@ -29,7 +29,7 @@ const activity = (overrides: ActivityOverrides): RunActivity => ({
   runId: runId(overrides.runId ?? "run-1"),
   workspace,
   workItem: workItemId(overrides.workItem ?? "#44"),
-  stage: overrides.stage ?? "triage",
+  operation: overrides.operation ?? "triage",
   seq: 0,
   atMillis: 0,
   correlation: agUiCorrelation(overrides.event),
@@ -136,11 +136,11 @@ describe("stepWatch", () => {
 
   it("keeps concurrent runs separate with their own labels", () => {
     const lines = drain([
-      content("first ", { runId: "run-1", workItem: "#1", stage: "triage" }),
-      content("second ", { runId: "run-2", workItem: "#2", stage: "implement" }),
-      content("run", { runId: "run-1", workItem: "#1", stage: "triage" }),
-      messageEnd({ runId: "run-2", workItem: "#2", stage: "implement" }),
-      messageEnd({ runId: "run-1", workItem: "#1", stage: "triage" }),
+      content("first ", { runId: "run-1", workItem: "#1", operation: "triage" }),
+      content("second ", { runId: "run-2", workItem: "#2", operation: "implement" }),
+      content("run", { runId: "run-1", workItem: "#1", operation: "triage" }),
+      messageEnd({ runId: "run-2", workItem: "#2", operation: "implement" }),
+      messageEnd({ runId: "run-1", workItem: "#1", operation: "triage" }),
     ]);
     assert.deepStrictEqual(lines, ["implement #2 · second", "triage #1 · first run"]);
   });
@@ -150,7 +150,7 @@ describe("stepWatch", () => {
       activities.reduce((state, next) => stepWatch(state, next)[0], initialWatchState);
     const state = foldState([
       content("half a thought", { runId: "run-9", workItem: "#9" }),
-      content("second run", { runId: "run-7", workItem: "#7", stage: "implement" }),
+      content("second run", { runId: "run-7", workItem: "#7", operation: "implement" }),
     ]);
     assert.deepStrictEqual(flushWatch(state), ["triage #9 · half a thought", "implement #7 · second run"]);
   });
@@ -198,14 +198,30 @@ const daemonEvent = (value: Record<string, unknown>) => decodeDaemonEvent({ ...v
 
 const foldBoard = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
-const eligibleEvent = (workspace: string, id: string, stage: LifecycleStage, title: string) =>
-  daemonEvent({ _tag: "ItemChanged", workspace, item: { _tag: "Eligible", id, title, stage } });
+const readyToMergeEvent = (workspace: string, id: string, title: string, number: number) =>
+  daemonEvent({
+    _tag: "ItemChanged",
+    workspace,
+    item: {
+      _tag: "ReadyToMerge",
+      id,
+      title,
+      pr: {
+        number,
+        url: `https://example.test/pull/${number}`,
+        checks: "passing",
+        review: "ready",
+        baseDivergence: "clean",
+        waitingSinceMillis: 0,
+      },
+    },
+  });
 
 const runningRun = Schema.decodeSync(RunSummary)({
   id: "run-1",
   workspace: "acme",
   workItem: "#1",
-  stage: "implement",
+  operation: "implement",
   harness: "cursor",
   branch: null,
   session: null,
@@ -230,9 +246,9 @@ describe("renderBoard", () => {
   it("renders scheduler, items grouped by workspace, and running runs", () => {
     const board = foldBoard([
       daemonEvent({ _tag: "SchedulerChanged", scheduler: schedulerStats }),
-      eligibleEvent("acme", "#1", "triage", "First"),
-      eligibleEvent("acme", "#2", "implement", "Second"),
-      eligibleEvent("beta", "#3", "follow-up", "Third"),
+      readyToMergeEvent("acme", "#1", "First", 1),
+      readyToMergeEvent("acme", "#2", "Second", 2),
+      readyToMergeEvent("beta", "#3", "Third", 3),
       daemonEvent({ _tag: "RunChanged", run: runningRun }),
     ]);
 
@@ -240,25 +256,25 @@ describe("renderBoard", () => {
       "scheduler: 1/4 in-flight · budget 2/10 (acme=1/3)",
       "workspaces:",
       "  acme",
-      "    triage #1 First",
-      "    implement #2 Second",
+      "    ready-to-merge #1 First (PR #1)",
+      "    ready-to-merge #2 Second (PR #2)",
       "  beta",
-      "    follow-up #3 Third",
+      "    ready-to-merge #3 Third (PR #3)",
       "running:",
       "  implement #1 [cursor] run-1",
     ]);
   });
 
-  it("drops an item removed from the reconcile snapshot", () => {
+  it("drops a removed read-model item", () => {
     const board = foldBoard([
-      eligibleEvent("acme", "#1", "triage", "First"),
-      eligibleEvent("acme", "#2", "implement", "Second"),
+      readyToMergeEvent("acme", "#1", "First", 1),
+      readyToMergeEvent("acme", "#2", "Second", 2),
       daemonEvent({ _tag: "ItemRemoved", workspace: "acme", id: "#1" }),
     ]);
 
     const lines = renderBoard(board);
-    assert.notInclude(lines, "    triage #1 First");
-    assert.include(lines, "    implement #2 Second");
+    assert.notInclude(lines, "    ready-to-merge #1 First (PR #1)");
+    assert.include(lines, "    ready-to-merge #2 Second (PR #2)");
   });
 
   it("stops showing a run as running once a drain interrupts it", () => {
@@ -278,7 +294,7 @@ describe("renderBoard", () => {
   });
 
   it("sanitizes control sequences and newlines in item titles", () => {
-    const board = foldBoard([eligibleEvent("acme", "#1", "triage", "safe\u001b[2Jtitle\nINJECTED")]);
+    const board = foldBoard([readyToMergeEvent("acme", "#1", "safe\u001b[2Jtitle\nINJECTED", 1)]);
     const lines = renderBoard(board);
     const itemRow = lines.find((entry) => entry.includes("#1")) ?? "";
 

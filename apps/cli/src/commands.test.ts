@@ -224,7 +224,7 @@ describe("operation settings", () => {
             },
             {
               setting: "model",
-              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              level: { _tag: "Default" },
               scope: { _tag: "SettingsProfile" },
               value: "operation-model",
             },
@@ -234,9 +234,9 @@ describe("operation settings", () => {
           harnessSettings: [],
           contributionSettings: [],
         },
-        { workflow: "coding", operation: "implement", workspace: null },
+        { workspace: null },
       ),
-      "enabled: unset\nharness: unset\nmodel: operation-model\nmodel-options: unset\npermission-profile: unset\nbindings: unset",
+      "harness: unset\nmodel: operation-model\nmodel-options: unset",
     );
     assert.isDefined(operationSettingsCommand);
   });
@@ -264,7 +264,7 @@ describe("operation settings", () => {
           harnessSettings: [],
           contributionSettings: [],
         },
-        { workflow: "coding", operation: "implement", workspace: null },
+        { workspace: null },
       ),
       "model-options: {}",
     );
@@ -274,23 +274,20 @@ describe("operation settings", () => {
     Effect.gen(function* () {
       const update = yield* makeOperationSettingUpdate(
         {
-          setting: "enabled",
+          setting: "harness",
           scope: "overlay",
-          level: "workflow",
-          workflow: "coding",
-          operation: "implement",
           workspace: Option.some("example"),
         },
-        Option.some("off"),
+        Option.some("cursor"),
       );
 
       assert.deepStrictEqual(update, {
         _tag: "Set",
         row: {
-          setting: "enabled",
+          setting: "harness",
           scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId("example") },
-          level: { _tag: "Workflow", workflow: "coding" },
-          value: false,
+          level: { _tag: "Default" },
+          value: "cursor",
         },
       });
     }),
@@ -302,9 +299,6 @@ describe("operation settings", () => {
         {
           setting: "model-options",
           scope: "profile",
-          level: "operation",
-          workflow: "coding",
-          operation: "implement",
           workspace: Option.none(),
         },
         Option.some('{"effort":"high","speed":true}'),
@@ -315,7 +309,7 @@ describe("operation settings", () => {
         row: {
           setting: "model-options",
           scope: { _tag: "SettingsProfile" },
-          level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+          level: { _tag: "Default" },
           value: { effort: "high", speed: true },
         },
       });
@@ -328,9 +322,6 @@ describe("operation settings", () => {
         {
           setting: "harness",
           scope: "host",
-          level: "default",
-          workflow: "coding",
-          operation: "implement",
           workspace: Option.none(),
         },
         Option.none(),

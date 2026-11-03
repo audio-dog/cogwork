@@ -132,10 +132,10 @@ Either way the rule from the ai-docs holds: provide the observability layer at t
 - `.repos/effect/packages/effect/src/Logger.ts`: `formatStructured` carries `annotations` and `spans` as first-class fields.
 - `.repos/effect/ai-docs/src/08_observability/10_logging.ts` and `20_otlp-tracing.ts`: annotate-at-the-pipe-tail, `References.MinimumLogLevel`, and the provide-observability-last rule.
 - `.agents/skills/effect-ts/references/guide-observability.md`.
-- `packages/engine/src/executor.ts`: `runClaimed`'s correlation annotation — the in-repo exemplar,
-  with `scheduler.ts`, `reconcile.ts`, and `recovery.ts` annotating their roots the same way.
-- `packages/engine/src/scheduler.ts` and `packages/engine/src/reconcile.ts`: metrics defined next to
-  the suppressed logs (`budgetExhaustedTicks`, `rateLimitHits`) — the metrics-not-grep exemplar.
+- `packages/engine/src/scheduler.ts`: the forked job's correlation annotation — the in-repo
+  exemplar, with `worktree-maintenance.ts` annotating each Workspace the same way.
+- `packages/engine/src/scheduler.ts`: metrics defined next to the suppressed logs
+  (`budgetExhaustedTicks`) — the metrics-not-grep exemplar.
 - `apps/cli/src/telemetry.ts`: the one telemetry pipeline (`localTelemetryLayer` +
   config-gated `otlpTelemetryLayer`).
 - `.repos/t3code/apps/server/src/observability/Metrics.ts`, `Attributes.ts`, and `RpcInstrumentation.ts`: module-scope metrics, attribute compaction, `Exit`-derived outcomes, and `TracerEnabled` suppression.

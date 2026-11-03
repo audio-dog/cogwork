@@ -229,7 +229,7 @@ const seedPrunablePayload = (storePath: string, bytes = 1048576) =>
     `INSERT OR IGNORE INTO sessions (id, workspace, harness, kind, handle, created_at)
      VALUES ('opaque', 'gh', 'cursor', 'opaque-handle', 'native', 0);
      INSERT INTO runs (
-       id, workspace, work_item, stage, harness, session, status,
+       id, workspace, work_item, operation, harness, session, status,
        started_at, ended_at, event_count
      ) VALUES ('prunable', 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', 1, 1, 1);
      INSERT INTO run_events (run_id, seq, type, name, data, at)
@@ -327,14 +327,11 @@ layer(NodeServices.layer)((it) => {
            '[{"name":"linear","endpoint":"https://mcp.linear.app/mcp/readonly","auth":{"type":"credential-store"}}]', 0,
            '[".repos"]', '["pnpm install"]'
          );
-         INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
+         INSERT INTO operation_settings (setting, scope, workspace, value)
          VALUES
-           ('harness', 'default', '', '', 'settings-profile', '', '"codex"'),
-           ('model', 'default', '', '', 'settings-profile', '', '"openai/gpt-5"'),
-           ('effort', 'default', '', '', 'settings-profile', '', '"high"'),
-           ('enabled', 'operation', 'coding', 'triage', 'settings-profile', '', 'true'),
-           ('enabled', 'operation', 'coding', 'implement', 'settings-profile', '', 'true'),
-           ('enabled', 'operation', 'coding', 'follow-up', 'settings-profile', '', 'true');
+           ('harness', 'settings-profile', '', '"codex"'),
+           ('model', 'settings-profile', '', '"openai/gpt-5"'),
+           ('effort', 'settings-profile', '', '"high"');
          ALTER TABLE workspaces DROP COLUMN source_control;
          DROP TABLE connections;`,
         );
@@ -345,9 +342,9 @@ layer(NodeServices.layer)((it) => {
         );
         const operationSettingsBefore = yield* query(
           storePath,
-          `SELECT setting, level, workflow, operation, scope, workspace, value
+          `SELECT setting, scope, workspace, value
            FROM operation_settings
-           ORDER BY setting, operation`,
+           ORDER BY setting`,
         );
 
         assert.deepStrictEqual(yield* storeAt(storePath).pipe(Effect.withLogger(logProbe.logger)), {
@@ -364,9 +361,9 @@ layer(NodeServices.layer)((it) => {
         assert.deepStrictEqual(
           yield* query(
             storePath,
-            `SELECT setting, level, workflow, operation, scope, workspace, value
+            `SELECT setting, scope, workspace, value
              FROM operation_settings
-             ORDER BY setting, operation`,
+             ORDER BY setting`,
           ),
           operationSettingsBefore,
         );
@@ -834,7 +831,7 @@ layer(NodeServices.layer)((it) => {
             _tag: "Set",
             row: {
               setting: "model",
-              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              level: { _tag: "Default" },
               scope: { _tag: "SettingsProfile" },
               value: "profile-operation",
             },
@@ -843,7 +840,7 @@ layer(NodeServices.layer)((it) => {
             _tag: "Set",
             row: {
               setting: "model-options",
-              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              level: { _tag: "Default" },
               scope: { _tag: "SettingsProfile" },
               value: { effort: "high", speed: true },
             },
@@ -854,19 +851,11 @@ layer(NodeServices.layer)((it) => {
       const reloaded = yield* withStore(storePath, (store) => Effect.succeed(store.seed));
 
       assert.strictEqual(
-        resolveOperationSetting(reloaded.operationSettings, "model", {
-          workflow: "coding",
-          operation: "implement",
-          workspace,
-        }),
-        "profile-operation",
+        resolveOperationSetting(reloaded.operationSettings, "model", { workspace }),
+        "overlay-default",
       );
       assert.deepStrictEqual(
-        resolveOperationSetting(reloaded.operationSettings, "model-options", {
-          workflow: "coding",
-          operation: "implement",
-          workspace,
-        }),
+        resolveOperationSetting(reloaded.operationSettings, "model-options", { workspace }),
         { effort: "high", speed: true },
       );
 
@@ -876,7 +865,7 @@ layer(NodeServices.layer)((it) => {
             _tag: "Clear",
             cell: {
               setting: "model",
-              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              level: { _tag: "Default" },
               scope: { _tag: "SettingsProfile" },
             },
           },
@@ -884,11 +873,7 @@ layer(NodeServices.layer)((it) => {
       );
 
       assert.strictEqual(
-        resolveOperationSetting(cleared.operationSettings, "model", {
-          workflow: "coding",
-          operation: "implement",
-          workspace,
-        }),
+        resolveOperationSetting(cleared.operationSettings, "model", { workspace }),
         "overlay-default",
       );
     }),
@@ -902,10 +887,10 @@ layer(NodeServices.layer)((it) => {
         assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
         yield* poke(
           storePath,
-          `INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
+          `INSERT INTO operation_settings (setting, scope, workspace, value)
            VALUES
-             ('model', 'operation', 'coding', 'implement', 'settings-profile', '', '"openai/gpt-5"'),
-             ('effort', 'operation', 'coding', 'implement', 'settings-profile', '', '"high"');`,
+             ('model', 'settings-profile', '', '"openai/gpt-5"'),
+             ('effort', 'settings-profile', '', '"high"');`,
         );
 
         const reloaded = yield* readControlStore(storePath).pipe(Effect.withLogger(logProbe.logger));
@@ -921,40 +906,6 @@ layer(NodeServices.layer)((it) => {
           return matches;
         };
         const warnings = entries.filter(isRetiredSettingWarning);
-        assert.strictEqual(warnings.length, 1);
-      }),
-    );
-
-    it.effect("ignores one stored setting for an unknown Operation without dropping valid settings", () =>
-      Effect.gen(function* () {
-        const { storePath } = yield* temporaryStore();
-        const logProbe = yield* ControlStoreLogProbe;
-        assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
-        yield* poke(
-          storePath,
-          `INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
-           VALUES
-             ('model', 'operation', 'coding', 'implement', 'settings-profile', '', '"openai/gpt-5"'),
-             ('model', 'operation', 'coding', 'verify', 'settings-profile', '', '"ignored"');`,
-        );
-
-        const reloaded = yield* readControlStore(storePath).pipe(Effect.withLogger(logProbe.logger));
-
-        assert.strictEqual(
-          resolveOperationSetting(reloaded.operationSettings, "model", {
-            workflow: "coding",
-            operation: "implement",
-            workspace,
-          }),
-          "openai/gpt-5",
-        );
-        assert.strictEqual(reloaded.operationSettings.length, 1);
-        const warnings = (yield* logProbe.entries).filter(
-          (entry) =>
-            entry.level === "WARN" &&
-            Array.isArray(entry.message) &&
-            entry.message.includes("ignored stored Operation setting for unknown Operation"),
-        );
         assert.strictEqual(warnings.length, 1);
       }),
     );
@@ -1174,7 +1125,7 @@ layer(NodeServices.layer)((it) => {
         storePath,
         `${retentionSessions}
          INSERT INTO runs (
-           id, workspace, work_item, stage, harness, session, status,
+           id, workspace, work_item, operation, harness, session, status,
            started_at, ended_at, event_count
          ) VALUES
            ('expired', 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', 0, 0, 2),
@@ -1257,7 +1208,7 @@ layer(NodeServices.layer)((it) => {
         storePath,
         `${retentionSessions}
          INSERT INTO runs (
-           id, workspace, work_item, stage, harness, session, status,
+           id, workspace, work_item, operation, harness, session, status,
            started_at, ended_at, event_count
          ) VALUES
            ('oldest', 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', 1, 1, 2),
@@ -1315,7 +1266,7 @@ layer(NodeServices.layer)((it) => {
            SELECT value + 1 FROM numbers WHERE value < 1000
          )
          INSERT INTO runs (
-           id, workspace, work_item, stage, harness, session, status,
+           id, workspace, work_item, operation, harness, session, status,
            started_at, ended_at, event_count
          )
          SELECT 'run-' || value, 'gh', '#1', 'triage', 'cursor', 'opaque', 'succeeded', value, value, 1

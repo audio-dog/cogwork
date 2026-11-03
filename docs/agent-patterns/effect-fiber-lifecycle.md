@@ -131,7 +131,7 @@ The one smell: a bare `Effect.never` outside any scope, used as a lazy "keep the
 - `.repos/effect/packages/effect/src/internal/effect.ts:1172`: `Effect.never` is `callback<never>(constVoid)` — suspended, interruptible, resource-free.
 - `.repos/effect/packages/effect/src/Layer.ts:2207`: `Layer.launch` is `scoped(andThen(build(self), never))`.
 - `packages/engine/src/scheduler.ts`: `FiberSet` with `awaitEmpty`, `clear`, and interrupt-aware crash reporting — the in-repo exemplar.
-- `packages/engine/src/reconcile.ts`: the supervised worker loop with a bounded receipt await — the in-repo exemplar of this pattern's supervision section.
+- `packages/engine/src/trigger-observation.ts`: one supervised `FiberMap` fiber per Trigger source, keyed by source id, restarted after a `SourceFailure` — the in-repo exemplar of this pattern's supervision section.
 - `packages/engine/src/run-control.ts`: the in-repo `FiberMap` registry keyed by run id (`cancel` must still read-and-interrupt in one atomic step, not `has` then `remove`).
 - `packages/engine/src/tools/owned-tools.ts`: the Promise-shaped tool boundary.
 - `apps/cli/src/platform.ts`: the `git rebase --abort` cleanup wired through `Effect.onExit` — the source of this doc's example.

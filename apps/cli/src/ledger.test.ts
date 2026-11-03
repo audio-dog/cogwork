@@ -64,7 +64,7 @@ const runRow = (run: RunRecord) =>
     run.id,
     run.workspace,
     run.workItem,
-    run.stage,
+    run.operation,
     run.harness,
     run.branch,
     run.session,
@@ -84,7 +84,7 @@ const insertRunsBulk = (storePath: string, records: ReadonlyArray<RunRecord>) =>
         sqlite.exec("BEGIN");
         const insert = sqlite.prepare(`
           INSERT INTO runs (
-            id, workspace, work_item, stage, harness, branch, session,
+            id, workspace, work_item, operation, harness, branch, session,
             input_tokens, output_tokens, total_tokens, status, started_at, ended_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
@@ -138,12 +138,10 @@ const runPlan = (id: string, message = "Triage #7") =>
       reference: { workItem, url: "https://example.test/issues/7" },
       prose: { body: "", comments: [] },
       facts: {
-        roles: ["needs-triage"],
         assignees: [],
         openBlockers: 0,
         claim: null,
         priority: "medium",
-        pr: null,
       },
       observation: { generation: 3, observedAtMillis: 1000 },
     },
@@ -162,7 +160,7 @@ const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecor
   id: runId(id),
   workspace,
   workItem,
-  stage: "triage",
+  operation: "triage",
   harness,
   branch: null,
   session: null,

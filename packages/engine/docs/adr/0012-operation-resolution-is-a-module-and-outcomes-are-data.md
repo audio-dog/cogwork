@@ -1,5 +1,7 @@
 # Operation resolution is a module, and operation outcomes are data
 
+Amended by ADR 0015. The fixed resolver and executor are deleted. Workflow documents define Operations and the Workflow runner resolves their Run Plans and outputs.
+
 The executor is the engine's god-module. One 1,390-line closure holds 78 functions over 15 injected
 services, and eight concerns share its lexical scope: claim, worktree hand-off, operation resolution,
 session choice, dispatch, event folding, failure policy, and outcome recording. Its pure decisions —

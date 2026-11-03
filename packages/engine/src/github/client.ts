@@ -36,7 +36,7 @@ export interface GitHubRepoRef {
 }
 
 export interface GitHubIssueCreateInput {
-  readonly title: string;
+  readonly title?: string;
   readonly body: string;
   readonly labels: ReadonlyArray<string>;
 }
@@ -80,6 +80,7 @@ export interface RawIssuePullReference {
 
 export interface RawPull {
   readonly number: number;
+  readonly title?: string;
   readonly url: string;
   readonly authorLogin: string;
   readonly authorAssociation: string;
@@ -191,6 +192,7 @@ const AuthenticatedUserSchema = Schema.Struct({ login: TrimmedNonEmptyString });
 
 const PullSchema = Schema.Struct({
   number: Schema.Finite,
+  title: Schema.String,
   html_url: Schema.optional(Schema.NullOr(Schema.String)),
   user: Schema.Struct({ login: Schema.String }),
   draft: Schema.optional(Schema.Boolean),
@@ -1570,6 +1572,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       return pulls.map(
         (pull): RawPull => ({
           number: pull.number,
+          title: pull.title,
           url: pull.html_url || `https://github.com/${repo.owner}/${repo.name}/pull/${pull.number}`,
           authorLogin: pull.user.login,
           authorAssociation: pull.author_association ?? "NONE",

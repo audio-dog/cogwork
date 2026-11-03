@@ -129,7 +129,7 @@ function SchedulerStrip({ scheduler }: { scheduler: NonNullable<NowState["schedu
 }
 
 function runPreview(run: NowState["runs"][number]) {
-  if (!run.preview) return run.stage;
+  if (!run.preview) return run.operation;
   if (!run.preview.text) return run.preview.label;
   return `${run.preview.label} · ${run.preview.text}`;
 }

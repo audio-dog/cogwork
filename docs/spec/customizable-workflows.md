@@ -233,7 +233,7 @@ WorkflowDocument {
 ADR 0033 ([#793](https://github.com/taylorfsteele/cogwork/pull/793)) records the coordination decision.
 
 - **A Work item is the one thing a Run acts on.** A tracker supplies it, or the engine mints it from a Trigger event. Identity derives from an immutable source identity; the author writes no key: issue → `WorkItemId`; pull request → the linked item by link key, else its own item; Granola → `note_id` under its Connection (revision `updated_at`); Slack → `(team_id, channel, ts)`, or for an ambient conversation `(team, channel, thread_ts)` / the first message's `ts`; schedule → `(Workflow, scheduled instant)`; fan-out child → parent item + Run + element position. (#782; #787)
-- **One coordination interface, two adapters.** Tracker items keep ADR 0003. Engine-minted items keep the same Claim, Attempt record, and Handback record shapes in the Control store, outside the Run ledger's disposable region, append-only (engine ADR 0011). Classification, the failure limit, and the handback barrier never branch on where an item came from: they hold a `WorkItemRef`, and the `Coordination` module in §20.2 chooses the authority inside.
+- **One coordination interface, two adapters.** Tracker items keep ADR 0003 until the cut-over; ADR 0036 then moves them to the Control store too. Engine-minted items keep the same Claim, Attempt record, and Handback record shapes in the Control store, outside the Run ledger's disposable region, append-only (engine ADR 0011). Classification, the failure limit, and the handback barrier never branch on where an item came from: they hold a `WorkItemRef`, and the `Coordination` module in §20.2 chooses the authority inside.
 - **Level-triggered.** An item is eligible when its observed source revision is newer than its processed revision and no claim is held. A redelivered event starts no Run; edits during a Run combine into one next Run.
 - **Fan-out.** An Operation declares `once` or `for each ⟨finding⟩`. The engine splits the list and routes each element by itself; an empty list means nothing to do. A child is a full Work item with its own id (never a key from model output). List cap 50, enforced at decode. (#782)
 - **Dedupe has three layers:** the revision (exact, engine); the write key on each output action (engine; a retry after success never creates the artifact twice); and the model's "is this the same work?", which the author routes on and the engine makes answerable (Work context carries the artifacts this lineage already created; the issue search Tool). (#782; #788 item 5)
@@ -491,7 +491,7 @@ One `Coordination` module keyed by a tagged **`WorkItemRef`**. The kind is on th
 ```ts
 // contracts
 type WorkItemRef =
-  | Issue { workspace; id: WorkItemId }                         // tracker authority (ADR 0003)
+  | Issue { workspace; id: WorkItemId }                         // tracker authority (ADR 0003); Control store from the cut-over (ADR 0036)
   | PullRequest { workspace; number }                           // no linked issue → engine-minted
   | GranolaNote { connection; noteId }
   | SlackMessage { team; channel; ts } | SlackConversation { team; channel; threadTs }

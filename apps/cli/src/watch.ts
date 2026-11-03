@@ -7,7 +7,7 @@ import {
   type RunSummary,
   type SchedulerStats,
 } from "@cogwork/contracts";
-import { formatClassifiedItem } from "./classified-item";
+import { formatReadModelItem } from "./read-model-item";
 import { formatScheduler } from "./status";
 import { sanitizeTerminalText, terminalLine } from "./terminal-text";
 
@@ -158,7 +158,7 @@ export const stepWatch = (
   activity: RunActivity,
 ): readonly [WatchState, ReadonlyArray<string>] => {
   const { runId, event } = activity;
-  const label = sanitizeTerminalText(`${activity.stage} ${activity.workItem}`);
+  const label = sanitizeTerminalText(`${activity.operation} ${activity.workItem}`);
   if (AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event)) {
     const text = (state.text.get(runId)?.text ?? "") + (event.delta ?? "");
     return [setText(state, runId, { label, text }), []];
@@ -199,11 +199,11 @@ const workspaceLines = (items: ReadonlyArray<BoardItem>) =>
     `  ${terminalLine(name)}`,
     ...items
       .filter((entry) => entry.workspace === name)
-      .map((entry) => `    ${terminalLine(formatClassifiedItem(entry.item))}`),
+      .map((entry) => `    ${terminalLine(formatReadModelItem(entry.item))}`),
   ]);
 
 const runningLine = (run: RunSummary) =>
-  `  ${terminalLine(`${run.stage} ${run.workItem} [${run.harness}] ${run.id}`)}`;
+  `  ${terminalLine(`${run.operation} ${run.workItem} [${run.harness}] ${run.id}`)}`;
 
 const schedulerLine = (scheduler: SchedulerStats | null) =>
   scheduler ? formatScheduler(scheduler) : "scheduler: (pending)";

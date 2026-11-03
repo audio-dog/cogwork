@@ -1,4 +1,3 @@
-import { LifecycleStage } from "@cogwork/contracts";
 import { Harness } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
@@ -227,7 +226,7 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
             assert.include(capture.prompt, "repo rules");
             assert.include(
               capture.prompt,
-              "Mandatory Operating Instructions: /operating-instructions/implement",
+              "Mandatory Operating Instructions: /operating-instructions/operate",
             );
             assert.include(capture.prompt, "implement the issue");
             assert.isFalse(capture.hasCodexConfig);
@@ -269,19 +268,19 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
           const executable = yield* fakeCodexWithRepositoryHooks();
           const harness = Harness.make([runner({ codexExecutable: executable })]);
           const captures = yield* Effect.forEach(
-            LifecycleStage.literals,
-            (stage) => runOperation(harness, stage),
+            ["operate", "verify"],
+            (operation) => runOperation(harness, operation),
             { concurrency: "unbounded" },
           );
 
-          for (const [, capture] of captures) {
+          captures.forEach(([, capture]) => {
             assert.include(capture.args, "--dangerously-bypass-hook-trust");
             assert.include(capture.args, "workspace-write");
             assert.notInclude(capture.args.join("\n"), "read-only");
             assert.include(capture.args, "sandbox_workspace_write.network_access=true");
             assert.include(capture.args, 'approval_policy="never"');
             assert.notInclude(capture.args.join("\n"), "danger-full-access");
-          }
+          });
         }),
       ),
     );

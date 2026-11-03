@@ -229,10 +229,10 @@ decision is in the wrong place, not the data.
 
 **Name the authority; derive the rest.** Exactly one system is authoritative for a given fact, and
 everything else derives from it. A key derived from an immutable id beats a dual write that has to be
-reconciled. It follows that anything derived is disposable: losing the daemon's local store is safe
-because the issue tracker stays authoritative for coordination, and new state is derivable until it
-demonstrably cannot be.
-(ADR [0003](../adr/0003-work-source-as-coordination-substrate.md); engine ADR
+reconciled. It follows that anything derived is disposable: losing the Run ledger is safe because the
+Control store stays authoritative for coordination, and new state is derivable until it demonstrably
+cannot be.
+(ADR [0036](../adr/0036-every-work-item-is-coordinated-in-the-control-store.md); engine ADR
 [0004](../../packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md))
 
 ### Trust and boundaries

@@ -1,9 +1,11 @@
 import {
   DaemonEvent,
+  defaultPriority,
   keyOf,
   Lineage,
   LineageId,
   type ParkReason,
+  priorityRank,
   type TriggerSourceHealth,
   type WorkflowCatalog,
   type WorkflowDocument,
@@ -102,6 +104,7 @@ export class TriggerObservationStore extends Context.Service<
 
 const admissionJson = Schema.fromJsonString(TriggerAdmission);
 const encodeAdmission = Schema.encodeSync(admissionJson);
+const decodeTriggerEvent = Schema.decodeUnknownEffect(TriggerEvent);
 const decodeAdmission = Schema.decodeUnknownEffect(admissionJson);
 const storeError = (error: unknown) => new TriggerObservationStoreError({ message: String(error) });
 const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
@@ -125,6 +128,17 @@ const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =
     return oldest !== undefined && sameRevision(admission, oldest);
   });
 };
+
+interface WaitingAdmission {
+  readonly admission: TriggerAdmission;
+  readonly actedOn: boolean;
+}
+
+const waitingAdmissionOrder = (left: WaitingAdmission, right: WaitingAdmission) =>
+  Number(right.actedOn) - Number(left.actedOn) ||
+  priorityRank.indexOf(left.admission.event.priority ?? defaultPriority) -
+    priorityRank.indexOf(right.admission.event.priority ?? defaultPriority) ||
+  left.admission.event.atMillis - right.admission.event.atMillis;
 
 const revisionAdvancedParks = new Set<ParkReason["_tag"]>([
   "AwaitingApproval",
@@ -597,16 +611,21 @@ export const make = Effect.gen(function* () {
       return isSelected && matchesSystem;
     });
     const listed = yield* Effect.forEach(workspaces, (workspace) =>
-      tracker.observe(workspace).pipe(Effect.map((items) => items.map((item) => ({ item, workspace })))),
+      tracker.observe(workspace).pipe(
+        Effect.flatMap((items) =>
+          Effect.forEach(items, (item) => {
+            const key = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
+            return coordination.read(key).pipe(Effect.map((view) => ({ item, key, view, workspace })));
+          }),
+        ),
+      ),
     );
-    return listed.flat().flatMap(({ item, workspace }): ReadonlyArray<SweepCandidate> => {
-      const isParked = item.coordination?.park !== null && item.coordination?.park !== undefined;
-      const matchesState = state === "parked" ? isParked : (item.states ?? item.roles).includes(state);
+    return listed.flat().flatMap(({ item, key, view, workspace }): ReadonlyArray<SweepCandidate> => {
+      const matchesState = state === "parked" ? view.park !== null : (item.states ?? []).includes(state);
       if (!matchesState) return [];
-      const key = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
       const lastTouchedAtMillis = Math.max(
         item.lastTouchedAtMillis ?? tickInstant,
-        item.coordination?.park?.atMillis ?? 0,
+        view.park?.atMillis ?? 0,
         sweptAt.get(keyOf(key)) ?? 0,
       );
       return [
@@ -800,7 +819,19 @@ export const make = Effect.gen(function* () {
     fingerprint: string,
   ) =>
     source.observe(subscriptions, sweepReadPort).pipe(
-      Stream.runForEach((event) => admit(source, subscriptions, event)),
+      Stream.runForEach((event) =>
+        decodeTriggerEvent(event).pipe(
+          Effect.matchEffect({
+            onFailure: (error) =>
+              Effect.logWarning("Trigger event does not decode; skipping it", {
+                source: source.id,
+                item: keyOf(event.key),
+                message: error.message,
+              }),
+            onSuccess: (decoded) => admit(source, subscriptions, decoded),
+          }),
+        ),
+      ),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(Effect.andThen(waitForRetry(error))),
       ),
@@ -939,6 +970,7 @@ export const make = Effect.gen(function* () {
                   coordination.read(admission.event.key).pipe(
                     Effect.map((view) => ({
                       admission,
+                      actedOn: view.actedOn(admission.subscription.workflow),
                       isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
                       gate: view.gate(
                         {
@@ -958,6 +990,7 @@ export const make = Effect.gen(function* () {
       Effect.map((states) =>
         states
           .filter(({ gate, isUnprocessedRevision }) => isUnprocessedRevision && gate._tag === "Open")
+          .toSorted(waitingAdmissionOrder)
           .map(({ admission }) => admission),
       ),
       Effect.catchCause(() => Effect.succeed([])),
