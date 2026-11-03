@@ -1,0 +1,21 @@
+packages/engine/src/trigger-observation.ts
+  s_095df1b8de8b26::t_22cf66ef5dc7b2 820-828
+  s_095df1b8de8b26::t_674db22aba5951 107
+  s_095df1b8de8b26::t_c85daa8a71319b 829-832
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a6d7556a033a646a1a1eddd392fa488db53c17e4",
+  "prompts": {},
+  "sessions": {
+    "s_095df1b8de8b26": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ad6d4af1-d894-4a16-9c5f-d415b0e456d5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
