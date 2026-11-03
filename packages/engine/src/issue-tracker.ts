@@ -102,11 +102,11 @@ const readEmptyProse = Effect.fn("IssueTracker.readProse")(function* (
   workspace: WorkspaceIssueTrackerBinding,
 ) {
   if (hasRemoteSource(workspace)) return yield* noAdapter(workspace);
-  return { body: "", comments: [] } satisfies RunPlanWorkContextProse;
+  const prose: RunPlanWorkContextProse = { body: "", comments: [] };
+  return prose;
 });
 
 export const makeEmpty = Effect.succeed({
-  rateLimitScope: (_workspace: WorkspaceIssueTrackerBinding): string | null => null,
   observe: observeEmpty,
   readProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) => readEmptyProse(workspace),
   ...unsupportedWorkflowActions,

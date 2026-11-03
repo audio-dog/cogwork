@@ -1,27 +1,14 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { IssueTracker, type IssueTrackerActionService, type IssueTrackerService } from "../issue-tracker";
+import { IssueTracker, type IssueTrackerService } from "../issue-tracker";
 import { issueTrackerWorkflowCatalogContribution } from "../issue-workflow-catalog";
 import { GitHubClient, type GitHubClientService } from "./client";
-import { makeIssueActions } from "./host";
+import { makeIssueActions, makeIssueReads } from "./host";
 
-const make = (client: GitHubClientService) => {
-  return makeIssueActions(client) satisfies IssueTrackerActionService;
-};
+const make = (client: GitHubClientService) =>
+  ({ ...makeIssueReads(client), ...makeIssueActions(client) }) satisfies IssueTrackerService;
 
-export const layer = Layer.effect(
-  IssueTracker,
-  Effect.gen(function* () {
-    const client = yield* GitHubClient;
-    const actions = make(client);
-    return {
-      rateLimitScope: () => null,
-      observe: () => Effect.succeed([]),
-      readProse: () => Effect.succeed({ body: "", comments: [] }),
-      ...actions,
-    } satisfies IssueTrackerService;
-  }),
-);
+export const layer = Layer.effect(IssueTracker, Effect.map(GitHubClient, make));
 
 export { make as makeAdapter };
 

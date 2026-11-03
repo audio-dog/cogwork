@@ -2,7 +2,7 @@ import { linearTeams, WorkflowActionArtifact, WorkItemId } from "@cogwork/contra
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { type CreateIssueInput, IssueTrackerError } from "../issue-tracker";
+import { type CreateIssueInput, IssueTrackerError, type TrackerItem } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
 import type { LinearClientService, LinearTeamRef } from "./client";
@@ -84,6 +84,68 @@ const ambiguousWriteNotConfirmed = (writeKey: string) =>
     message: `Linear write ${writeKey} may have committed but was not confirmed by read-back`,
   });
 
+const targetForIssue = Effect.fn("linear.issueTarget")(function* (
+  workspace: WorkspaceIssueTrackerBinding,
+  id: WorkItemId,
+) {
+  const targets = targetsFor(workspace);
+  if (targets.length === 0) return yield* notLinear(workspace);
+  const target = targets.find(({ team }) => team === teamKeyOf(id));
+  if (!target) {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: `Linear item ${id} does not belong to a configured team`,
+    });
+  }
+  return target;
+});
+
+export const makeIssueReads = (client: LinearClientService) => ({
+  observe: Effect.fn("linear.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
+    const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
+      client.observeIssues(target, null),
+    );
+    return yield* Effect.forEach(perTeam.flat(), (issue) =>
+      Effect.map(
+        itemId(issue.identifier),
+        (id): TrackerItem => ({
+          id,
+          title: issue.title,
+          url: issue.url,
+          assignees: issue.assignees,
+          openBlockers: issue.openBlockers,
+          priority: issue.priority,
+          states: [...issue.labels, issue.stateName],
+          lastTouchedAtMillis: issue.updatedAtMillis,
+        }),
+      ),
+    );
+  }),
+  readProse: Effect.fn("linear.readProse")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    id: WorkItemId,
+  ) {
+    const target = yield* targetForIssue(workspace, id);
+    const { body, comments } = yield* client.readProse(target, id);
+    return {
+      body,
+      comments: comments.map((comment) => ({
+        author: comment.authorId,
+        authorAssociation: comment.authorAssociation,
+        body: comment.body,
+        createdAtMillis: comment.createdAtMillis,
+      })),
+    };
+  }),
+  assignees: Effect.fn("linear.assignees")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    id: WorkItemId,
+  ) {
+    const target = yield* targetForIssue(workspace, id);
+    return yield* client.issueAssignees(target, id);
+  }),
+});
+
 export const makeIssueActions = (client: LinearClientService) => {
   const targetForCreate = Effect.fn("linear.workflowCreateTarget")(function* (
     workspace: WorkspaceIssueTrackerBinding,
@@ -95,21 +157,6 @@ export const makeIssueActions = (client: LinearClientService) => {
     const originTeam = originMatchesWorkspace ? teamKeyOf(origin.id) : null;
     const target = targets.find(({ team }) => team === originTeam) ?? targets.at(0);
     if (!target) return yield* notLinear(workspace);
-    return target;
-  });
-  const targetForIssue = Effect.fn("linear.workflowIssueTarget")(function* (
-    workspace: WorkspaceIssueTrackerBinding,
-    id: WorkItemId,
-  ) {
-    const targets = targetsFor(workspace);
-    if (targets.length === 0) return yield* notLinear(workspace);
-    const target = targets.find(({ team }) => team === teamKeyOf(id));
-    if (!target) {
-      return yield* new IssueTrackerError({
-        reason: "unavailable",
-        message: `Linear item ${id} does not belong to a configured team`,
-      });
-    }
     return target;
   });
   const commentsCarry = (target: LinearTarget, issue: string, writeKey: string) =>

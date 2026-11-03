@@ -1,13 +1,16 @@
 import {
   type ConnectionBindingId,
+  defaultPriority,
   type GitHubPrioritySource,
+  type Priority,
+  resolvePriority,
   WorkflowActionArtifact,
   type WorkflowActionOrigin,
   WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { type CreateIssueInput, IssueTrackerError } from "../issue-tracker";
+import { type CreateIssueInput, IssueTrackerError, type TrackerItem } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { type GitHubClientService, type GitHubRepoRef, type RawIssue, repoRefFromRepository } from "./client";
 import { wireCodec } from "./markers";
@@ -78,6 +81,110 @@ const ambiguousWriteNotConfirmed = (writeKey: string) =>
     writeMayHaveCommitted: true,
     message: `GitHub write ${writeKey} may have committed but was not confirmed by read-back`,
   });
+
+export const issuePriorities = Effect.fn("github.issuePriorities")(function* (
+  client: GitHubClientService,
+  target: GitHubTarget,
+  issues: ReadonlyArray<RawIssue>,
+) {
+  const fallback = new Map<number, Priority>();
+  const source = target.priority;
+  if (!source) return fallback;
+  return yield* client.listPriorityFields(target).pipe(
+    Effect.filterOrFail(
+      (fields) => fields.some((field) => field.id === source.field),
+      () =>
+        new IssueTrackerError({
+          reason: "unavailable",
+          message: `GitHub issue field ${source.field} is not an available single-select field`,
+        }),
+    ),
+    Effect.flatMap(() =>
+      client.listIssueFieldValues(
+        target,
+        issues.map((issue) => issue.nodeId),
+      ),
+    ),
+    Effect.map(
+      (valuesByIssue) =>
+        new Map(
+          issues.map((issue): readonly [number, Priority] => [
+            issue.number,
+            resolvePriority(valuesByIssue.get(issue.number)?.get(source.field)),
+          ]),
+        ),
+    ),
+    Effect.catchTag("IssueTrackerError", (error) =>
+      Effect.logWarning("priority issue field read failed; defaulting every item to medium", {
+        owner: target.owner,
+        name: target.name,
+        field: source.field,
+        message: error.message,
+      }).pipe(Effect.map(() => fallback)),
+    ),
+  );
+});
+
+export const makeIssueReads = (client: GitHubClientService) => {
+  const issueRef = Effect.fn("github.issueRef")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    id: WorkItemId,
+  ) {
+    const target = targetFor(workspace);
+    if (!target) return yield* notGitHub(workspace);
+    return { target, number: yield* issueNumberOf(id) };
+  });
+  return {
+    observe: Effect.fn("github.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
+      const target = targetFor(workspace);
+      if (!target) return [];
+      const issues = (yield* client.listIssues(target)).filter((issue) => !issue.isPullRequest);
+      const priorities = yield* issuePriorities(client, target, issues);
+      return yield* Effect.forEach(issues, (issue) =>
+        Effect.map(
+          itemId(issue.number),
+          (id): TrackerItem => ({
+            id,
+            title: issue.title,
+            url: issue.url,
+            assignees: issue.assignees,
+            openBlockers: issue.openBlockers,
+            priority: priorities.get(issue.number) ?? defaultPriority,
+            states: issue.labels,
+            lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,
+          }),
+        ),
+      );
+    }),
+    readProse: Effect.fn("github.readProse")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const [issue, comments] = yield* Effect.all([
+        client.readIssue(target, number),
+        client.listAllComments(target, number),
+      ]);
+      return {
+        body: issue.body,
+        comments: comments.map((comment) => ({
+          author: comment.authorLogin,
+          authorAssociation: comment.authorAssociation,
+          body: comment.body,
+          createdAtMillis: comment.createdAtMillis,
+        })),
+      };
+    }),
+    assignees: Effect.fn("github.assignees")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const issue = yield* client.readIssue(target, number);
+      return issue.assignees;
+    }),
+  };
+};
 
 export const makeIssueActions = (client: GitHubClientService) => {
   const target = Effect.fn("github.workflowActionTarget")(function* (
