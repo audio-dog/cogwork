@@ -1,0 +1,21 @@
+AGENTS.md
+  s_a785565860b8c9::t_becac4b5199357 58-75
+.agents/skills/tanstack-ai/SKILL.md
+  s_a785565860b8c9::t_d4ba34161c4dc6 1-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9cb1e32b55d8f809b323832a0014d8e33fcda876",
+  "prompts": {},
+  "sessions": {
+    "s_a785565860b8c9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "96b07dfc-e668-4e11-8bc2-b9e905067b96",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
