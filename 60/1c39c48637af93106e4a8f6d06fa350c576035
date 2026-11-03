@@ -1,0 +1,19 @@
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_2fb0b531134a4c::t_2d0e9986db3411 20-22,43,100,121,159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "601c39c48637af93106e4a8f6d06fa350c576035",
+  "prompts": {},
+  "sessions": {
+    "s_2fb0b531134a4c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e4be7955-53a4-41d5-8fa4-5a53cdb5c45e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
