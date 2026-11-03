@@ -2,13 +2,7 @@ import * as Schema from "effect/Schema";
 import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionOverview } from "./connection";
 import { LocalContribution } from "./contribution";
-import {
-  ControlStore,
-  OperationAvailabilityList,
-  PollState,
-  ReadyToMergeItem,
-  SchedulerStats,
-} from "./daemon";
+import { ControlStore, ReadyToMergeItem, SchedulerStats } from "./daemon";
 import { HarnessReadiness } from "./harness";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
@@ -27,9 +21,7 @@ export const WorkspaceState = Schema.TaggedUnion({
     checkoutPath: TrimmedNonEmptyString,
     issueTracker: IssueTrackerType,
     record: WorkspaceRegistration,
-    poll: PollState,
     contributions: Schema.Array(LocalContribution),
-    availability: OperationAvailabilityList,
   },
   Failed: {
     name: Schema.optional(WorkspaceId),

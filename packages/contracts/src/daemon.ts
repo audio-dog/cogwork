@@ -6,7 +6,7 @@ import { LocalContribution } from "./contribution";
 import { HarnessEnablement } from "./harness";
 import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
-import { OperationNeedKind, WorkspaceConcurrency, WorkspaceRegistration } from "./workspace";
+import { WorkspaceConcurrency, WorkspaceRegistration } from "./workspace";
 
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -86,50 +86,8 @@ export const ReadyToMergeItem = Schema.Struct({
 });
 export type ReadyToMergeItem = typeof ReadyToMergeItem.Type;
 
-export const AvailabilityCause = Schema.TaggedUnion({
-  UnsatisfiedNeed: {
-    need: TrimmedNonEmptyString,
-    kind: OperationNeedKind,
-    reason: Schema.Literals(["unbound", "off", "unavailable", "not-ready"]),
-    contribution: Schema.NullOr(TrimmedNonEmptyString),
-    message: TrimmedNonEmptyString,
-  },
-  RuntimeHostFactFailed: {
-    fact: Schema.Literals(["checkout-path", "harness", "credential"]),
-    message: TrimmedNonEmptyString,
-  },
-  PolicyRefusal: {
-    source: TrimmedNonEmptyString,
-    message: TrimmedNonEmptyString,
-  },
-});
-export type AvailabilityCause = typeof AvailabilityCause.Type;
-
-export const OperationAvailability = Schema.Struct({
-  operation: TrimmedNonEmptyString,
-  available: Schema.Boolean,
-  causes: Schema.Array(AvailabilityCause),
-});
-export type OperationAvailability = typeof OperationAvailability.Type;
-
-export const OperationAvailabilityList = Schema.Array(OperationAvailability).pipe(
-  Schema.withDecodingDefaultKey(Effect.succeed([])),
-);
-
 export const PollPauseReason = Schema.Literals(["auth", "unavailable", "rate-limited"]);
 export type PollPauseReason = typeof PollPauseReason.Type;
-
-export const PollState = Schema.Union([
-  Schema.Struct({ status: Schema.Literal("ok") }),
-  Schema.Struct({ status: Schema.Literal("pending") }),
-  Schema.Struct({
-    status: Schema.Literal("paused"),
-    reason: PollPauseReason,
-    message: Schema.String,
-    retryAtMillis: Schema.NullOr(Schema.Finite),
-  }),
-]).pipe(Schema.toTaggedUnion("status"));
-export type PollState = typeof PollState.Type;
 
 export const WorkspaceInfo = Schema.Struct({
   name: WorkspaceId,
@@ -137,9 +95,7 @@ export const WorkspaceInfo = Schema.Struct({
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerType,
   record: WorkspaceRegistration,
-  poll: PollState,
   contributions: Schema.Array(LocalContribution),
-  availability: OperationAvailabilityList,
   readyToMerge: Schema.Array(ReadyToMergeItem),
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;

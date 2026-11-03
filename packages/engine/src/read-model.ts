@@ -59,9 +59,7 @@ export const workspaceInfoOf = (
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
   record: workspaceRecordOf(workspace),
-  poll: { status: "ok" as const },
   contributions: workspace.contributions,
-  availability: [],
   readyToMerge,
 });
 

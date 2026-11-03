@@ -37,9 +37,7 @@ const registered = (name: string, displayName?: string) =>
           issueTracker: { type: "github" },
           linearHistory: false,
         },
-        poll: { status: "ok" },
         contributions: [],
-        availability: [],
       },
     }),
   );
@@ -105,7 +103,6 @@ describe("workspace record draft", () => {
         concurrency: 3,
         mcpSkills: [],
       },
-      poll: { status: "ok" },
       contributions: [],
     });
 

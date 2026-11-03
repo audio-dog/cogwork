@@ -69,9 +69,7 @@ export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
   checkoutPath: info.checkoutPath,
   issueTracker: info.issueTracker,
   record: info.record,
-  poll: info.poll,
   contributions: info.contributions,
-  availability: info.availability,
 });
 
 export const workspaceFailureState = (failure: WorkspaceFailureInfo) => ({

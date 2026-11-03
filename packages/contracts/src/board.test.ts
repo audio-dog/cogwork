@@ -34,9 +34,7 @@ const registered = (name: string) =>
       issueTracker: { type: "github" },
       linearHistory: false,
     },
-    poll: { status: "ok" },
     contributions: [],
-    availability: [],
   });
 
 const readyToMerge = (id: string, title: string) =>
@@ -395,9 +393,7 @@ describe("applyDaemonEvent", () => {
             issueTracker: { type: "linear" },
             linearHistory: false,
           },
-          poll: { status: "ok" },
           contributions: [],
-          availability: [],
         }),
       }),
     ]);
