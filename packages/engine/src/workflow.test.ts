@@ -33,13 +33,15 @@ import * as Stream from "effect/Stream";
 import { clockEntries, clockSource } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";
-import { githubSourceControlActionEntries } from "./github/provider";
+import { githubSourceControlActionEntries, slackReviewTemplate } from "./github/provider";
 import { githubPullRequestEntries } from "./github/pull-request-trigger-source";
 import { githubTrackerEntries } from "./github/tracker-trigger-source";
 import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import { linearTrackerEntries } from "./linear/tracker-trigger-source";
+import { slackEntries } from "./slack-source";
+import { slackActionEntries } from "./slack-write";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import {
   cogworkWorkflowCatalogContribution,
@@ -79,7 +81,7 @@ const triggerContribution: WorkflowCatalogContribution = {
       emits: [],
     }),
   ],
-  templates: [],
+  templates: [slackReviewTemplate],
 };
 
 const clockContribution = {
@@ -90,6 +92,12 @@ const clockContribution = {
       Effect.map((options) => options.map((option) => ({ ...option, listedIn: workspaces }))),
       Effect.catchTag("SourceFailure", () => Effect.succeed([])),
     ),
+};
+
+const githubReviewContribution: WorkflowCatalogContribution = {
+  entries: [...githubSourceControlActionEntries, ...slackEntries, ...slackActionEntries],
+  templates: [],
+  listOptions: () => Effect.succeed([]),
 };
 
 const document = decodeDocument({
@@ -135,6 +143,7 @@ const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   { entries: linearTrackerEntries, templates: [] },
   triggerContribution,
   granolaWorkflowCatalogContribution,
+  githubReviewContribution,
   clockContribution,
 ]);
 
@@ -265,6 +274,21 @@ layer(NodeServices.layer)((it) => {
                 entry: "linear.add-label",
                 parameters: [{ id: "label", value: "state:needs-triage" }],
               },
+            ],
+          },
+          {
+            id: "slack-to-github-review",
+            trigger: "slack.i-am-mentioned",
+            forEach: null,
+            choices: ["review-request", "question", "not-actionable"],
+            actions: [
+              {
+                choice: "review-request",
+                entry: "slack.add-reaction",
+                parameters: [{ id: "emoji", value: "eyes" }],
+              },
+              { choice: "question", entry: "slack.draft-reply-in-slack", parameters: [] },
+              { choice: "not-actionable", entry: "cogwork.stop", parameters: [] },
             ],
           },
         ],

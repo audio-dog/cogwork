@@ -21,6 +21,7 @@ import {
   type StreamChunk,
   type TextAdapter,
   type TextOptions,
+  toolDefinition,
 } from "@tanstack/ai";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import {
@@ -482,6 +483,42 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           assert.deepStrictEqual(messages[1], { role: "user", content: "Implement #147." });
           assert.deepStrictEqual(probe.chatOptions[0]?.systemPrompts, []);
         }),
+    );
+
+    it.effect("renders only engine-owned tools named by the Run Plan", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-engine-tool-" });
+        const probe = new ControlledProbe();
+        const harness = makeHarness(descriptor(terminalEvents, probe));
+        const pullRequestTool = toolDefinition({
+          name: "pull-request",
+          description: "Read a pull request",
+        }).server(() => Promise.resolve({}));
+        const hiddenTool = toolDefinition({
+          name: "hidden-tool",
+          description: "Must stay hidden",
+        }).server(() => Promise.resolve({}));
+        const plan = RunPlan.make({
+          ...request,
+          tools: ["pull-request"],
+          sandbox: { ...request.sandbox, workspace: checkout },
+        });
+
+        yield* harness
+          .run({
+            plan,
+            session: freshSession,
+            mcpCredentials: new Map(),
+            engineTools: [pullRequestTool, hiddenTool],
+          })
+          .pipe(Stream.runDrain);
+
+        assert.deepStrictEqual(
+          probe.chatOptions[0]?.tools?.map(({ name }) => name),
+          ["pull-request"],
+        );
+      }),
     );
 
     it.effect("ends a Run whose checkout feed never sees an event", () =>

@@ -265,6 +265,7 @@ export const make = (config: SchedulerConfig) =>
 
     const tick = Effect.fn("Scheduler.tick")(function* () {
       const config = yield* Ref.get(configRef);
+      yield* workflowRun.refreshReviewPlans();
       const registryState = yield* registry.state;
       const workspaceLimits = new Map(
         registryState.workspaces.map(({ config: workspace, workspaceLimit }) => [
