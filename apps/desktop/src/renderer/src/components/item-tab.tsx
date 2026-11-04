@@ -12,9 +12,9 @@ import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
-import { BoardResult, useActivitySession, useBoard } from "../features/activity-session";
+import { BoardResult, useBoard, useOperationName } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
-import { boardItem, operationNameOf, runForItem, runsForItem, workItemLabel } from "../features/feed";
+import { boardItem, type OperationRun, runForItem, runsForItem, workItemLabel } from "../features/feed";
 import { relativeTime } from "../features/format";
 import {
   attemptTone,
@@ -66,7 +66,7 @@ interface MutationStatus {
 interface ItemTabMeta {
   readonly now: number;
   readonly cancel: MutationStatus;
-  readonly operationName: (operation: string) => string;
+  readonly operationName: (run: OperationRun) => string;
 }
 
 interface ItemTabContextValue {
@@ -94,7 +94,6 @@ function ItemTabProvider({
   item,
   run,
   attempts,
-  operationName,
   initialSubTab,
   children,
 }: {
@@ -103,7 +102,6 @@ function ItemTabProvider({
   item: ItemTabSubject;
   run: RunSummary | null;
   attempts: readonly RunSummary[];
-  operationName: (operation: string) => string;
   initialSubTab?: SubTabKey;
   children: ReactNode;
 }) {
@@ -112,6 +110,7 @@ function ItemTabProvider({
   );
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
   const now = useNow();
+  const operationName = useOperationName();
 
   const descriptor = describeItemState(run, item, operationName);
   const tabs = subTabsFor(item);
@@ -348,7 +347,7 @@ function PreviousAttempts() {
                     >
                       {runStatusLabel[attempt.status]}
                     </span>
-                    <span className="text-muted-foreground">{operationName(attempt.operation)}</span>
+                    <span className="text-muted-foreground">{operationName(attempt)}</span>
                     <span aria-hidden className="text-muted-foreground">
                       ·
                     </span>
@@ -496,7 +495,6 @@ function ItemGone() {
 
 export function ItemTab({ selection }: { selection: ItemSelection & { runId?: RunSummary["id"] } }) {
   const result = useBoard();
-  const { workflows } = useActivitySession();
   if (!BoardResult.$is("Success")(result)) return <ItemGone />;
 
   const { board } = result;
@@ -521,7 +519,6 @@ export function ItemTab({ selection }: { selection: ItemSelection & { runId?: Ru
       item={subject}
       run={run}
       attempts={attempts}
-      operationName={(operation) => operationNameOf(workflows.values(), operation)}
       initialSubTab={selectedRun ? "run" : undefined}
     >
       <div className="flex h-full min-h-0 flex-col">

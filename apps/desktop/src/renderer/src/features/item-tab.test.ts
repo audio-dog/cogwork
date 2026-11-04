@@ -40,7 +40,8 @@ const readyEntry: BoardItem = {
   },
 };
 
-const operationNames = (operation: string) => (operation === "triage" ? "Triage" : operation);
+const operationNames = ({ operation }: { readonly operation: string }) =>
+  operation === "triage" ? "Triage" : operation;
 
 describe("item tab subject", () => {
   it("opens a Run-only item by its number, its Run's title, and a link to the issue", () => {

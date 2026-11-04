@@ -8,7 +8,7 @@ import type {
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
-import { workItemLabel } from "./feed";
+import { type OperationRun, workItemLabel } from "./feed";
 import { runStatusLabel } from "./run-status";
 
 export type StateTone = "live" | "ready" | "muted";
@@ -62,11 +62,11 @@ const settledItemState = (run: RunSummary | null, subject: ItemTabSubject) =>
 export const describeItemState = (
   run: RunSummary | null,
   subject: ItemTabSubject,
-  operationName: (operation: string) => string,
+  operationName: (run: OperationRun) => string,
 ) =>
   run?.status === "running"
     ? ({
-        label: `Running · ${operationName(run.operation)}`,
+        label: `Running · ${operationName(run)}`,
         tone: "live",
         running: true,
       } satisfies ItemStateDescriptor)

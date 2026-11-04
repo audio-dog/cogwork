@@ -19,7 +19,7 @@ import type * as Atom from "effect/unstable/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
 import { recordDaemonEventsApplied } from "../daemon/process-health";
-import { workItemLabel } from "./feed";
+import { type OperationRun, operationNameOf, runTitle } from "./feed";
 import {
   applyRunPreview,
   previewMap,
@@ -67,6 +67,7 @@ export interface ActiveRun {
   readonly workspace: WorkspaceId;
   readonly workItem: WorkItemId;
   readonly subject?: RunSummary["subject"];
+  readonly workflow?: RunSummary["workflow"];
   readonly operation: RunSummary["operation"];
   readonly status: RunStatus;
   readonly preview: RunActivityPreview | null;
@@ -172,7 +173,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       kind: "run",
       atMillis,
       label: activityLabels.run,
-      summary: `${run.subject?.title ?? workItemLabel(run.workItem)} · run ${run.status}`,
+      summary: `${runTitle(run)} · run ${run.status}`,
       severity: runStatusSeverity[run.status],
       entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem },
       raw: pretty(run),
@@ -523,6 +524,11 @@ export function useActivitySession(): ActivitySession {
   const session = use(ActivitySessionContext);
   if (session === null) throw new Error("useActivitySession must render inside ActivitySessionProvider.");
   return session;
+}
+
+export function useOperationName() {
+  const { workflows } = useActivitySession();
+  return (run: OperationRun) => operationNameOf(workflows, run);
 }
 
 export type BoardResult = Data.TaggedEnum<{

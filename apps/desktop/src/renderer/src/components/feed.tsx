@@ -6,9 +6,9 @@ import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
 import { RiCheckLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use } from "react";
-import { BoardResult, useActivitySession, useBoard } from "../features/activity-session";
-import type { FeedRun } from "../features/feed";
-import { operationNameOf, recentlyDone, runningRuns } from "../features/feed";
+import { BoardResult, useBoard, useOperationName } from "../features/activity-session";
+import type { FeedRun, OperationRun } from "../features/feed";
+import { recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
 import { runStatusLabel } from "../features/run-status";
@@ -31,7 +31,7 @@ interface FeedActions {
 interface FeedMeta {
   now: number;
   workspaceName: (workspace: WorkspaceId) => string;
-  operationName: (operation: string) => string;
+  operationName: (run: OperationRun) => string;
 }
 
 interface FeedContextValue {
@@ -129,7 +129,7 @@ function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivit
         <TypingDots />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{title ?? label}</span>
         <Badge variant="secondary" className="w-20 shrink-0 justify-center">
-          {operationName(run.operation)}
+          {operationName(run)}
         </Badge>
         <span className="w-16 shrink-0 truncate text-end text-xs text-muted-foreground">
           {workspaceName(run.workspace)}
@@ -266,11 +266,11 @@ function FeedContent({
   done,
   previews,
   workspaceName,
-  operationName,
-}: FeedState & Pick<FeedMeta, "workspaceName" | "operationName">) {
+}: FeedState & Pick<FeedMeta, "workspaceName">) {
   const openItem = useRightPanelStore((state) => state.openItem);
   const select = (selection: ItemSelection) => openItem(selection.workspace, selection.workItem);
   const now = useNow();
+  const operationName = useOperationName();
   return (
     <FeedCompound.Provider
       state={{ running, done, previews }}
@@ -310,7 +310,6 @@ export function FeedSkeleton() {
 
 export function Feed() {
   const result = useBoard();
-  const { workflows } = useActivitySession();
   const filter = useChromeStore((state) => state.workspaceFilter);
 
   if (!BoardResult.$is("Success")(result)) return null;
@@ -342,7 +341,6 @@ export function Feed() {
       done={done}
       previews={previews}
       workspaceName={(workspace) => workspaceLabelById(board, workspace)}
-      operationName={(operation) => operationNameOf(workflows.values(), operation)}
     />
   );
 }

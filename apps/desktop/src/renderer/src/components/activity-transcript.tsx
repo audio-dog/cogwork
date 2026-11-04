@@ -30,9 +30,9 @@ import {
   type ActivityRow,
   activityLabels,
   type NowState,
-  useActivitySession,
+  useOperationName,
 } from "../features/activity-session";
-import { operationNameOf, workItemLabel } from "../features/feed";
+import { runTitle } from "../features/feed";
 import { relativeTime } from "../features/format";
 import { useNow } from "../features/use-now";
 import { useActivityView } from "./activity-view";
@@ -138,7 +138,7 @@ function runPreview(run: NowState["runs"][number], operationName: string) {
 
 function RunRow({ run }: { run: NowState["runs"][number] }) {
   const { actions } = useActivityView();
-  const { workflows } = useActivitySession();
+  const operationName = useOperationName();
   return (
     <button
       type="button"
@@ -147,11 +147,9 @@ function RunRow({ run }: { run: NowState["runs"][number] }) {
     >
       <RiRobot2Line className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium">
-          {run.subject?.title ?? workItemLabel(run.workItem)}
-        </span>
+        <span className="block truncate text-xs font-medium">{runTitle(run)}</span>
         <span className="block truncate text-[11px] text-muted-foreground">
-          {runPreview(run, operationNameOf(workflows.values(), run.operation))}
+          {runPreview(run, operationName(run))}
         </span>
       </span>
       <PulseDots />

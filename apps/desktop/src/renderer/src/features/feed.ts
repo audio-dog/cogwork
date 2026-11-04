@@ -3,6 +3,7 @@ import {
   itemKey,
   type RunSummary,
   refOfKey,
+  type WorkflowId,
   type WorkflowRecord,
   type WorkItemId,
   WorkItemRef,
@@ -31,10 +32,16 @@ export const workItemLabel = (workItem: string) => {
   return ref === null ? workItem : refLabel(ref);
 };
 
-export const operationNameOf = (workflows: Iterable<WorkflowRecord>, operation: string) =>
-  [...workflows]
-    .flatMap((workflow) => (workflow.publishedCopy ?? workflow.workingCopy).operations)
-    .find(({ id }) => id === operation)?.name ?? operation;
+export const runTitle = (run: Pick<RunSummary, "subject" | "workItem">) =>
+  run.subject?.title ?? workItemLabel(run.workItem);
+
+export type OperationRun = Pick<RunSummary, "workflow" | "operation">;
+
+export const operationNameOf = (workflows: ReadonlyMap<WorkflowId, WorkflowRecord>, run: OperationRun) => {
+  const workflow = run.workflow === undefined ? undefined : workflows.get(run.workflow);
+  const operations = (workflow?.publishedCopy ?? workflow?.workingCopy)?.operations ?? [];
+  return operations.find(({ id }) => id === run.operation)?.name ?? run.operation;
+};
 
 const terminalStatuses: ReadonlySet<RunSummary["status"]> = new Set([
   "succeeded",
@@ -48,7 +55,7 @@ const terminalStatuses: ReadonlySet<RunSummary["status"]> = new Set([
 const inWorkspace = (filter: WorkspaceId | null, workspace: WorkspaceId) =>
   filter === null || filter === workspace;
 
-const feedRunOf = (board: Board, run: RunSummary): FeedRun => ({
+const feedRunOf = (board: Board, run: RunSummary) => ({
   run,
   label: workItemLabel(run.workItem),
   title: run.subject?.title ?? board.items.get(itemKey(run.workspace, run.workItem))?.item.title ?? null,
