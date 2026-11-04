@@ -4,7 +4,7 @@
   "private": true,
   "description": "Orchestration control plane for AI coding agents: discover work, schedule runs, and drive harnesses.",
   "type": "module",
-  "packageManager": "pnpm@11.5.3",
+  "packageManager": "pnpm@12.16.1",
   "scripts": {
     "format-and-lint:fix": "biome check . --write",
     "format-and-lint:unsafe": "biome check . --write --unsafe",
@@ -32,7 +32,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "^24.20.0",
+      "version": "^26.13.0",
       "onFail": "download"
     }
   }
