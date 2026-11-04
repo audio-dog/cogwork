@@ -190,6 +190,7 @@ const fanOutAdmission = (
       atMillis: admission.event.atMillis,
       entry: admission.event.entry,
       workspace: admission.event.workspace,
+      subject: admission.event.subject,
       workContext: {
         body: JSON.stringify(element, null, 2),
         comments: [],

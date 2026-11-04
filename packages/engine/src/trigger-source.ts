@@ -67,6 +67,7 @@ export type TriggerEvent = typeof TriggerEvent.Type;
 export interface SweepCandidate {
   readonly key: WorkItemRef;
   readonly workspace: WorkspaceId | null;
+  readonly subject?: RunSubject | undefined;
   readonly lastTouchedAtMillis: number;
   readonly loadWorkContext?: Effect.Effect<RunPlanWorkContextProse | undefined, SourceFailure>;
 }

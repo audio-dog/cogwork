@@ -300,6 +300,7 @@ const sweepEventsAt = Effect.fn("ClockSource.sweepEventsAt")(function* (
         atMillis: instant,
         entry: subscription.entry,
         workspace: candidate.workspace,
+        subject: candidate.subject,
         target: { workflow: subscription.workflow, trigger: subscription.trigger },
         ...(workContext === undefined ? {} : { workContext }),
       } satisfies TriggerEvent;

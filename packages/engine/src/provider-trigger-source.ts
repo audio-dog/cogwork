@@ -84,10 +84,10 @@ export const workspaceOptionReader =
 export const parameterValue = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
   parameters.find((parameter) => parameter.id === id)?.value;
 
-export const providerSubject = (title: string | undefined, url: string) => {
+export const providerSubject = (title: string | undefined, url: string | null) => {
   const trimmed = title?.trim();
   if (!trimmed) return undefined;
-  return { title: trimmed, url: url.trim() || null };
+  return { title: trimmed, url: url?.trim() || null };
 };
 
 export const providerModifiedSinceGraceMillis = 30_000;

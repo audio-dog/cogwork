@@ -17,6 +17,7 @@ import type { ConnectionStoreService } from "./connection";
 import type { CoordinationService } from "./coordination";
 import type { Credential } from "./credential-store";
 import { type GranolaHttpFailure, makeGranolaHttp } from "./granola-http";
+import { providerSubject } from "./provider-trigger-source";
 import {
   SourceFailure,
   type TriggerEntry,
@@ -516,6 +517,7 @@ const eventOf = Effect.fn("GranolaSource.eventOf")(function* (
     atMillis: note.updatedAtMillis,
     entry: isGeneratedRevision ? generatedKey : editedKey,
     workspace: null,
+    subject: providerSubject(note.title, null),
     payload: payloadOf(note),
   } satisfies TriggerEvent;
 });

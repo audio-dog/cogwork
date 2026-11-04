@@ -33,6 +33,7 @@ import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker } from "./issue-tracker";
+import { providerSubject } from "./provider-trigger-source";
 import { WorkspaceRegistry } from "./registry";
 import {
   SourceFailure,
@@ -640,6 +641,7 @@ export const make = Effect.gen(function* () {
         {
           key,
           workspace: workspace.config.name,
+          subject: providerSubject(item.title, item.url),
           lastTouchedAtMillis,
           loadWorkContext: tracker.readProse(workspace, item.id).pipe(Effect.mapError(sweepFailure)),
         },
@@ -677,6 +679,7 @@ export const make = Effect.gen(function* () {
           return {
             key: admission.event.key,
             workspace: admission.event.workspace,
+            subject: admission.event.subject,
             lastTouchedAtMillis: Math.max(
               admission.event.atMillis,
               view.park?.atMillis ?? 0,
