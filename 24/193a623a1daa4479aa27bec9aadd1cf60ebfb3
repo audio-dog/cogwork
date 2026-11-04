@@ -1,0 +1,224 @@
+apps/desktop/src/renderer/src/features/workflow-edits.ts
+  s_d2457442f091a8::t_724e0ae7f27116 28
+  s_d2457442f091a8::t_b525cb1aeffffd 1-27,29-118
+packages/engine/src/github/client.ts
+  s_4041b52c730515::t_b3dad7ca54a401 1358-1373
+  s_4041b52c730515::t_d6b03e093b14f6 1733
+  s_4041b52c730515::t_c332ab80257087 231
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_d2457442f091a8::t_3dc1feed8811ac 1-810
+packages/engine/src/github/client.test.ts
+  s_4041b52c730515::t_d42da720543b84 1163
+  s_4041b52c730515::t_54178e5b52a496 1153-1154
+  s_4041b52c730515::t_de9c66e7c14c83 1147-1152,1155-1162,1164-1166
+packages/engine/src/github/tracker-trigger-source.ts
+  s_4041b52c730515::t_9b357575bf4c7c 237,239,245,252
+  s_4041b52c730515::t_aac578f33cdf75 28
+  s_4041b52c730515::t_fd5c77882b2f93 244
+packages/engine/src/workflow-machine-readiness.ts
+  s_4041b52c730515::t_4dddd97f594a4d 35
+  s_4041b52c730515::t_e68b7c8565cdbb 88-92
+  s_4041b52c730515::t_5e605d9969839c 6
+apps/desktop/src/renderer/src/components/buffered-field.tsx
+  s_4041b52c730515::t_b6a8015d6fff30 50-53
+  s_d2457442f091a8::t_9709241390e16a 1-15,17,23-24,26-27,33-35,37-38,40-42,44-49,54-103
+  s_4041b52c730515::t_d6ceb31487f9a5 16,19-20,29-31,36,39,43
+  s_4041b52c730515::t_8cb15da91891ba 18,21-22,25,28,32
+packages/engine/src/workflow-machine-readiness.test.ts
+  s_4041b52c730515::t_2434c4476c5f3f 58
+  s_4041b52c730515::t_ffe37902251070 1
+  s_4041b52c730515::t_2fabd49edc661e 32-33
+  s_4041b52c730515::t_9571b65207beaf 2-31,34-57,59-60
+packages/engine/src/workflow-catalog.ts
+  s_4041b52c730515::t_686fbd9614df41 1,11,16,57,71
+packages/contracts/src/workflow.test.ts
+  s_4041b52c730515::t_bee14a694c3def 446-461
+configs/lint/tests/rules.test.mjs
+  s_4041b52c730515::t_70a846235b014f 125
+  s_4041b52c730515::t_fad2694082cb70 127-130
+  s_4041b52c730515::t_fa22be16ac4f6c 124
+  s_4041b52c730515::t_dd954fc6d1787e 126
+packages/engine/src/slack-source.ts
+  s_4041b52c730515::t_e63e6790f4da60 986-988,990-991,993-995,997-998,1000-1001
+  s_4041b52c730515::t_d9e676d061dbf1 1019
+  s_4041b52c730515::t_69cc15f34c4665 32,989,996
+packages/engine/src/linear/trigger-source.test.ts
+  s_4041b52c730515::t_ec0138f11671dc 20
+  s_4041b52c730515::t_9942a71b44ce43 101-103,108-111,114-115,117-118
+apps/desktop/src/renderer/src/features/workflow-defaults.ts
+  s_d2457442f091a8::t_62c8bacd66211c 1-6,11-30,32-48
+packages/engine/src/trigger-source.ts
+  s_4041b52c730515::t_a0410ffdd47bbc 90
+  s_4041b52c730515::t_3361b6800d0f32 113
+  s_4041b52c730515::t_296b866467e33f 18
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_d2457442f091a8::t_28ba1e1fb05e3b 23
+configs/lint/jsx.grit
+  s_4041b52c730515::t_9c955aa63c1146 21-26,30-37
+  s_4041b52c730515::t_378306aab03d3c 29
+apps/desktop/src/shared/ipc.ts
+  s_4041b52c730515::t_c4fbad08caece0 117
+  s_4041b52c730515::t_8ce73a53778c40 69
+apps/desktop/src/main/ipc.test.ts
+  s_4041b52c730515::t_643af5757faec6 171-187
+  s_4041b52c730515::t_251a04cdd81e1a 81
+  s_4041b52c730515::t_cf801bab0fe8df 70-71
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_d2457442f091a8::t_f39b5c35c7c92c 1-16
+  s_4041b52c730515::t_10c59d1027ff51 75
+  s_4041b52c730515::t_1ca283f69d3d2d 217-219
+  s_d2457442f091a8::t_268ec0c598c3a6 157,159
+  s_d2457442f091a8::t_43a77a73f94a36 20,22,27
+  s_d2457442f091a8::t_77324a7dca6099 36,68,90-93
+  s_d2457442f091a8::t_4d73f3f53a2628 54-67,69-71,77-78,82-89,94-102,104-110
+  s_d2457442f091a8::t_c360dde0866e42 103
+  s_d2457442f091a8::t_e629f8f2718b9d 221-226
+  s_4041b52c730515::t_1bde1458d0930d 39
+  s_d2457442f091a8::t_cc58afa9d79637 111
+apps/desktop/src/renderer/src/features/workflow-edits.test.ts
+  s_d2457442f091a8::t_6c24372da8fa85 2-5,7-46,48-73
+  s_d2457442f091a8::t_798f1cfa9188d7 1,6
+  s_d2457442f091a8::t_655fa668884194 47
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_4041b52c730515::t_0eb942e5d516b4 1,37
+  s_4041b52c730515::t_304dd7587bd3ed 28
+scripts/vendor.mjs
+  s_770ced53906877::t_3ad2b28c572df0 23
+packages/engine/src/clock-source.test.ts
+  s_4041b52c730515::t_3b7a1c6cf362ec 128-130
+  s_4041b52c730515::t_be0945889f30c5 11
+  s_4041b52c730515::t_fd2e24a5b97060 158-165,168-170,172
+apps/desktop/src/main/ipc.ts
+  s_4041b52c730515::t_0d3db3ef141abf 240-242
+  s_4041b52c730515::t_9c11f625b18f8e 43
+packages/engine/src/linear/client.ts
+  s_4041b52c730515::t_03a2e64eb1cc07 1218
+  s_4041b52c730515::t_f193ce165fc72c 3
+  s_4041b52c730515::t_a3840010c33143 1019-1031
+  s_4041b52c730515::t_92671350695b47 473-477
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_4041b52c730515::t_92344ca2aaf071 216-233
+apps/desktop/src/renderer/src/components/workflow-problems.tsx
+  s_d2457442f091a8::t_5e965de786caf9 51-52
+  s_d2457442f091a8::t_9ba6e0a1cbf82a 57-62,65
+  s_d2457442f091a8::t_a1fa3a4abfc9b7 107,110-111,114-115
+  s_d2457442f091a8::t_02424f9aea7d31 1-50,53-56,63-64,66-106,108-109,112-113,116-166
+apps/desktop/src/renderer/src/features/workflow-daemon-provider.test.tsx
+  s_d2457442f091a8::t_a7561e430a99d6 8,11,91,105-108,136-139
+  s_d2457442f091a8::t_1581d97d120d3f 102-104,133-135
+apps/desktop/src/renderer/src/components/register-workspace-dialog.tsx
+  s_4041b52c730515::t_752df6d89d0102 1
+  s_4041b52c730515::t_2d34ad16341958 2-11,13-24,29,32,37-44,46,48-50,52,54-64,69-86,89,91,95,107,109,111-112,114-115,130-144,146,160,162-163,165-170,172-175,181-185,187-188,200-205
+  s_4041b52c730515::t_c12872ddf3505f 12,25-28,30-31,33-36,45,47,51,53,65-68,87-88,90,92-94,96-106,108,110,113,116-129,145,147-159,161,164,171,176-180,186,189-199
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_4041b52c730515::t_a63a424e3ed9da 2-11,21,23,25-26,32-37,63-65
+packages/engine/src/clock-source.ts
+  s_4041b52c730515::t_999bdbf0ec091f 358-377,379-383
+  s_4041b52c730515::t_a7d3df5743847e 22
+  s_4041b52c730515::t_fbfa10fbd0c55c 33
+  s_4041b52c730515::t_8500ecac2dbe5e 390
+packages/engine/src/workflow-options.ts
+  s_4041b52c730515::t_62f515ceb30d24 1-65
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_d2457442f091a8::t_a113b886569009 5-6,10,13,18-29,33-34,45-50,52-54,59-90,94,99-101,152,175,178-179,181,198,207,210,227,229,235,240-241,243-276,280,284,286-288,290-315,319-320,324,333,336,340,346-357,359-360,370-371,381,383,398,405-408,411,413-420,422-436,438-461,476-477,566,569,571-575,585-591,593-594,598-612,622,624-627,629-632,641-642,645,650,655-699,718-720,723-724,784-805,807-811,823-829,835-842
+  s_4041b52c730515::t_9ce99fd7f9e6cc 98
+  s_4041b52c730515::t_006cbf434d66fa 124,126,130,135
+  s_4041b52c730515::t_9385b9737aa7ac 15
+  s_d2457442f091a8::t_e581ea3b8e4858 491,532,595-597
+  s_d2457442f091a8::t_895a23d4a073dc 30-32,51,57-58,465-475,478-488,493-495,497-500,502-505,509,511,513-515,517-521,523-531,533-536,539,543,545,548-550,552-562,576-581,583-584,592,614
+packages/contracts/src/workflow.ts
+  s_4041b52c730515::t_0a15d9c4228c0f 1429-1431
+apps/desktop/src/renderer/src/components/workflow-catalog-menu.tsx
+  s_d2457442f091a8::t_8394c214d7ab8f 1-8,19,21-22,28,37,54-87,89-99,101-126,129-150,152-160,175-176,182-184,188-199,202-206,215-221,226-233,235-239,246-308,312,314,317-331,333-334,336,338,341,343,354-384,387,390-396,398-404,406,409,415-458,479-484
+  s_d2457442f091a8::t_08dd1192ee4c7e 459-478
+  s_d2457442f091a8::t_084a63c49549ee 53
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_4041b52c730515::t_f223387c33e3a3 313-317
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_4041b52c730515::t_4c3d9299bbb52f 46
+  s_4041b52c730515::t_95cfee4f4f78c8 120
+packages/engine/src/github/provider.ts
+  s_4041b52c730515::t_831a9c4ea42213 30
+  s_4041b52c730515::t_0f8e2df309da3a 18
+  s_4041b52c730515::t_23f9095bd86cb1 579-588
+  s_4041b52c730515::t_ded51fe026325e 592
+configs/lint/tests/fixtures/no-select-without-items/invalid-example.tsx
+  s_4041b52c730515::t_95961746ee6f11 1-22
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_4041b52c730515::t_5df28e178409d9 382
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_4041b52c730515::t_0e0fb1ebe6f621 296-310
+  s_4041b52c730515::t_2b2c3ec0b0dee3 1-6
+  s_4041b52c730515::t_2b2a0374d63ab1 318
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_4041b52c730515::t_36dc1828c07fd2 12
+apps/desktop/src/main/index.ts
+  s_4041b52c730515::t_0157ba4363a483 234-241
+  s_4041b52c730515::t_b3c87eba9319e3 10
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_d2457442f091a8::t_193b865dca923e 143-157
+  s_4041b52c730515::t_36c6864a3cf903 272-273,293-295,298-299,302,305,308-313
+  s_4041b52c730515::t_a474877bb4b6a1 621-624,631,637,640,642-643,645,648-651
+  s_4041b52c730515::t_5bd87efd58d43e 625-630,632-635,639,647
+  s_4041b52c730515::t_811635ed702ce2 724-744,746-759
+  s_4041b52c730515::t_99a5c4155a3285 10
+  s_4041b52c730515::t_3f9a8201890f51 306-307
+  s_d2457442f091a8::t_dc4099b753e26e 20-25
+  s_d2457442f091a8::t_1581d97d120d3f 212,250,332,367,415,491,568-570,672,707,745
+  s_4041b52c730515::t_cec2cb7722866d 274-292,296-297,300-301,303-304,314-316,618-619,760-761
+  s_d2457442f091a8::t_0d6209ee0d70e1 508,545-549,551-552,557-567,571-590,602,615-617,636,638,641,646,652
+  s_4041b52c730515::t_42645123248eb8 4
+  s_4041b52c730515::t_fa315cf002f9b7 620
+apps/desktop/src/preload/index.ts
+  s_4041b52c730515::t_ce4f132bc4fb0d 39
+packages/engine/src/workflow.ts
+  s_4041b52c730515::t_7f28fe5e4c64fc 426
+  s_4041b52c730515::t_c624f1b8e8b250 46
+  s_4041b52c730515::t_7e2474b451eed1 185
+packages/engine/src/workflow.test.ts
+  s_4041b52c730515::t_804cf7a0b47cc9 99-102
+  s_4041b52c730515::t_2a5c74980e6c2b 889-891,893-926
+  s_4041b52c730515::t_f10b69e2ccd084 892
+  s_4041b52c730515::t_e5d81d3a444b0e 177
+  s_4041b52c730515::t_f1d287009e174c 87,90,96-98,103-129
+  s_4041b52c730515::t_70a59d99a358cf 15
+  s_4041b52c730515::t_ffc065b6830f93 44
+packages/engine/src/github/trigger-source.test.ts
+  s_4041b52c730515::t_f43f606d3dbb3e 29
+  s_4041b52c730515::t_bc8bb242e11d8e 162-164,175-176,178-179
+  s_4041b52c730515::t_3b068641087672 169-172
+configs/lint/tests/fixtures/no-select-without-items/valid-example.tsx
+  s_4041b52c730515::t_8cf3683a7dd229 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "24193a623a1daa4479aa27bec9aadd1cf60ebfb3",
+  "prompts": {},
+  "sessions": {
+    "s_4041b52c730515": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ef442269-cfc5-49d7-b54f-060694da656c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_770ced53906877": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4d84af3c-2cf3-4f9a-80ee-d0b04dbd9d3a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_d2457442f091a8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "40b394c8-b55e-43fd-9fbe-5bdb19c36e32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
