@@ -1,0 +1,19 @@
+packages/engine/docs/adr/0016-run-plan-resolution-and-run-completion-are-modules-of-the-workflow-runner.md
+  s_2324a6c1e00458::t_775096c8401afa 1-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8e03e91070a69a2fac5c4e8eb6d58a86dfe183b6",
+  "prompts": {},
+  "sessions": {
+    "s_2324a6c1e00458": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1e3915b5-60c5-47a8-a730-ec09aba04ebf",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
