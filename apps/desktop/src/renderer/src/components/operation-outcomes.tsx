@@ -184,38 +184,48 @@ function AddActionMenu({ children }: { readonly children: ReactNode }) {
   );
 }
 
+function AddActionTrigger({ className }: { readonly className: string }) {
+  return (
+    <AddActionMenu>
+      <CatalogMenu.Trigger
+        render={
+          <Button size="xs" variant="ghost" className={cn("font-normal text-muted-foreground", className)} />
+        }
+      >
+        <RiAddLine data-icon="inline-start" />
+        Add Action
+      </CatalogMenu.Trigger>
+    </AddActionMenu>
+  );
+}
+
 function OutcomeHeading({ children }: { readonly children: ReactNode }) {
   const { state } = useOutcome();
   return (
     <div className="flex h-7 items-center gap-2">
       {children}
       {outcomeIsEmpty(state) ? null : (
-        <AddActionMenu>
-          <CatalogMenu.Trigger
-            render={
-              <Button
-                size="xs"
-                variant="ghost"
-                className="ms-auto font-normal text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100"
-              />
-            }
-          >
-            <RiAddLine data-icon="inline-start" />
-            Add Action
-          </CatalogMenu.Trigger>
-        </AddActionMenu>
+        <AddActionTrigger className="ms-auto opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 focus-visible:opacity-100 data-popup-open:opacity-100" />
       )}
     </div>
   );
 }
 
-function RemoveOnHover({ label, onRemove }: { readonly label: string; readonly onRemove: () => void }) {
+function RemoveOnHover({
+  label,
+  className,
+  onRemove,
+}: {
+  readonly label: string;
+  readonly className: string;
+  readonly onRemove: () => void;
+}) {
   return (
     <Button
       size="icon-xs"
       variant="ghost"
       aria-label={label}
-      className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+      className={cn("opacity-0 focus-visible:opacity-100", className)}
       onClick={onRemove}
     >
       <RiCloseLine />
@@ -309,15 +319,11 @@ function ActionLine({ action, index }: { readonly action: WorkflowAction; readon
         ))}
       </span>
       {entry ? <Instructions entry={entry} /> : <span />}
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={`Remove ${name}`}
-        className="mt-0.5 opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
-        onClick={() => actions.send(outcomeEdits.removeAction(operation, state.when, index, entries))}
-      >
-        <RiCloseLine />
-      </Button>
+      <RemoveOnHover
+        label={`Remove ${name}`}
+        className="mt-0.5 group-hover/action:opacity-100"
+        onRemove={() => actions.send(outcomeEdits.removeAction(operation, state.when, index, entries))}
+      />
     </div>
   );
 }
@@ -334,15 +340,11 @@ function HandOffLine({ target }: { readonly target: WorkflowOperation["id"] }) {
     <div className="group/action flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs hover:bg-muted/40">
       <RiArrowRightLine className="size-3.5 text-muted-foreground" />
       <span className="font-medium">{name}</span>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label={`Stop handing off to ${name}`}
-        className="ms-auto opacity-0 group-hover/action:opacity-100 focus-visible:opacity-100"
-        onClick={() => actions.send(outcomeEdits.handOff(operation, state.when, null))}
-      >
-        <RiCloseLine />
-      </Button>
+      <RemoveOnHover
+        label={`Stop handing off to ${name}`}
+        className="ms-auto group-hover/action:opacity-100"
+        onRemove={() => actions.send(outcomeEdits.handOff(operation, state.when, null))}
+      />
     </div>
   );
 }
@@ -359,16 +361,7 @@ function OutcomeActions() {
         />
       ))}
       {state.handOff ? <HandOffLine target={state.handOff} /> : null}
-      {outcomeIsEmpty(state) ? (
-        <AddActionMenu>
-          <CatalogMenu.Trigger
-            render={<Button size="xs" variant="ghost" className="w-fit font-normal text-muted-foreground" />}
-          >
-            <RiAddLine data-icon="inline-start" />
-            Add Action
-          </CatalogMenu.Trigger>
-        </AddActionMenu>
-      ) : null}
+      {outcomeIsEmpty(state) ? <AddActionTrigger className="w-fit" /> : null}
     </div>
   );
 }
@@ -442,6 +435,7 @@ function OutcomeName({
       {question.choices.length > 1 ? (
         <RemoveOnHover
           label={`Remove ${choice.name}`}
+          className="group-hover/row:opacity-100"
           onRemove={() =>
             actions.send([
               { _tag: "RemoveChoice", operation: operation.id, question: question.id, choice: choice.id },
@@ -480,17 +474,13 @@ function QuestionLine({ question }: { readonly question: WorkflowQuestion }) {
         workflowDocument={workflowDocument}
       />
       {namesQuestions(operation) ? (
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`Remove ${label.toLowerCase()}`}
-          className="opacity-0 group-hover/question:opacity-100 focus-visible:opacity-100"
-          onClick={() =>
+        <RemoveOnHover
+          label={`Remove ${label.toLowerCase()}`}
+          className="group-hover/question:opacity-100"
+          onRemove={() =>
             actions.send([{ _tag: "RemoveQuestion", operation: operation.id, question: question.id }])
           }
-        >
-          <RiCloseLine />
-        </Button>
+        />
       ) : null}
     </div>
   );
@@ -550,6 +540,7 @@ function EveryTime() {
           <span className="ps-1.5 text-sm text-muted-foreground">Every time</span>
           <RemoveOnHover
             label="Stop running anything every time"
+            className="group-hover/row:opacity-100"
             onRemove={() => actions.send([{ _tag: "RemoveTransition", operation: operation.id, when: [] }])}
           />
         </OutcomeHeading>
@@ -576,6 +567,7 @@ function Combinations() {
             </span>
             <RemoveOnHover
               label="Remove this combination"
+              className="group-hover/row:opacity-100"
               onRemove={() =>
                 actions.send([{ _tag: "RemoveTransition", operation: operation.id, when: transition.when }])
               }
