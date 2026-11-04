@@ -473,15 +473,13 @@ function QuestionLine({ question }: { readonly question: WorkflowQuestion }) {
         problems={problemsAt(problems, { operation: operation.id, question: question.id, choice: null })}
         workflowDocument={workflowDocument}
       />
-      {namesQuestions(operation) ? (
-        <RemoveOnHover
-          label={`Remove ${label.toLowerCase()}`}
-          className="group-hover/question:opacity-100"
-          onRemove={() =>
-            actions.send([{ _tag: "RemoveQuestion", operation: operation.id, question: question.id }])
-          }
-        />
-      ) : null}
+      <RemoveOnHover
+        label={`Remove ${label.toLowerCase()}`}
+        className="group-hover/question:opacity-100"
+        onRemove={() =>
+          actions.send([{ _tag: "RemoveQuestion", operation: operation.id, question: question.id }])
+        }
+      />
     </div>
   );
 }
