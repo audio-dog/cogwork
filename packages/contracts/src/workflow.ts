@@ -11,6 +11,7 @@ import {
   SlackTeamId,
   SourceControlType,
   TrimmedNonEmptyString,
+  WorkflowId,
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
@@ -19,9 +20,6 @@ import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
 import { IssueTrackerConfig, SourceControlConfig } from "./workspace";
-
-export const WorkflowId = TrimmedNonEmptyString.pipe(Schema.brand("WorkflowId"));
-export type WorkflowId = typeof WorkflowId.Type;
 
 export const WorkflowNodeId = TrimmedNonEmptyString.check(
   Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
