@@ -7,7 +7,6 @@ import {
   WorkflowCatalogKey,
   WorkflowId,
   WorkflowNodeId,
-  type WorkflowOption,
   WorkflowParameterValue,
   WorkItemRef,
   WorkspaceId,
@@ -16,6 +15,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import type { SystemOptions } from "./workflow-options";
 
 export const TriggerSourceId = Schema.Literals(["github", "linear", "granola", "slack", "clock"]);
 export type TriggerSourceId = typeof TriggerSourceId.Type;
@@ -87,11 +87,7 @@ export interface TriggerSource {
   readonly id: TriggerSourceId;
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
   readonly availability: (entry: WorkflowCatalogKey) => Effect.Effect<WorkflowAvailability>;
-  readonly listOptions: (
-    entry: WorkflowCatalogKey,
-    parameter: string,
-    workspace?: WorkspaceId,
-  ) => Effect.Effect<ReadonlyArray<WorkflowOption>, SourceFailure>;
+  readonly options?: ReadonlyArray<SystemOptions>;
   readonly observe: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
     readPort?: TriggerReadPort,
@@ -114,9 +110,7 @@ export const combineTriggerSources = (sources: ReadonlyArray<TriggerSource>) =>
         availability: (entry) =>
           grouped.find((source) => ownsEntry(source, entry))?.availability(entry) ??
           Effect.succeed({ _tag: "Unavailable", reason: `Unknown ${entry} entry` }),
-        listOptions: (entry, parameter, workspace) =>
-          grouped.find((source) => ownsEntry(source, entry))?.listOptions(entry, parameter, workspace) ??
-          Effect.succeed([]),
+        options: grouped.flatMap(({ options = [] }) => options),
         observe: (subscriptions, readPort) => {
           const streams = grouped
             .map((source) => ({

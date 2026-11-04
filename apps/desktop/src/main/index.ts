@@ -7,7 +7,7 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
-import { app, BrowserWindow, crashReporter, Notification, powerMonitor, shell } from "electron";
+import { app, BrowserWindow, crashReporter, dialog, Notification, powerMonitor, shell } from "electron";
 import appIdentity from "../../app-identity.json";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveDesktopEnvironment } from "./desktop-environment";
@@ -231,6 +231,14 @@ const bootstrap = () => {
         BrowserWindow.getAllWindows().some((window) => window.webContents === sender),
       runtime,
       notifications,
+      chooseFolder: async (sender) => {
+        const options = { properties: ["openDirectory" as const] };
+        const window = BrowserWindow.fromWebContents(sender);
+        const result = window
+          ? await dialog.showOpenDialog(window, options)
+          : await dialog.showOpenDialog(options);
+        return result.canceled ? null : (result.filePaths[0] ?? null);
+      },
     });
 
     const startExit = await runtime.runPromiseExit(supervisor.start);

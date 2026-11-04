@@ -310,16 +310,17 @@ function PriorityFieldRow() {
   );
 }
 
+export const trackerItems = [
+  { value: "github", label: "GitHub Issues" },
+  { value: "linear", label: "Linear" },
+] as const;
+
 function IssueTrackerRows() {
   const {
     state: { draft, connections },
     actions: { patch },
     meta: { disabled },
   } = useWorkspaceRecord();
-  const trackerItems = [
-    { value: "github", label: "GitHub Issues" },
-    { value: "linear", label: "Linear" },
-  ];
   return (
     <FieldGroup>
       <Field orientation="responsive">

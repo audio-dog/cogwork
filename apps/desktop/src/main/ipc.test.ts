@@ -67,6 +67,8 @@ const notifications = {
   closeAll: vi.fn(),
 };
 
+const chooseFolder = vi.fn(async () => "/Users/taylor/sites/cogwork");
+
 const deps = (socketPath: string, runtime: ReturnType<typeof makeRuntime>) => ({
   socketPath,
   supervisor,
@@ -76,6 +78,7 @@ const deps = (socketPath: string, runtime: ReturnType<typeof makeRuntime>) => ({
   isTrustedSender: () => true,
   runtime,
   notifications,
+  chooseFolder,
 });
 
 const listen = (server: net.Server, socketPath: string) =>
@@ -160,6 +163,23 @@ it("rejects notification writes from an untrusted renderer", async () => {
     ]);
 
     expect(notifications.sync).not.toHaveBeenCalled();
+  } finally {
+    await runtime.dispose();
+  }
+});
+
+it("opens no folder dialog for an untrusted renderer", async () => {
+  const runtime = makeRuntime();
+  const sender = new FakeSender();
+  chooseFolder.mockClear();
+
+  try {
+    registerIpc({ ...deps("/tmp/test.sock", runtime), isTrustedSender: () => false });
+    const choose = ipc.handlers.get(IpcChannel.chooseFolder);
+    if (!choose) throw new Error("Folder handler was not registered");
+
+    expect(await choose({ sender })).toBeNull();
+    expect(chooseFolder).not.toHaveBeenCalled();
   } finally {
     await runtime.dispose();
   }

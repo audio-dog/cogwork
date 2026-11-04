@@ -565,7 +565,6 @@ export const makeGranolaSource = (
           Effect.succeed({ _tag: "Unavailable", reason: error.message } satisfies WorkflowAvailability),
         ),
       ),
-    listOptions: (_entry, _parameter) => Effect.succeed([]),
     observe: (subscriptions) => {
       if (subscriptions.length === 0) return Stream.empty;
       const next = (state: { readonly watermark: number; readonly first: boolean }) =>

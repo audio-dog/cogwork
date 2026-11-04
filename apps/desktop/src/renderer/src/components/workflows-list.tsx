@@ -20,7 +20,7 @@ const blankWorkflowDocument = (): WorkflowDocument => ({
   name: "Untitled Workflow",
   workspaces: { _tag: "Every" },
   triggers: [],
-  operations: [newWorkflowOperation()],
+  operations: [newWorkflowOperation([])],
 });
 
 function WorkflowRow({ id }: { readonly id: string }) {

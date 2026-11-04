@@ -1426,7 +1426,9 @@ const optionReadinessDiagnostics = (document: WorkflowDocument, catalog: Workflo
     if (!entry) return [];
     return usage.parameters.flatMap(({ id, value }) => {
       const parameter = entry.parameters.find((candidate) => candidate.id === id);
-      const missingLiveValue = parameter?.source === "live" && !parameter.values.includes(value);
+      // A source lists most live values only on request, so an empty catalog list says nothing.
+      const missingLiveValue =
+        parameter?.source === "live" && parameter.values.length > 0 && !parameter.values.includes(value);
       return missingLiveValue
         ? [
             diagnostic(

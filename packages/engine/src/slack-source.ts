@@ -29,6 +29,7 @@ import {
   type TriggerSource,
   type TriggerSubscription,
 } from "./trigger-source";
+import type { SystemOptions } from "./workflow-options";
 
 export interface SlackSession {
   readonly team: string;
@@ -982,26 +983,22 @@ export const make = Effect.gen(function* () {
     return nested.flat();
   });
 
-  const optionsReaders = {
-    channel: (connected: SlackSession) =>
-      client
-        .channels(connected)
-        .pipe(
-          Effect.map((channels) =>
-            channels.map(({ id: value, name }) => ({ value, name, listedIn: [] }) satisfies WorkflowOption),
-          ),
+  const readers: SystemOptions["readers"] = {
+    channel: () =>
+      session.pipe(
+        Effect.flatMap((connected) => client.channels(connected)),
+        Effect.map((channels) =>
+          channels.map(({ id: value, name }) => ({ value, name, listedIn: [] }) satisfies WorkflowOption),
         ),
-    emoji: (connected: SlackSession) =>
-      client
-        .emojis(connected)
-        .pipe(
-          Effect.map((emojis) =>
-            emojis.map((value) => ({ value, name: `:${value}:`, listedIn: [] }) satisfies WorkflowOption),
-          ),
+      ),
+    emoji: () =>
+      session.pipe(
+        Effect.flatMap((connected) => client.emojis(connected)),
+        Effect.map((emojis) =>
+          emojis.map((value) => ({ value, name: `:${value}:`, listedIn: [] }) satisfies WorkflowOption),
         ),
-  } satisfies Readonly<
-    Record<string, (connected: SlackSession) => Effect.Effect<ReadonlyArray<WorkflowOption>, SourceFailure>>
-  >;
+      ),
+  };
 
   return {
     id: "slack",
@@ -1019,20 +1016,7 @@ export const make = Effect.gen(function* () {
           () => ({ _tag: "Unavailable", reason: "Slack Connection unavailable" }) as const,
         ),
       ),
-    listOptions: (_entry, parameterId) =>
-      session.pipe(
-        Effect.flatMap((connected) => {
-          const reader = (
-            optionsReaders as Readonly<
-              Record<
-                string,
-                (connected: SlackSession) => Effect.Effect<ReadonlyArray<WorkflowOption>, SourceFailure>
-              >
-            >
-          )[parameterId];
-          return reader?.(connected) ?? Effect.succeed([]);
-        }),
-      ),
+    options: [{ system: "slack", readers }],
     observe: (subscriptions) =>
       subscriptions.length === 0
         ? Stream.empty

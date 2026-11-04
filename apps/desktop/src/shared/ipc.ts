@@ -66,6 +66,7 @@ export const IpcChannel = {
   desktopNotificationNavigation: "cogwork:desktop-notification-navigation",
   takeDesktopNotificationNavigation: "cogwork:take-desktop-notification-navigation",
   openNotificationSettings: "cogwork:open-notification-settings",
+  chooseFolder: "cogwork:choose-folder",
 } as const;
 
 // The window behavior the main process owns and persists across restarts. `closeToHide` on means
@@ -113,6 +114,7 @@ export interface CogworkBridge {
   readonly getProcessHealth: () => Promise<ReadonlyArray<DesktopProcessHealthSample>>;
   readonly setWindowPreferences: (preferences: Partial<WindowPreferences>) => Promise<WindowPreferences>;
   readonly captureProcessProfile: (capture: ProcessProfileCapture) => Promise<string>;
+  readonly chooseFolder: () => Promise<string | null>;
   readonly rpc: DaemonRpcBridge;
   readonly notifications: {
     readonly enable: () => Promise<DesktopNotificationStatus>;

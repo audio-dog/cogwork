@@ -25,6 +25,7 @@ import {
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
+import type { OptionReader } from "../workflow-options";
 import type { GitHubClientService, GitHubRepoRef, RawIssue, RawIssueComment } from "./client";
 import { issuePriorities, targetFor } from "./host";
 import { hasCogworkMarker } from "./markers";
@@ -233,25 +234,22 @@ export const makeGitHubTrackerTriggerSource = (
   registry: Effect.Effect<RegistryState>,
   artifacts: WorkflowArtifactStoreService | null = null,
 ): TriggerSource => {
-  const listOptions: TriggerSource["listOptions"] = (_entry, parameter, workspace) =>
+  const label: OptionReader = (workspace) =>
     Effect.gen(function* () {
-      if (parameter !== "label" || workspace === undefined) return [];
+      if (workspace === undefined) return [];
       const state = yield* registry;
       const registered = state.workspaces.find(({ config }) => config.name === workspace);
       const target = registered ? targetFor(registered) : null;
       if (!target) return [];
-      const issues = yield* client.listIssues(target, { state: "all" });
-      const labels = issues.filter(({ isPullRequest }) => !isPullRequest).flatMap(({ labels }) => labels);
-      return [...new Set(labels)].map(
-        (label) => ({ value: label, name: label, listedIn: [workspace] }) satisfies WorkflowOption,
-      );
+      const labels = yield* client.listLabels(target);
+      return labels.map((name) => ({ value: name, name, listedIn: [workspace] }) satisfies WorkflowOption);
     }).pipe(Effect.mapError((error) => sourceFailure("github", error)));
 
   return {
     id: "github",
     entries: githubTrackerEntries,
     availability: () => Effect.succeed({ _tag: "Available" }),
-    listOptions,
+    options: [{ system: "github", readers: { label } }],
     observe: (subscriptions) =>
       providerPollingStream("github", (checkpoint) =>
         read(client, registry, subscriptions, checkpoint, artifacts),

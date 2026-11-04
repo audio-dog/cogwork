@@ -1,5 +1,6 @@
 import { type Priority, resolvePriority } from "@cogwork/contracts";
 import {
+  type IssueLabelConnection,
   LinearError,
   LinearErrorType,
   LinearClient as LinearSdk,
@@ -468,6 +469,11 @@ const metaSelection = `
 const labelSelection = `
   id
   labels(filter: { name: { eq: $label } }, first: 1) { nodes { id name } }`;
+
+const labelNames = (connection: IssueLabelConnection): Promise<ReadonlyArray<string>> =>
+  connection.pageInfo.hasNextPage
+    ? connection.fetchNext().then(labelNames)
+    : Promise.resolve(connection.nodes.map(({ name }) => name));
 
 // A workspace-level label belongs to no team, so no team-scoped connection lists it.
 const workspaceLabelQuery = `
@@ -1010,6 +1016,19 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return { teamId: team.id, labelId: payload.issueLabels.nodes.at(0)?.id ?? null };
   });
 
+  // Team labels and workspace labels both apply to the team's issues.
+  const listLabels = Effect.fn("linear.listLabels")(function* (ref: LinearTeamRef) {
+    const team = yield* loadTeam(ref, metaShape);
+    return yield* call(ref, (sdk) =>
+      sdk
+        .issueLabels({
+          filter: { or: [{ team: { id: { eq: team.id } } }, { team: { null: true } }] },
+          first: 250,
+        })
+        .then(labelNames),
+    );
+  });
+
   const ensureLabel = Effect.fn("linear.ensureLabel")(function* (ref: LinearTeamRef, name: string) {
     const { teamId, labelId } = yield* resolveLabel(ref, name);
     if (labelId !== null) return labelId;
@@ -1196,6 +1215,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     readProse,
     createIssue,
     readTriggerProse,
+    listLabels,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);

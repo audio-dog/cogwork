@@ -443,6 +443,22 @@ describe("Workflow validator", () => {
     assert.isAbove(adviseReadiness(baseDocument, baseCatalog, machine).length, 0);
   });
 
+  it("does not advise on a live value when the catalog lists no values for its parameter", () => {
+    const entries = decodeCatalog({
+      ...baseCatalog,
+      entries: baseCatalog.entries.map((entry) =>
+        entry.kind === "trigger"
+          ? { ...entry, parameters: [{ id: "label", required: true, source: "live", values: [] }] }
+          : entry,
+      ),
+    }).entries;
+    const document = documentWith({
+      triggers: [{ ...baseDocument.triggers[0], parameters: [{ id: "label", value: "needs-triage" }] }],
+    });
+
+    assert.notInclude(readinessCodesOf(document, catalogWith({ entries })), "option-not-listed");
+  });
+
   it("reports how many selected Workspaces bind a Trigger app", () => {
     const second = decodeWorkspaceId("second");
     const document = documentWith({

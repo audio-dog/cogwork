@@ -1144,6 +1144,26 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("lists repository labels from every page", () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      name: `label-${index}`,
+      color: "ededed",
+    }));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [{ name: "needs-triage" }]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const labels = yield* client.listLabels(repo);
+      assert.lengthOf(labels, 101);
+      assert.strictEqual(labels.at(-1), "needs-triage");
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("fails an open-pull pagination timeout without returning a partial page", () => {
     const respond = (request: HttpClientRequest.HttpClientRequest) => {
       const currentPage = Number(new URL(request.url).searchParams.get("page") ?? "1");

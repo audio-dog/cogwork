@@ -4,7 +4,6 @@ import {
   type WorkflowActionOrigin,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
-  type WorkflowOptionList,
   WorkflowTemplate,
   type WorkItem,
   WorkItemId,
@@ -16,6 +15,7 @@ import * as Schema from "effect/Schema";
 import { checkState } from "../ci";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
+import { sourceFailure } from "../provider-trigger-source";
 import { WorkspaceRegistry } from "../registry";
 import {
   type PrSignals,
@@ -27,6 +27,7 @@ import {
   type SourceControlProviderService,
 } from "../source-control";
 import type { WorkflowCatalogContribution } from "../workflow-catalog";
+import type { OptionReader } from "../workflow-options";
 import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
 import {
   GitHubClient,
@@ -575,42 +576,20 @@ const make = (
     return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
   });
 
+  const reviewer: OptionReader = (workspaceId) =>
+    Effect.gen(function* () {
+      const state = yield* registry;
+      const workspace = state.workspaces.find(({ config }) => config.name === workspaceId);
+      const target = workspace ? sourceControlTargetFor(workspace) : null;
+      if (!target || workspaceId === undefined) return [];
+      const reviewers = yield* client.listCollaborators(target);
+      return reviewers.map((name) => ({ value: name, name, listedIn: [workspaceId] }));
+    }).pipe(Effect.mapError((error) => sourceFailure("github", error)));
+
   const contribution: WorkflowCatalogContribution = {
     entries: githubSourceControlActionEntries,
     templates: [slackReviewTemplate],
-    listOptions: (entry, parameter, workspaces) => {
-      const listsReviewers = entry === catalogKey("github.request-review") && parameter === "reviewer";
-      if (!listsReviewers) return Effect.succeed([]);
-      return registry.pipe(
-        Effect.flatMap((state) =>
-          Effect.forEach(workspaces, (workspaceId) => {
-            const workspace = state.workspaces.find(({ config }) => config.name === workspaceId);
-            const target = workspace ? sourceControlTargetFor(workspace) : null;
-            if (!target) return Effect.succeed([]);
-            return client.listCollaborators(target).pipe(
-              Effect.map((reviewers) =>
-                reviewers.map((reviewer) => ({
-                  value: reviewer,
-                  name: reviewer,
-                  listedIn: [workspaceId],
-                })),
-              ),
-              Effect.catchTag("IssueTrackerError", () => Effect.succeed([])),
-            );
-          }),
-        ),
-        Effect.map((listed) => {
-          const byReviewer = listed.flat().reduce((options, option) => {
-            const current = options.get(option.value);
-            return options.set(option.value, {
-              ...option,
-              listedIn: [...new Set([...(current?.listedIn ?? []), ...option.listedIn])],
-            });
-          }, new Map<string, WorkflowOptionList[number]>());
-          return [...byReviewer.values()];
-        }),
-      );
-    },
+    options: [{ system: "github", readers: { reviewer } }],
   };
 
   const readyToMerge = Effect.fn("github.readyToMerge")(function* (

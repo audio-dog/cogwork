@@ -213,19 +213,24 @@ export const makeLinearTrackerTriggerSource = (
   id: "linear",
   entries: linearTrackerEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: (_entry, parameter, workspace) =>
-    Effect.gen(function* () {
-      if (parameter !== "label" || workspace === undefined) return [];
-      const state = yield* registry;
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
-      if (!registered) return [];
-      const issues = yield* Effect.forEach(targetsFor(registered), (target) =>
-        client.observeIssues(target, null, null, undefined, true),
-      );
-      return [...new Set(issues.flat().flatMap(({ labels }) => labels))].map(
-        (label) => ({ value: label, name: label, listedIn: [workspace] }) satisfies WorkflowOption,
-      );
-    }).pipe(Effect.mapError((error) => sourceFailure("linear", error))),
+  options: [
+    {
+      system: "linear",
+      readers: {
+        label: (workspace) =>
+          Effect.gen(function* () {
+            if (workspace === undefined) return [];
+            const state = yield* registry;
+            const registered = state.workspaces.find(({ config }) => config.name === workspace);
+            if (!registered) return [];
+            const labels = yield* Effect.forEach(targetsFor(registered), client.listLabels);
+            return [...new Set(labels.flat())].map(
+              (name) => ({ value: name, name, listedIn: [workspace] }) satisfies WorkflowOption,
+            );
+          }).pipe(Effect.mapError((error) => sourceFailure("linear", error))),
+      },
+    },
+  ],
   observe: (subscriptions) =>
     providerPollingStream("linear", (checkpoint) =>
       read(client, registry, subscriptions, checkpoint, artifacts),

@@ -1,4 +1,9 @@
-import { WorkflowCatalogKey, type WorkflowOption, type WorkItemRef } from "@cogwork/contracts";
+import {
+  WorkflowCatalogKey,
+  type WorkflowOption,
+  type WorkItemRef,
+  type WorkspaceId,
+} from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -288,6 +293,21 @@ const read = Effect.fn("GitHubPullRequestTriggerSource.read")(function* (
   };
 });
 
+const configuredBots = (registry: Effect.Effect<RegistryState>, workspace: WorkspaceId | undefined) =>
+  Effect.map(registry, (state) => {
+    if (workspace === undefined) return [];
+    const registered = state.workspaces.find(({ config }) => config.name === workspace);
+    const configured =
+      registered?.config.sourceControl?.botAllowlist ??
+      (registered?.config.issueTracker.type === "github"
+        ? registered.config.issueTracker.botAllowlist
+        : undefined) ??
+      [];
+    return configured.map(
+      (bot) => ({ value: bot, name: bot, listedIn: [workspace] }) satisfies WorkflowOption,
+    );
+  });
+
 export const makeGitHubPullRequestTriggerSource = (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
@@ -295,20 +315,7 @@ export const makeGitHubPullRequestTriggerSource = (
   id: "github",
   entries: githubPullRequestEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: (_entry, parameter, workspace) =>
-    Effect.map(registry, (state) => {
-      if (parameter !== "bot" || workspace === undefined) return [];
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
-      const configured =
-        registered?.config.sourceControl?.botAllowlist ??
-        (registered?.config.issueTracker.type === "github"
-          ? registered.config.issueTracker.botAllowlist
-          : undefined) ??
-        [];
-      return configured.map(
-        (bot) => ({ value: bot, name: bot, listedIn: [workspace] }) satisfies WorkflowOption,
-      );
-    }),
+  options: [{ system: "github", readers: { bot: (workspace) => configuredBots(registry, workspace) } }],
   observe: (subscriptions) =>
     providerPollingStream("github", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
 });

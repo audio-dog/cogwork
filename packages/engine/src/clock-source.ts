@@ -19,6 +19,7 @@ import {
   type TriggerSource,
   type TriggerSubscription,
 } from "./trigger-source";
+import { mergeOptions, type OptionReader, type SystemOptions } from "./workflow-options";
 
 const hourlyKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.hourly");
 const dailyKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
@@ -29,9 +30,7 @@ const numberValues = (end: number) => Array.from({ length: end }, (_, value) => 
 const minutes = numberValues(60);
 const hours = numberValues(24);
 const weekdays = numberValues(7);
-const liveSweepOptions: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "idle-days": ["1", "7", "14", "30", "60", "90"],
-};
+const idleDays = ["1", "7", "14", "30", "60", "90"];
 
 const parameter = (id: string, source: "fixed" | "live", values: ReadonlyArray<string>) => ({
   id,
@@ -356,69 +355,39 @@ const observeSubscription = (subscription: TriggerSubscription, readPort: Trigge
     }),
   );
 
-const sweepStateOptions = (
-  sources: ReadonlyArray<TriggerSource>,
-  workspace: Parameters<TriggerSource["listOptions"]>[2],
-) => {
-  const readers = sources.flatMap((source) => {
-    const entry = source.entries.find(({ parameters }) => parameters.some(({ id }) => id === "label"));
-    return entry === undefined ? [] : [{ source, entry }];
-  });
-  return Effect.forEach(readers, ({ source, entry }) =>
-    source
-      .listOptions(entry.key, "label", workspace)
-      .pipe(Effect.catchTag("SourceFailure", () => Effect.succeed([]))),
-  ).pipe(
-    Effect.map((listed) => {
-      const options = [
-        {
-          value: "parked",
-          name: "parked",
-          listedIn: workspace === undefined ? [] : [workspace],
-        } satisfies WorkflowOption,
-        ...listed.flat(),
-      ];
-      return [
-        ...options
-          .reduce((byValue, option) => {
-            const current = byValue.get(option.value);
-            return new Map(byValue).set(option.value, {
-              ...option,
-              listedIn: [...new Set([...(current?.listedIn ?? []), ...option.listedIn])],
-            });
-          }, new Map<string, WorkflowOption>())
-          .values(),
-      ];
-    }),
+const valueOptions = (values: ReadonlyArray<string>) =>
+  Effect.succeed(values.map((value) => ({ value, name: value, listedIn: [] }) satisfies WorkflowOption));
+
+const sweepStateReader =
+  (labelReaders: ReadonlyArray<OptionReader>): OptionReader =>
+  (workspace) =>
+    Effect.forEach(labelReaders, (reader) =>
+      reader(workspace).pipe(Effect.catchTag("SourceFailure", () => Effect.succeed([]))),
+    ).pipe(
+      Effect.map((listed) =>
+        mergeOptions([
+          [{ value: "parked", name: "parked", listedIn: workspace === undefined ? [] : [workspace] }],
+          ...listed,
+        ]),
+      ),
+    );
+
+const clockReaders = (sources: ReadonlyArray<TriggerSource>): SystemOptions["readers"] => {
+  const labelReaders = sources.flatMap(({ options = [] }) =>
+    options.flatMap(({ readers }) => (readers.label ? [readers.label] : [])),
   );
+  return {
+    zone: () => valueOptions([...new Set(["UTC", ...Intl.supportedValuesOf("timeZone")])]),
+    "idle-days": () => valueOptions(idleDays),
+    state: sweepStateReader(labelReaders),
+  };
 };
 
 export const makeClockSource = (sweepStateSources: ReadonlyArray<TriggerSource> = []): TriggerSource => ({
   id: "clock",
   entries: clockEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: (entry, parameter, workspace) => {
-    if (entry === sweepKey && parameter === "state") {
-      return sweepStateOptions(sweepStateSources, workspace);
-    }
-    const isZoneParameter = parameter === "zone" && clockEntries.some(({ key }) => key === entry);
-    const catalogValues = clockEntries
-      .find(({ key }) => key === entry)
-      ?.parameters.find(({ id }) => id === parameter)?.values;
-    const values =
-      [
-        {
-          matches: isZoneParameter,
-          produce: () => [...new Set(["UTC", ...Intl.supportedValuesOf("timeZone")])],
-        },
-        { matches: true, produce: () => catalogValues ?? liveSweepOptions[parameter] ?? [] },
-      ]
-        .find(({ matches }) => matches)
-        ?.produce() ?? [];
-    return Effect.succeed(
-      values.map((value) => ({ value, name: value, listedIn: [] }) satisfies WorkflowOption),
-    );
-  },
+  options: [{ system: "schedule", readers: clockReaders(sweepStateSources) }],
   observe: (subscriptions, readPort) =>
     subscriptions.length === 0
       ? Stream.empty

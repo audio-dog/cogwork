@@ -282,7 +282,6 @@ const sourceFailingOnce = (starts: Ref.Ref<number>, failure: SourceFailure): Tri
   id: "clock",
   entries: clockEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: () => Effect.succeed([]),
   observe: (subscriptions) =>
     subscriptions.length === 0
       ? Stream.empty

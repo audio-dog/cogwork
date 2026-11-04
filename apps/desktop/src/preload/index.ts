@@ -36,6 +36,7 @@ const bridge: CogworkBridge = {
   },
   setWindowPreferences: (preferences) => ipcRenderer.invoke(IpcChannel.setWindowPreferences, preferences),
   captureProcessProfile: (capture) => ipcRenderer.invoke(IpcChannel.captureProcessProfile, capture),
+  chooseFolder: () => ipcRenderer.invoke(IpcChannel.chooseFolder),
   notifications: {
     enable: () => ipcRenderer.invoke(IpcChannel.enableDesktopNotifications),
     sync: (requests) => ipcRenderer.invoke(IpcChannel.syncDesktopNotifications, requests),

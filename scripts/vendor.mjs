@@ -20,6 +20,7 @@ const REPOS = [
   },
   { name: "opencode", remote: "https://github.com/anomalyco/opencode.git" },
   { name: "codex", remote: "https://github.com/openai/codex.git" },
+  { name: "t3code", remote: "https://github.com/pingdotgg/t3code.git" },
   {
     name: "biome-effect-linting-rules",
     remote: "https://github.com/OperationalFallacy/biome-effect-linting-rules.git",
