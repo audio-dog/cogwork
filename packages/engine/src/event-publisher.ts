@@ -2,6 +2,7 @@ import {
   type ConnectionOverview,
   ContributionSettingScope,
   type ControlStore as ControlStorePicture,
+  contributionSettingApplies,
   type PluginOverview,
   type ReadyToMergeItem,
   type WorkspaceId,
@@ -20,15 +21,6 @@ const withoutContributionDiagnostic = ({
   diagnostic: _diagnostic,
   ...row
 }: ControlStorePicture["contributionSettings"][number]) => row;
-
-const contributionSettingAppliesToWorkspace = (
-  scope: ControlStorePicture["contributionSettings"][number]["scope"],
-  workspace: RegistryState["workspaces"][number],
-) =>
-  ContributionSettingScope.match(scope, {
-    SettingsProfile: () => true,
-    PrivateWorkspaceOverlay: ({ workspace: scopeWorkspace }) => workspace.config.name === scopeWorkspace,
-  });
 
 const contributionSettingScopeExists = (
   scope: ControlStorePicture["contributionSettings"][number]["scope"],
@@ -52,7 +44,7 @@ const contributionSettingExistsInWorkspace = (
 ) =>
   registry.workspaces.some(
     (workspace) =>
-      contributionSettingAppliesToWorkspace(row.scope, workspace) &&
+      contributionSettingApplies(row.scope, workspace.config.name) &&
       workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
   );
 

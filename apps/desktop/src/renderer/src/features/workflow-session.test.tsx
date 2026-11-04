@@ -317,6 +317,35 @@ describe("WorkflowProvider", () => {
     await act(async () => root.unmount());
   });
 
+  it("removes the only question so the Operation has no outcomes to answer", async () => {
+    const edit = vi.fn<WorkflowClient["edit"]>(async (_id, edits) => {
+      const applied = applyWorkflowEdits(everyRecord.workingCopy, edits);
+      if (applied._tag === "Refused") throw new Error("refused");
+      return { ...everyRecord, workingCopy: applied.value, workingRevision: 2 };
+    });
+    const client: WorkflowClient = {
+      create: unused,
+      edit,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const { container, render, root } = await mountEditor(everyRecord, client);
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove question 1"]');
+    if (!remove) throw new Error("The only question has no remove control");
+
+    await act(async () => remove.click());
+    const saved = await edit.mock.results[0]?.value;
+    await render(saved);
+
+    expect(edit).toHaveBeenCalledWith(everyRecord.id, [
+      { _tag: "RemoveQuestion", operation: "work", question: "outcome" },
+    ]);
+    expect(container.querySelector('input[aria-label="Question 1"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
   it("saves a draft before the switch turns it on", async () => {
     const live = { ...record, workingRevision: 3 };
     const publish = vi.fn<WorkflowClient["publish"]>(async () => ({ ...live, publishedRevision: 3 }));

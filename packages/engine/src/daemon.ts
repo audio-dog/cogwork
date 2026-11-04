@@ -484,7 +484,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   );
   const harnessReadiness = harnessReadinessLayer.pipe(Layer.provideMerge(harnessRuntime));
   const machineReadiness = machineReadinessLayer.pipe(
-    Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness)),
+    Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness, plugins)),
   );
   const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
     Layer.provide(controlStore),
