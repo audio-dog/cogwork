@@ -1,0 +1,54 @@
+apps/desktop/src/renderer/src/features/feed.ts
+  s_0b206f65c3cef5::t_608d821b21b7b9 6
+  s_0b206f65c3cef5::t_b2b168760003a0 58
+  s_0b206f65c3cef5::t_bb722f3d63b45d 35-44
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_0b206f65c3cef5::t_ffd907bdd0c098 132
+  s_0b206f65c3cef5::t_2b3724c7ccfe86 34
+  s_0b206f65c3cef5::t_cc51349729b20f 269,273
+  s_0b206f65c3cef5::t_34369c329e038a 9-11
+apps/desktop/src/renderer/src/components/activity-transcript.tsx
+  s_0b206f65c3cef5::t_25fecd7ac38f35 141
+  s_0b206f65c3cef5::t_0fc9d2417dafa8 33,35
+  s_0b206f65c3cef5::t_33390e1c6e7e72 150,152
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_0b206f65c3cef5::t_e1550a4e552d23 398
+  s_0b206f65c3cef5::t_bd9477135591af 26
+  s_0b206f65c3cef5::t_e62bf86d872781 411
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_0b206f65c3cef5::t_c608edc54739c2 22
+  s_0b206f65c3cef5::t_bb3a7d78d87263 529-531
+  s_0b206f65c3cef5::t_d816c6dfed166b 70
+  s_0b206f65c3cef5::t_568dbc17a920cd 176
+  s_0b206f65c3cef5::t_95227b5b351a76 532-533
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_0b206f65c3cef5::t_ab000a3cc610d4 43-44
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_0b206f65c3cef5::t_70c747866d8d5c 11
+  s_0b206f65c3cef5::t_72c320434fe97f 65,69
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_0b206f65c3cef5::t_e59602045271c0 91-92
+  s_0b206f65c3cef5::t_e079f45c742bb3 1-9,12,15,43-90
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_0b206f65c3cef5::t_9ccbd7519b7299 15
+  s_0b206f65c3cef5::t_14570a2ca51435 17
+  s_0b206f65c3cef5::t_3a748efd2abc16 113
+  s_0b206f65c3cef5::t_066cf006f006a1 350
+  s_0b206f65c3cef5::t_45276bb23d4186 69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2714aad05a9d6c661d4e851578ff97febad427b8",
+  "prompts": {},
+  "sessions": {
+    "s_0b206f65c3cef5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61b6bae3-99d6-40b6-a1ad-0a34989edb04",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
