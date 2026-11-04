@@ -18,6 +18,7 @@ import {
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
+  providerSubject,
   triggerEntry,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
@@ -43,6 +44,7 @@ export const githubPullRequestEntries = [
     "Pull request checks failed",
     "github",
     "pull-request",
+    "condition",
     [],
   ),
   triggerEntry(
@@ -50,6 +52,7 @@ export const githubPullRequestEntries = [
     "Pull request conflicts with its base",
     "github",
     "pull-request",
+    "condition",
     [],
   ),
   triggerEntry(
@@ -57,12 +60,17 @@ export const githubPullRequestEntries = [
     "New review comment from a person",
     "github",
     "pull-request",
+    "occurrence",
     [catchUpParameter],
   ),
-  triggerEntry("github.new-finding-from-bot", "New finding from a bot", "github", "pull-request", [
-    liveParameter("bot"),
-    catchUpParameter,
-  ]),
+  triggerEntry(
+    "github.new-finding-from-bot",
+    "New finding from a bot",
+    "github",
+    "pull-request",
+    "occurrence",
+    [liveParameter("bot"), catchUpParameter],
+  ),
 ];
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
@@ -159,6 +167,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   const feedback = feedbackOf(issueComments, reviewComments, reviews);
   const ref = itemRef(workspace, pull);
   const prose = proseOf(pull, feedback);
+  const subject = providerSubject(pull.title, pull.url);
   const failed = checks
     .filter(({ conclusion }) => conclusion !== null && failingConclusions.has(conclusion))
     .map(({ name, conclusion }) => `${name}:${conclusion}`)
@@ -173,6 +182,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             atMillis: pull.updatedAtMillis,
             entry: checksFailedKey,
             workspace: workspace.config.name,
+            subject,
             workContext: prose,
           },
         ]
@@ -186,6 +196,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             atMillis: pull.updatedAtMillis,
             entry: conflictsKey,
             workspace: workspace.config.name,
+            subject,
             workContext: prose,
           },
         ]
@@ -213,6 +224,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
               entry: reviewCommentKey,
               workspace: workspace.config.name,
               target: { workflow: subscription.workflow, trigger: subscription.trigger },
+              subject,
               workContext: prose,
             }) satisfies TriggerEvent,
         );
@@ -233,6 +245,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             workspace: workspace.config.name,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "bot", value: bot ?? "" }],
+            subject,
             workContext: prose,
           }) satisfies TriggerEvent,
       );

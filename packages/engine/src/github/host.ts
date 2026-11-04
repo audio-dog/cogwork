@@ -74,6 +74,12 @@ const writeNotConfirmed = (writeKey: string) =>
     message: `GitHub write ${writeKey} was not confirmed by read-back`,
   });
 
+const stateNotConfirmed = (change: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    message: `GitHub ${change} was not confirmed by read-back`,
+  });
+
 const ambiguousWriteNotConfirmed = (writeKey: string) =>
   new IssueTrackerError({
     reason: "unavailable",
@@ -219,17 +225,15 @@ export const makeIssueActions = (client: GitHubClientService) => {
     if (yield* commentsCarry(repo, number, writeKey)) return;
     return yield* writeNotConfirmed(writeKey);
   });
-  const writeOnce = Effect.fn("github.workflowWriteOnce")(function* (
-    repo: GitHubTarget,
-    number: number,
-    writeKey: string,
+  const convergeState = Effect.fn("github.workflowConvergeState")(function* (
+    change: string,
     applied: Effect.Effect<boolean, IssueTrackerError>,
     write: Effect.Effect<unknown, IssueTrackerError>,
   ) {
-    if (yield* commentsCarry(repo, number, writeKey)) return;
-    if (!(yield* applied)) yield* write;
-    yield* client.createComment(repo, number, writeMarker(writeKey));
-    yield* confirmComment(repo, number, writeKey);
+    if (yield* applied) return;
+    yield* write;
+    if (yield* applied) return;
+    return yield* stateNotConfirmed(change);
   });
   const repairCreatedIssueLabels = Effect.fn("github.repairWorkflowCreatedIssueLabels")(function* (
     repo: GitHubTarget,
@@ -304,14 +308,11 @@ export const makeIssueActions = (client: GitHubClientService) => {
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       labels: ReadonlyArray<string>,
-      writeKey: string,
     ) {
       const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      yield* writeOnce(
-        repo,
-        number,
-        writeKey,
+      yield* convergeState(
+        `add labels ${labels.join(", ")} to #${number}`,
         client
           .readIssue(repo, number)
           .pipe(Effect.map((issue) => labels.every((label) => issue.labels.includes(label)))),
@@ -322,14 +323,11 @@ export const makeIssueActions = (client: GitHubClientService) => {
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       label: string,
-      writeKey: string,
     ) {
       const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      yield* writeOnce(
-        repo,
-        number,
-        writeKey,
+      yield* convergeState(
+        `remove label ${label} from #${number}`,
         client.readIssue(repo, number).pipe(Effect.map((issue) => !issue.labels.includes(label))),
         client.removeLabel(repo, number, label),
       );
@@ -337,14 +335,11 @@ export const makeIssueActions = (client: GitHubClientService) => {
     closeIssue: Effect.fn("github.workflowCloseIssue")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
-      writeKey: string,
     ) {
       const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      yield* writeOnce(
-        repo,
-        number,
-        writeKey,
+      yield* convergeState(
+        `close #${number}`,
         client.readIssue(repo, number).pipe(Effect.map(({ state }) => state === "closed")),
         client.closeIssue(repo, number),
       );

@@ -640,6 +640,19 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("round-trips a Run's subject and keeps it absent when none was given", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const subject = { title: "Fix login", url: "https://github.com/acme/web/issues/7" };
+        yield* ledger.insertRun({ ...record("subject-titled", 9200), subject });
+        yield* ledger.insertRun(record("subject-absent", 9300));
+
+        const summaries = yield* ledger.listRuns(10);
+        assert.deepStrictEqual(summaries.find((row) => row.id === runId("subject-titled"))?.subject, subject);
+        assert.isFalse("subject" in (summaries.find((row) => row.id === runId("subject-absent")) ?? {}));
+      }),
+    );
+
     it.effect("round-trips the estimated flag on a best-guess usage", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;

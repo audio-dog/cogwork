@@ -51,18 +51,15 @@ export interface IssueTrackerActionService {
     workspace: WorkspaceIssueTrackerBinding,
     itemId: WorkItemId,
     labels: ReadonlyArray<string>,
-    writeKey: string,
   ) => Effect.Effect<void, IssueTrackerError>;
   readonly removeLabel: (
     workspace: WorkspaceIssueTrackerBinding,
     itemId: WorkItemId,
     label: string,
-    writeKey: string,
   ) => Effect.Effect<void, IssueTrackerError>;
   readonly closeIssue: (
     workspace: WorkspaceIssueTrackerBinding,
     itemId: WorkItemId,
-    writeKey: string,
   ) => Effect.Effect<void, IssueTrackerError>;
 }
 

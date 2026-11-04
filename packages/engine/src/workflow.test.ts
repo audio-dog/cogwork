@@ -386,7 +386,11 @@ layer(NodeServices.layer)((it) => {
                 routes: [
                   {
                     when: ["role:ready-for-agent"],
-                    actions: ["github.comment-this-item", "github.add-label:label:ready-for-agent"],
+                    actions: [
+                      "github.comment-this-item",
+                      "github.add-label:label:ready-for-agent",
+                      "github.remove-label:label:needs-triage",
+                    ],
                     handOff: null,
                   },
                   {
@@ -394,6 +398,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "github.comment-this-item",
                       "github.add-label:label:needs-info",
+                      "github.remove-label:label:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -403,6 +408,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "github.comment-this-item",
                       "github.add-label:label:ready-for-human",
+                      "github.remove-label:label:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -412,6 +418,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "github.comment-this-item",
                       "github.add-label:label:wontfix",
+                      "github.remove-label:label:needs-triage",
                       "github.close-this-issue",
                     ],
                     handOff: null,
@@ -478,7 +485,11 @@ layer(NodeServices.layer)((it) => {
                 routes: [
                   {
                     when: ["role:ready-for-agent"],
-                    actions: ["linear.comment-this-item", "linear.add-label:label:state:ready-for-agent"],
+                    actions: [
+                      "linear.comment-this-item",
+                      "linear.add-label:label:state:ready-for-agent",
+                      "linear.remove-label:label:state:needs-triage",
+                    ],
                     handOff: null,
                   },
                   {
@@ -486,6 +497,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "linear.comment-this-item",
                       "linear.add-label:label:state:needs-info",
+                      "linear.remove-label:label:state:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -495,6 +507,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "linear.comment-this-item",
                       "linear.add-label:label:state:ready-for-human",
+                      "linear.remove-label:label:state:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -504,6 +517,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "linear.comment-this-item",
                       "linear.add-label:label:state:wontfix",
+                      "linear.remove-label:label:state:needs-triage",
                       "linear.close-this-issue",
                     ],
                     handOff: null,

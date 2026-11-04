@@ -14,6 +14,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
   SourceFailure,
+  type TriggerEntry,
   type TriggerEvent,
   type TriggerReadPort,
   type TriggerSource,
@@ -44,10 +45,11 @@ const scheduleEntry = (
   name: string,
   parameters: WorkflowCatalogEntry["parameters"],
   itemKind = "schedule",
-): WorkflowCatalogEntry => ({
+): TriggerEntry => ({
   key,
   name,
   kind: "trigger",
+  triggerKind: "occurrence",
   system: null,
   connection: null,
   requires: [],
@@ -60,7 +62,7 @@ const scheduleEntry = (
   emits: [],
 });
 
-export const clockEntries: ReadonlyArray<WorkflowCatalogEntry> = [
+export const clockEntries: ReadonlyArray<TriggerEntry> = [
   scheduleEntry(hourlyKey, "Every hour", [
     parameter("minute", "fixed", minutes),
     parameter("zone", "live", []),

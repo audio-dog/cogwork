@@ -267,6 +267,28 @@ describe("GitHub Trigger sources", () => {
     ),
   );
 
+  it.effect("carries the trimmed issue title and its link on a label event", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const events = yield* source
+        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.deepStrictEqual(
+        [...events].map(({ subject }) => subject),
+        [{ title: "Fix login", url: "https://github.com/acme/example/issues/1" }],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([{ ...issue(1), title: "  Fix login " }]),
+          listIssueEvents: () => Effect.succeed([]),
+        }),
+      ),
+    ),
+  );
+
   it.effect("carries the creating Workflow lineage into issue label events", () =>
     Effect.gen(function* () {
       const inherited = { root: LineageId.make("issue:root"), parent: null, hop: 4 } as const;

@@ -726,8 +726,8 @@ function Footer() {
 }
 
 const cardinalityChoices = [
-  { value: "once", label: "Once", description: "One answer for each Run" },
-  { value: "each", label: "For each…", description: "One answer for each thing it finds" },
+  { value: "once", label: "Once" },
+  { value: "each", label: "For each…" },
 ] as const;
 
 function Cardinality() {
@@ -745,7 +745,7 @@ function Cardinality() {
           {forEach === null ? "Once" : "For each"}
           <RiArrowDownSLine data-icon="inline-end" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64">
+        <DropdownMenuContent className="w-40">
           <DropdownMenuGroup>
             <DropdownMenuRadioGroup
               value={forEach === null ? "once" : "each"}
@@ -760,10 +760,7 @@ function Cardinality() {
             >
               {cardinalityChoices.map((choice) => (
                 <DropdownMenuRadioItem key={choice.value} value={choice.value} closeOnClick>
-                  <span className="flex flex-col">
-                    <span>{choice.label}</span>
-                    <span className="text-xs text-muted-foreground">{choice.description}</span>
-                  </span>
+                  {choice.label}
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>

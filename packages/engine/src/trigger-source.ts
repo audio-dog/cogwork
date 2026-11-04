@@ -2,6 +2,7 @@ import {
   Cause,
   Priority,
   RunPlanWorkContextProse,
+  RunSubject,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
@@ -46,6 +47,7 @@ export const TriggerEvent = Schema.Struct({
     }),
   ),
   parameters: Schema.optional(Schema.Array(WorkflowParameterValue)),
+  subject: Schema.optional(RunSubject),
   workContext: Schema.optional(RunPlanWorkContextProse),
   payload: Schema.optional(
     Schema.TaggedUnion({
@@ -83,9 +85,13 @@ export class SourceFailure extends Schema.TaggedError<SourceFailure>()("SourceFa
   message: Schema.String,
 }) {}
 
+export interface TriggerEntry extends WorkflowCatalogEntry {
+  readonly triggerKind: "condition" | "occurrence";
+}
+
 export interface TriggerSource {
   readonly id: TriggerSourceId;
-  readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
+  readonly entries: ReadonlyArray<TriggerEntry>;
   readonly availability: (entry: WorkflowCatalogKey) => Effect.Effect<WorkflowAvailability>;
   readonly options?: ReadonlyArray<SystemOptions>;
   readonly observe: (

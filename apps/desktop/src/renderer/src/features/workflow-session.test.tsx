@@ -314,14 +314,19 @@ describe("WorkflowProvider", () => {
     await act(async () => root.unmount());
   });
 
-  it("publishes the latest live revision", async () => {
+  it("saves a draft before the switch turns it on", async () => {
     const live = { ...record, workingRevision: 3 };
-    const publish = vi.fn<WorkflowClient["publish"]>(async () => live);
+    const publish = vi.fn<WorkflowClient["publish"]>(async () => ({ ...live, publishedRevision: 3 }));
+    const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => ({
+      ...live,
+      publishedRevision: 3,
+      enabled: true,
+    }));
     const client: WorkflowClient = {
       create: unused,
       edit: unused,
       publish,
-      switchEnabled: unused,
+      switchEnabled,
       delete: unused,
       listOptions: unused,
     };
@@ -335,17 +340,17 @@ describe("WorkflowProvider", () => {
     );
     await act(async () => root.render(renderEditor(record)));
     await act(async () => root.render(renderEditor(live)));
-    const publishButton = [...container.querySelectorAll("button")].find(
-      ({ textContent }) => textContent === "Publish",
-    );
-    if (!publishButton) throw new Error("Publish button did not render");
+    const enable = container.querySelector<HTMLElement>('[aria-label="Turn this Workflow on"]');
+    if (!enable) throw new Error("Switch did not render");
 
     await act(async () => {
-      publishButton.click();
+      enable.click();
       await Promise.resolve();
     });
 
     expect(publish).toHaveBeenCalledWith(record.id, 3);
+    expect(switchEnabled).toHaveBeenCalledWith(record.id, true);
+    expect(publish.mock.invocationCallOrder[0]).toBeLessThan(switchEnabled.mock.invocationCallOrder[0] ?? 0);
     await act(async () => root.unmount());
   });
 
@@ -380,10 +385,8 @@ describe("WorkflowProvider", () => {
       await Promise.resolve();
     });
 
-    const publishButton = [...container.querySelectorAll("button")].find(
-      ({ textContent }) => textContent === "Publish",
-    );
-    expect(publishButton?.disabled).toBe(false);
+    const save = [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
+    expect(save?.disabled).toBe(false);
     await act(async () => {
       pending.resolve({
         ...everyRecord,
@@ -398,11 +401,15 @@ describe("WorkflowProvider", () => {
   it("publishes the accepted revision after a queued edit fails", async () => {
     const pending = Promise.withResolvers<WorkflowRecord>();
     const publish = vi.fn<WorkflowClient["publish"]>(async () => everyRecord);
+    const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => ({
+      ...everyRecord,
+      enabled: true,
+    }));
     const client: WorkflowClient = {
       create: unused,
       edit: () => pending.promise,
       publish,
-      switchEnabled: unused,
+      switchEnabled,
       delete: unused,
       listOptions: unused,
     };
@@ -427,13 +434,11 @@ describe("WorkflowProvider", () => {
       input.blur();
       await Promise.resolve();
     });
-    const publishButton = [...container.querySelectorAll("button")].find(
-      ({ textContent }) => textContent === "Publish",
-    );
-    if (!publishButton) throw new Error("Publish button did not render");
-    expect(publishButton.disabled).toBe(false);
+    const save = [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
+    if (!save) throw new Error("Save button did not render");
+    expect(save.disabled).toBe(false);
     await act(async () => {
-      publishButton.click();
+      save.click();
       pending.reject(new Error("edit rejected"));
       await Promise.resolve();
       await Promise.resolve();
@@ -441,6 +446,7 @@ describe("WorkflowProvider", () => {
     });
 
     expect(publish).toHaveBeenCalledWith(everyRecord.id, 1);
+    expect(container.textContent).toContain("Not saved");
     await act(async () => root.unmount());
   });
 
@@ -470,10 +476,12 @@ describe("WorkflowProvider", () => {
     expect(
       container.querySelector('[aria-label="Turn this Workflow on"]')?.getAttribute("aria-checked"),
     ).toBe("true");
+    const save = [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
+    expect(save?.disabled).toBe(false);
     await act(async () => root.unmount());
   });
 
-  it("disables enable controls until the Workflow is published", async () => {
+  it("keeps the list switch disabled until the Workflow is published", async () => {
     const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => record);
     const client: WorkflowClient = {
       create: unused,
@@ -495,8 +503,8 @@ describe("WorkflowProvider", () => {
       );
     });
 
-    const switches = [...container.querySelectorAll<HTMLElement>('[role="switch"]')];
-    expect(switches).toHaveLength(2);
+    const switches = [...container.querySelectorAll<HTMLElement>('[aria-label="Turn Local name on"]')];
+    expect(switches).toHaveLength(1);
     expect(switches.every((control) => control.getAttribute("aria-disabled") === "true")).toBe(true);
     switches.forEach((control) => {
       control.click();
@@ -542,9 +550,7 @@ describe("WorkflowProvider", () => {
     };
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { container, root } = await mountEditor(workflow, client);
-    const problems = [...container.querySelectorAll("button")].find(
-      ({ textContent }) => textContent === "2 problems",
-    );
+    const problems = container.querySelector<HTMLButtonElement>('[aria-label="2 problems"]');
     if (!problems) throw new Error("Problems button did not render");
     await act(async () => problems.click());
 
@@ -554,7 +560,7 @@ describe("WorkflowProvider", () => {
     await act(async () => root.unmount());
   });
 
-  it("blocks Publish on an incomplete problem and never on an advisory one", async () => {
+  it("blocks Save for an incomplete problem and never for an advisory one", async () => {
     const location = { trigger: null, operation: null, question: null, choice: null, field: "document" };
     const advisory: WorkflowRecord = {
       ...everyRecord,
@@ -578,12 +584,12 @@ describe("WorkflowProvider", () => {
       listOptions: unused,
     };
     const { container, render, root } = await mountEditor(advisory, client);
-    const publish = () =>
-      [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Publish");
+    const save = () =>
+      [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
 
-    expect(publish()?.disabled).toBe(false);
+    expect(save()?.disabled).toBe(false);
     await render(incomplete);
-    expect(publish()?.disabled).toBe(true);
+    expect(save()?.disabled).toBe(true);
     await act(async () => root.unmount());
   });
 

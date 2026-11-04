@@ -13,6 +13,7 @@ import {
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
+  providerSubject,
   sourceFailure,
   triggerEntry,
   workspaceSubscriptions,
@@ -27,11 +28,17 @@ const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-has
 const newIssueCommentKey = Schema.decodeSync(WorkflowCatalogKey)("linear.new-comment-from-person");
 
 export const linearTrackerEntries = [
-  triggerEntry("linear.issue-has-label", "Issue has label", "linear", "issue", [liveParameter("label")]),
-  triggerEntry("linear.new-comment-from-person", "New comment from a person", "linear", "issue", [
+  triggerEntry("linear.issue-has-label", "Issue has label", "linear", "issue", "condition", [
     liveParameter("label"),
-    catchUpParameter,
   ]),
+  triggerEntry(
+    "linear.new-comment-from-person",
+    "New comment from a person",
+    "linear",
+    "issue",
+    "occurrence",
+    [liveParameter("label"), catchUpParameter],
+  ),
 ];
 
 const itemId = Schema.decodeSync(WorkItemId);
@@ -70,6 +77,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
   if (!target) return [];
   const prose = yield* client.readTriggerProse(target, issue.id);
   const issueId = itemId(issue.identifier);
+  const subject = providerSubject(issue.title, issue.url);
   const origin =
     artifacts === null
       ? null
@@ -109,6 +117,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
           workspace: workspace.config.name,
           priority: issue.priority,
           parameters: [{ id: "label", value: label ?? "" }],
+          subject,
           workContext: proseOf(prose.body, prose.comments),
         } satisfies TriggerEvent,
       ];
@@ -141,6 +150,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
             priority: issue.priority,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
+            subject,
             workContext: proseOf(prose.body, prose.comments),
           }) satisfies TriggerEvent,
       );

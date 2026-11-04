@@ -1,5 +1,4 @@
 import type {
-  WorkflowCatalog,
   WorkflowDiagnostic,
   WorkflowDiagnosticLocation,
   WorkflowDocument,
@@ -48,34 +47,14 @@ export const problemTargetId = (location: Partial<WorkflowDiagnosticLocation>) =
 const operationName = (workflowDocument: WorkflowDocument, id: string) =>
   workflowDocument.operations.find((operation) => operation.id === id)?.name ?? id;
 
-const capitalized = (text: string) => `${text.slice(0, 1).toUpperCase()}${text.slice(1)}`;
-
 const problemText = (problem: WorkflowDiagnostic, workflowDocument: WorkflowDocument) => {
   if (problem.code === "hand-off-and-trigger") {
     return `${operationName(workflowDocument, problem.message.split(" ").at(-1) ?? "")} will run two times`;
   }
-  const subject = workflowDocument.operations.find(({ id }) =>
-    problem.message.startsWith(`Operation ${id} `),
-  );
-  const message = subject
-    ? capitalized(problem.message.slice(`Operation ${subject.id} `.length))
-    : problem.message;
   return workflowDocument.operations.reduce(
     (text, operation) => text.replaceAll(`Operation ${operation.id}`, operation.name),
-    message,
+    problem.message,
   );
-};
-
-const problemPlace = (
-  problem: WorkflowDiagnostic,
-  workflowDocument: WorkflowDocument,
-  catalog: WorkflowCatalog | null,
-) => {
-  const { operation, trigger } = problem.location;
-  if (operation !== null) return operationName(workflowDocument, operation);
-  const entry = workflowDocument.triggers.find(({ id }) => id === trigger)?.entry;
-  if (entry === undefined) return "Workflow";
-  return catalog?.entries.find(({ key }) => key === entry)?.name ?? entry;
 };
 
 const problemKey = (problem: WorkflowDiagnostic, index: number) =>
@@ -122,11 +101,9 @@ export function ProblemMark({
 export function ProblemsButton({
   problems,
   workflowDocument,
-  catalog,
 }: {
   readonly problems: ReadonlyArray<WorkflowDiagnostic>;
   readonly workflowDocument: WorkflowDocument;
-  readonly catalog: WorkflowCatalog | null;
 }) {
   const [open, setOpen] = useState(false);
   if (problems.length === 0) return null;
@@ -139,9 +116,18 @@ export function ProblemsButton({
   };
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<Button size="sm" variant="ghost" className="font-normal" />}>
+      <PopoverTrigger
+        render={
+          <Button
+            size="sm"
+            variant="ghost"
+            className="font-normal"
+            aria-label={problems.length === 1 ? "1 problem" : `${problems.length} problems`}
+          />
+        }
+      >
         <ProblemIcon blocking={blocking} />
-        {problems.length === 1 ? "1 problem" : `${problems.length} problems`}
+        {problems.length}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 gap-0.5 p-1">
         {problems.map((problem, index) => (
@@ -152,12 +138,7 @@ export function ProblemsButton({
             onClick={() => show(problem)}
           >
             <ProblemIcon blocking={blocksPublish(problem)} />
-            <span className="flex min-w-0 flex-col">
-              <span className="text-xs text-muted-foreground">
-                {problemPlace(problem, workflowDocument, catalog)}
-              </span>
-              <span className="text-sm">{problemText(problem, workflowDocument)}</span>
-            </span>
+            {problemText(problem, workflowDocument)}
           </Button>
         ))}
       </PopoverContent>

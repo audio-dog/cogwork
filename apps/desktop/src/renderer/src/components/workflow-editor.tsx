@@ -23,7 +23,7 @@ import {
   DropdownMenuFilter,
   DropdownMenuGroup,
   DropdownMenuInput,
-  DropdownMenuLabel,
+  DropdownMenuItem,
   DropdownMenuList,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -48,6 +48,7 @@ import {
   RiArrowRightLine,
   RiCloseLine,
   RiDeleteBinLine,
+  RiMore2Line,
   RiPlugLine,
   RiRobot2Line,
   RiToolsLine,
@@ -99,6 +100,7 @@ interface WorkflowEditorValue {
     readonly harnesses: WorkflowHarnesses;
     readonly needs: ReadonlyArray<NeedChoice>;
     readonly listValues: ListValues;
+    readonly saveFailed: boolean;
   };
 }
 
@@ -168,13 +170,85 @@ function WorkspaceSelect() {
   );
 }
 
+function SaveFailure() {
+  const {
+    meta: { saveFailed },
+  } = useWorkflowEditor();
+  if (!saveFailed) return null;
+  return <span className="text-xs text-destructive">Not saved</span>;
+}
+
+function EnabledSwitch() {
+  const {
+    state: { workflow },
+    actions,
+  } = useWorkflowEditor();
+  const neverSaved = workflow.publishedRevision === null;
+  return (
+    <Switch
+      checked={workflow.enabled}
+      disabled={neverSaved && problemsOf(workflow).some(blocksPublish)}
+      aria-label="Turn this Workflow on"
+      onCheckedChange={async (enabled) => {
+        if (enabled && neverSaved) await actions.publish(workflow.id, workflow.workingRevision);
+        await actions.switchEnabled(workflow.id, enabled);
+      }}
+    />
+  );
+}
+
+function SaveButton() {
+  const {
+    state: { workflow },
+    actions,
+  } = useWorkflowEditor();
+  return (
+    <Button
+      size="sm"
+      disabled={
+        workflow.publishedRevision === workflow.workingRevision || problemsOf(workflow).some(blocksPublish)
+      }
+      onClick={() => actions.publish(workflow.id, workflow.workingRevision)}
+    >
+      Save
+    </Button>
+  );
+}
+
+function MoreMenu() {
+  const {
+    state: { workflow },
+    actions,
+  } = useWorkflowEditor();
+  const navigate = useNavigate();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" aria-label="More actions" />}>
+        <RiMore2Line />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={async () => {
+              await actions.delete(workflow.id);
+              await navigate({ to: "/workflows" });
+            }}
+          >
+            <RiDeleteBinLine />
+            Delete Workflow
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function EditorHeader() {
   const {
     state: { workflow },
     actions,
-    meta: { catalog },
   } = useWorkflowEditor();
-  const navigate = useNavigate();
   const problems = problemsOf(workflow);
   const workspaceProblems = problemsAt(problems, { trigger: null, operation: null, field: "workspaces" });
   return (
@@ -198,31 +272,11 @@ function EditorHeader() {
             return (await actions.send([{ _tag: "Rename", name }]))?.workingCopy.name ?? name;
           }}
         />
-        <Switch
-          checked={workflow.enabled}
-          disabled={workflow.publishedRevision === null}
-          onCheckedChange={(enabled) => actions.switchEnabled(workflow.id, enabled)}
-          aria-label="Turn this Workflow on"
-        />
-        <ProblemsButton problems={problems} workflowDocument={workflow.workingCopy} catalog={catalog} />
-        <Button
-          size="sm"
-          disabled={problems.some(blocksPublish) || workflow.publishedRevision === workflow.workingRevision}
-          onClick={() => actions.publish(workflow.id, workflow.workingRevision)}
-        >
-          Publish
-        </Button>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Delete Workflow"
-          onClick={async () => {
-            await actions.delete(workflow.id);
-            await navigate({ to: "/workflows" });
-          }}
-        >
-          <RiDeleteBinLine />
-        </Button>
+        <SaveFailure />
+        <ProblemsButton problems={problems} workflowDocument={workflow.workingCopy} />
+        <EnabledSwitch />
+        <SaveButton />
+        <MoreMenu />
       </div>
       <div className="flex items-center gap-1 ps-9">
         <WorkspaceSelect />
@@ -256,7 +310,6 @@ function TriggerStart({ trigger, label }: { readonly trigger: WorkflowTrigger; r
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-48">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Starts</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={trigger.start}
             onValueChange={(next) => {
@@ -490,9 +543,15 @@ const useOperationTools = () => {
 
 function ToolItem({ need, children }: { readonly need: NeedChoice; readonly children?: ReactNode }) {
   const {
+    meta: { needs },
+  } = useWorkflowEditor();
+  const {
     state: { operation },
     actions: { toggle },
   } = useOperationTools();
+  const ambiguous = needs.some(
+    (other) => other.identity !== need.identity && other.kind === need.kind && other.name === need.name,
+  );
   return (
     <DropdownMenuCheckboxItem
       label={need.name}
@@ -501,7 +560,9 @@ function ToolItem({ need, children }: { readonly need: NeedChoice; readonly chil
     >
       {children}
       <span className="truncate">{need.name}</span>
-      <span className="ms-auto truncate text-xs text-muted-foreground">{need.source}</span>
+      {ambiguous ? (
+        <span className="ms-auto truncate text-xs text-muted-foreground">{need.source}</span>
+      ) : null}
     </DropdownMenuCheckboxItem>
   );
 }
@@ -510,21 +571,16 @@ function ToolsCascade() {
   const {
     meta: { needs },
   } = useWorkflowEditor();
-  const {
-    state: { operation },
-  } = useOperationTools();
   return (
     <DropdownMenuGroup>
       {needGroups.map(({ kind, label, Icon }) => {
         const inGroup = needs.filter((need) => need.kind === kind);
         if (inGroup.length === 0) return null;
-        const chosen = inGroup.filter(({ identity }) => operation.requires.includes(identity)).length;
         return (
           <DropdownMenuSub key={kind}>
             <DropdownMenuSubTrigger label={label}>
               <Icon className="text-muted-foreground" />
               <span className="flex-1 truncate">{label}</span>
-              {chosen > 0 ? <span className="text-xs text-muted-foreground">{chosen}</span> : null}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="max-h-72 min-w-56">
               <DropdownMenuGroup>
@@ -731,6 +787,7 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
   const { state, actions } = useWorkflowSession();
   const remote = state.workflows.find(({ id }) => id === initial.id) ?? initial;
   const [preview, setPreview] = useState<WorkflowRecord | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   const accepted = useRef(remote);
   const pending = useRef<
     ReadonlyArray<{
@@ -790,11 +847,13 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
       (next) => {
         accepted.current = next;
         pending.current = pending.current.filter((entry) => entry.key !== key);
+        setSaveFailed(false);
         refreshPreview();
         return next;
       },
       (error) => {
         pending.current = pending.current.filter((entry) => entry.key !== key);
+        setSaveFailed(true);
         refreshPreview();
         throw error;
       },
@@ -839,6 +898,7 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
           harnesses: state.harnesses,
           needs: state.needs,
           listValues,
+          saveFailed,
         },
       }}
     >

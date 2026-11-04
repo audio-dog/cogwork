@@ -12,7 +12,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { IssueTrackerError } from "./issue-tracker";
-import { SourceFailure, type TriggerEvent, type TriggerSourceId } from "./trigger-source";
+import { SourceFailure, type TriggerEntry, type TriggerEvent, type TriggerSourceId } from "./trigger-source";
 
 export const catchUpParameter = {
   id: "catch-up-at-most",
@@ -33,11 +33,13 @@ export const triggerEntry = (
   name: string,
   system: "github" | "linear",
   itemKind: "issue" | "pull-request",
+  triggerKind: TriggerEntry["triggerKind"],
   parameters: WorkflowCatalogEntry["parameters"],
-): WorkflowCatalogEntry => ({
+): TriggerEntry => ({
   key: Schema.decodeSync(WorkflowCatalogKey)(key),
   name,
   kind: "trigger",
+  triggerKind,
   system,
   connection: system,
   requires: [],
@@ -60,6 +62,12 @@ export const sourceFailure = (source: TriggerSourceId, error: IssueTrackerError)
 
 export const parameterValue = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
   parameters.find((parameter) => parameter.id === id)?.value;
+
+export const providerSubject = (title: string | undefined, url: string) => {
+  const trimmed = title?.trim();
+  if (!trimmed) return undefined;
+  return { title: trimmed, url: url.trim() || null };
+};
 
 export const providerModifiedSinceGraceMillis = 30_000;
 const providerPollInterval = Duration.seconds(60);

@@ -71,10 +71,17 @@ export const RunEvent = Schema.Struct({
 });
 export type RunEvent = typeof RunEvent.Type;
 
+export const RunSubject = Schema.Struct({
+  title: TrimmedNonEmptyString,
+  url: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type RunSubject = typeof RunSubject.Type;
+
 export const RunRecord = Schema.Struct({
   id: RunId,
   workspace: WorkspaceId,
   workItem: WorkItemId,
+  subject: Schema.optionalKey(RunSubject),
   operation: TrimmedNonEmptyString,
   harness: HarnessName,
   branch: Schema.NullOr(BranchName),

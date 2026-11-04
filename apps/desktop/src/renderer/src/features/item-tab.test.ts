@@ -40,20 +40,35 @@ const readyEntry: BoardItem = {
   },
 };
 
+const operationNames = (operation: string) => (operation === "triage" ? "Triage" : operation);
+
 describe("item tab subject", () => {
-  it("opens an item that has Runs but no board entry, with no pull request tab", () => {
-    const subject = itemTabSubject(null, workItem);
-    expect(subject).toStrictEqual({ id: workItem, title: workItem, url: null, pr: null });
+  it("opens a Run-only item by its number, its Run's title, and a link to the issue", () => {
+    const subject = itemTabSubject(null, workItem, {
+      title: "Remove the instruction package",
+      url: "https://github.com/acme/web/issues/7",
+    });
+    expect(subject).toStrictEqual({
+      id: workItem,
+      label: "#7",
+      title: "Remove the instruction package",
+      url: "https://github.com/acme/web/issues/7",
+      pr: null,
+    });
     expect(subTabsFor(subject).map(({ key }) => key)).toStrictEqual(["main", "run"]);
   });
 
+  it("uses the item number as the title when no Run carries a subject", () => {
+    expect(itemTabSubject(null, workItem, null)).toMatchObject({ label: "#7", title: "#7", url: null });
+  });
+
   it("labels a settled Run-only item by its Run status and a board item as ready to merge", () => {
-    const runOnly = itemTabSubject(null, workItem);
-    const ready = itemTabSubject(readyEntry, readyEntry.item.id);
-    expect(describeItemState(run("crashed"), runOnly).label).toBe("Crashed");
-    expect(describeItemState(null, ready).label).toBe("Ready to merge");
-    expect(describeItemState(run("running"), ready)).toStrictEqual({
-      label: "Running · triage",
+    const runOnly = itemTabSubject(null, workItem, null);
+    const ready = itemTabSubject(readyEntry, readyEntry.item.id, null);
+    expect(describeItemState(run("crashed"), runOnly, operationNames).label).toBe("Crashed");
+    expect(describeItemState(null, ready, operationNames).label).toBe("Ready to merge");
+    expect(describeItemState(run("running"), ready, operationNames)).toStrictEqual({
+      label: "Running · Triage",
       tone: "live",
       running: true,
     });

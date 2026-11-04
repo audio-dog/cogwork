@@ -25,6 +25,7 @@ import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { readJsonEventStream } from "./json-event-stream";
 import {
   SourceFailure,
+  type TriggerEntry,
   type TriggerEvent,
   type TriggerSource,
   type TriggerSubscription,
@@ -128,10 +129,11 @@ const entry = (
   name: string,
   itemKind: "slack-message" | "slack-conversation",
   parameters: WorkflowCatalogEntry["parameters"],
-): WorkflowCatalogEntry => ({
+): TriggerEntry => ({
   key,
   name,
   kind: "trigger",
+  triggerKind: "occurrence",
   system: "slack",
   connection: "slack",
   requires: [],
@@ -151,7 +153,7 @@ const catchUpParameter = parameter("catch-up-at-most", false, "fixed", [
   "2592000000",
 ]);
 
-export const slackEntries: ReadonlyArray<WorkflowCatalogEntry> = [
+export const slackEntries: ReadonlyArray<TriggerEntry> = [
   entry(mentionedKey, "I am mentioned", "slack-message", [
     parameter("channel", false, "live", []),
     catchUpParameter,

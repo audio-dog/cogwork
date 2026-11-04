@@ -6,9 +6,9 @@ import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
 import { RiCheckLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use } from "react";
-import { BoardResult, useBoard } from "../features/activity-session";
+import { BoardResult, useActivitySession, useBoard } from "../features/activity-session";
 import type { FeedRun } from "../features/feed";
-import { recentlyDone, runningRuns } from "../features/feed";
+import { operationNameOf, recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
 import { runStatusLabel } from "../features/run-status";
@@ -31,6 +31,7 @@ interface FeedActions {
 interface FeedMeta {
   now: number;
   workspaceName: (workspace: WorkspaceId) => string;
+  operationName: (operation: string) => string;
 }
 
 interface FeedContextValue {
@@ -115,9 +116,9 @@ function ConsoleLine({ preview }: { preview: RunActivityPreview | undefined }) {
 function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivityPreview | undefined }) {
   const {
     actions: { select },
-    meta: { now, workspaceName },
+    meta: { now, workspaceName, operationName },
   } = useFeed();
-  const { run, title } = entry;
+  const { run, label, title } = entry;
   return (
     <button
       type="button"
@@ -126,14 +127,16 @@ function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivit
     >
       <span className="flex w-full items-center gap-3">
         <TypingDots />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{title ?? run.workItem}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{title ?? label}</span>
         <Badge variant="secondary" className="w-20 shrink-0 justify-center">
-          {run.operation}
+          {operationName(run.operation)}
         </Badge>
         <span className="w-16 shrink-0 truncate text-end text-xs text-muted-foreground">
           {workspaceName(run.workspace)}
         </span>
-        <span className="w-14 shrink-0 text-end font-mono text-xs text-muted-foreground">{run.workItem}</span>
+        <span className="w-14 shrink-0 truncate text-end font-mono text-xs text-muted-foreground">
+          {label}
+        </span>
         <span className="w-12 shrink-0 text-end font-mono text-xs text-muted-foreground tabular-nums">
           {elapsed(run.startedAtMillis, now)}
         </span>
@@ -193,7 +196,7 @@ function DoneLedgerRow({ entry }: { entry: FeedRun }) {
     actions: { select },
     meta: { workspaceName },
   } = useFeed();
-  const { run, title } = entry;
+  const { run, label, title } = entry;
   return (
     <TableRow
       className="cursor-pointer"
@@ -202,8 +205,8 @@ function DoneLedgerRow({ entry }: { entry: FeedRun }) {
       <TableCell>
         <RunStateBadge status={run.status} />
       </TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{run.workItem}</TableCell>
-      <TableCell className="truncate text-foreground">{title ?? run.workItem}</TableCell>
+      <TableCell className="truncate font-mono text-xs text-muted-foreground">{label}</TableCell>
+      <TableCell className="truncate text-foreground">{title ?? label}</TableCell>
       <TableCell>
         <Badge variant="outline">{workspaceName(run.workspace)}</Badge>
       </TableCell>
@@ -263,7 +266,8 @@ function FeedContent({
   done,
   previews,
   workspaceName,
-}: FeedState & Pick<FeedMeta, "workspaceName">) {
+  operationName,
+}: FeedState & Pick<FeedMeta, "workspaceName" | "operationName">) {
   const openItem = useRightPanelStore((state) => state.openItem);
   const select = (selection: ItemSelection) => openItem(selection.workspace, selection.workItem);
   const now = useNow();
@@ -271,7 +275,7 @@ function FeedContent({
     <FeedCompound.Provider
       state={{ running, done, previews }}
       actions={{ select }}
-      meta={{ now, workspaceName }}
+      meta={{ now, workspaceName, operationName }}
     >
       <FeedCompound.Frame>
         <FeedCompound.LiveNow />
@@ -306,6 +310,7 @@ export function FeedSkeleton() {
 
 export function Feed() {
   const result = useBoard();
+  const { workflows } = useActivitySession();
   const filter = useChromeStore((state) => state.workspaceFilter);
 
   if (!BoardResult.$is("Success")(result)) return null;
@@ -337,6 +342,7 @@ export function Feed() {
       done={done}
       previews={previews}
       workspaceName={(workspace) => workspaceLabelById(board, workspace)}
+      operationName={(operation) => operationNameOf(workflows.values(), operation)}
     />
   );
 }

@@ -19,6 +19,7 @@ import {
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
+  providerSubject,
   sourceFailure,
   triggerEntry,
   workspaceSubscriptions,
@@ -35,11 +36,17 @@ export const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("github.is
 export const newIssueCommentKey = Schema.decodeSync(WorkflowCatalogKey)("github.new-comment-from-person");
 
 export const githubTrackerEntries = [
-  triggerEntry("github.issue-has-label", "Issue has label", "github", "issue", [liveParameter("label")]),
-  triggerEntry("github.new-comment-from-person", "New comment from a person", "github", "issue", [
+  triggerEntry("github.issue-has-label", "Issue has label", "github", "issue", "condition", [
     liveParameter("label"),
-    catchUpParameter,
   ]),
+  triggerEntry(
+    "github.new-comment-from-person",
+    "New comment from a person",
+    "github",
+    "issue",
+    "occurrence",
+    [liveParameter("label"), catchUpParameter],
+  ),
 ];
 
 const itemId = Schema.decodeSync(WorkItemId);
@@ -78,6 +85,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
     needsComments ? client.listTriggerComments(target, issue.number) : Effect.succeed([]),
   ]);
   const issueId = itemId(`#${issue.number}`);
+  const subject = providerSubject(issue.title, issue.url);
   const origin =
     artifacts === null
       ? null
@@ -113,6 +121,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
         workspace: workspace.config.name,
         priority,
         parameters: [{ id: "label", value: label }],
+        subject,
         workContext: proseOf(issue, comments),
       } satisfies TriggerEvent,
     ];
@@ -148,6 +157,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
             priority,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
+            subject,
             workContext: proseOf(issue, comments),
           }) satisfies TriggerEvent,
       );

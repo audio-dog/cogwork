@@ -566,7 +566,7 @@ export const make = Effect.gen(function* () {
       ].jsonSchema.input({ target: "draft-2020-12" }),
       connections: [],
       workContext: {
-        reference: { workItem: item, url: null },
+        reference: { workItem: item, url: admission.event.subject?.url ?? null },
         facts: {
           assignees: [],
           openBlockers: 0,
@@ -590,6 +590,7 @@ export const make = Effect.gen(function* () {
       id,
       workspace: runWorkspace,
       workItem: item,
+      ...(admission.event.subject ? { subject: admission.event.subject } : {}),
       operation: operation.id,
       harness: selectedHarness,
       branch: checkout.branch,

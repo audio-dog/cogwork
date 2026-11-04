@@ -19,6 +19,7 @@ import type * as Atom from "effect/unstable/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
 import { recordDaemonEventsApplied } from "../daemon/process-health";
+import { workItemLabel } from "./feed";
 import {
   applyRunPreview,
   previewMap,
@@ -65,6 +66,7 @@ export interface ActiveRun {
   readonly runId: RunId;
   readonly workspace: WorkspaceId;
   readonly workItem: WorkItemId;
+  readonly subject?: RunSummary["subject"];
   readonly operation: RunSummary["operation"];
   readonly status: RunStatus;
   readonly preview: RunActivityPreview | null;
@@ -170,7 +172,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       kind: "run",
       atMillis,
       label: activityLabels.run,
-      summary: `${run.workItem} · run ${run.status}`,
+      summary: `${run.subject?.title ?? workItemLabel(run.workItem)} · run ${run.status}`,
       severity: runStatusSeverity[run.status],
       entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem },
       raw: pretty(run),

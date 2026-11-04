@@ -12,9 +12,9 @@ import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from
 import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
-import { BoardResult, useBoard } from "../features/activity-session";
+import { BoardResult, useActivitySession, useBoard } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
-import { boardItem, runForItem, runsForItem } from "../features/feed";
+import { boardItem, operationNameOf, runForItem, runsForItem, workItemLabel } from "../features/feed";
 import { relativeTime } from "../features/format";
 import {
   attemptTone,
@@ -22,6 +22,7 @@ import {
   type ItemStateDescriptor,
   type ItemTabSubject,
   itemTabSubject,
+  latestRunSubject,
   previousAttempts,
   resolveSubTab,
   type SubTab,
@@ -33,6 +34,7 @@ import { useRunTranscript } from "../features/run-activity";
 import { runStatusLabel } from "../features/run-status";
 import { statusLine } from "../features/run-transcript";
 import { useNow } from "../features/use-now";
+import { workspaceLabelById } from "../features/workspace-record";
 import type { ItemSelection } from "../store/chrome";
 import { useRightPanelStore } from "../store/right-panel";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
@@ -42,6 +44,7 @@ import { SurfaceTab } from "./surface-tab";
 
 interface ItemTabState {
   readonly workspace: WorkspaceId;
+  readonly workspaceLabel: string;
   readonly item: ItemTabSubject;
   readonly run: RunSummary | null;
   readonly attempts: readonly RunSummary[];
@@ -63,6 +66,7 @@ interface MutationStatus {
 interface ItemTabMeta {
   readonly now: number;
   readonly cancel: MutationStatus;
+  readonly operationName: (operation: string) => string;
 }
 
 interface ItemTabContextValue {
@@ -86,16 +90,20 @@ const mutationStatus = <A, E>(result: AsyncResult.AsyncResult<A, E>, active = tr
 
 function ItemTabProvider({
   workspace,
+  workspaceLabel,
   item,
   run,
   attempts,
+  operationName,
   initialSubTab,
   children,
 }: {
   workspace: WorkspaceId;
+  workspaceLabel: string;
   item: ItemTabSubject;
   run: RunSummary | null;
   attempts: readonly RunSummary[];
+  operationName: (operation: string) => string;
   initialSubTab?: SubTabKey;
   children: ReactNode;
 }) {
@@ -105,7 +113,7 @@ function ItemTabProvider({
   const [cancelResult, cancelRun] = useAtom(cancelRunAtom);
   const now = useNow();
 
-  const descriptor = describeItemState(run, item);
+  const descriptor = describeItemState(run, item, operationName);
   const tabs = subTabsFor(item);
   const resolved = resolveSubTab(subTab, tabs);
   const actions: ItemTabActions = {
@@ -118,6 +126,7 @@ function ItemTabProvider({
   const meta: ItemTabMeta = {
     now,
     cancel: mutationStatus(cancelResult),
+    operationName,
   };
 
   return (
@@ -125,6 +134,7 @@ function ItemTabProvider({
       value={{
         state: {
           workspace,
+          workspaceLabel,
           item,
           run,
           attempts,
@@ -215,14 +225,14 @@ export function ItemTitle({ title, url }: Pick<ItemTabSubject, "title" | "url">)
 
 function Header() {
   const {
-    state: { workspace, item, descriptor },
+    state: { workspaceLabel, item, descriptor },
   } = useItemTab();
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="font-mono">{item.id}</span>
+        <span className="font-mono">{item.label}</span>
         <span aria-hidden>·</span>
-        <span>{workspace}</span>
+        <span>{workspaceLabel}</span>
       </div>
       <h1 className="text-base font-semibold [&>a]:underline-offset-4 [&>a:hover]:underline">
         <ItemTitle title={item.title} url={item.url} />
@@ -305,7 +315,7 @@ function PullRequestSummary({ pr }: { pr: PrSummary }) {
 function PreviousAttempts() {
   const {
     state: { attempts },
-    meta: { now },
+    meta: { now, operationName },
   } = useItemTab();
   if (attempts.length === 0) {
     return (
@@ -338,7 +348,7 @@ function PreviousAttempts() {
                     >
                       {runStatusLabel[attempt.status]}
                     </span>
-                    <span className="text-muted-foreground">{attempt.operation}</span>
+                    <span className="text-muted-foreground">{operationName(attempt.operation)}</span>
                     <span aria-hidden className="text-muted-foreground">
                       ·
                     </span>
@@ -486,6 +496,7 @@ function ItemGone() {
 
 export function ItemTab({ selection }: { selection: ItemSelection & { runId?: RunSummary["id"] } }) {
   const result = useBoard();
+  const { workflows } = useActivitySession();
   if (!BoardResult.$is("Success")(result)) return <ItemGone />;
 
   const { board } = result;
@@ -493,7 +504,7 @@ export function ItemTab({ selection }: { selection: ItemSelection & { runId?: Ru
   const itemRuns = runsForItem(board, selection.workspace, selection.workItem);
   if (!entry && itemRuns.length === 0) return <ItemGone />;
 
-  const subject = itemTabSubject(entry, selection.workItem);
+  const subject = itemTabSubject(entry, selection.workItem, latestRunSubject(itemRuns));
   const selectedRun = selectedRunForItem(
     selection.runId ? board.runs.get(selection.runId) : null,
     selection.workspace,
@@ -506,9 +517,11 @@ export function ItemTab({ selection }: { selection: ItemSelection & { runId?: Ru
     <ItemTabProvider
       key={`${selection.workspace}:${subject.id}`}
       workspace={selection.workspace}
+      workspaceLabel={workspaceLabelById(board, selection.workspace)}
       item={subject}
       run={run}
       attempts={attempts}
+      operationName={(operation) => operationNameOf(workflows.values(), operation)}
       initialSubTab={selectedRun ? "run" : undefined}
     >
       <div className="flex h-full min-h-0 flex-col">
@@ -531,7 +544,12 @@ export function ItemSurfaceTab({
   const active = useRightPanelStore((state) => state.active === id);
   const setActive = useRightPanelStore((state) => state.setActive);
   const closeSurface = useRightPanelStore((state) => state.closeSurface);
+  const result = useBoard();
   const Tab = active ? SurfaceTab.Active : SurfaceTab.Inactive;
+  const label = workItemLabel(workItem);
+  const title = BoardResult.$is("Success")(result)
+    ? (latestRunSubject(runsForItem(result.board, workspace, workItem))?.title ?? label)
+    : label;
 
   return (
     <Tab>
@@ -540,13 +558,13 @@ export function ItemSurfaceTab({
           render={
             <SurfaceTab.Button onClick={() => setActive(id)}>
               <RiFileList2Line data-icon="inline-start" />
-              <span className="truncate">{workItem}</span>
+              <span className="truncate">{label}</span>
             </SurfaceTab.Button>
           }
         />
-        <TooltipContent side="bottom">{workspace}</TooltipContent>
+        <TooltipContent side="bottom">{title}</TooltipContent>
       </Tooltip>
-      <SurfaceTab.Close aria-label={`Close ${workItem}`} onClick={() => closeSurface(id)} />
+      <SurfaceTab.Close aria-label={`Close ${label}`} onClick={() => closeSurface(id)} />
     </Tab>
   );
 }

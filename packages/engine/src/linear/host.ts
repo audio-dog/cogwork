@@ -76,6 +76,12 @@ const writeNotConfirmed = (writeKey: string) =>
     message: `Linear write ${writeKey} was not confirmed by read-back`,
   });
 
+const stateNotConfirmed = (change: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    message: `Linear ${change} was not confirmed by read-back`,
+  });
+
 const ambiguousWriteNotConfirmed = (writeKey: string) =>
   new IssueTrackerError({
     reason: "unavailable",
@@ -188,17 +194,15 @@ export const makeIssueActions = (client: LinearClientService) => {
     if (marker.body) return;
     return yield* ambiguousWriteNotConfirmed(writeKey);
   });
-  const writeOnce = Effect.fn("linear.workflowWriteOnce")(function* (
-    target: LinearTarget,
-    issue: string,
-    writeKey: string,
+  const convergeState = Effect.fn("linear.workflowConvergeState")(function* (
+    change: string,
     applied: Effect.Effect<boolean, IssueTrackerError>,
     write: Effect.Effect<unknown, IssueTrackerError>,
   ) {
-    if (yield* commentsCarry(target, issue, writeKey)) return;
-    if (!(yield* applied)) yield* write;
-    yield* client.createComment(target, issue, writeMarker(writeKey));
-    yield* confirmComment(target, issue, writeKey);
+    if (yield* applied) return;
+    yield* write;
+    if (yield* applied) return;
+    return yield* stateNotConfirmed(change);
   });
   return {
     createIssue: Effect.fn("linear.workflowCreateIssue")(function* (
@@ -247,13 +251,10 @@ export const makeIssueActions = (client: LinearClientService) => {
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       labels: ReadonlyArray<string>,
-      writeKey: string,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      yield* writeOnce(
-        target,
-        id,
-        writeKey,
+      yield* convergeState(
+        `add labels ${labels.join(", ")} to ${id}`,
         client
           .readActionIssue(target, id)
           .pipe(Effect.map((issue) => labels.every((label) => issue.labels.includes(label)))),
@@ -264,21 +265,21 @@ export const makeIssueActions = (client: LinearClientService) => {
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
       label: string,
-      writeKey: string,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      yield* writeOnce(target, id, writeKey, Effect.succeed(false), client.removeLabel(target, id, label));
+      yield* convergeState(
+        `remove label ${label} from ${id}`,
+        client.readActionIssue(target, id).pipe(Effect.map((issue) => !issue.labels.includes(label))),
+        client.removeLabel(target, id, label),
+      );
     }),
     closeIssue: Effect.fn("linear.workflowCloseIssue")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
-      writeKey: string,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      yield* writeOnce(
-        target,
-        id,
-        writeKey,
+      yield* convergeState(
+        `close ${id}`,
         client.readActionIssue(target, id).pipe(Effect.map(({ stateType }) => stateType === "completed")),
         completedStateId(client, target).pipe(
           Effect.flatMap((stateId) => client.setState(target, id, stateId)),
