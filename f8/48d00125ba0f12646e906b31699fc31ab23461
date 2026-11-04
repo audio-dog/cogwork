@@ -1,0 +1,33 @@
+packages/engine/src/index.ts
+  s_19c1b5e0f8d107::t_7d377a1b7bdd4c 36
+packages/codex-cli/src/harness-execution.test.ts
+  s_f9ae3cbfb34099::t_81ee7f49d2e513 2
+packages/codex-cli/src/harness-fixtures.ts
+  s_f9ae3cbfb34099::t_03b52115ff70b8 48,54,74-75,364
+packages/codex-cli/src/harness-session.test.ts
+  s_f9ae3cbfb34099::t_4bcb36402244c7 1-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f848d00125ba0f12646e906b31699fc31ab23461",
+  "prompts": {},
+  "sessions": {
+    "s_19c1b5e0f8d107": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f2b1413f-27df-4ab6-adc9-78fb1f8e26dc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f9ae3cbfb34099": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ac50c61-8279-40ce-bd6d-5c20b6456e4a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
