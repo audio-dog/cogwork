@@ -1,0 +1,19 @@
+packages/engine/docs/adr/0017-an-action-entry-is-registered-once.md
+  s_2324a6c1e00458::t_6d6f6cb649f1ff 1-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "200d8bac36131a1c933d00fd9ada77132dd0e5bc",
+  "prompts": {},
+  "sessions": {
+    "s_2324a6c1e00458": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1e3915b5-60c5-47a8-a730-ec09aba04ebf",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
