@@ -69,8 +69,11 @@ const problemKey = (problem: WorkflowDiagnostic, index: number) =>
     index,
   ].join(":");
 
-function ProblemIcon({ blocking }: { readonly blocking: boolean }) {
-  if (blocking) return <RiErrorWarningLine data-icon="inline-start" className="text-destructive" />;
+function BlockingProblemIcon() {
+  return <RiErrorWarningLine data-icon="inline-start" className="text-destructive" />;
+}
+
+function AdvisoryProblemIcon() {
   return <RiInformationLine data-icon="inline-start" className="text-muted-foreground" />;
 }
 
@@ -87,7 +90,7 @@ export function ProblemMark({
   return (
     <Tooltip>
       <TooltipTrigger render={<Button size="icon-xs" variant="ghost" aria-label={label} />}>
-        <ProblemIcon blocking={blocking} />
+        {blocking ? <BlockingProblemIcon /> : <AdvisoryProblemIcon />}
       </TooltipTrigger>
       <TooltipContent side="top" className="flex flex-col items-start gap-0.5">
         {problems.map((problem, index) => (
@@ -126,7 +129,7 @@ export function ProblemsButton({
           />
         }
       >
-        <ProblemIcon blocking={blocking} />
+        {blocking ? <BlockingProblemIcon /> : <AdvisoryProblemIcon />}
         {problems.length}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 gap-0.5 p-1">
@@ -137,7 +140,7 @@ export function ProblemsButton({
             className="h-auto items-start justify-start gap-2 px-2 py-1.5 text-start font-normal whitespace-normal"
             onClick={() => show(problem)}
           >
-            <ProblemIcon blocking={blocksPublish(problem)} />
+            {blocksPublish(problem) ? <BlockingProblemIcon /> : <AdvisoryProblemIcon />}
             {problemText(problem, workflowDocument)}
           </Button>
         ))}
