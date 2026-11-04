@@ -520,11 +520,11 @@ const needGroups: ReadonlyArray<{
   readonly label: string;
   readonly Icon: ComponentType<{ className?: string }>;
 }> = [
-  { kind: "mcp-server", label: kindLabelsPlural["mcp-server"], Icon: kindIcons["mcp-server"] },
-  { kind: "skill", label: kindLabelsPlural.skill, Icon: kindIcons.skill },
-  { kind: "subagent", label: kindLabelsPlural.subagent, Icon: kindIcons.subagent },
-  { kind: "command", label: kindLabelsPlural.command, Icon: kindIcons.command },
-  { kind: "hook", label: kindLabelsPlural.hook, Icon: kindIcons.hook },
+  ...(["mcp-server", "skill", "subagent", "command", "hook"] as const).map((kind) => ({
+    kind,
+    label: kindLabelsPlural[kind],
+    Icon: kindIcons[kind],
+  })),
   { kind: "connection", label: "Connections", Icon: RiPlugLine },
 ];
 
