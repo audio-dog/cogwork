@@ -220,6 +220,7 @@ const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => 
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   document.body.replaceChildren();
 });
@@ -270,7 +271,8 @@ describe("WorkflowProvider", () => {
   });
 
   it("keeps the typed outcome name through a pause and shows the saved name on blur", async () => {
-    const pause = () => new Promise((resolve) => setTimeout(resolve, 600));
+    vi.useFakeTimers();
+    const pause = () => vi.advanceTimersByTimeAsync(600);
     const current = { record: everyRecord };
     const edit = vi.fn<WorkflowClient["edit"]>(async (_id, edits) => {
       const applied = applyWorkflowEdits(current.record.workingCopy, edits);
@@ -305,6 +307,7 @@ describe("WorkflowProvider", () => {
     expect(input.value).toBe("");
     await type("ready ");
     await act(pause);
+    expect(edit).toHaveBeenCalledOnce();
     expect(input.value).toBe("ready ");
     await type("ready for agent ");
     await act(async () => input.blur());
