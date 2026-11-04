@@ -659,6 +659,75 @@ describe("WorkflowProvider", () => {
     await act(async () => root.unmount());
   });
 
+  it("keeps an action's listed options when the Add Action menu opens again", async () => {
+    const firstListing = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const refresh = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const listings = [firstListing.promise, refresh.promise];
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: () => listings.shift() ?? refresh.promise,
+    };
+    const { container, root } = await mountEditor(everyRecord, client);
+    const addAction = [...container.querySelectorAll("button")].find(
+      ({ textContent }) => textContent === "Add Action",
+    );
+    if (!addAction) throw new Error("Add Action did not render");
+    const menuItem = (text: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        ({ textContent }) => textContent === text,
+      );
+    const openDoneValues = async () => {
+      await act(async () => addAction.click());
+      await act(async () => menuItem("Test")?.click());
+      await act(async () => menuItem("Done…")?.click());
+    };
+
+    await openDoneValues();
+    expect(document.body.textContent).toContain("Loading");
+    await act(async () =>
+      firstListing.resolve([{ value: "needs-triage", name: "needs-triage", listedIn: [] }]),
+    );
+    expect(menuItem("needs-triage")).toBeDefined();
+
+    await act(async () => addAction.click());
+    expect(menuItem("needs-triage")).toBeUndefined();
+    await openDoneValues();
+    expect(menuItem("needs-triage")).toBeDefined();
+    expect(document.body.textContent).not.toContain("Loading");
+    await act(async () => root.unmount());
+  });
+
+  it("keeps the newest options when an older read settles last", async () => {
+    const older = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const newer = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const listings = [older.promise, newer.promise];
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: () => listings.shift() ?? newer.promise,
+    };
+    const { container, root } = await mountEditor(everyRecord, client);
+    const parameter = container.querySelector<HTMLButtonElement>('[aria-label="Started target"]');
+    if (!parameter) throw new Error("Trigger parameter did not render");
+    const optionTexts = () =>
+      [...document.querySelectorAll('[role="menuitemradio"]')].map(({ textContent }) => textContent);
+
+    await act(async () => parameter.click());
+    await act(async () => parameter.click());
+    await act(async () => parameter.click());
+    await act(async () => newer.resolve([{ value: "new", name: "new", listedIn: [] }]));
+    await act(async () => older.resolve([{ value: "old", name: "old", listedIn: [] }]));
+    expect(optionTexts()).toEqual(["new"]);
+    await act(async () => root.unmount());
+  });
+
   it("lists options for every ready workspace when the Workflow selects Every", async () => {
     const listOptions = vi.fn<WorkflowClient["listOptions"]>(async () => []);
     const client: WorkflowClient = {

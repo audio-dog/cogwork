@@ -98,33 +98,46 @@ const fixedValues = (parameter: WorkflowCatalogParameter) =>
 const cascadingParameter = (entry: WorkflowCatalogEntry) =>
   entry.parameters.length === 1 ? entry.parameters[0] : undefined;
 
-const useValues = (
-  entry: WorkflowCatalogEntry,
-  parameter: WorkflowCatalogParameter,
-  listValues: ListValues,
-  seed: ReadonlyArray<CatalogValue>,
-) => {
-  const [listed, setListed] = useState<ReadonlyArray<CatalogValue> | null>(
-    parameter.source === "fixed" ? fixedValues(parameter) : null,
-  );
-  const [failed, setFailed] = useState(false);
-  const load = () => {
+interface Listing {
+  readonly listed: ReadonlyArray<CatalogValue> | null;
+  readonly failed: boolean;
+}
+
+const listingKey = (entry: WorkflowCatalogEntry, parameter: WorkflowCatalogParameter) =>
+  `${entry.key}/${parameter.id}`;
+
+/** Keeps each parameter's last list where the menu that shows it unmounts on close. */
+const useListings = (listValues: ListValues) => {
+  const [listings, setListings] = useState<ReadonlyMap<string, Listing>>(new Map());
+  const latestRequest = useRef(new Map<string, number>());
+  const settle = (key: string, request: number, next: (previous: Listing | undefined) => Listing) => {
+    if (latestRequest.current.get(key) !== request) return;
+    setListings((current) => new Map(current).set(key, next(current.get(key))));
+  };
+  const load = (entry: WorkflowCatalogEntry, parameter: WorkflowCatalogParameter) => {
     if (parameter.source === "fixed") return;
+    const key = listingKey(entry, parameter);
+    const request = (latestRequest.current.get(key) ?? 0) + 1;
+    latestRequest.current.set(key, request);
     listValues(entry, parameter).then(
-      (values) => {
-        setListed(values);
-        setFailed(false);
-      },
-      () => setFailed(true),
+      (values) => settle(key, request, () => ({ listed: values, failed: false })),
+      () => settle(key, request, (previous) => ({ listed: previous?.listed ?? null, failed: true })),
     );
   };
-  return {
-    values: listed ?? seed,
-    loading: listed === null && !failed,
-    failed: listed === null && failed,
-    load,
+  const valuesOf = (
+    entry: WorkflowCatalogEntry,
+    parameter: WorkflowCatalogParameter,
+    seed: ReadonlyArray<CatalogValue>,
+  ) => {
+    if (parameter.source === "fixed")
+      return { values: fixedValues(parameter), loading: false, failed: false };
+    const { listed, failed } = listings.get(listingKey(entry, parameter)) ?? { listed: null, failed: false };
+    return { values: listed ?? seed, loading: listed === null && !failed, failed: listed === null && failed };
   };
+  return { load, valuesOf };
 };
+
+type Listings = ReturnType<typeof useListings>;
 
 function ValuesState({
   values,
@@ -157,7 +170,7 @@ interface CatalogMenuValue {
   readonly meta: {
     readonly machine: MachineReadiness;
     readonly handOffs: ReadonlyArray<HandOffTarget>;
-    readonly listValues: ListValues;
+    readonly listings: Listings;
   };
 }
 
@@ -185,6 +198,7 @@ function Provider({
   readonly children: ReactNode;
 }) {
   const [query, setQuery] = useState("");
+  const listings = useListings(listValues);
   const lastPick = useRef<CatalogChoice | null>(null);
   const choose = (choice: CatalogChoice) => {
     lastPick.current = choice;
@@ -202,7 +216,7 @@ function Provider({
       value={{
         state: { entries, query },
         actions: { choose, takeFinalFocus },
-        meta: { machine, handOffs, listValues },
+        meta: { machine, handOffs, listings },
       }}
     >
       <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
@@ -252,14 +266,14 @@ function EntryValues({
 }) {
   const {
     actions: { choose },
-    meta: { listValues },
+    meta: { listings },
   } = useCatalogMenu();
   const { disabled, status } = useEntryAvailability(entry);
-  const values = useValues(entry, parameter, listValues, []);
+  const values = listings.valuesOf(entry, parameter, []);
   return (
     <DropdownMenuSub
       onOpenChange={(open) => {
-        if (open) values.load();
+        if (open) listings.load(entry, parameter);
       }}
     >
       <DropdownMenuSubTrigger label={entry.name} disabled={disabled}>
@@ -430,7 +444,8 @@ export function ParameterMenu({
   readonly onChange: (value: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const values = useValues(entry, parameter, listValues, value ? [{ value, label: value }] : []);
+  const listings = useListings(listValues);
+  const values = listings.valuesOf(entry, parameter, value ? [{ value, label: value }] : []);
   const needle = query.trim().toLowerCase();
   const shown = values.values.filter(({ label }) => label.toLowerCase().includes(needle));
   const named = entry.parameters.length > 1;
@@ -438,7 +453,7 @@ export function ParameterMenu({
     <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery}>
       <DropdownMenu
         onOpenChange={(open) => {
-          if (open) values.load();
+          if (open) listings.load(entry, parameter);
         }}
       >
         <DropdownMenuTrigger
