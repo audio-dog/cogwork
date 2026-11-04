@@ -2,7 +2,12 @@ import { linearTeams, WorkflowActionArtifact, WorkItemId } from "@cogwork/contra
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { type CreateIssueInput, IssueTrackerError, type TrackerItem } from "../issue-tracker";
+import {
+  type CreateIssueInput,
+  convergeTrackerState,
+  IssueTrackerError,
+  type TrackerItem,
+} from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
 import type { LinearClientService, LinearTeamRef } from "./client";
@@ -74,12 +79,6 @@ const writeNotConfirmed = (writeKey: string) =>
   new IssueTrackerError({
     reason: "unavailable",
     message: `Linear write ${writeKey} was not confirmed by read-back`,
-  });
-
-const stateNotConfirmed = (change: string) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    message: `Linear ${change} was not confirmed by read-back`,
   });
 
 const ambiguousWriteNotConfirmed = (writeKey: string) =>
@@ -194,16 +193,6 @@ export const makeIssueActions = (client: LinearClientService) => {
     if (marker.body) return;
     return yield* ambiguousWriteNotConfirmed(writeKey);
   });
-  const convergeState = Effect.fn("linear.workflowConvergeState")(function* (
-    change: string,
-    applied: Effect.Effect<boolean, IssueTrackerError>,
-    write: Effect.Effect<unknown, IssueTrackerError>,
-  ) {
-    if (yield* applied) return;
-    yield* write;
-    if (yield* applied) return;
-    return yield* stateNotConfirmed(change);
-  });
   return {
     createIssue: Effect.fn("linear.workflowCreateIssue")(function* (
       workspace: WorkspaceIssueTrackerBinding,
@@ -253,8 +242,8 @@ export const makeIssueActions = (client: LinearClientService) => {
       labels: ReadonlyArray<string>,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      yield* convergeState(
-        `add labels ${labels.join(", ")} to ${id}`,
+      yield* convergeTrackerState(
+        `Linear add labels ${labels.join(", ")} to ${id}`,
         client
           .readActionIssue(target, id)
           .pipe(Effect.map((issue) => labels.every((label) => issue.labels.includes(label)))),
@@ -267,8 +256,8 @@ export const makeIssueActions = (client: LinearClientService) => {
       label: string,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      yield* convergeState(
-        `remove label ${label} from ${id}`,
+      yield* convergeTrackerState(
+        `Linear remove label ${label} from ${id}`,
         client.readActionIssue(target, id).pipe(Effect.map((issue) => !issue.labels.includes(label))),
         client.removeLabel(target, id, label),
       );
@@ -278,8 +267,8 @@ export const makeIssueActions = (client: LinearClientService) => {
       id: WorkItemId,
     ) {
       const target = yield* targetForIssue(workspace, id);
-      yield* convergeState(
-        `close ${id}`,
+      yield* convergeTrackerState(
+        `Linear close ${id}`,
         client.readActionIssue(target, id).pipe(Effect.map(({ stateType }) => stateType === "completed")),
         completedStateId(client, target).pipe(
           Effect.flatMap((stateId) => client.setState(target, id, stateId)),

@@ -10,7 +10,12 @@ import {
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { type CreateIssueInput, IssueTrackerError, type TrackerItem } from "../issue-tracker";
+import {
+  type CreateIssueInput,
+  convergeTrackerState,
+  IssueTrackerError,
+  type TrackerItem,
+} from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { type GitHubClientService, type GitHubRepoRef, type RawIssue, repoRefFromRepository } from "./client";
 import { wireCodec } from "./markers";
@@ -72,12 +77,6 @@ const writeNotConfirmed = (writeKey: string) =>
   new IssueTrackerError({
     reason: "unavailable",
     message: `GitHub write ${writeKey} was not confirmed by read-back`,
-  });
-
-const stateNotConfirmed = (change: string) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    message: `GitHub ${change} was not confirmed by read-back`,
   });
 
 const ambiguousWriteNotConfirmed = (writeKey: string) =>
@@ -225,16 +224,6 @@ export const makeIssueActions = (client: GitHubClientService) => {
     if (yield* commentsCarry(repo, number, writeKey)) return;
     return yield* writeNotConfirmed(writeKey);
   });
-  const convergeState = Effect.fn("github.workflowConvergeState")(function* (
-    change: string,
-    applied: Effect.Effect<boolean, IssueTrackerError>,
-    write: Effect.Effect<unknown, IssueTrackerError>,
-  ) {
-    if (yield* applied) return;
-    yield* write;
-    if (yield* applied) return;
-    return yield* stateNotConfirmed(change);
-  });
   const repairCreatedIssueLabels = Effect.fn("github.repairWorkflowCreatedIssueLabels")(function* (
     repo: GitHubTarget,
     issue: RawIssue,
@@ -311,8 +300,8 @@ export const makeIssueActions = (client: GitHubClientService) => {
     ) {
       const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      yield* convergeState(
-        `add labels ${labels.join(", ")} to #${number}`,
+      yield* convergeTrackerState(
+        `GitHub add labels ${labels.join(", ")} to #${number}`,
         client
           .readIssue(repo, number)
           .pipe(Effect.map((issue) => labels.every((label) => issue.labels.includes(label)))),
@@ -326,8 +315,8 @@ export const makeIssueActions = (client: GitHubClientService) => {
     ) {
       const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      yield* convergeState(
-        `remove label ${label} from #${number}`,
+      yield* convergeTrackerState(
+        `GitHub remove label ${label} from #${number}`,
         client.readIssue(repo, number).pipe(Effect.map((issue) => !issue.labels.includes(label))),
         client.removeLabel(repo, number, label),
       );
@@ -338,8 +327,8 @@ export const makeIssueActions = (client: GitHubClientService) => {
     ) {
       const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      yield* convergeState(
-        `close #${number}`,
+      yield* convergeTrackerState(
+        `GitHub close #${number}`,
         client.readIssue(repo, number).pipe(Effect.map(({ state }) => state === "closed")),
         client.closeIssue(repo, number),
       );

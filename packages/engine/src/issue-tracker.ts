@@ -63,6 +63,21 @@ export interface IssueTrackerActionService {
   ) => Effect.Effect<void, IssueTrackerError>;
 }
 
+/** Label and close writes carry no marker, so a repeated step reads the state instead. */
+export const convergeTrackerState = Effect.fn("IssueTracker.convergeState")(function* (
+  change: string,
+  applied: Effect.Effect<boolean, IssueTrackerError>,
+  write: Effect.Effect<unknown, IssueTrackerError>,
+) {
+  if (yield* applied) return;
+  yield* write;
+  if (yield* applied) return;
+  return yield* new IssueTrackerError({
+    reason: "unavailable",
+    message: `${change} was not confirmed by read-back`,
+  });
+});
+
 const unavailableAction = () =>
   Effect.fail(
     new IssueTrackerError({
