@@ -43,6 +43,7 @@ import { DaemonEventBus } from "./daemon-event-bus";
 import { Harness } from "./harness";
 import { firstPartyInstructionPackages, WorkflowCatalogContributions } from "./workflow-catalog";
 import { MachineReadinessSource } from "./workflow-machine-readiness";
+import { makeWorkflowOptions } from "./workflow-options";
 
 type WorkflowsError = ControlStoreFailure | WorkflowFailure;
 
@@ -181,6 +182,7 @@ export const make = Effect.gen(function* () {
   const harness = yield* Harness;
   const catalog = catalogOf(contributions, harness);
   const templates = contributions.flatMap((contribution) => contribution.templates);
+  const options = makeWorkflowOptions(contributions.flatMap((contribution) => contribution.options ?? []));
   const unavailable = ControlStoreFailure.make({
     operation: "read Workflows",
     message: store.health === "unavailable" ? store.message : "Control store unavailable",
@@ -421,23 +423,7 @@ export const make = Effect.gen(function* () {
     readonly workspaces: ReadonlyArray<WorkspaceId>;
   }) => {
     const entry = catalog.entries.find(({ key }) => key === payload.entry);
-    const parameter = entry?.parameters.find(({ id }) => id === payload.parameter);
-    if (parameter?.source === "live") {
-      const contribution = contributions.find(({ entries }) =>
-        entries.some(({ key }) => key === payload.entry),
-      );
-      return (
-        contribution?.listOptions?.(payload.entry, payload.parameter, payload.workspaces) ??
-        Effect.succeed([])
-      );
-    }
-    return Effect.succeed(
-      (parameter?.values ?? []).map((value) => ({
-        value,
-        name: value,
-        listedIn: payload.workspaces,
-      })) satisfies WorkflowOptionList,
-    );
+    return entry ? options.list(entry, payload.parameter, payload.workspaces) : Effect.succeed([]);
   };
 
   return {

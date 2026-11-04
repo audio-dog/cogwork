@@ -40,6 +40,7 @@ export interface IpcDeps {
   readonly isTrustedSender: (sender: WebContents) => boolean;
   readonly runtime: ManagedRuntime.ManagedRuntime<EngineSupervisor, never>;
   readonly notifications: DesktopNotifications;
+  readonly chooseFolder: (sender: WebContents) => Promise<string | null>;
 }
 
 const boundedText = (value: unknown, maximum: number) =>
@@ -235,6 +236,9 @@ export const registerIpc = (deps: IpcDeps) => {
   );
   ipcMain.handle(IpcChannel.openNotificationSettings, (event) =>
     deps.isTrustedSender(event.sender) ? deps.notifications.openSettings() : false,
+  );
+  ipcMain.handle(IpcChannel.chooseFolder, (event) =>
+    deps.isTrustedSender(event.sender) ? deps.chooseFolder(event.sender) : null,
   );
 
   const sessions = new WeakMap<WebContents, RendererSession>();

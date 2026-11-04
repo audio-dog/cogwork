@@ -3,10 +3,12 @@ import type {
   PrSummary,
   RunId,
   RunStatus,
+  RunSubject,
   RunSummary,
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
+import { type OperationRun, workItemLabel } from "./feed";
 import { runStatusLabel } from "./run-status";
 
 export type StateTone = "live" | "ready" | "muted";
@@ -19,20 +21,34 @@ export interface ItemStateDescriptor {
 
 export interface ItemTabSubject {
   readonly id: WorkItemId;
+  readonly label: string;
   readonly title: string;
   readonly url: string | null;
   readonly pr: PrSummary | null;
 }
 
-export const itemTabSubject = (entry: BoardItem | null, workItem: WorkItemId) =>
-  entry
-    ? ({
-        id: entry.item.id,
-        title: entry.item.title,
-        url: entry.item.url ?? null,
-        pr: entry.item.pr,
-      } satisfies ItemTabSubject)
-    : ({ id: workItem, title: workItem, url: null, pr: null } satisfies ItemTabSubject);
+export const itemTabSubject = (entry: BoardItem | null, workItem: WorkItemId, subject: RunSubject | null) => {
+  const label = workItemLabel(workItem);
+  if (entry) {
+    return {
+      id: entry.item.id,
+      label,
+      title: entry.item.title,
+      url: entry.item.url ?? subject?.url ?? null,
+      pr: entry.item.pr,
+    } satisfies ItemTabSubject;
+  }
+  return {
+    id: workItem,
+    label,
+    title: subject?.title ?? label,
+    url: subject?.url ?? null,
+    pr: null,
+  } satisfies ItemTabSubject;
+};
+
+export const latestRunSubject = (runs: readonly RunSummary[]) =>
+  runs.toSorted((a, b) => b.startedAtMillis - a.startedAtMillis).find((run) => run.subject)?.subject ?? null;
 
 const settledItemState = (run: RunSummary | null, subject: ItemTabSubject) =>
   subject.pr
@@ -43,9 +59,17 @@ const settledItemState = (run: RunSummary | null, subject: ItemTabSubject) =>
         running: false,
       } satisfies ItemStateDescriptor);
 
-export const describeItemState = (run: RunSummary | null, subject: ItemTabSubject) =>
+export const describeItemState = (
+  run: RunSummary | null,
+  subject: ItemTabSubject,
+  operationName: (run: OperationRun) => string,
+) =>
   run?.status === "running"
-    ? ({ label: `Running · ${run.operation}`, tone: "live", running: true } satisfies ItemStateDescriptor)
+    ? ({
+        label: `Running · ${operationName(run)}`,
+        tone: "live",
+        running: true,
+      } satisfies ItemStateDescriptor)
     : settledItemState(run, subject);
 
 export type SubTabKey = "main" | "run" | "pr";

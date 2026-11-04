@@ -954,6 +954,8 @@ describe("WorkflowRun", () => {
           Ref.update(calls, (current) => [...current, `comment:${issue}:${body}`]),
         addLabels: (_workspace, issue, labels) =>
           Ref.update(calls, (current) => [...current, `labels:${issue}:${labels.join(",")}`]),
+        removeLabel: (_workspace, issue, label) =>
+          Ref.update(calls, (current) => [...current, `unlabel:${issue}:${label}`]),
       } satisfies IssueTrackerService;
       const registry = { ...emptyRegistry, workspaces: [workspace] };
       const runCodingAdmission = (admission: TriggerAdmission, result: unknown) =>
@@ -972,7 +974,7 @@ describe("WorkflowRun", () => {
         stuck: false,
         answers: { role: "needs-info" },
         inputs: { comment: "Please add the failing logs.", hand_off: "Waiting for logs." },
-        workspace: workspace.config.name,
+        workspace: "none",
       });
       yield* runCodingAdmission(admissionFor("needs-info-comment", issue("#801")), {
         summary: "Ready after reporter reply",
@@ -1006,8 +1008,10 @@ describe("WorkflowRun", () => {
       assert.deepStrictEqual(yield* Ref.get(calls), [
         "comment:#800:Please add the failing logs.",
         "labels:#800:needs-info",
+        "unlabel:#800:needs-triage",
         "comment:#801:Thanks, this is ready.",
         "labels:#801:ready-for-agent",
+        "unlabel:#801:needs-triage",
         "push-branch:802",
         "open:Implement retries",
         "push-if-ahead:803-follow-up",
@@ -1524,6 +1528,27 @@ describe("WorkflowRun", () => {
 
       assert.strictEqual(run?.status, "failed");
       assert.include(attempts[0]?.reason ?? "", "needs non-empty input notification");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("records the event's title and link on the Run and gives the link to the agent", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram([
+        {
+          summary: "All clear",
+          stuck: false,
+          answers: { done: "yes" },
+          inputs: { notification: "Deploy ready" },
+        },
+      ]);
+      const subject = { title: "Fix login", url: "https://github.com/acme/web/issues/7" };
+      yield* runner.execute({ ...admission, event: { ...admission.event, subject } });
+      const ledger = yield* RunLedger;
+      const [run] = yield* ledger.listRuns(10);
+      const plan = run ? yield* ledger.getRunPlan(run.id) : null;
+
+      assert.deepStrictEqual(run?.subject, subject);
+      assert.strictEqual(plan?.workContext.reference.url, subject.url);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

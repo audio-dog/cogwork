@@ -1,10 +1,4 @@
-import {
-  type WorkflowCatalogEntry,
-  WorkflowCatalogKey,
-  type WorkflowOptionList,
-  type WorkflowTemplate,
-  type WorkspaceId,
-} from "@cogwork/contracts";
+import { type WorkflowCatalogEntry, WorkflowCatalogKey, type WorkflowTemplate } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -14,15 +8,12 @@ import { workflowCatalogContribution as linearActions } from "./linear/adapter";
 import { slackActionEntries } from "./slack-write";
 import { SourceControlProvider } from "./source-control";
 import { type TriggerSource, TriggerSources } from "./trigger-source";
+import type { SystemOptions } from "./workflow-options";
 
 export interface WorkflowCatalogContribution {
   readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
   readonly templates: ReadonlyArray<WorkflowTemplate>;
-  readonly listOptions?: (
-    entry: WorkflowCatalogKey,
-    parameter: string,
-    workspaces: ReadonlyArray<WorkspaceId>,
-  ) => Effect.Effect<WorkflowOptionList>;
+  readonly options?: ReadonlyArray<SystemOptions>;
 }
 
 export class WorkflowCatalogContributions extends Context.Service<
@@ -63,32 +54,7 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
 const sourceContribution = (source: TriggerSource): WorkflowCatalogContribution => ({
   entries: source.entries,
   templates: [],
-  listOptions: (entry, parameter, workspaces) => {
-    const reads = workspaces.length === 0 ? [undefined] : workspaces;
-    return Effect.forEach(reads, (workspace) => source.listOptions(entry, parameter, workspace)).pipe(
-      Effect.map((listed) => {
-        const byValue = listed.flat().reduce((options, option) => {
-          const current = options.get(option.value);
-          return options.set(option.value, {
-            ...option,
-            listedIn: [...new Set([...(current?.listedIn ?? []), ...option.listedIn])],
-          });
-        }, new Map<string, WorkflowOptionList[number]>());
-        return [...byValue.values()];
-      }),
-      Effect.catchTag("SourceFailure", () => Effect.succeed([])),
-    );
-  },
-});
-
-const slackActionContribution = (sources: ReadonlyArray<TriggerSource>): WorkflowCatalogContribution => ({
-  entries: slackActionEntries,
-  templates: [],
-  listOptions: (entry, parameter) =>
-    sources
-      .find(({ id }) => id === "slack")
-      ?.listOptions(entry, parameter)
-      .pipe(Effect.catchTag("SourceFailure", () => Effect.succeed([]))) ?? Effect.succeed([]),
+  options: source.options ?? [],
 });
 
 export const workflowCatalogContributionsLayer = Layer.effect(
@@ -102,7 +68,7 @@ export const workflowCatalogContributionsLayer = Layer.effect(
       linearActions,
       sourceControl.workflowCatalogContribution,
       ...sources.map(sourceContribution),
-      slackActionContribution(sources),
+      { entries: slackActionEntries, templates: [] },
     ];
   }),
 );

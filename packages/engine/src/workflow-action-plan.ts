@@ -175,6 +175,16 @@ const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceCont
   } satisfies FrozenSourceControlTarget;
 });
 
+const itemWorkspaceOf = (admission: TriggerAdmission) =>
+  WorkItemRef.matchOrElse(
+    admission.event.key,
+    {
+      Issue: ({ workspace }) => workspace,
+      PullRequest: ({ workspace }) => workspace,
+    },
+    () => undefined,
+  );
+
 const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarget | null) => {
   if (target === null) return Effect.succeed<WorkflowActionTarget>({ _tag: "NoWorkspace" });
   const ref = admission.event.key;
@@ -225,7 +235,6 @@ const issueTargetProducers = new Map<string, IssueTargetProducer>([
         target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
       ),
   ],
-  ["comment-this-item", currentIssueTarget],
   [
     "comment-issue",
     (
@@ -234,10 +243,9 @@ const issueTargetProducers = new Map<string, IssueTargetProducer>([
       inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
     ) => existingIssueTarget(typeof inputs.issue === "string" ? inputs.issue : "", target),
   ],
-  ["add-label", currentIssueTarget],
-  ["remove-label", currentIssueTarget],
-  ["close-this-issue", currentIssueTarget],
 ]);
+
+const currentIssueActions = ["comment-this-item", "add-label", "remove-label", "close-this-issue"];
 
 const sourceControlActions = new Set([
   "open-pull-request",
@@ -297,10 +305,15 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
     | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
     | undefined,
 ) {
-  const target = yield* frozenSourceControlTarget(entry, selected, workspaceId);
-  if (target === null) return { _tag: "NoWorkspace" } as const;
   const name = actionName(entry.key);
-  if (namedPullRequestActions.has(name)) {
+  const named = namedPullRequestActions.has(name);
+  const target = yield* frozenSourceControlTarget(
+    entry,
+    selected,
+    named ? workspaceId : (itemWorkspaceOf(admission) ?? workspaceId),
+  );
+  if (target === null) return { _tag: "NoWorkspace" } as const;
+  if (named) {
     const reference = typeof inputs.pull_request === "string" ? inputs.pull_request : "";
     const workspace = selected.find(({ config }) => config.name === target.config.name);
     if (!workspace) return yield* decodeFailure("The named pull request Workspace is unavailable");
@@ -377,6 +390,13 @@ const issueTargetProducer =
       Effect.flatMap((target) => producer(context.admission, target, context.inputs)),
     );
 
+const currentIssueTargetProducer: TargetProducer = (context) =>
+  frozenIssueTarget(
+    context.entry,
+    context.workspaces,
+    itemWorkspaceOf(context.admission) ?? context.workspace,
+  ).pipe(Effect.flatMap((target) => currentIssueTarget(context.admission, target)));
+
 const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
 
 const slackTarget = (target: unknown) =>
@@ -417,6 +437,7 @@ const slackChannelTarget: TargetProducer = ({ parameters }) => {
 
 const targetProducers = new Map<string, TargetProducer>([
   ...[...issueTargetProducers].map(([name, producer]) => [name, issueTargetProducer(producer)] as const),
+  ...currentIssueActions.map((name) => [name, currentIssueTargetProducer] as const),
   ["send-message", slackChannelTarget],
   ["reply-in-thread", slackItemTarget],
   ["add-reaction", slackItemTarget],
@@ -794,7 +815,7 @@ const actionExecutors: Record<string, ActionExecutor> = {
     const issue = yield* requireIssueTarget(context.step);
     const labels = parameterValues(context.step.parameters, "label");
     if (labels.length === 0) return yield* invalidTarget(context.step);
-    yield* context.tracker.addLabels(workspace, issue, labels, context.step.writeKey);
+    yield* context.tracker.addLabels(workspace, issue, labels);
     return null;
   }),
   "remove-label": Effect.fn("WorkflowActionPlan.removeLabel")(function* (context: ActionContext) {
@@ -802,13 +823,13 @@ const actionExecutors: Record<string, ActionExecutor> = {
     const issue = yield* requireIssueTarget(context.step);
     const label = parameterValues(context.step.parameters, "label").at(0);
     if (!label) return yield* invalidTarget(context.step);
-    yield* context.tracker.removeLabel(workspace, issue, label, context.step.writeKey);
+    yield* context.tracker.removeLabel(workspace, issue, label);
     return null;
   }),
   "close-this-issue": Effect.fn("WorkflowActionPlan.closeIssue")(function* (context: ActionContext) {
     const workspace = yield* requireWorkspace(context);
     const issue = yield* requireIssueTarget(context.step);
-    yield* context.tracker.closeIssue(workspace, issue, context.step.writeKey);
+    yield* context.tracker.closeIssue(workspace, issue);
     return null;
   }),
   "open-pull-request": Effect.fn("WorkflowActionPlan.openPullRequest")(function* (context: ActionContext) {

@@ -222,6 +222,7 @@ it.effect("uses the API-key adapter and freezes a complete Granola note", () =>
       atMillis: Date.parse("2026-10-29T15:00:00.000Z"),
       entry: generated,
       workspace: null,
+      subject: { title: "Weekly product sync", url: null },
       payload: {
         _tag: "GranolaNote",
         title: "Weekly product sync",

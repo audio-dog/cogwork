@@ -122,6 +122,13 @@ const ruleCases = [
     name: "no-native-button-mismatch",
   },
   {
+    extension: "tsx",
+    message:
+      "Rule: a Base UI Select needs an items prop for its SelectValue. Why: SelectValue renders the raw value, not the SelectItem label, so the closed trigger shows a different text than the open list. Fix: pass items={[{ value, label }]} to <Select>, or give SelectValue a children function that renders the label.",
+    plugin: "jsx",
+    name: "no-select-without-items",
+  },
+  {
     message:
       "Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.",
     plugin: "gated",

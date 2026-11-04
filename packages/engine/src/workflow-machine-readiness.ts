@@ -3,6 +3,7 @@ import {
   HarnessName,
   HarnessState,
   type MachineReadiness,
+  NeedIdentity,
   type OperationSettingRow,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -31,6 +32,7 @@ const isDefaultHarnessSetting = (
   row.setting === "harness" && row.level._tag === "Default" && row.scope._tag === "SettingsProfile";
 
 const decodeHarnessOption = Schema.decodeUnknownOption(HarnessName);
+const needOf = Schema.decodeSync(NeedIdentity);
 
 const defaultHarnessOf = (rows: ReadonlyArray<OperationSettingRow>) =>
   Option.getOrNull(decodeHarnessOption(rows.find(isDefaultHarnessSetting)?.value));
@@ -83,7 +85,11 @@ export const make = Effect.gen(function* () {
                   available: enabled && HarnessState.guards.Ready(state),
                 })),
                 defaultHarness: defaultHarnessOf(picture?.operationSettings ?? []),
-                readyNeeds: [],
+                readyNeeds: connectionOverview.connections.flatMap(({ connection, readiness }) =>
+                  connection !== null && ConnectionReadiness.guards.Ready(readiness)
+                    ? [needOf(connection.id)]
+                    : [],
+                ),
               }) satisfies MachineReadiness,
           ),
         ),

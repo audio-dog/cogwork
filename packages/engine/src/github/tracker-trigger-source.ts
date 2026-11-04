@@ -1,10 +1,4 @@
-import {
-  defaultPriority,
-  type Priority,
-  WorkflowCatalogKey,
-  type WorkflowOption,
-  WorkItemId,
-} from "@cogwork/contracts";
+import { defaultPriority, type Priority, WorkflowCatalogKey, WorkItemId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -19,8 +13,9 @@ import {
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
-  sourceFailure,
+  providerSubject,
   triggerEntry,
+  workspaceOptionReader,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
@@ -34,11 +29,17 @@ export const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("github.is
 export const newIssueCommentKey = Schema.decodeSync(WorkflowCatalogKey)("github.new-comment-from-person");
 
 export const githubTrackerEntries = [
-  triggerEntry("github.issue-has-label", "Issue has label", "github", "issue", [liveParameter("label")]),
-  triggerEntry("github.new-comment-from-person", "New comment from a person", "github", "issue", [
+  triggerEntry("github.issue-has-label", "Issue has label", "github", "issue", "condition", [
     liveParameter("label"),
-    catchUpParameter,
   ]),
+  triggerEntry(
+    "github.new-comment-from-person",
+    "New comment from a person",
+    "github",
+    "issue",
+    "occurrence",
+    [liveParameter("label"), catchUpParameter],
+  ),
 ];
 
 const itemId = Schema.decodeSync(WorkItemId);
@@ -77,6 +78,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
     needsComments ? client.listTriggerComments(target, issue.number) : Effect.succeed([]),
   ]);
   const issueId = itemId(`#${issue.number}`);
+  const subject = providerSubject(issue.title, issue.url);
   const origin =
     artifacts === null
       ? null
@@ -112,6 +114,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
         workspace: workspace.config.name,
         priority,
         parameters: [{ id: "label", value: label }],
+        subject,
         workContext: proseOf(issue, comments),
       } satisfies TriggerEvent,
     ];
@@ -147,6 +150,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
             priority,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
+            subject,
             workContext: proseOf(issue, comments),
           }) satisfies TriggerEvent,
       );
@@ -233,25 +237,16 @@ export const makeGitHubTrackerTriggerSource = (
   registry: Effect.Effect<RegistryState>,
   artifacts: WorkflowArtifactStoreService | null = null,
 ): TriggerSource => {
-  const listOptions: TriggerSource["listOptions"] = (_entry, parameter, workspace) =>
-    Effect.gen(function* () {
-      if (parameter !== "label" || workspace === undefined) return [];
-      const state = yield* registry;
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
-      const target = registered ? targetFor(registered) : null;
-      if (!target) return [];
-      const issues = yield* client.listIssues(target, { state: "all" });
-      const labels = issues.filter(({ isPullRequest }) => !isPullRequest).flatMap(({ labels }) => labels);
-      return [...new Set(labels)].map(
-        (label) => ({ value: label, name: label, listedIn: [workspace] }) satisfies WorkflowOption,
-      );
-    }).pipe(Effect.mapError((error) => sourceFailure("github", error)));
+  const label = workspaceOptionReader("github", registry, (registered) => {
+    const target = targetFor(registered);
+    return target ? client.listLabels(target) : Effect.succeed([]);
+  });
 
   return {
     id: "github",
     entries: githubTrackerEntries,
     availability: () => Effect.succeed({ _tag: "Available" }),
-    listOptions,
+    options: [{ system: "github", readers: { label } }],
     observe: (subscriptions) =>
       providerPollingStream("github", (checkpoint) =>
         read(client, registry, subscriptions, checkpoint, artifacts),

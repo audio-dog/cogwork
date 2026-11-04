@@ -23,6 +23,7 @@ import { useAtom } from "@effect/atom-react";
 import { RiArrowDownSLine, RiCheckLine, RiErrorWarningLine, RiStopCircleLine } from "@remixicon/react";
 import { createContext, type ReactNode, use } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
+import { useOperationName } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
 import { duration } from "../features/format";
 import { useRunTranscript } from "../features/run-activity";
@@ -394,6 +395,7 @@ function RunNow() {
     state: { run, line },
     meta: { cancelError },
   } = useRunTranscriptContext();
+  const operationName = useOperationName();
   return (
     <div className="shrink-0 border-b p-3">
       <div className="rounded-lg border bg-card px-3 py-2.5">
@@ -406,7 +408,7 @@ function RunNow() {
         <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
           <ElapsedTime />
           <span aria-hidden>·</span>
-          <span>{run.operation}</span>
+          <span>{operationName(run)}</span>
           <CancelButton />
         </div>
         {cancelError && <p className="mt-1.5 text-xs text-destructive">{cancelError}</p>}

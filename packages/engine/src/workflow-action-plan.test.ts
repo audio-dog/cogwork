@@ -336,10 +336,9 @@ const trackerLayer = Layer.effect(
         Ref.update(probe.calls, (current) => [...current, `${body}:${writeKey}`]).pipe(
           Effect.andThen(trackerResult(body)),
         ),
-      addLabels: (_workspace, _item, labels, writeKey) =>
-        Ref.update(probe.calls, (current) => [...current, `${labels.join(",")}:${writeKey}`]),
-      closeIssue: (_workspace, _item, writeKey) =>
-        Ref.update(probe.calls, (current) => [...current, `close:${writeKey}`]),
+      addLabels: (_workspace, _item, labels) =>
+        Ref.update(probe.calls, (current) => [...current, `labels:${labels.join(",")}`]),
+      closeIssue: () => Ref.update(probe.calls, (current) => [...current, "close"]),
     };
   }),
 );
@@ -908,7 +907,7 @@ describe("Workflow action plan", () => {
       assert.strictEqual(stillParked._tag, "Parked");
       assert.deepStrictEqual(callsBeforeHandback, ["first:write-0", "fail:write-1"]);
       assert.strictEqual(completed._tag, "Complete");
-      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["first:write-0", "fail:write-1", "close:write-2"]);
+      assert.deepStrictEqual(yield* Ref.get(probe.calls), ["first:write-0", "fail:write-1", "close"]);
       assert.isNull(yield* store.pending(initial.item, initial.workflow));
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );

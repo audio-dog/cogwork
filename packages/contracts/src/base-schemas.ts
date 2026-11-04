@@ -10,6 +10,9 @@ export const makeBrand = <Brand extends string>(brand: Brand) =>
 export const WorkspaceId = makeBrand("WorkspaceId");
 export type WorkspaceId = typeof WorkspaceId.Type;
 
+export const WorkflowId = makeBrand("WorkflowId");
+export type WorkflowId = typeof WorkflowId.Type;
+
 export const WorkItemId = makeBrand("WorkItemId");
 export type WorkItemId = typeof WorkItemId.Type;
 

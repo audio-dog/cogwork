@@ -228,6 +228,7 @@ const CompareSchema = Schema.Struct({ files: Schema.Array(PullFileSchema) });
 
 const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
 const GitHubCollaboratorsSchema = Schema.Array(GitHubUserSchema);
+const GitHubLabelsSchema = Schema.Array(Schema.Struct({ name: Schema.String }));
 const RequestedReviewersSchema = Schema.Struct({ users: Schema.Array(GitHubUserSchema) });
 
 const ReviewSchema = Schema.Struct({
@@ -1354,6 +1355,22 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     return yield* withPaginationDeadline(collect());
   });
 
+  const listLabels = Effect.fn("github.listLabels")(function* (repo: GitHubRepoRef) {
+    const collect: (page?: number) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError> = Effect.fn(
+      "github.collectLabelPages",
+    )(function* (page = 1) {
+      const json = yield* fetchJson(repo, repoPath(repo, `/labels?per_page=100&page=${page}`));
+      const labels = yield* Effect.mapError(
+        Schema.decodeUnknownEffect(GitHubLabelsSchema)(json),
+        toUnavailable,
+      );
+      const current = labels.map(({ name }) => name);
+      if (current.length < 100) return current;
+      return [...current, ...(yield* collect(page + 1))];
+    });
+    return yield* withPaginationDeadline(collect());
+  });
+
   const listRequestedReviewers = Effect.fn("github.listRequestedReviewers")(function* (
     repo: GitHubRepoRef,
     pullNumber: number,
@@ -1713,6 +1730,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       }),
     createComment,
     listCollaborators,
+    listLabels,
     listRequestedReviewers,
     requestReview,
     createReview,

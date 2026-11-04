@@ -34,6 +34,7 @@ import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
+import { githubTrackerEntries, issueHasLabelKey } from "./github/tracker-trigger-source";
 import { granolaEntries } from "./granola-source";
 import {
   IssueTracker,
@@ -58,6 +59,7 @@ import {
   SourceFailure,
   type TriggerEvent,
   type TriggerSource,
+  type TriggerSourceId,
   TriggerSources,
   type TriggerSubscription,
 } from "./trigger-source";
@@ -155,15 +157,20 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
     readonly observedItems?: ReadonlyArray<TrackerItem>;
     readonly exactAssignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
     readonly store?: TriggerObservationStoreService;
+    readonly document?: WorkflowDocument;
+    readonly source?: { readonly id: TriggerSourceId; readonly entries: TriggerSource["entries"] };
   } = {},
 ) {
-  const current = yield* Ref.make(record(true, selectedDocument));
+  const current = yield* Ref.make(record(true, options.document ?? selectedDocument));
   const processed = yield* Ref.make<string | null>(null);
   const observed = yield* Ref.make(0);
   const sourceRevision = yield* Ref.make<string | null>(null);
   const trackerCalls = yield* Ref.make(0);
   const exactAssigneeCalls = yield* Ref.make(0);
-  const scripted = yield* makeScriptedSource("clock", clockEntries);
+  const scripted = yield* makeScriptedSource(
+    options.source?.id ?? "clock",
+    options.source?.entries ?? clockEntries,
+  );
   const store = options.store ?? (yield* makeMemoryTriggerObservationStore);
   const bus = yield* makeDaemonEventBus;
   const emptyTracker = yield* makeEmptyIssueTracker;
@@ -282,7 +289,6 @@ const sourceFailingOnce = (starts: Ref.Ref<number>, failure: SourceFailure): Tri
   id: "clock",
   entries: clockEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: () => Effect.succeed([]),
   observe: (subscriptions) =>
     subscriptions.length === 0
       ? Stream.empty
@@ -974,6 +980,48 @@ describe("TriggerObservation", () => {
 
       assert.isTrue(Option.isSome(result));
       assert.strictEqual(yield* Ref.get(trackerCalls), 0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("admits an item that already matched a condition at switch-on", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000);
+      const labelParameters = [{ id: "label", value: "needs-triage" }];
+      const labelDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...selectedDocument,
+        triggers: [
+          {
+            id: triggerId,
+            entry: issueHasLabelKey,
+            parameters: labelParameters,
+            start: subscription.operation,
+          },
+        ],
+      });
+      const { observation, scripted } = yield* makeWorkspaceObservation({
+        document: labelDocument,
+        source: { id: "github", entries: githubTrackerEntries },
+      });
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        ...selectedEvent,
+        entry: issueHasLabelKey,
+        revision: "label:needs-triage:999",
+        atMillis: 999,
+        parameters: labelParameters,
+      });
+      yield* TestClock.adjust("1 second");
+      const admitted = yield* Fiber.join(changed);
+
+      assert.deepStrictEqual(
+        Option.map(admitted, (admissions) => admissions.map(({ event }) => event.revision)),
+        Option.some(["label:needs-triage:999"]),
+      );
     }).pipe(Effect.scoped),
   );
 

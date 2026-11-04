@@ -26,6 +26,7 @@ import type { RegisteredWorkspace } from "../projector";
 import { matchTriggerEvent } from "../trigger-observation";
 import type { TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
+import { makeWorkflowOptions } from "../workflow-options";
 import { GitHubClient, type GitHubClientService, type RawPull } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
@@ -158,26 +159,24 @@ const pullClientLayer = (listedPulls = pulls) =>
 const targetOf = (event: object) => ("target" in event ? event.target : undefined);
 
 describe("GitHub Trigger sources", () => {
-  it.effect("lists labels from every tracker issue and excludes pull request labels", () => {
-    const listIssues = vi.fn<GitHubClientService["listIssues"]>(() =>
-      Effect.succeed([
-        { ...issue(1), state: "closed", labels: ["closed-only"] },
-        { ...issue(2, true), labels: ["pull-only"] },
-      ]),
+  it.effect("lists the repository's labels without reading its issues", () => {
+    const listLabels = vi.fn<GitHubClientService["listLabels"]>(() =>
+      Effect.succeed(["needs-triage", "unused-yet"]),
     );
 
     return Effect.gen(function* () {
       const client = yield* GitHubClient;
-      const options = yield* makeGitHubTrackerTriggerSource(
-        client,
-        Effect.succeed(registryState),
-      ).listOptions(issueHasLabelKey, "label", workspaceId);
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const entry = source.entries.find(({ key }) => key === issueHasLabelKey);
+      if (!entry) return assert.fail("missing issue-has-label entry");
+      const options = yield* makeWorkflowOptions(source.options ?? []).list(entry, "label", [workspaceId]);
 
       assert.deepStrictEqual(options, [
-        { value: "closed-only", name: "closed-only", listedIn: [workspaceId] },
+        { value: "needs-triage", name: "needs-triage", listedIn: [workspaceId] },
+        { value: "unused-yet", name: "unused-yet", listedIn: [workspaceId] },
       ]);
-      assert.deepStrictEqual(listIssues.mock.calls[0]?.[1], { state: "all" });
-    }).pipe(Effect.provide(Layer.mock(GitHubClient, { listIssues })));
+      assert.strictEqual(listLabels.mock.calls.length, 1);
+    }).pipe(Effect.provide(Layer.mock(GitHubClient, { listLabels })));
   });
 
   it.effect("emits current labels and keeps person-comment revisions distinct by label", () =>
@@ -263,6 +262,28 @@ describe("GitHub Trigger sources", () => {
                     },
                   ],
             ),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("carries the trimmed issue title and its link on a label event", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const events = yield* source
+        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .pipe(Stream.take(1), Stream.runCollect);
+
+      assert.deepStrictEqual(
+        [...events].map(({ subject }) => subject),
+        [{ title: "Fix login", url: "https://github.com/acme/example/issues/1" }],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () => Effect.succeed([{ ...issue(1), title: "  Fix login " }]),
+          listIssueEvents: () => Effect.succeed([]),
         }),
       ),
     ),

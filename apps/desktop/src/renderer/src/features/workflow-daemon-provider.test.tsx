@@ -5,8 +5,10 @@ import * as Schema from "effect/Schema";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Configuration } from "../components/configuration-provider";
 import {
   createWorkflowAtom,
+  harnessCatalogsAtom,
   switchWorkflowAtom,
   workflowCatalogAtom,
   workflowsAtom,
@@ -86,6 +88,7 @@ describe("DaemonWorkflowProvider", () => {
       value: { workflows: [], unreadable: [] },
     });
     atomValues.set(workflowCatalogAtom, { _tag: "Initial", waiting: false });
+    atomValues.set(harnessCatalogsAtom, { _tag: "Initial", waiting: false });
     atomValues.set(workflowTemplatesAtom, { _tag: "Initial", waiting: false });
   });
 
@@ -96,9 +99,13 @@ describe("DaemonWorkflowProvider", () => {
     await act(async () => {
       root.render(
         <ActivitySessionContext value={{ ...initialActivitySession, seed: false }}>
-          <DaemonWorkflowProvider>
-            <SessionProbe />
-          </DaemonWorkflowProvider>
+          <Configuration.Provider
+            picture={{ workspaces: [], plugins: [], catalogPlugins: [], contributions: [] }}
+          >
+            <DaemonWorkflowProvider>
+              <SessionProbe />
+            </DaemonWorkflowProvider>
+          </Configuration.Provider>
         </ActivitySessionContext>,
       );
     });
@@ -123,9 +130,13 @@ describe("DaemonWorkflowProvider", () => {
     await act(async () => {
       root.render(
         <ActivitySessionContext value={{ ...initialActivitySession, seed: false }}>
-          <DaemonWorkflowProvider>
-            <SessionProbe />
-          </DaemonWorkflowProvider>
+          <Configuration.Provider
+            picture={{ workspaces: [], plugins: [], catalogPlugins: [], contributions: [] }}
+          >
+            <DaemonWorkflowProvider>
+              <SessionProbe />
+            </DaemonWorkflowProvider>
+          </Configuration.Provider>
         </ActivitySessionContext>,
       );
     });

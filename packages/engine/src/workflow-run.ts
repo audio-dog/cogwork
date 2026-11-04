@@ -190,6 +190,7 @@ const fanOutAdmission = (
       atMillis: admission.event.atMillis,
       entry: admission.event.entry,
       workspace: admission.event.workspace,
+      subject: admission.event.subject,
       workContext: {
         body: JSON.stringify(element, null, 2),
         comments: [],
@@ -566,7 +567,7 @@ export const make = Effect.gen(function* () {
       ].jsonSchema.input({ target: "draft-2020-12" }),
       connections: [],
       workContext: {
-        reference: { workItem: item, url: null },
+        reference: { workItem: item, url: admission.event.subject?.url ?? null },
         facts: {
           assignees: [],
           openBlockers: 0,
@@ -590,6 +591,8 @@ export const make = Effect.gen(function* () {
       id,
       workspace: runWorkspace,
       workItem: item,
+      ...(admission.event.subject ? { subject: admission.event.subject } : {}),
+      workflow: record.id,
       operation: operation.id,
       harness: selectedHarness,
       branch: checkout.branch,

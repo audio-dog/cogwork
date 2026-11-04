@@ -8,6 +8,7 @@ import {
   priorityRank,
   type TriggerSourceHealth,
   type WorkflowCatalog,
+  type WorkflowCatalogKey,
   type WorkflowDocument,
   type WorkflowRecord,
   type WorkItemId,
@@ -32,6 +33,7 @@ import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker } from "./issue-tracker";
+import { providerSubject } from "./provider-trigger-source";
 import { WorkspaceRegistry } from "./registry";
 import {
   SourceFailure,
@@ -185,6 +187,7 @@ const activateSubscriptions = (
   atMillis: number,
 ) =>
   subscriptions.map((subscription) => {
+    if (subscription.catchUp === null) return subscription;
     const checkpoint = checkpoints.get(subscriptionKey(subscription));
     const since = checkpoint?.active ? checkpoint.checkpointMillis : atMillis;
     return { ...subscription, catchUp: { since } };
@@ -471,6 +474,7 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
 const subscriptionsOf = (
   records: ReadonlyArray<WorkflowRecord>,
   everyWorkspace: ReadonlyArray<TriggerSubscription["workspaces"][number]>,
+  conditionEntries: ReadonlySet<WorkflowCatalogKey>,
 ) =>
   records.flatMap((record) => {
     const document = record.publishedCopy;
@@ -486,7 +490,7 @@ const subscriptionsOf = (
           entry: trigger.entry,
           parameters: trigger.parameters,
           workspaces,
-          catchUp: { since: 0 },
+          catchUp: conditionEntries.has(trigger.entry) ? null : { since: 0 },
         }) satisfies TriggerSubscription,
     );
   });
@@ -561,6 +565,11 @@ export const make = Effect.gen(function* () {
   const bus = yield* DaemonEventBus;
   const store = yield* TriggerObservationStore;
   const sources = yield* TriggerSources;
+  const conditionEntries = new Set(
+    sources.flatMap(({ entries }) =>
+      entries.filter(({ triggerKind }) => triggerKind === "condition").map(({ key }) => key),
+    ),
+  );
   const tracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
   const fibers = yield* FiberMap.make<TriggerSource["id"]>();
@@ -632,6 +641,7 @@ export const make = Effect.gen(function* () {
         {
           key,
           workspace: workspace.config.name,
+          subject: providerSubject(item.title, item.url),
           lastTouchedAtMillis,
           loadWorkContext: tracker.readProse(workspace, item.id).pipe(Effect.mapError(sweepFailure)),
         },
@@ -669,6 +679,7 @@ export const make = Effect.gen(function* () {
           return {
             key: admission.event.key,
             workspace: admission.event.workspace,
+            subject: admission.event.subject,
             lastTouchedAtMillis: Math.max(
               admission.event.atMillis,
               view.park?.atMillis ?? 0,
@@ -786,7 +797,9 @@ export const make = Effect.gen(function* () {
     const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
     const workspaceIds = registryState.workspaces.map(({ config }) => config.name);
     const current = new Set(
-      sourceSubscriptions(source, subscriptionsOf(listed.workflows, workspaceIds)).map(subscriptionIdentity),
+      sourceSubscriptions(source, subscriptionsOf(listed.workflows, workspaceIds, conditionEntries)).map(
+        subscriptionIdentity,
+      ),
     );
     const active = subscriptions.filter((subscription) => current.has(subscriptionIdentity(subscription)));
     if (active.length === 0) return;
@@ -878,6 +891,7 @@ export const make = Effect.gen(function* () {
                 subscriptionsOf(
                   listed.workflows,
                   registryState.workspaces.map(({ config }) => config.name),
+                  conditionEntries,
                 ),
                 atMillis,
               ),

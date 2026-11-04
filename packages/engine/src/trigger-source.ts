@@ -2,12 +2,12 @@ import {
   Cause,
   Priority,
   RunPlanWorkContextProse,
+  RunSubject,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
   WorkflowId,
   WorkflowNodeId,
-  type WorkflowOption,
   WorkflowParameterValue,
   WorkItemRef,
   WorkspaceId,
@@ -16,6 +16,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import type { SystemOptions } from "./workflow-options";
 
 export const TriggerSourceId = Schema.Literals(["github", "linear", "granola", "slack", "clock"]);
 export type TriggerSourceId = typeof TriggerSourceId.Type;
@@ -46,6 +47,7 @@ export const TriggerEvent = Schema.Struct({
     }),
   ),
   parameters: Schema.optional(Schema.Array(WorkflowParameterValue)),
+  subject: Schema.optional(RunSubject),
   workContext: Schema.optional(RunPlanWorkContextProse),
   payload: Schema.optional(
     Schema.TaggedUnion({
@@ -65,6 +67,7 @@ export type TriggerEvent = typeof TriggerEvent.Type;
 export interface SweepCandidate {
   readonly key: WorkItemRef;
   readonly workspace: WorkspaceId | null;
+  readonly subject?: RunSubject | undefined;
   readonly lastTouchedAtMillis: number;
   readonly loadWorkContext?: Effect.Effect<RunPlanWorkContextProse | undefined, SourceFailure>;
 }
@@ -83,15 +86,15 @@ export class SourceFailure extends Schema.TaggedError<SourceFailure>()("SourceFa
   message: Schema.String,
 }) {}
 
+export interface TriggerEntry extends WorkflowCatalogEntry {
+  readonly triggerKind: "condition" | "occurrence";
+}
+
 export interface TriggerSource {
   readonly id: TriggerSourceId;
-  readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
+  readonly entries: ReadonlyArray<TriggerEntry>;
   readonly availability: (entry: WorkflowCatalogKey) => Effect.Effect<WorkflowAvailability>;
-  readonly listOptions: (
-    entry: WorkflowCatalogKey,
-    parameter: string,
-    workspace?: WorkspaceId,
-  ) => Effect.Effect<ReadonlyArray<WorkflowOption>, SourceFailure>;
+  readonly options?: ReadonlyArray<SystemOptions>;
   readonly observe: (
     subscriptions: ReadonlyArray<TriggerSubscription>,
     readPort?: TriggerReadPort,
@@ -114,9 +117,7 @@ export const combineTriggerSources = (sources: ReadonlyArray<TriggerSource>) =>
         availability: (entry) =>
           grouped.find((source) => ownsEntry(source, entry))?.availability(entry) ??
           Effect.succeed({ _tag: "Unavailable", reason: `Unknown ${entry} entry` }),
-        listOptions: (entry, parameter, workspace) =>
-          grouped.find((source) => ownsEntry(source, entry))?.listOptions(entry, parameter, workspace) ??
-          Effect.succeed([]),
+        options: grouped.flatMap(({ options = [] }) => options),
         observe: (subscriptions, readPort) => {
           const streams = grouped
             .map((source) => ({

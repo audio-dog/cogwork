@@ -5,7 +5,6 @@ import {
   MachineReadiness,
   Principal,
   WorkflowCatalogEntry,
-  type WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowEditRefused,
   WorkflowNodeId,
@@ -13,7 +12,7 @@ import {
   WorkflowPublishRefused,
   WorkflowSwitchRefused,
   WorkflowUnreadable,
-  type WorkspaceId,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
@@ -42,6 +41,7 @@ import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalo
 import { linearTrackerEntries } from "./linear/tracker-trigger-source";
 import { slackEntries } from "./slack-source";
 import { slackActionEntries } from "./slack-write";
+import { SourceFailure } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import {
   cogworkWorkflowCatalogContribution,
@@ -84,20 +84,49 @@ const triggerContribution: WorkflowCatalogContribution = {
   templates: [slackReviewTemplate],
 };
 
-const clockContribution = {
+const clockContribution: WorkflowCatalogContribution = {
   entries: clockEntries,
   templates: [],
-  listOptions: (entry: WorkflowCatalogKey, parameter: string, workspaces: ReadonlyArray<WorkspaceId>) =>
-    clockSource.listOptions(entry, parameter).pipe(
-      Effect.map((options) => options.map((option) => ({ ...option, listedIn: workspaces }))),
-      Effect.catchTag("SourceFailure", () => Effect.succeed([])),
-    ),
+  options: clockSource.options ?? [],
 };
 
 const githubReviewContribution: WorkflowCatalogContribution = {
   entries: [...githubSourceControlActionEntries, ...slackEntries, ...slackActionEntries],
   templates: [],
-  listOptions: () => Effect.succeed([]),
+};
+
+const unreachableWorkspace = Schema.decodeSync(WorkspaceId)("unreachable");
+const labelWorkspaces = [
+  Schema.decodeSync(WorkspaceId)("first"),
+  Schema.decodeSync(WorkspaceId)("second"),
+] as const;
+const githubLabelOptions: WorkflowCatalogContribution = {
+  entries: [],
+  templates: [],
+  options: [
+    {
+      system: "github",
+      readers: {
+        label: (workspace) =>
+          workspace === unreachableWorkspace
+            ? Effect.fail(
+                new SourceFailure({
+                  source: "github",
+                  reason: "unavailable",
+                  retryAfterMillis: null,
+                  message: "GitHub unavailable",
+                }),
+              )
+            : Effect.succeed(
+                ["needs-triage", workspace ?? "none"].map((value) => ({
+                  value,
+                  name: value,
+                  listedIn: workspace === undefined ? [] : [workspace],
+                })),
+              ),
+      },
+    },
+  ],
 };
 
 const document = decodeDocument({
@@ -145,6 +174,7 @@ const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   granolaWorkflowCatalogContribution,
   githubReviewContribution,
   clockContribution,
+  githubLabelOptions,
 ]);
 
 const testLayer = (
@@ -356,7 +386,11 @@ layer(NodeServices.layer)((it) => {
                 routes: [
                   {
                     when: ["role:ready-for-agent"],
-                    actions: ["github.comment-this-item", "github.add-label:label:ready-for-agent"],
+                    actions: [
+                      "github.comment-this-item",
+                      "github.add-label:label:ready-for-agent",
+                      "github.remove-label:label:needs-triage",
+                    ],
                     handOff: null,
                   },
                   {
@@ -364,6 +398,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "github.comment-this-item",
                       "github.add-label:label:needs-info",
+                      "github.remove-label:label:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -373,6 +408,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "github.comment-this-item",
                       "github.add-label:label:ready-for-human",
+                      "github.remove-label:label:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -382,6 +418,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "github.comment-this-item",
                       "github.add-label:label:wontfix",
+                      "github.remove-label:label:needs-triage",
                       "github.close-this-issue",
                     ],
                     handOff: null,
@@ -448,7 +485,11 @@ layer(NodeServices.layer)((it) => {
                 routes: [
                   {
                     when: ["role:ready-for-agent"],
-                    actions: ["linear.comment-this-item", "linear.add-label:label:state:ready-for-agent"],
+                    actions: [
+                      "linear.comment-this-item",
+                      "linear.add-label:label:state:ready-for-agent",
+                      "linear.remove-label:label:state:needs-triage",
+                    ],
                     handOff: null,
                   },
                   {
@@ -456,6 +497,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "linear.comment-this-item",
                       "linear.add-label:label:state:needs-info",
+                      "linear.remove-label:label:state:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -465,6 +507,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "linear.comment-this-item",
                       "linear.add-label:label:state:ready-for-human",
+                      "linear.remove-label:label:state:needs-triage",
                       "cogwork.hand-to-me",
                     ],
                     handOff: null,
@@ -474,6 +517,7 @@ layer(NodeServices.layer)((it) => {
                     actions: [
                       "linear.comment-this-item",
                       "linear.add-label:label:state:wontfix",
+                      "linear.remove-label:label:state:needs-triage",
                       "linear.close-this-issue",
                     ],
                     handOff: null,
@@ -852,6 +896,44 @@ layer(NodeServices.layer)((it) => {
       assert.include(
         options.map(({ value }) => value),
         "America/New_York",
+      );
+    }),
+  );
+
+  it.effect("lists a system's labels for an action whose contribution reads no options", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const [first, second] = labelWorkspaces;
+      const options = yield* withWorkflows(storePath, ({ listOptions }) =>
+        listOptions({
+          entry: Schema.decodeSync(WorkflowCatalogEntry.fields.key)("github.add-label"),
+          parameter: "label",
+          workspaces: [first, second, unreachableWorkspace],
+        }),
+      );
+
+      assert.deepStrictEqual(options, [
+        { value: "needs-triage", name: "needs-triage", listedIn: [first, second] },
+        { value: "first", name: "first", listedIn: [first] },
+        { value: "second", name: "second", listedIn: [second] },
+      ]);
+    }),
+  );
+
+  it.effect("lists live sweep idle days through the Workflow catalog", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const options = yield* withWorkflows(storePath, ({ listOptions }) =>
+        listOptions({
+          entry: Schema.decodeSync(WorkflowCatalogEntry.fields.key)("schedule.sweep"),
+          parameter: "idle-days",
+          workspaces: [],
+        }),
+      );
+
+      assert.include(
+        options.map(({ value }) => value),
+        "30",
       );
     }),
   );

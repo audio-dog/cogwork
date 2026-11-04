@@ -26,11 +26,9 @@ export const route = (
     createIssue: (workspace, input) => forWorkspace(workspace).createIssue(workspace, input),
     commentIssue: (workspace, id, body, writeKey) =>
       forWorkspace(workspace).commentIssue(workspace, id, body, writeKey),
-    addLabels: (workspace, id, labels, writeKey) =>
-      forWorkspace(workspace).addLabels(workspace, id, labels, writeKey),
-    removeLabel: (workspace, id, label, writeKey) =>
-      forWorkspace(workspace).removeLabel(workspace, id, label, writeKey),
-    closeIssue: (workspace, id, writeKey) => forWorkspace(workspace).closeIssue(workspace, id, writeKey),
+    addLabels: (workspace, id, labels) => forWorkspace(workspace).addLabels(workspace, id, labels),
+    removeLabel: (workspace, id, label) => forWorkspace(workspace).removeLabel(workspace, id, label),
+    closeIssue: (workspace, id) => forWorkspace(workspace).closeIssue(workspace, id),
   };
 };
 

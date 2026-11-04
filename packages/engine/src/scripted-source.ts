@@ -27,7 +27,6 @@ export const makeScriptedSource = (id: TriggerSourceId, entries: TriggerSource["
       id,
       entries,
       availability: () => Effect.succeed({ _tag: "Available" }),
-      listOptions: () => Effect.succeed([]),
       observe: (next) =>
         (next.length === 0 ? Stream.empty : Stream.fromPubSubTake(signals)).pipe(
           Stream.onStart(Ref.set(subscriptions, next)),

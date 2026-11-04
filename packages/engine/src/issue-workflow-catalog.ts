@@ -210,12 +210,16 @@ const codingPipelineTemplate = (system: "github" | "linear") => {
     parameters: [{ id: "label", value: roleLabel(system, role) }],
   });
   const commentAction = { entry: trackerAction("comment-this-item"), parameters: [] };
+  const removeTriageLabel = {
+    entry: trackerAction("remove-label"),
+    parameters: [{ id: "label", value: roleLabel(system, "needs-triage") }],
+  };
   const triageTransition = (
     role: string,
     trailingActions: ReadonlyArray<{ readonly entry: string; readonly parameters: ReadonlyArray<never> }>,
   ) => ({
     when: [{ question: "role", choice: role }],
-    actions: [commentAction, labelAction(role), ...trailingActions],
+    actions: [commentAction, labelAction(role), removeTriageLabel, ...trailingActions],
     handOff: null,
   });
   const handToMe = { entry: "cogwork.hand-to-me", parameters: [] };

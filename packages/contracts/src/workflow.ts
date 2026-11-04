@@ -11,6 +11,7 @@ import {
   SlackTeamId,
   SourceControlType,
   TrimmedNonEmptyString,
+  WorkflowId,
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
@@ -19,9 +20,6 @@ import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
 import { IssueTrackerConfig, SourceControlConfig } from "./workspace";
-
-export const WorkflowId = TrimmedNonEmptyString.pipe(Schema.brand("WorkflowId"));
-export type WorkflowId = typeof WorkflowId.Type;
 
 export const WorkflowNodeId = TrimmedNonEmptyString.check(
   Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -1426,7 +1424,9 @@ const optionReadinessDiagnostics = (document: WorkflowDocument, catalog: Workflo
     if (!entry) return [];
     return usage.parameters.flatMap(({ id, value }) => {
       const parameter = entry.parameters.find((candidate) => candidate.id === id);
-      const missingLiveValue = parameter?.source === "live" && !parameter.values.includes(value);
+      // A source lists most live values only on request, so an empty catalog list says nothing.
+      const missingLiveValue =
+        parameter?.source === "live" && parameter.values.length > 0 && !parameter.values.includes(value);
       return missingLiveValue
         ? [
             diagnostic(

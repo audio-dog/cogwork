@@ -8,6 +8,7 @@ import {
   type Session,
   SessionId,
   sessionHandle,
+  WorkflowId,
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
@@ -106,6 +107,7 @@ const resolveItem = Schema.decodeSync(WorkItemId)("#202");
 const bareResolveItem = Schema.decodeSync(WorkItemId)("202");
 const resolveOther = Schema.decodeSync(WorkItemId)("#303");
 const missingResolveItem = Schema.decodeSync(WorkItemId)("#404");
+const triageWorkflow = Schema.decodeSync(WorkflowId)("triage-workflow");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const replacementSession = Schema.decodeSync(SessionId)("sess-replaced");
 const midSession = Schema.decodeSync(SessionId)("sess-mid");
@@ -637,6 +639,23 @@ describe("sqlite RunLedger", () => {
         const summary = summaries.find((row) => row.id === id);
         assert.isDefined(summary);
         assert.deepStrictEqual(summary?.usage, { inputTokens: 5 });
+      }),
+    );
+
+    it.effect("round-trips a Run's subject and Workflow and keeps them absent when none was given", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const subject = { title: "Fix login", url: "https://github.com/acme/web/issues/7" };
+        yield* ledger.insertRun({ ...record("subject-titled", 9200), subject, workflow: triageWorkflow });
+        yield* ledger.insertRun(record("subject-absent", 9300));
+
+        const summaries = yield* ledger.listRuns(10);
+        const titled = summaries.find((row) => row.id === runId("subject-titled"));
+        const absent = summaries.find((row) => row.id === runId("subject-absent")) ?? {};
+        assert.deepStrictEqual(titled?.subject, subject);
+        assert.strictEqual(titled?.workflow, triageWorkflow);
+        assert.isFalse("subject" in absent);
+        assert.isFalse("workflow" in absent);
       }),
     );
 

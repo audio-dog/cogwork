@@ -3,19 +3,13 @@ import type {
   ControlStore,
   DaemonLimitUpdate,
   WorkspaceId,
-  WorkspaceRegistration,
   WorkspaceState,
   WorkspaceUpdate,
 } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
 import type * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useState } from "react";
-import {
-  deregisterWorkspaceAtom,
-  rebindWorkspaceAtom,
-  registerWorkspaceAtom,
-  updateWorkspaceAtom,
-} from "../daemon/atoms";
+import { deregisterWorkspaceAtom, rebindWorkspaceAtom, updateWorkspaceAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
 import { useDaemonLimit } from "../features/use-daemon-limit";
@@ -30,7 +24,6 @@ interface WorkspacesStateValue {
 }
 
 interface WorkspacesActions {
-  readonly register: (registration: WorkspaceRegistration) => void;
   readonly update: (workspace: WorkspaceId, update: WorkspaceUpdate) => void;
   readonly rebind: (workspace: WorkspaceId, checkoutPath: string) => void;
   readonly deregister: (workspace: WorkspaceId) => void;
@@ -38,9 +31,6 @@ interface WorkspacesActions {
 }
 
 interface WorkspacesMeta {
-  readonly registerPending: boolean;
-  readonly registerError: string | null;
-  readonly registerOutcome: WorkspaceState | null;
   readonly rebindPending: boolean;
   readonly rebindError: string | null;
   readonly rebindOutcome: WorkspaceState | null;
@@ -81,7 +71,6 @@ export function WorkspacesProvider({ value, children }: { value: WorkspacesValue
 
 export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const board = useBoard();
-  const [registerResult, runRegister] = useAtom(registerWorkspaceAtom);
   const [rebindResult, runRebind] = useAtom(rebindWorkspaceAtom);
   const [updateResult, runUpdate] = useAtom(updateWorkspaceAtom);
   const [deregisterResult, runDeregister] = useAtom(deregisterWorkspaceAtom);
@@ -98,7 +87,6 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
   const workspaces = picture ? [...picture.workspaces.values()] : [];
 
   const actions: WorkspacesActions = {
-    register: (registration) => runRegister({ payload: { registration } }),
     update: (workspace, update) => {
       setUpdateTarget(workspace);
       runUpdate({ payload: { workspace, update } });
@@ -125,9 +113,6 @@ export function LiveWorkspacesProvider({ children }: { children: ReactNode }) {
         },
         actions,
         meta: {
-          registerPending: registerResult.waiting,
-          registerError: resultError(registerResult),
-          registerOutcome: resultValue(registerResult),
           rebindPending: rebindResult.waiting,
           rebindError: resultError(rebindResult),
           rebindOutcome: resultValue(rebindResult),

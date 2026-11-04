@@ -1,12 +1,12 @@
 import * as Schema from "effect/Schema";
-import { IssueTrackerType, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
+import { IssueTrackerType, TrimmedNonEmptyString, WorkflowId, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionOverview } from "./connection";
 import { LocalContribution } from "./contribution";
 import { ControlStore, ReadyToMergeItem, SchedulerStats } from "./daemon";
 import { HarnessReadiness } from "./harness";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
-import { WorkflowId, WorkflowRecord } from "./workflow";
+import { WorkflowRecord } from "./workflow";
 import { WorkspaceRegistration } from "./workspace";
 
 export const ReadModelItem = Schema.TaggedUnion({

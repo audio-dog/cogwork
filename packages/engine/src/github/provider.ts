@@ -4,7 +4,6 @@ import {
   type WorkflowActionOrigin,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
-  type WorkflowOptionList,
   WorkflowTemplate,
   type WorkItem,
   WorkItemId,
@@ -16,6 +15,7 @@ import * as Schema from "effect/Schema";
 import { checkState } from "../ci";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
+import { workspaceOptionReader } from "../provider-trigger-source";
 import { WorkspaceRegistry } from "../registry";
 import {
   type PrSignals,
@@ -575,42 +575,15 @@ const make = (
     return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
   });
 
+  const reviewer = workspaceOptionReader("github", registry, (workspace) => {
+    const target = sourceControlTargetFor(workspace);
+    return target ? client.listCollaborators(target) : Effect.succeed([]);
+  });
+
   const contribution: WorkflowCatalogContribution = {
     entries: githubSourceControlActionEntries,
     templates: [slackReviewTemplate],
-    listOptions: (entry, parameter, workspaces) => {
-      const listsReviewers = entry === catalogKey("github.request-review") && parameter === "reviewer";
-      if (!listsReviewers) return Effect.succeed([]);
-      return registry.pipe(
-        Effect.flatMap((state) =>
-          Effect.forEach(workspaces, (workspaceId) => {
-            const workspace = state.workspaces.find(({ config }) => config.name === workspaceId);
-            const target = workspace ? sourceControlTargetFor(workspace) : null;
-            if (!target) return Effect.succeed([]);
-            return client.listCollaborators(target).pipe(
-              Effect.map((reviewers) =>
-                reviewers.map((reviewer) => ({
-                  value: reviewer,
-                  name: reviewer,
-                  listedIn: [workspaceId],
-                })),
-              ),
-              Effect.catchTag("IssueTrackerError", () => Effect.succeed([])),
-            );
-          }),
-        ),
-        Effect.map((listed) => {
-          const byReviewer = listed.flat().reduce((options, option) => {
-            const current = options.get(option.value);
-            return options.set(option.value, {
-              ...option,
-              listedIn: [...new Set([...(current?.listedIn ?? []), ...option.listedIn])],
-            });
-          }, new Map<string, WorkflowOptionList[number]>());
-          return [...byReviewer.values()];
-        }),
-      );
-    },
+    options: [{ system: "github", readers: { reviewer } }],
   };
 
   const readyToMerge = Effect.fn("github.readyToMerge")(function* (

@@ -8,6 +8,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { clockSource, latestScheduledInstant, makeClockSource, nextScheduledInstant } from "./clock-source";
 import type { TriggerReadPort, TriggerSource, TriggerSubscription } from "./trigger-source";
+import { makeWorkflowOptions } from "./workflow-options";
 
 const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
@@ -124,7 +125,9 @@ describe("ClockSource", () => {
 
   it.effect("lists IANA zones for schedule zone parameters", () =>
     Effect.gen(function* () {
-      const options = yield* clockSource.listOptions(decodeEntry("schedule.daily"), "zone");
+      const entry = clockSource.entries.find(({ key }) => key === decodeEntry("schedule.daily"));
+      if (entry === undefined) return assert.fail("missing daily entry");
+      const options = yield* makeWorkflowOptions(clockSource.options ?? []).list(entry, "zone", []);
 
       assert.include(
         options.map(({ value }) => value),
@@ -152,15 +155,21 @@ describe("ClockSource", () => {
           },
         ],
         availability: () => Effect.succeed({ _tag: "Available" }),
-        listOptions: () => Effect.succeed([{ value: "stale", name: "stale", listedIn: [workspace] }]),
+        options: [
+          {
+            system: "github",
+            readers: {
+              label: () => Effect.succeed([{ value: "stale", name: "stale", listedIn: [workspace] }]),
+            },
+          },
+        ],
         observe: () => Stream.empty,
       };
+      const clock = makeClockSource([labels]);
+      const sweep = clock.entries.find(({ key }) => key === decodeEntry("schedule.sweep"));
+      if (sweep === undefined) return assert.fail("missing sweep entry");
 
-      const options = yield* makeClockSource([labels]).listOptions(
-        decodeEntry("schedule.sweep"),
-        "state",
-        workspace,
-      );
+      const options = yield* makeWorkflowOptions(clock.options ?? []).list(sweep, "state", [workspace]);
 
       assert.deepStrictEqual(
         options.map(({ value }) => value),

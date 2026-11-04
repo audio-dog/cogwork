@@ -1,4 +1,4 @@
-import { linearTeams, WorkflowCatalogKey, type WorkflowOption, WorkItemId } from "@cogwork/contracts";
+import { linearTeams, WorkflowCatalogKey, WorkItemId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -13,8 +13,9 @@ import {
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
-  sourceFailure,
+  providerSubject,
   triggerEntry,
+  workspaceOptionReader,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
@@ -27,11 +28,17 @@ const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-has
 const newIssueCommentKey = Schema.decodeSync(WorkflowCatalogKey)("linear.new-comment-from-person");
 
 export const linearTrackerEntries = [
-  triggerEntry("linear.issue-has-label", "Issue has label", "linear", "issue", [liveParameter("label")]),
-  triggerEntry("linear.new-comment-from-person", "New comment from a person", "linear", "issue", [
+  triggerEntry("linear.issue-has-label", "Issue has label", "linear", "issue", "condition", [
     liveParameter("label"),
-    catchUpParameter,
   ]),
+  triggerEntry(
+    "linear.new-comment-from-person",
+    "New comment from a person",
+    "linear",
+    "issue",
+    "occurrence",
+    [liveParameter("label"), catchUpParameter],
+  ),
 ];
 
 const itemId = Schema.decodeSync(WorkItemId);
@@ -70,6 +77,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
   if (!target) return [];
   const prose = yield* client.readTriggerProse(target, issue.id);
   const issueId = itemId(issue.identifier);
+  const subject = providerSubject(issue.title, issue.url);
   const origin =
     artifacts === null
       ? null
@@ -109,6 +117,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
           workspace: workspace.config.name,
           priority: issue.priority,
           parameters: [{ id: "label", value: label ?? "" }],
+          subject,
           workContext: proseOf(prose.body, prose.comments),
         } satisfies TriggerEvent,
       ];
@@ -141,6 +150,7 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
             priority: issue.priority,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
+            subject,
             workContext: proseOf(prose.body, prose.comments),
           }) satisfies TriggerEvent,
       );
@@ -213,19 +223,16 @@ export const makeLinearTrackerTriggerSource = (
   id: "linear",
   entries: linearTrackerEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: (_entry, parameter, workspace) =>
-    Effect.gen(function* () {
-      if (parameter !== "label" || workspace === undefined) return [];
-      const state = yield* registry;
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
-      if (!registered) return [];
-      const issues = yield* Effect.forEach(targetsFor(registered), (target) =>
-        client.observeIssues(target, null, null, undefined, true),
-      );
-      return [...new Set(issues.flat().flatMap(({ labels }) => labels))].map(
-        (label) => ({ value: label, name: label, listedIn: [workspace] }) satisfies WorkflowOption,
-      );
-    }).pipe(Effect.mapError((error) => sourceFailure("linear", error))),
+  options: [
+    {
+      system: "linear",
+      readers: {
+        label: workspaceOptionReader("linear", registry, (registered) =>
+          Effect.map(Effect.forEach(targetsFor(registered), client.listLabels), (labels) => labels.flat()),
+        ),
+      },
+    },
+  ],
   observe: (subscriptions) =>
     providerPollingStream("linear", (checkpoint) =>
       read(client, registry, subscriptions, checkpoint, artifacts),

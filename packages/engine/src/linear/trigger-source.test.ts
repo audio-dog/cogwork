@@ -17,6 +17,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
 import type { TriggerSubscription } from "../trigger-source";
+import { makeWorkflowOptions } from "../workflow-options";
 import { LinearClient, type LinearClientService } from "./client";
 import { makeLinearTrackerTriggerSource } from "./tracker-trigger-source";
 
@@ -97,39 +98,24 @@ const targetTriggerOf = (event: object) => {
   return "trigger" in event.target ? event.target.trigger : undefined;
 };
 
-it.effect("lists labels from completed Linear issues", () => {
-  const listIssues = vi.fn<LinearClientService["observeIssues"]>(() =>
-    Effect.succeed([
-      {
-        id: "completed-issue-id",
-        identifier: "ENG-2",
-        title: "Completed issue",
-        url: "https://linear.app/acme/issue/ENG-2",
-        labels: ["completed-only"],
-        assignees: ["owner"],
-        stateName: "Done",
-        stateType: "completed",
-        openBlockers: 0,
-        priority: "medium" as const,
-        updatedAtMillis: 3_000,
-        coordinationComments: [],
-      },
-    ]),
+it.effect("lists the team's Linear labels without reading its issues", () => {
+  const listLabels = vi.fn<LinearClientService["listLabels"]>(() =>
+    Effect.succeed(["state:needs-triage", "unused-yet"]),
   );
 
   return Effect.gen(function* () {
     const client = yield* LinearClient;
-    const options = yield* makeLinearTrackerTriggerSource(client, Effect.succeed(registryState)).listOptions(
-      issueHasLabelKey,
-      "label",
-      workspaceId,
-    );
+    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const entry = source.entries.find(({ key }) => key === issueHasLabelKey);
+    if (!entry) return assert.fail("missing issue-has-label entry");
+    const options = yield* makeWorkflowOptions(source.options ?? []).list(entry, "label", [workspaceId]);
 
     assert.deepStrictEqual(options, [
-      { value: "completed-only", name: "completed-only", listedIn: [workspaceId] },
+      { value: "state:needs-triage", name: "state:needs-triage", listedIn: [workspaceId] },
+      { value: "unused-yet", name: "unused-yet", listedIn: [workspaceId] },
     ]);
-    assert.isTrue(listIssues.mock.calls[0]?.[4]);
-  }).pipe(Effect.provide(Layer.mock(LinearClient, { observeIssues: listIssues })));
+    assert.strictEqual(listLabels.mock.calls.length, 1);
+  }).pipe(Effect.provide(Layer.mock(LinearClient, { listLabels })));
 });
 
 it.effect("reads Linear updates and keeps comment revisions distinct by label", () =>
