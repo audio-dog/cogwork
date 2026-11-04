@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_0b206f65c3cef5::t_2ae4ba9dab2462 523-527
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9c8b06c3a1b705b772a70370b2191ef9645375e1",
+  "prompts": {},
+  "sessions": {
+    "s_0b206f65c3cef5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "61b6bae3-99d6-40b6-a1ad-0a34989edb04",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
