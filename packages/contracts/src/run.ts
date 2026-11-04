@@ -1,7 +1,14 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { AgUiCorrelation, AgUiEvent } from "./ag-ui";
-import { BranchName, HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
+import {
+  BranchName,
+  HarnessName,
+  TrimmedNonEmptyString,
+  WorkflowId,
+  WorkItemId,
+  WorkspaceId,
+} from "./base-schemas";
 
 export const RunId = TrimmedNonEmptyString.pipe(Schema.brand("RunId"));
 export type RunId = typeof RunId.Type;
@@ -82,6 +89,7 @@ export const RunRecord = Schema.Struct({
   workspace: WorkspaceId,
   workItem: WorkItemId,
   subject: Schema.optionalKey(RunSubject),
+  workflow: Schema.optionalKey(WorkflowId),
   operation: TrimmedNonEmptyString,
   harness: HarnessName,
   branch: Schema.NullOr(BranchName),

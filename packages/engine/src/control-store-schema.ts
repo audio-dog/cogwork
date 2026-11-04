@@ -346,6 +346,7 @@ export const runs = sqliteTable(
     workItem: text("work_item").notNull(),
     subjectTitle: text("subject_title"),
     subjectUrl: text("subject_url"),
+    workflow: text("workflow"),
     operation: text("operation").notNull(),
     harness: text("harness").notNull(),
     branch: text("branch"),

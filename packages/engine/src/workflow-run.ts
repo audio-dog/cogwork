@@ -591,6 +591,7 @@ export const make = Effect.gen(function* () {
       workspace: runWorkspace,
       workItem: item,
       ...(admission.event.subject ? { subject: admission.event.subject } : {}),
+      workflow: record.id,
       operation: operation.id,
       harness: selectedHarness,
       branch: checkout.branch,
