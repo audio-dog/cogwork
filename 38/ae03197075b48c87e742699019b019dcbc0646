@@ -1,0 +1,22 @@
+packages/engine/CONTEXT.md
+  s_2324a6c1e00458::t_94d078633aaabf 145-150
+  s_2324a6c1e00458::t_e512eb0db7abe1 153-158
+  s_2324a6c1e00458::t_906b0c93c15cd0 53,56-62
+  s_2324a6c1e00458::t_1f4af5dfe9a82c 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "38ae03197075b48c87e742699019b019dcbc0646",
+  "prompts": {},
+  "sessions": {
+    "s_2324a6c1e00458": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1e3915b5-60c5-47a8-a730-ec09aba04ebf",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
