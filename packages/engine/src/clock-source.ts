@@ -20,7 +20,7 @@ import {
   type TriggerSource,
   type TriggerSubscription,
 } from "./trigger-source";
-import { mergeOptions, type OptionReader, type SystemOptions } from "./workflow-options";
+import { mergeOptions, type OptionReader } from "./workflow-options";
 
 const hourlyKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.hourly");
 const dailyKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
@@ -374,7 +374,7 @@ const sweepStateReader =
       ),
     );
 
-const clockReaders = (sources: ReadonlyArray<TriggerSource>): SystemOptions["readers"] => {
+const clockReaders = (sources: ReadonlyArray<TriggerSource>) => {
   const labelReaders = sources.flatMap(({ options = [] }) =>
     options.flatMap(({ readers }) => (readers.label ? [readers.label] : [])),
   );

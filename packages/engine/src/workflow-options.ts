@@ -1,9 +1,4 @@
-import type {
-  WorkflowCatalogEntry,
-  WorkflowOption,
-  WorkflowOptionList,
-  WorkspaceId,
-} from "@cogwork/contracts";
+import type { WorkflowCatalogEntry, WorkflowOption, WorkspaceId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import type { SourceFailure } from "./trigger-source";
 
@@ -43,11 +38,7 @@ export const makeWorkflowOptions = (systems: ReadonlyArray<SystemOptions>) => {
     ),
   );
 
-  const list = (
-    entry: WorkflowCatalogEntry,
-    parameterId: string,
-    workspaces: ReadonlyArray<WorkspaceId>,
-  ): Effect.Effect<WorkflowOptionList> => {
+  const list = (entry: WorkflowCatalogEntry, parameterId: string, workspaces: ReadonlyArray<WorkspaceId>) => {
     const parameter = entry.parameters.find(({ id }) => id === parameterId);
     if (parameter === undefined) return Effect.succeed([]);
     if (parameter.source !== "live") {

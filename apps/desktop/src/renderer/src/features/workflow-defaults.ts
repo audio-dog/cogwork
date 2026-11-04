@@ -1,9 +1,4 @@
-import {
-  type WorkflowDocument,
-  WorkflowNodeId,
-  type WorkflowOperation,
-  type WorkflowQuestion,
-} from "@cogwork/contracts";
+import { type WorkflowDocument, WorkflowNodeId, type WorkflowOperation } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
@@ -21,7 +16,7 @@ export const freshNodeId = (prefix: string, taken: ReadonlyArray<string>) =>
     ).find((id) => !taken.includes(id)) ?? `${prefix}-${taken.length + 1}`,
   );
 
-export const yesOrNoQuestion = (id: WorkflowNodeId): WorkflowQuestion => ({
+export const yesOrNoQuestion = (id: WorkflowNodeId) => ({
   id,
   text: "What happened?",
   choices: [
