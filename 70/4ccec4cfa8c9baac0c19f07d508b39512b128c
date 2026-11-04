@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_19c1b5e0f8d107::t_0787877359c1d7 476-482
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_19c1b5e0f8d107::t_031c1ccce23d20 320-348
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "704ccec4cfa8c9baac0c19f07d508b39512b128c",
+  "prompts": {},
+  "sessions": {
+    "s_19c1b5e0f8d107": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f2b1413f-27df-4ab6-adc9-78fb1f8e26dc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
