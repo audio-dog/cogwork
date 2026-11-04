@@ -50,8 +50,16 @@ A schedulable Trigger admission plus the reservation keys that keep it from bein
 _Avoid_: Job, task
 
 **Workflow runner**:
-The unit that executes one admission: claim, resolve and persist the Run Plan, dispatch the Harness, record events, decode the document-derived Operation result, freeze and execute the Action plan, then route a hand-off or Stop.
+The unit that executes one admission: claim, prepare the Run, resolve and persist the Run Plan, dispatch the Harness, record events, decode the document-derived Operation result, freeze and execute the Action plan, then complete the Run and route a hand-off or Stop. It orchestrates; the decisions sit in **Run Plan resolution** and **Run completion**.
 _Avoid_: Executor, fixed pipeline, stage runner
+
+**Run preparation**:
+The step between claim and dispatch that ensures the checkout, chooses the Session, provisions the instruction layers, runs Harness preflight, and gathers the facts Run Plan resolution decides over. It owns every side effect a Run needs before it starts; it makes no decision about the Plan's contents.
+_Avoid_: Setup, bootstrap, Run Plan resolution (the decision this step feeds)
+
+**Run completion**:
+The decision, taken from a Run's result and the item's coordination view, of what follows: retry, exhaust, park stuck, fan out, complete, or hand off. One decision serves a fresh Run, a resumed Action plan, and a review-plan refresh, so the failure counters and park reasons are applied in one place.
+_Avoid_: Outcome handling, completion closure, failure policy (one input to it), disposition
 
 **Run recorder**:
 The one seam a run's harness events cross between the harness runner and everything that reads them. Recording is one act with four parts: assign the event's sequence, encode it as a run event, append it to the run ledger (capturing an opaque session handle when one rides the event), and publish the same moment as run activity. Reads come back through the same seam — a settled run replays as run activity for the drill-in, and a session's events decode for the transcript fold — so live and replayed activity are identical by construction. The recorded-event codec is shared only with the replay harness, which needs the same decode boundary.
@@ -134,12 +142,20 @@ The Operation-owned instruction document and supporting directory carrying its m
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Run Plan resolution**:
-The Workflow runner's combination of the published Operation, Default settings, Operating Instructions, Work Context, contributions, and Sandbox Policy into one immutable Run Plan before dispatch.
-_Avoid_: Fixed Operation resolution, stage resolution, prompt assembly
+The decision that combines the published Operation, Default settings, Operating Instructions, Work Context, contributions, Sandbox Policy, and the tool needs its Action entries declare into one immutable Run Plan — or into a **Run Plan rejection** with its reason when the machine cannot satisfy the Operation. It decides over facts Run preparation gathered and performs no side effect.
+_Avoid_: Fixed Operation resolution, stage resolution, prompt assembly, decline (the runner's act on a rejection)
+
+**Action entry**:
+One registered output action: its catalog row, the target it freezes, the write it performs, its phase in the Action plan's fixed order (approval, write, notify, terminal), and the engine Tools a Run needs to use it. Registered once under its full catalog key; the Trigger and action catalog's action rows derive from the registry, so a row cannot exist without its write.
+_Avoid_: Action executor (one field), catalog row (one field), handler, action definition
 
 **Issue tracker adapter**:
-A concrete Trigger read and Workflow action implementation for GitHub or Linear. It observes tracker-native items, loads Work Context, and performs catalog actions such as adding a label or posting a comment. Coordination is a separate authority.
-_Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
+A concrete implementation of the issue tracker port for GitHub or Linear. It supplies the tracker-native reads — items changed since a cursor, when a label was applied, an item's prose with each comment marked as a person's or not — loads Work Context, and performs catalog actions such as adding a label or posting a comment. It observes nothing by itself; the Tracker Trigger source observes through it. Coordination is a separate authority.
+_Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin, Trigger source (the module that reads through it)
+
+**Tracker Trigger source**:
+The one Trigger source implementation for issue trackers, instantiated once per tracker system over the issue tracker port. It owns polling, per-workspace cursors, catch-up, the label and comment source revisions, the origin-record cause, and the Cogwork-marker filter; it holds no tracker-specific branch. Each instance keeps its own source id so one tracker's cooldown never stops the other's polling.
+_Avoid_: GitHub Trigger source, Linear Trigger source (instances, not modules), pull request Trigger source (the source control port's own)
 
 **Source control provider adapter**:
 A concrete implementation of pull-request Trigger sources and Workflow actions, with GitHub the only one today. It also projects the ready-to-merge view from Cogwork origin records and live pull-request state.
