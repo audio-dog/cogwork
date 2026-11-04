@@ -2,6 +2,7 @@ import {
   keyOf,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
+  type WorkflowOption,
   type WorkflowParameterValue,
   type WorkspaceId,
 } from "@cogwork/contracts";
@@ -12,7 +13,9 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { IssueTrackerError } from "./issue-tracker";
+import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { SourceFailure, type TriggerEntry, type TriggerEvent, type TriggerSourceId } from "./trigger-source";
+import type { OptionReader } from "./workflow-options";
 
 export const catchUpParameter = {
   id: "catch-up-at-most",
@@ -59,6 +62,24 @@ export const sourceFailure = (source: TriggerSourceId, error: IssueTrackerError)
     retryAfterMillis: error.retryAfterMillis ?? null,
     message: error.message,
   });
+
+export const workspaceOptionReader =
+  (
+    source: TriggerSourceId,
+    registry: Effect.Effect<RegistryState>,
+    names: (workspace: RegisteredWorkspace) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>,
+  ): OptionReader =>
+  (workspace) =>
+    Effect.gen(function* () {
+      if (workspace === undefined) return [];
+      const state = yield* registry;
+      const registered = state.workspaces.find(({ config }) => config.name === workspace);
+      if (!registered) return [];
+      const listed = yield* names(registered);
+      return [...new Set(listed)].map(
+        (name) => ({ value: name, name, listedIn: [workspace] }) satisfies WorkflowOption,
+      );
+    }).pipe(Effect.mapError((error) => sourceFailure(source, error)));
 
 export const parameterValue = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
   parameters.find((parameter) => parameter.id === id)?.value;

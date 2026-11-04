@@ -15,7 +15,7 @@ import * as Schema from "effect/Schema";
 import { checkState } from "../ci";
 import { IssueTrackerError } from "../issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
-import { sourceFailure } from "../provider-trigger-source";
+import { workspaceOptionReader } from "../provider-trigger-source";
 import { WorkspaceRegistry } from "../registry";
 import {
   type PrSignals,
@@ -27,7 +27,6 @@ import {
   type SourceControlProviderService,
 } from "../source-control";
 import type { WorkflowCatalogContribution } from "../workflow-catalog";
-import type { OptionReader } from "../workflow-options";
 import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
 import {
   GitHubClient,
@@ -576,15 +575,10 @@ const make = (
     return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
   });
 
-  const reviewer: OptionReader = (workspaceId) =>
-    Effect.gen(function* () {
-      const state = yield* registry;
-      const workspace = state.workspaces.find(({ config }) => config.name === workspaceId);
-      const target = workspace ? sourceControlTargetFor(workspace) : null;
-      if (!target || workspaceId === undefined) return [];
-      const reviewers = yield* client.listCollaborators(target);
-      return reviewers.map((name) => ({ value: name, name, listedIn: [workspaceId] }));
-    }).pipe(Effect.mapError((error) => sourceFailure("github", error)));
+  const reviewer = workspaceOptionReader("github", registry, (workspace) => {
+    const target = sourceControlTargetFor(workspace);
+    return target ? client.listCollaborators(target) : Effect.succeed([]);
+  });
 
   const contribution: WorkflowCatalogContribution = {
     entries: githubSourceControlActionEntries,

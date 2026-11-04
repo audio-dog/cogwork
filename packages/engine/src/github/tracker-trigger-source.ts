@@ -1,10 +1,4 @@
-import {
-  defaultPriority,
-  type Priority,
-  WorkflowCatalogKey,
-  type WorkflowOption,
-  WorkItemId,
-} from "@cogwork/contracts";
+import { defaultPriority, type Priority, WorkflowCatalogKey, WorkItemId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -20,13 +14,12 @@ import {
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   providerSubject,
-  sourceFailure,
   triggerEntry,
+  workspaceOptionReader,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
-import type { OptionReader } from "../workflow-options";
 import type { GitHubClientService, GitHubRepoRef, RawIssue, RawIssueComment } from "./client";
 import { issuePriorities, targetFor } from "./host";
 import { hasCogworkMarker } from "./markers";
@@ -244,16 +237,10 @@ export const makeGitHubTrackerTriggerSource = (
   registry: Effect.Effect<RegistryState>,
   artifacts: WorkflowArtifactStoreService | null = null,
 ): TriggerSource => {
-  const label: OptionReader = (workspace) =>
-    Effect.gen(function* () {
-      if (workspace === undefined) return [];
-      const state = yield* registry;
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
-      const target = registered ? targetFor(registered) : null;
-      if (!target) return [];
-      const labels = yield* client.listLabels(target);
-      return labels.map((name) => ({ value: name, name, listedIn: [workspace] }) satisfies WorkflowOption);
-    }).pipe(Effect.mapError((error) => sourceFailure("github", error)));
+  const label = workspaceOptionReader("github", registry, (registered) => {
+    const target = targetFor(registered);
+    return target ? client.listLabels(target) : Effect.succeed([]);
+  });
 
   return {
     id: "github",

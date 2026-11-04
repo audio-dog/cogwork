@@ -1,4 +1,4 @@
-import { linearTeams, WorkflowCatalogKey, type WorkflowOption, WorkItemId } from "@cogwork/contracts";
+import { linearTeams, WorkflowCatalogKey, WorkItemId } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -14,8 +14,8 @@ import {
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   providerSubject,
-  sourceFailure,
   triggerEntry,
+  workspaceOptionReader,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
@@ -227,17 +227,9 @@ export const makeLinearTrackerTriggerSource = (
     {
       system: "linear",
       readers: {
-        label: (workspace) =>
-          Effect.gen(function* () {
-            if (workspace === undefined) return [];
-            const state = yield* registry;
-            const registered = state.workspaces.find(({ config }) => config.name === workspace);
-            if (!registered) return [];
-            const labels = yield* Effect.forEach(targetsFor(registered), client.listLabels);
-            return [...new Set(labels.flat())].map(
-              (name) => ({ value: name, name, listedIn: [workspace] }) satisfies WorkflowOption,
-            );
-          }).pipe(Effect.mapError((error) => sourceFailure("linear", error))),
+        label: workspaceOptionReader("linear", registry, (registered) =>
+          Effect.map(Effect.forEach(targetsFor(registered), client.listLabels), (labels) => labels.flat()),
+        ),
       },
     },
   ],
