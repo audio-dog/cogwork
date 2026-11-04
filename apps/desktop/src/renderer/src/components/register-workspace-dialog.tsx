@@ -26,7 +26,7 @@ import { useAtomSet } from "@effect/atom-react";
 import { RiAddLine, RiFolderOpenLine } from "@remixicon/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 import { registerWorkspaceAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { connectionSystemLabel, workspaceConnectionChoices } from "../features/connections-view";
@@ -55,11 +55,6 @@ const registrationDraftFrom = (
     linearOrganization: textFrom(data, "linearOrganization"),
     sourceControlConnectionId: "",
   };
-};
-
-const workspaceTrackerFrom = (value: string | null) => {
-  if (value === "github" || value === "linear") return value;
-  return null;
 };
 
 function useTrackerConnection(tracker: WorkspaceTracker) {
@@ -91,9 +86,11 @@ export function RegisterWorkspaceDialog() {
   const [tracker, setTracker] = useState<WorkspaceTracker>("github");
   const [submitting, setSubmitting] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const openings = useRef(0);
   const connection = useTrackerConnection(tracker);
 
   const changeOpen = (next: boolean) => {
+    openings.current += 1;
     setOpen(next);
     if (!next) return;
     setCheckoutPath(null);
@@ -114,8 +111,10 @@ export function RegisterWorkspaceDialog() {
       return;
     }
     setSubmitting(true);
+    const opening = openings.current;
     const exit = await register({ payload: { registration } });
     setSubmitting(false);
+    if (opening !== openings.current) return;
     if (Exit.isFailure(exit)) {
       setRefusal(daemonFailureMessage(exit.cause));
       return;
@@ -164,8 +163,7 @@ export function RegisterWorkspaceDialog() {
                 items={trackerItems}
                 value={tracker}
                 onValueChange={(value) => {
-                  const next = workspaceTrackerFrom(value);
-                  if (next) setTracker(next);
+                  if (value === "github" || value === "linear") setTracker(value);
                 }}
               >
                 <SelectTrigger id="register-workspace-tracker" className="w-full">
