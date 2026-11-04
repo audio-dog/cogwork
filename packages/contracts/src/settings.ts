@@ -246,6 +246,12 @@ export const resolveContributionUnion = (rows: readonly ContributionUnionRow[]) 
 
 export const defaultContributionEnabled = (authority: string) => authority !== "local:repo";
 
+export const contributionSettingApplies = (scope: ContributionSettingScope, workspace: WorkspaceId | null) =>
+  ContributionSettingScope.match(scope, {
+    SettingsProfile: () => true,
+    PrivateWorkspaceOverlay: (overlay) => overlay.workspace === workspace,
+  });
+
 export const admissibleSettingScope = (
   family: "contribution" | "operation",
   setting: OperationSettingName | "enabled",
