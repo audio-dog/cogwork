@@ -1,0 +1,33 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_19c1b5e0f8d107::t_7680976755e6fe 413
+  s_19c1b5e0f8d107::t_6673891404fa14 484
+  s_19c1b5e0f8d107::t_6c68ce533488c4 20
+  s_19c1b5e0f8d107::t_0edc1868712bcc 55
+  s_19c1b5e0f8d107::t_09334c29445681 338-340
+  s_19c1b5e0f8d107::t_b27e1617498464 341-351,358-359,362,364-366,368,370-375,377-385,387,390-391,393-395,397-406
+  s_19c1b5e0f8d107::t_0e8d86e230d387 437
+  s_19c1b5e0f8d107::t_1a884198cbee1e 352-357,360-361,363,367,369,376
+  s_19c1b5e0f8d107::t_5d4a958846b742 386,388-389,392,396
+  s_19c1b5e0f8d107::t_b5bbac7d783999 4,10-11
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_19c1b5e0f8d107::t_f61474fceb6155 229-233,241
+  s_19c1b5e0f8d107::t_34eb7fa22c0e01 378-417
+  s_19c1b5e0f8d107::t_8408cbec16ab0a 132-156
+  s_19c1b5e0f8d107::t_3244696d934fb8 418-420
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ed824ee9c208a2ece1184da41e5a11f08effc352",
+  "prompts": {},
+  "sessions": {
+    "s_19c1b5e0f8d107": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f2b1413f-27df-4ab6-adc9-78fb1f8e26dc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
