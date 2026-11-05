@@ -416,7 +416,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
         })(model),
       projectModel: () => model,
       projectOptions: (request) => cursorModelOptions(request.identity.resumeHandle),
-      transport: {},
+      transport: { instructionProjection: "system-prompt" },
       diagnostics: cursorDiagnostics,
       estimateUsage: cursorUsage,
     };
