@@ -44,6 +44,7 @@ import { defaultRunBudget } from "./provider-runner";
 import { makePullRequestTool } from "./pull-request-tool";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
+import { subagentMembers } from "./run-plan";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SlackWrite } from "./slack-write";
@@ -559,6 +560,7 @@ export const make = Effect.gen(function* () {
               ),
             ].join("\n"),
           };
+    const subagents = yield* subagentMembers(workspace?.contributions ?? [], operation.requires);
     const plan = RunPlan.make({
       id,
       operation: operation.id,
@@ -591,7 +593,7 @@ export const make = Effect.gen(function* () {
       ],
       skills: [],
       mcp: [],
-      subagents: [],
+      subagents,
       commands: [],
       hooks: [],
       middleware: [...harness.planMiddleware(selectedHarness)],
