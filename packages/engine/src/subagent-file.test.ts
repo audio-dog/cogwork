@@ -67,6 +67,11 @@ describe("decodeSubagentFile", () => {
       text: file("name: griller\ndescription: Interviews.\nmodel: sonnet"),
       reason: /model "sonnet" is a vendor model, not a Model level/,
     },
+    {
+      case: "a model that refers to itself",
+      text: file("name: griller\ndescription: Interviews.\nmodel: &a [*a]"),
+      reason: /^the frontmatter does not decode: /,
+    },
   ])("rejects $case with the reason", ({ text, reason }) =>
     Effect.gen(function* () {
       const outcome = yield* decodeSubagentFile("griller", text).pipe(

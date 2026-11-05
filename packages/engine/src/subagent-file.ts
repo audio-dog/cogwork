@@ -12,7 +12,7 @@ const SubagentFrontmatter = Schema.Struct({
   name: Schema.String.check(Schema.isPattern(/^[a-z0-9-]+$/)),
   description: TrimmedNonEmptyString,
   tools: Schema.optionalKey(Schema.Union([Schema.Array(TrimmedNonEmptyString), Schema.String])),
-  model: Schema.optionalKey(Schema.Unknown),
+  model: Schema.optionalKey(Schema.NullOr(TrimmedNonEmptyString)),
   metadata: Schema.optionalKey(Schema.Struct({ "model-level": Schema.optionalKey(ModelLevel) })),
 });
 type SubagentFrontmatter = typeof SubagentFrontmatter.Type;
@@ -47,7 +47,7 @@ const rejections: ReadonlyArray<{
   },
 ];
 
-const inheritsModel = (model: unknown) => model === null || model === "inherit";
+const inheritsModel = (model: string | null | undefined) => model === null || model === "inherit";
 
 const yamlProblem = (error: unknown) => {
   if (!(error instanceof YAMLParseError)) return "the frontmatter is not valid YAML";
