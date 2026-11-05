@@ -1,0 +1,31 @@
+packages/engine/src/run-completion.test.ts
+  s_e378a409e9efab::t_f32bc116d62ea4 1-40
+packages/engine/src/run-completion.ts
+  s_778fe005d403c7::t_ba1fc01cd18c92 1-34
+packages/engine/src/workflow-run.ts
+  s_778fe005d403c7::t_641aa23cb5b453 46,324-349,458-462,816-817,1019-1029
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "21bf25e6c9ef5562c6080e96476d670920f858f4",
+  "prompts": {},
+  "sessions": {
+    "s_778fe005d403c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9314172e-4578-46f0-813e-eee7d20ffe90",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e378a409e9efab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fd78987b-21a9-432c-a57d-be2faea4a740",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
