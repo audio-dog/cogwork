@@ -16,6 +16,7 @@ import {
   type WorkflowAgentInputValue,
   type WorkflowOperationElement,
   WorkflowTouchpointFailure,
+  type WorkflowTrigger,
   WorkItemId,
   WorkItemRef,
   WorkspaceId,
@@ -340,11 +341,19 @@ export const make = Effect.gen(function* () {
       )
       .pipe(Effect.map(() => "skipped" as const));
 
-  const recheck = Effect.fn("WorkflowRun.recheck")(function* (admission: TriggerAdmission) {
+  const recheck = Effect.fn("WorkflowRun.recheck")(function* (
+    admission: TriggerAdmission,
+    trigger: WorkflowTrigger,
+  ) {
     const source = triggerSources.find((candidate) => ownsEntry(candidate, admission.event.entry));
     if (!source?.recheck) return Recheck.Matches();
+    const published = {
+      ...admission.subscription,
+      parameters: trigger.parameters,
+      filters: trigger.filters.map(({ entry }) => entry),
+    };
     return yield* source
-      .recheck(admission.event, admission.subscription)
+      .recheck(admission.event, published)
       .pipe(
         Effect.catchTag("SourceFailure", (error) =>
           Effect.logWarning("Trigger recheck failed; the Run proceeds", { error }).pipe(
@@ -467,7 +476,7 @@ export const make = Effect.gen(function* () {
       return yield* rejectPlan(admission, admission.event.payload.reason);
     }
     const startsTrigger = operation.id === trigger.start;
-    const current = startsTrigger ? yield* recheck(admission) : Recheck.Matches();
+    const current = startsTrigger ? yield* recheck(admission, trigger) : Recheck.Matches();
     if (Recheck.$is("Ended")(current)) return yield* skipNoLongerMatching(admission, current.reason);
     if (Recheck.$is("Waiting")(current)) return "waiting" as const;
 
