@@ -1,0 +1,59 @@
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_40b6efcbb26166::t_cb66fc353baa5b 102,151
+docs/adr/0028-subagent-model-choice-is-a-named-level-not-a-pinned-model.md
+  s_40b6efcbb26166::t_b88961c441e611 6-13
+packages/contracts/CONTEXT.md
+  s_40b6efcbb26166::t_121bd12a7d0104 193
+packages/contracts/src/run-plan.ts
+  s_39eb01622dab60::t_1d8ac12ae74087 59-74,223
+packages/engine/package.json
+  s_40b6efcbb26166::t_fc19bd8ab3312c 29-30
+packages/engine/src/authoring-tree.test.ts
+  s_40b6efcbb26166::t_9165114443d0ea 33-36,51,59
+packages/engine/src/authoring-tree.ts
+  s_39eb01622dab60::t_7575f55d40f7fa 36
+packages/engine/src/run-plan.ts
+  s_39eb01622dab60::t_8cc0aa3c85216c 1-12,23-42
+packages/engine/src/workflow-run.ts
+  s_0d3b9f79f9a9e8::t_45f3ab3e901400 47,563,596
+pnpm-lock.yaml
+  s_40b6efcbb26166::t_da9bd5a25dc2c3 786-788
+packages/engine/src/run-plan.test.ts
+  s_39eb01622dab60::t_686b0b3b4fa5ed 1-68
+packages/engine/src/subagent-file.test.ts
+  s_39eb01622dab60::t_06b3f6d8e3b44b 1-74
+packages/engine/src/subagent-file.ts
+  s_39eb01622dab60::t_d7f7d182c30791 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b7bf15bdb7f7550682151fe59a83beadc2493ebe",
+  "prompts": {},
+  "sessions": {
+    "s_0d3b9f79f9a9e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1802234b-cf9d-4999-86f3-6bdbe822ef90",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_39eb01622dab60": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5be6fe3b-9bad-4104-a94c-9ac704689d2a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_40b6efcbb26166": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b475a55-cbd6-40a3-8f70-75b92589b974",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
