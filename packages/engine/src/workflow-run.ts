@@ -274,6 +274,8 @@ export const make = Effect.gen(function* () {
     worktrees === null
       ? sourceControlExecutionContext
       : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
+  const runBranchOf = (branch: string | null) =>
+    worktrees === null || branch === null ? {} : { runBranch: { worktrees, branch } };
   const decodeIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
   const touchpointGate = Semaphore.makeUnsafe(1);
 
@@ -754,10 +756,11 @@ export const make = Effect.gen(function* () {
           workflowRevision: record.publishedRevision ?? record.workingRevision,
           ...(sourceControl ? { sourceControl } : {}),
           pullRequestSnapshots: reviewedPullRequests,
+          ...runBranchOf(run.branch),
         }),
       ).pipe(
         Effect.matchEffect({
-          onFailure: (error) => refuseResult(admission, key, run, error.message),
+          onFailure: (error) => refuseResult(admission, key, run, error.message, refusalStatus[error.reason]),
           onSuccess: acceptPlans,
         }),
       );
@@ -776,9 +779,7 @@ export const make = Effect.gen(function* () {
         workflowRevision: record.publishedRevision ?? record.workingRevision,
         ...(sourceControl ? { sourceControl } : {}),
         pullRequestSnapshots: reviewedPullRequests,
-        ...(worktrees !== null && run.branch !== null
-          ? { runBranch: { worktrees, branch: run.branch } }
-          : {}),
+        ...runBranchOf(run.branch),
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
@@ -993,6 +994,7 @@ export const make = Effect.gen(function* () {
       createdAtMillis,
       workflowRevision: plan.workflowRevision,
       ...(sourceControl ? { sourceControl } : {}),
+      ...runBranchOf((yield* ledger.getRun(plan.attempt))?.branch ?? null),
     }).pipe(Effect.mapError((error) => touchpointFailure("invalid-edits", error.message)));
   });
 
