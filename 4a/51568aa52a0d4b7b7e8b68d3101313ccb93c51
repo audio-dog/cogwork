@@ -1,0 +1,31 @@
+packages/engine/src/issue-workflow-catalog.ts
+  s_6214f64f82177d::t_8395e700631321 1,3,336,341,343-344
+packages/engine/src/workflow-action-entry.ts
+  s_6214f64f82177d::t_49ae3059cf63c0 1-9,85-97
+packages/engine/src/workflow-action-plan.ts
+  s_6214f64f82177d::t_710bffef16d1e5 31,47-48,55-61
+packages/engine/src/workflow-catalog.ts
+  s_6214f64f82177d::t_fd3436f9b61264 27
+packages/engine/src/workflow-action-registry.ts
+  s_6214f64f82177d::t_d1d8354703d62a 3,5-7
+packages/engine/src/workflow-actions-issue.test.ts
+  s_6214f64f82177d::t_7f5c8cbe84f35c 1-217
+packages/engine/src/workflow-actions-issue.ts
+  s_6214f64f82177d::t_36f42617256222 1-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4a51568aa52a0d4b7b7e8b68d3101313ccb93c51",
+  "prompts": {},
+  "sessions": {
+    "s_6214f64f82177d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cde1b79c-b0c5-4719-baab-b7d2f08c8b91",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
