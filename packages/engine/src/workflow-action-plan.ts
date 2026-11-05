@@ -9,7 +9,6 @@ import {
   WorkflowActionArtifact,
   WorkflowActionOrigin,
   WorkflowActionPlan,
-  type WorkflowActionPlanArtifact,
   WorkflowActionPlanStep,
   WorkflowActionTarget,
   type WorkflowAgentInputValue,
@@ -17,7 +16,6 @@ import {
   type WorkflowCatalogEntry,
   type WorkflowDocument,
   type WorkflowNodeId,
-  WorkflowNotificationId,
   type WorkflowOperation,
   type WorkflowParameterValue,
   type WorkflowReviewComment,
@@ -25,12 +23,11 @@ import {
   WorkItemId,
   WorkItemRef,
 } from "@cogwork/contracts";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Coordination, defaultClaimant } from "./coordination";
-import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
+import { Coordination } from "./coordination";
+import { IssueTracker, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
@@ -42,15 +39,20 @@ import {
   type SourceControlProviderService,
 } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import {
+  type ActionContext,
+  type ActionExecutor,
+  decodeFailure,
+  invalidTarget,
+  stringInput,
+  type TargetProducer,
+  WorkflowActionPlanDecodeError,
+} from "./workflow-action-entry";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { actionEntryFor, compareActionPhase } from "./workflow-action-registry";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 import { PullRequestReadiness, WorktreeManager } from "./worktree";
-
-export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
-  "WorkflowActionPlanDecodeError",
-  { message: Schema.String },
-) {}
 
 const planPreview = (plan: WorkflowActionPlan) =>
   JSON.stringify({
@@ -90,8 +92,6 @@ const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArra
       : document.workspaces.workspaces;
   return workspaces.filter(({ config }) => selected.includes(config.name));
 };
-
-const decodeFailure = (message: string) => Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
 
 const planJson = Schema.fromJsonString(WorkflowActionPlan);
 
@@ -369,20 +369,6 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
 
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
 
-interface TargetContext {
-  readonly entry: WorkflowCatalogEntry;
-  readonly admission: TriggerAdmission;
-  readonly workspaces: ReadonlyArray<RegisteredWorkspace>;
-  readonly inputs: Readonly<Record<string, WorkflowAgentInputValue>>;
-  readonly parameters: ReadonlyArray<WorkflowParameterValue>;
-  readonly workspace: string | undefined;
-  readonly sourceControl: SourceControlProviderService | undefined;
-}
-
-type TargetProducer = (
-  context: TargetContext,
-) => Effect.Effect<WorkflowActionTarget, WorkflowActionPlanDecodeError>;
-
 const issueTargetProducer =
   (producer: IssueTargetProducer): TargetProducer =>
   (context) =>
@@ -456,15 +442,14 @@ const targetFor = (
     | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
     | undefined,
 ) => {
+  const context = { entry, admission, workspaces, inputs, parameters, workspace, sourceControl };
+  const registered = actionEntryFor(entry.key);
+  if (registered) return registered.target(context);
   const name = actionName(entry.key);
   if (sourceControlActions.has(name)) {
     return sourceControlTargetFor(entry, admission, workspaces, inputs, sourceControl, workspace, snapshots);
   }
-  const producer = targetProducers.get(name);
-  return (
-    producer?.({ entry, admission, workspaces, inputs, parameters, workspace, sourceControl }) ??
-    cogworkTarget
-  );
+  return targetProducers.get(name)?.(context) ?? cogworkTarget;
 };
 
 const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
@@ -485,17 +470,6 @@ const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
   return Object.fromEntries(entries);
 });
 
-const actionRanks = [
-  { when: (entry: string) => entry === "cogwork.wait-for-approval", rank: 0 },
-  { when: (entry: string) => entry === "cogwork.notify", rank: 2 },
-  {
-    when: (entry: string) => entry === "cogwork.hand-to-me" || entry === "cogwork.stop",
-    rank: 3,
-  },
-] as const;
-
-const actionRank = (entry: string) => actionRanks.find(({ when }) => when(entry))?.rank ?? 1;
-
 export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(function* (input: BuildInput) {
   const entries = new Map(input.catalog.entries.map((entry) => [entry.key, entry]));
   const matched = matchWorkflowTransitions(input.operation, input.output.answers);
@@ -504,7 +478,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     .map((action, documentPosition) => ({ action, documentPosition }))
     .toSorted(
       (left, right) =>
-        actionRank(left.action.entry) - actionRank(right.action.entry) ||
+        compareActionPhase(left.action.entry, right.action.entry) ||
         left.documentPosition - right.documentPosition,
     );
   const steps = yield* Effect.forEach(actions, ({ action }, position) =>
@@ -564,11 +538,6 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
 const parameterValues = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
   parameters.filter((parameter) => parameter.id === id).map(({ value }) => value);
 
-const stringInput = (step: WorkflowActionPlanStep, name: string) => {
-  const value = step.inputs[name];
-  return typeof value === "string" ? value : "";
-};
-
 const reviewCommentsInput = (step: WorkflowActionPlanStep) => {
   const value = step.inputs.review_comments;
   return Array.isArray(value) ? value : [];
@@ -610,30 +579,6 @@ const sourceTargetWorkspace = (
   return app === target.app ? (workspace ?? null) : null;
 };
 
-const invalidTarget = (step: WorkflowActionPlanStep) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    retryable: false,
-    message: `Action ${step.entry} has an invalid target`,
-  });
-
-interface ActionContext {
-  readonly item: TriggerAdmission["event"]["key"];
-  readonly plan: WorkflowActionPlan;
-  readonly step: WorkflowActionPlanStep;
-  readonly workspace: WorkspaceIssueTrackerBinding | null;
-  readonly tracker: IssueTrackerActionService;
-  readonly notifications: Effect.Success<typeof WorkflowNotifications>;
-  readonly ledger: Effect.Success<typeof RunLedger>;
-  readonly sourceControl: Effect.Success<typeof SourceControlProvider> | null;
-  readonly sourceWorkspace: RegisteredWorkspace | null;
-  readonly worktrees: Effect.Success<typeof WorktreeManager> | null;
-  readonly slack: Effect.Success<typeof SlackWrite>;
-  readonly actionPlans: Effect.Success<typeof WorkflowActionPlanStore>;
-  readonly coordination: Effect.Success<typeof Coordination>;
-  readonly observationStore: Effect.Success<typeof TriggerObservationStore>;
-}
-
 const requireIssueTarget = (step: WorkflowActionPlanStep) => {
   const issue = targetIssue(step);
   return issue === null ? Effect.fail(invalidTarget(step)) : Effect.succeed(issue);
@@ -641,10 +586,6 @@ const requireIssueTarget = (step: WorkflowActionPlanStep) => {
 
 const requireWorkspace = (context: ActionContext) =>
   context.workspace === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.workspace);
-
-type ActionExecutor = (
-  context: ActionContext,
-) => Effect.Effect<WorkflowActionPlanArtifact | null, IssueTrackerError | SlackWriteError>;
 
 const slackInvalidTarget = (step: WorkflowActionPlanStep) =>
   new SlackWriteError({
@@ -731,65 +672,6 @@ const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (con
   );
   return null;
 });
-
-const actionFailure = (error: unknown) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    retryable: true,
-    message: error instanceof Error ? error.message : String(error),
-  });
-
-const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPendingApproval")(function* (
-  context: ActionContext,
-) {
-  const plans = yield* context.actionPlans.list;
-  const waiting = plans.filter(
-    (plan) =>
-      plan.item === context.plan.item &&
-      plan.attempt !== context.plan.attempt &&
-      plan.steps.some(({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending"),
-  );
-  const admissions = yield* context.observationStore.admissions;
-  const endedAtMillis = yield* Clock.currentTimeMillis;
-  yield* Effect.forEach(
-    waiting,
-    (plan) =>
-      Effect.gen(function* () {
-        const matchingAdmissions = admissions.filter(
-          (admission) =>
-            keyOf(admission.event.key) === plan.item &&
-            admission.subscription.workflow === plan.workflow &&
-            admission.event.revision === plan.revision,
-        );
-        yield* Effect.forEach(
-          matchingAdmissions,
-          (admission) =>
-            context.observationStore.complete(
-              admission,
-              context.coordination.markProcessed(admission.event.key, admission.event.revision),
-            ),
-          { discard: true },
-        );
-        yield* context.actionPlans.remove(plan.item, plan.workflow, plan.attempt);
-        const run = yield* context.ledger.getRun(plan.attempt);
-        if (run !== null) {
-          yield* context.ledger.updateRun(plan.attempt, {
-            status: "interrupted",
-            usage: null,
-            endedAtMillis,
-          });
-        }
-      }),
-    { discard: true },
-  );
-  if (waiting.length > 0) {
-    yield* context.coordination.handBack(context.item, { by: defaultClaimant });
-  }
-  return null;
-});
-
-const withdrawPendingApproval = (context: ActionContext) =>
-  withdrawPendingApprovalRaw(context).pipe(Effect.mapError(actionFailure));
 
 const actionExecutors: Record<string, ActionExecutor> = {
   "create-issue": Effect.fn("WorkflowActionPlan.createIssue")(function* (context: ActionContext) {
@@ -963,42 +845,11 @@ const actionExecutors: Record<string, ActionExecutor> = {
     yield* context.slack.draftReply(target, stringInput(context.step, "reply"));
     return null;
   }),
-  notify: Effect.fn("WorkflowActionPlan.notify")(function* (context: ActionContext) {
-    const run = yield* context.ledger.getRun(context.plan.attempt);
-    if (run === null) return yield* invalidTarget(context.step);
-    yield* context.notifications
-      .write(run, {
-        id: WorkflowNotificationId.make(
-          `${keyOf(context.item)}:${context.plan.attempt}:${context.step.writeKey}`,
-        ),
-        item: context.item,
-        workflow: context.plan.workflow,
-        operation: context.plan.operation,
-        summary: stringInput(context.step, "notification"),
-        answers: context.plan.answers,
-        artifacts: context.plan.steps.flatMap(({ artifact }) =>
-          Schema.is(WorkflowActionArtifact)(artifact) ? [artifact] : [],
-        ),
-        atMillis: context.plan.createdAtMillis,
-      })
-      .pipe(
-        Effect.mapError(
-          (error) =>
-            new IssueTrackerError({
-              reason: "unavailable",
-              retryable: error.retryable,
-              message: error.message,
-            }),
-        ),
-      );
-    return null;
-  }),
-  stop: () => Effect.succeed(null),
-  "hand-to-me": () => Effect.succeed(null),
-  "withdraw-pending-approval": withdrawPendingApproval,
 };
 
 const executorFor = (step: WorkflowActionPlanStep) => {
+  const registered = actionEntryFor(step.entry);
+  if (registered) return registered.execute;
   const name = actionName(step.entry);
   return Object.entries(actionExecutors).find(([candidate]) => candidate === name)?.[1];
 };
