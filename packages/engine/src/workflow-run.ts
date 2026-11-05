@@ -459,6 +459,7 @@ export const make = Effect.gen(function* () {
       contributions: [],
     });
     yield* Effect.addFinalizer(() => contextAssembler.cleanup(id).pipe(Effect.ignore));
+    const lineageArtifacts = yield* artifacts.byLineage(admission.lineage.root);
     const plan = resolveRunPlan({
       id,
       admission,
@@ -476,7 +477,7 @@ export const make = Effect.gen(function* () {
       priorIssues,
       claim,
       handback,
-      lineageArtifacts: yield* artifacts.byLineage(admission.lineage.root),
+      lineageArtifacts,
     });
     const run: RunRecord = {
       id,

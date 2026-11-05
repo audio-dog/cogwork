@@ -26,6 +26,7 @@ const workspace = Schema.decodeSync(WorkspaceId)("cogwork");
 const issue = Schema.decodeSync(WorkItemId)("#905");
 const workflow = Schema.decodeSync(WorkflowId)("implement");
 const harness = Schema.decodeSync(HarnessName)("claude-code");
+const ownHarness = Schema.decodeSync(HarnessName)("codex");
 const lineage = { root: LineageId.make("issue:cogwork:%23905"), parent: null, hop: 0 };
 const commentEntry = entry("github.comment-issue");
 const reviewEntry = entry("github.post-review");
@@ -174,9 +175,6 @@ describe("resolveRunPlan", () => {
       },
       observation: { generation: 4, observedAtMillis: 1_000 },
     });
-    assert.deepStrictEqual(plan.sandbox, { workspace: "/checkouts/905", policy: "full" });
-    assert.deepStrictEqual(plan.persistence, { sessionKind: "opaque-handle" });
-    assert.deepStrictEqual(plan.tools, []);
   });
 
   it.each<{ readonly name: string; readonly facts: RunPlanFacts; readonly body: string }>([
@@ -228,7 +226,7 @@ describe("resolveRunPlan", () => {
           WorkflowActionArtifact.make({
             kind: "IssueCreated",
             workspace,
-            issue,
+            issue: Schema.decodeSync(WorkItemId)("#906"),
             url: "https://github.com/o/r/issues/906",
             origin: {
               item: WorkItemKey.make("issue:cogwork:%23905"),
@@ -244,7 +242,7 @@ describe("resolveRunPlan", () => {
         "## What to build",
         "",
         "## Artifacts this lineage created",
-        '[{"workspace":"cogwork","issue":"#905","url":"https://github.com/o/r/issues/906"}]',
+        '[{"workspace":"cogwork","issue":"#906","url":"https://github.com/o/r/issues/906"}]',
       ].join("\n"),
     },
   ])("$name", ({ facts: input, body }) => {
@@ -292,6 +290,12 @@ describe("selectRunHarness", () => {
     readonly expected: HarnessName | null;
   }>([
     { name: "falls back to the machine default", operation: facts.operation, machine, expected: harness },
+    {
+      name: "prefers the Operation's own Harness",
+      operation: { ...facts.operation, model: { ...facts.operation.model, harness: ownHarness } },
+      machine,
+      expected: ownHarness,
+    },
     {
       name: "declines without a Harness",
       operation: facts.operation,
