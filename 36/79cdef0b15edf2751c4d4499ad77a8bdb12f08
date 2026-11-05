@@ -1,0 +1,61 @@
+packages/engine/src/workflow-action-entry.test.ts
+  s_438e2cf206d445::t_53beded473ba86 1-33
+packages/engine/src/workflow-action-entry.ts
+  s_3aba9388f1eb65::t_0beb83cad8bbba 1-89
+packages/engine/src/workflow-action-plan.ts
+  s_e008ec39c4d59e::t_77ec12a9e6e008 29-30,42-50,52,445-447,452,481,851-852
+packages/engine/src/workflow-action-registry.ts
+  s_67c13d4b2c473c::t_ebb5847df72078 1-13
+packages/engine/src/workflow-actions-cogwork.ts
+  s_73bd2aa2334727::t_c6a31b6ee51425 1-162
+packages/engine/src/workflow-catalog.ts
+  s_3aba9388f1eb65::t_016af197f1ea84 1,10,27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3679cdef0b15edf2751c4d4499ad77a8bdb12f08",
+  "prompts": {},
+  "sessions": {
+    "s_3aba9388f1eb65": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ebc1f3ae-2c7b-4f33-a92f-fa8d2ed0d0bd",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_438e2cf206d445": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a3e156806d62f8fd1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_67c13d4b2c473c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-affbe090ac67b74ff",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_73bd2aa2334727": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-abf51afb639393f82",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e008ec39c4d59e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8021c7c732f4dc10",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
