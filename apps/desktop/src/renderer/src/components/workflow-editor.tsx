@@ -1,11 +1,14 @@
 import {
   adviseReadiness,
   applyWorkflowEdits,
+  filterAppliesTo,
   type MachineReadiness,
   type NeedIdentity,
   selectedHarnessCatalogModel,
   validateWorkflow,
   type WorkflowCatalog,
+  type WorkflowCatalogEntry,
+  type WorkflowCatalogKey,
   type WorkflowEdit,
   type WorkflowModelSelection,
   type WorkflowOperation,
@@ -14,6 +17,7 @@ import {
   WorkflowWorkspaceSelection,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import {
   DropdownMenu,
@@ -48,6 +52,7 @@ import {
   RiArrowRightLine,
   RiCloseLine,
   RiDeleteBinLine,
+  RiFilter3Line,
   RiMore2Line,
   RiPlugLine,
   RiRobot2Line,
@@ -330,13 +335,82 @@ function TriggerStart({ trigger, label }: { readonly trigger: WorkflowTrigger; r
   );
 }
 
+const catalogEntryOf = (catalog: WorkflowCatalog | null, key: WorkflowCatalogKey) =>
+  catalog?.entries.find((candidate) => candidate.key === key);
+
+function TriggerFilters({
+  trigger,
+  entry,
+}: {
+  readonly trigger: WorkflowTrigger;
+  readonly entry: WorkflowCatalogEntry;
+}) {
+  const {
+    actions,
+    meta: { catalog },
+  } = useWorkflowEditor();
+  const nameOf = (key: WorkflowCatalogKey) => catalogEntryOf(catalog, key)?.name ?? key;
+  const addable =
+    catalog?.entries.filter(
+      (candidate) =>
+        filterAppliesTo(candidate, entry) && !trigger.filters.some((added) => added.entry === candidate.key),
+    ) ?? [];
+  return (
+    <>
+      {trigger.filters.map((added) => (
+        <span key={added.entry} className="flex items-center gap-1 text-xs text-muted-foreground">
+          and
+          <Badge variant="secondary">{nameOf(added.entry)}</Badge>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label={`Remove filter ${nameOf(added.entry)}`}
+            onClick={() =>
+              actions.send([{ _tag: "RemoveTriggerFilter", trigger: trigger.id, entry: added.entry }])
+            }
+          >
+            <RiCloseLine />
+          </Button>
+        </span>
+      ))}
+      {addable.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button size="xs" variant="ghost" className="font-normal text-muted-foreground" />}
+          >
+            <RiFilter3Line data-icon="inline-start" />
+            Add filter
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56">
+            <DropdownMenuGroup>
+              {addable.map((candidate) => (
+                <DropdownMenuItem
+                  key={candidate.key}
+                  label={candidate.name}
+                  onClick={() =>
+                    actions.send([
+                      { _tag: "AddTriggerFilter", trigger: trigger.id, filter: { entry: candidate.key } },
+                    ])
+                  }
+                >
+                  {candidate.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </>
+  );
+}
+
 function TriggerRow({ trigger }: { readonly trigger: WorkflowTrigger }) {
   const {
     state: { workflow },
     actions,
     meta: { catalog, listValues },
   } = useWorkflowEditor();
-  const entry = catalog?.entries.find(({ key }) => key === trigger.entry);
+  const entry = catalogEntryOf(catalog, trigger.entry);
   const Icon = appIconOf(entry ? appOf(entry) : (trigger.entry.split(".")[0] ?? "cogwork"));
   const name = entry?.name ?? trigger.entry;
   return (
@@ -360,6 +434,7 @@ function TriggerRow({ trigger }: { readonly trigger: WorkflowTrigger }) {
           }
         />
       ))}
+      {entry ? <TriggerFilters trigger={trigger} entry={entry} /> : null}
       {workflow.workingCopy.operations.length > 1 ? <TriggerStart trigger={trigger} label={name} /> : null}
       <span className="ms-auto flex items-center gap-0.5">
         <ProblemMark
@@ -406,6 +481,7 @@ function Triggers() {
                   id: freshNodeId("trigger", documentNodeIds(workflow.workingCopy)),
                   entry: choice.entry.key,
                   parameters: choice.parameters,
+                  filters: [],
                   start,
                 },
               },
