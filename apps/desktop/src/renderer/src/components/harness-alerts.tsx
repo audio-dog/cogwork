@@ -27,7 +27,7 @@ function HarnessAlertCard({ alert }: { readonly alert: HarnessAlert }) {
         {alert.detail && <div>{alert.detail}</div>}
         {alert.parked > 0 && (
           <Link to="/attention" search={{ layout: "board" }}>
-            Hand back {plural(alert.parked, "parked item")}
+            Review {plural(alert.parked, "parked item")}
           </Link>
         )}
         <Button size="xs" variant="outline" disabled={checking} onClick={() => check({ payload: undefined })}>
@@ -66,7 +66,7 @@ export function HarnessAlerts() {
   });
   if (alerts.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 px-6 pt-6">
+    <div className="flex shrink-0 flex-col gap-2 px-6 pt-6">
       {alerts.map((alert) => (
         <HarnessAlertCard key={alert.harness} alert={alert} />
       ))}

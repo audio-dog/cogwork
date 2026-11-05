@@ -60,12 +60,12 @@ const notSignedIn = HarnessState.cases.NotSignedIn.make({
   signIn: HarnessSignIn.make({ command: "claude auth login" }),
 });
 
-const park = (reason: { readonly _tag: string }) =>
+const park = (reason: { readonly _tag: string }, operation = "triage") =>
   decodePark({
     item: { _tag: "Issue", workspace: "acme", id: "#1" },
     workflow: "triage",
     publishedRevision: 1,
-    operation: "triage",
+    operation,
     lineage: { root: "issue:acme:%231", parent: null, hop: 0 },
     summary: "Parked",
     changedSinceParked: false,
@@ -139,7 +139,11 @@ describe("harnessAlerts", () => {
       workflows: [workflow(true, "claude")],
       defaultHarness: null,
       readiness: readiness(notSignedIn),
-      parks: [park({ _tag: "MissingOperation" }), park({ _tag: "HopCap" })],
+      parks: [
+        park({ _tag: "MissingOperation" }),
+        park({ _tag: "HopCap" }),
+        park({ _tag: "MissingOperation" }, "review"),
+      ],
       dismissed: {},
     });
     expect(alert?.parked).toBe(1);

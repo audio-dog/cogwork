@@ -23,22 +23,23 @@ interface HarnessProblem {
   readonly detail: string | null;
 }
 
-const harnessProblem = HarnessState.match<HarnessProblem | null>({
-  Ready: () => null,
-  NotSignedIn: ({ signIn }) => ({
-    problem: "is not signed in",
-    signIn: signIn?.command ?? null,
-    detail: signIn ? null : "Sign in again with its own CLI.",
-  }),
-  NotInstalled: ({ diagnostic }) => ({ problem: "is not installed", signIn: null, detail: diagnostic }),
-  UnsupportedVersion: ({ requirement }) => ({
-    problem: "version is not supported",
-    signIn: null,
-    detail: requirement ? `Needs ${requirement}` : null,
-  }),
-  Unavailable: () => null,
-  Unknown: () => null,
-});
+const harnessProblem = (label: string) =>
+  HarnessState.match<HarnessProblem | null>({
+    Ready: () => null,
+    NotSignedIn: ({ signIn }) => ({
+      problem: "is not signed in",
+      signIn: signIn?.command ?? null,
+      detail: signIn ? null : `Sign in with the ${label} CLI.`,
+    }),
+    NotInstalled: ({ diagnostic }) => ({ problem: "is not installed", signIn: null, detail: diagnostic }),
+    UnsupportedVersion: ({ requirement }) => ({
+      problem: "version is not supported",
+      signIn: null,
+      detail: requirement ? `Needs ${requirement}` : null,
+    }),
+    Unavailable: () => null,
+    Unknown: () => null,
+  });
 
 const enabledOperations = (workflows: ReadonlyArray<WorkflowRecord>, defaultHarness: HarnessName | null) =>
   workflows.flatMap(({ id, enabled, publishedCopy }) =>
@@ -65,8 +66,9 @@ export const harnessAlerts = ({
   readonly dismissed: Readonly<Record<string, string>>;
 }) => {
   const operations = enabledOperations(workflows, defaultHarness);
-  return (readiness?.harnesses ?? []).flatMap(({ harness, enabled, state }): HarnessAlert[] => {
-    const problem = harnessProblem(state);
+  return (readiness?.harnesses ?? []).flatMap(({ harness, enabled, state }) => {
+    const label = providerLabel(harness);
+    const problem = harnessProblem(label)(state);
     if (!problem) return [];
     const used = operations.filter((operation) => operation.harness === harness);
     const key = JSON.stringify([state._tag, problem.signIn, problem.detail]);
@@ -77,15 +79,14 @@ export const harnessAlerts = ({
         ParkReason.guards.MissingOperation(park.reason) &&
         used.some(({ workflow, operation }) => workflow === park.workflow && operation === park.operation),
     ).length;
-    return [
-      {
-        harness,
-        key,
-        title: `${providerLabel(harness)} ${problem.problem}`,
-        signIn: problem.signIn,
-        detail: problem.detail,
-        parked,
-      },
-    ];
+    const alert: HarnessAlert = {
+      harness,
+      key,
+      title: `${label} ${problem.problem}`,
+      signIn: problem.signIn,
+      detail: problem.detail,
+      parked,
+    };
+    return [alert];
   });
 };
