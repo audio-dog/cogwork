@@ -1,0 +1,35 @@
+packages/claude-code/src/harness.ts
+  s_0d3b9f79f9a9e8::t_276b0ffa336f2e 417
+packages/codex-cli/src/harness-configuration.test.ts
+  s_0d3b9f79f9a9e8::t_6cc29106bd3aa9 5,266-285
+packages/codex-cli/src/harness-fixtures.ts
+  s_0d3b9f79f9a9e8::t_bfa862353a675b 14,85,120,152
+packages/codex-cli/src/harness.ts
+  s_0d3b9f79f9a9e8::t_0cad224864c170 324
+packages/engine/CONTEXT.md
+  s_0d3b9f79f9a9e8::t_f9e3eec86a1086 89
+packages/engine/src/external-harness-runtime.test.ts
+  s_0d3b9f79f9a9e8::t_e0adb118c840c3 451-455,493,510-526
+packages/engine/src/external-harness-runtime.ts
+  s_0d3b9f79f9a9e8::t_d1fc427eec84b3 10,149,478-485,487,507,704
+packages/engine/src/workflow-run.test.ts
+  s_0d3b9f79f9a9e8::t_90e12095b806a0 567,578-618,636,1488,1498-1535
+packages/engine/src/workflow-run.ts
+  s_0d3b9f79f9a9e8::t_8e56dcb6d8bc19 236-244,504,598-603,631
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0f8b429efb9c5299d5f5ecf0b7eb695d88639a12",
+  "prompts": {},
+  "sessions": {
+    "s_0d3b9f79f9a9e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1802234b-cf9d-4999-86f3-6bdbe822ef90",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
