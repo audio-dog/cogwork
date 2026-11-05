@@ -1,0 +1,21 @@
+apps/cli/src/slack-login.test.ts
+  s_84a42e7dc1c6b4::t_529d4cc41a92a5 70-114,118,132-166
+apps/cli/src/slack-login.ts
+  s_84a42e7dc1c6b4::t_a0e3ed973ee9bd 64-66,70-73,83-84,93-95,124-146,178,212-213,215,219-220,224-226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "984708efba7b01e48083a841adb10cc7b1789624",
+  "prompts": {},
+  "sessions": {
+    "s_84a42e7dc1c6b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad7a9ae7-e8e0-4118-a49a-a988362f5544",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
