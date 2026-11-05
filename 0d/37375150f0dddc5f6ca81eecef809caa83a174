@@ -1,0 +1,23 @@
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_59abb0b53c08f2::t_164b6d6fe3cc7c 21-27,31,102
+packages/cursor-acp/src/harness.test.ts
+  s_59abb0b53c08f2::t_8923e284a07809 492,500-501,559-566
+packages/cursor-acp/src/harness.ts
+  s_59abb0b53c08f2::t_9989822b8cbb08 419
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d37375150f0dddc5f6ca81eecef809caa83a174",
+  "prompts": {},
+  "sessions": {
+    "s_59abb0b53c08f2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08b60892-4651-4861-891e-d675b133629c",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
