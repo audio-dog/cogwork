@@ -1,0 +1,25 @@
+packages/engine/src/workflow-action-plan.test.ts
+  s_538b88c1870644::t_e959841bbe9478 512-587,1198-1234,1249,1258-1263,1265-1269
+packages/engine/src/workflow-action-plan.ts
+  s_538b88c1870644::t_cb268a620b2697 48,52,83-88,100-102,109,219,301-314,325,342,373-377,427,480,484-493,559,876,879-880
+packages/engine/src/workflow-run.ts
+  s_538b88c1870644::t_ef2e28f5b4876c 62,209-210,779-781,785-786
+packages/engine/src/worktree.ts
+  s_538b88c1870644::t_27e7f872f41928 80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0aeba37c4102e910bb6b3817fbcf12611a59fc35",
+  "prompts": {},
+  "sessions": {
+    "s_538b88c1870644": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c72e8c5d-5267-4a56-b32b-67ced11a7346",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
