@@ -1,16 +1,4 @@
-import {
-  Claim,
-  HandbackRecord,
-  HarnessName,
-  LineageId,
-  type MachineReadiness,
-  RunId,
-  WorkflowCatalogKey,
-  WorkflowId,
-  WorkflowNodeId,
-  WorkflowOperation,
-  WorkspaceId,
-} from "@cogwork/contracts";
+import { HandbackRecord, LineageId, type MachineReadiness, RunId, WorkspaceId } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -22,31 +10,14 @@ import { Coordination, fold } from "./coordination";
 import * as CredentialStore from "./credential-store";
 import { Harness, HarnessError } from "./harness";
 import { RunLedger } from "./run-ledger";
-import { RunPlanResolution, resolveRunPlan } from "./run-plan-resolution";
+import { resolveRunPlan } from "./run-plan-resolution";
 import { make as makeRunPreparation, type PreparedRun, type RunPreparationRequest } from "./run-preparation";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import type { TriggerAdmission } from "./trigger-observation";
+import { admission, claim, harnessName, operation, workflow } from "./testing/run-plan-fixtures";
 import { memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 
-const workflow = Schema.decodeSync(WorkflowId)("daily-summary");
-const node = Schema.decodeSync(WorkflowNodeId);
-const scheduleEntry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
-const harnessName = Schema.decodeSync(HarnessName)("scripted");
 const decodeRun = Schema.decodeSync(RunId);
-
-const operation = Schema.decodeSync(WorkflowOperation)({
-  id: "summarize",
-  name: "Summarize",
-  instructionPackage: "implement-agent",
-  instruction: "Summarize the day.",
-  permissionProfile: "read-only",
-  requires: [],
-  model: { harness: null, model: null, options: [] },
-  forEach: null,
-  questions: [],
-  transitions: [],
-  hints: [],
-});
+const runWorkspace = Schema.decodeSync(WorkspaceId)(workflow);
 
 const machine: MachineReadiness = {
   workspaces: [],
@@ -56,42 +27,21 @@ const machine: MachineReadiness = {
   readyNeeds: [],
 };
 
-const admission: TriggerAdmission = {
-  event: {
-    key: { _tag: "ScheduleInstant", workflow, instantMillis: 1_000 },
-    revision: "1000",
-    cause: { _tag: "Unknown" },
-    atMillis: 1_000,
-    entry: scheduleEntry,
-    workspace: null,
-  },
-  subscription: {
-    workflow,
-    trigger: node("schedule"),
-    operation: operation.id,
-    entry: scheduleEntry,
-    parameters: [],
-    filters: [],
-    workspaces: [],
-    catchUp: { since: 0 },
-  },
-  lineage: { root: LineageId.make("schedule:1000"), parent: null, hop: 0 },
-};
-
-const workflowRecord = { id: workflow, publishedRevision: 1 };
-
-const runWorkspace = Schema.decodeSync(WorkspaceId)(workflow);
-
 const request = (id: string, overrides: Partial<RunPreparationRequest> = {}): RunPreparationRequest => ({
   id: decodeRun(id),
   admission,
   operation,
-  machine,
+  harness: harnessName,
   workspace: null,
   runWorkspace,
   pendingAttempt: null,
   startedAtMillis: 1_000,
   ...overrides,
+});
+
+const parkedAdmission = (attempt: RunId) => ({
+  ...admission,
+  lineage: { ...admission.lineage, parent: LineageId.make(attempt) },
 });
 
 const preparationLayer = (options: {
@@ -142,68 +92,65 @@ const preparationLayer = (options: {
     }),
   );
 
-const sessionOf = (prepared: PreparedRun) =>
-  prepared._tag === "Ready" ? prepared.provisioned.session : null;
-
 const acceptAttempt = Effect.fn("RunPreparationTest.acceptAttempt")(function* (
   prepared: PreparedRun,
   attempt: RunId,
 ) {
-  const resolution = resolveRunPlan({
+  const { plan } = resolveRunPlan({
     id: attempt,
     admission,
-    workflow: workflowRecord,
+    workflow: { id: workflow, publishedRevision: 1 },
     operation,
     workspace: null,
     catalog: { entries: [], instructionPackages: [], harnesses: [] },
     outputWorkspaces: [],
-    claim: Claim.make({
-      by: "cogwork",
-      claimedAtMillis: 1,
-      operation: { workflow, operation: operation.id },
-      lineage: admission.lineage,
-    }),
+    claim,
     priorIssues: null,
     prepared,
   });
-  if (!RunPlanResolution.$is("Accepted")(resolution)) return yield* Effect.die("Run Plan was rejected");
   const ledger = yield* RunLedger;
   yield* ledger.acceptRun(
     {
       id: attempt,
       workspace: runWorkspace,
-      workItem: resolution.plan.workContext.reference.workItem,
+      workItem: plan.workContext.reference.workItem,
       workflow,
       operation: operation.id,
-      harness: resolution.provisioned.harness,
+      harness: prepared.harness,
       branch: null,
-      session: resolution.provisioned.session,
+      session: prepared.session,
       usage: null,
       status: "running",
       startedAtMillis: 1_000,
       endedAtMillis: null,
     },
-    resolution.plan,
+    plan,
   );
 });
 
 describe("RunPreparation", () => {
-  it.effect("mints a new Session for a parked attempt that was not handed back", () =>
+  it.effect.each([
+    {
+      name: "mints a new Session when the parked attempt was not handed back",
+      handbacks: [],
+      resumes: false,
+    },
+    {
+      name: "resumes the Session of a handed-back attempt",
+      handbacks: [HandbackRecord.make({ by: "Taylor", atMillis: 2_000, note: null })],
+      resumes: true,
+    },
+  ])("$name", ({ handbacks, resumes }) =>
     Effect.gen(function* () {
       const preparation = yield* makeRunPreparation;
       const parked = request("run-1");
       const first = yield* preparation.prepare(parked);
       yield* acceptAttempt(first, parked.id);
 
-      const next = yield* preparation.prepare(
-        request("run-2", {
-          admission: { ...admission, lineage: { ...admission.lineage, parent: LineageId.make(parked.id) } },
-        }),
-      );
+      const next = yield* preparation.prepare(request("run-2", { admission: parkedAdmission(parked.id) }));
 
-      assert.isNotNull(sessionOf(next));
-      assert.notStrictEqual(sessionOf(next), sessionOf(first));
-    }).pipe(Effect.provide(preparationLayer({})), Effect.scoped),
+      assert.strictEqual(next.session === first.session, resumes);
+    }).pipe(Effect.provide(preparationLayer({ handbacks })), Effect.scoped),
   );
 
   it.effect("resumes the Session of a pending plan's attempt", () =>
@@ -215,44 +162,15 @@ describe("RunPreparation", () => {
 
       const resumed = yield* preparation.prepare(request("run-2", { pendingAttempt: pending.id }));
 
-      assert.strictEqual(sessionOf(resumed), sessionOf(first));
+      assert.strictEqual(resumed.session, first.session);
     }).pipe(Effect.provide(preparationLayer({})), Effect.scoped),
   );
 
-  it.effect("resumes the Session of a handed-back attempt", () =>
+  it.effect("reports a failed Harness preflight", () =>
     Effect.gen(function* () {
       const preparation = yield* makeRunPreparation;
-      const parked = request("run-1");
-      const first = yield* preparation.prepare(parked);
-      yield* acceptAttempt(first, parked.id);
 
-      const resumed = yield* preparation.prepare(
-        request("run-2", {
-          admission: { ...admission, lineage: { ...admission.lineage, parent: LineageId.make(parked.id) } },
-        }),
-      );
-
-      assert.strictEqual(sessionOf(resumed), sessionOf(first));
-      assert.strictEqual(
-        resumed._tag === "Ready" ? resumed.provisioned.handbackNote : null,
-        "Use the decision",
-      );
-    }).pipe(
-      Effect.provide(
-        preparationLayer({
-          handbacks: [HandbackRecord.make({ by: "Taylor", atMillis: 2_000, note: " Use the decision " })],
-        }),
-      ),
-      Effect.scoped,
-    ),
-  );
-
-  it.effect("reports a failed Harness preflight in its readiness", () =>
-    Effect.gen(function* () {
-      const preparation = yield* makeRunPreparation;
-      const prepared = yield* preparation.prepare(request("run-1"));
-
-      assert.deepStrictEqual(prepared._tag === "Unready" ? prepared.readiness : null, {
+      assert.deepStrictEqual(yield* preparation.preflight(operation, machine), {
         harness: harnessName,
         missingNeeds: [],
         preflightFailure: "Harness unavailable",

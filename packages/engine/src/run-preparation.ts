@@ -14,7 +14,6 @@ import {
   WorkItemRef,
   type WorkspaceId,
 } from "@cogwork/contracts";
-import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -54,13 +53,13 @@ const runItemId = WorkItemRef.match({
   FanOutChild: () => workItemId("#workflow"),
 });
 
-export interface RunReadiness {
+export interface PreflightFacts {
   readonly harness: HarnessName | null;
   readonly missingNeeds: ReadonlyArray<NeedIdentity>;
   readonly preflightFailure: string | null;
 }
 
-export interface ProvisionedRun {
+export interface PreparedRun {
   readonly harness: HarnessName;
   readonly options: ModelOptionSelections;
   readonly checkout: { readonly path: string; readonly branch: BranchName | null };
@@ -72,22 +71,19 @@ export interface ProvisionedRun {
   readonly lineageArtifacts: ReadonlyArray<WorkflowActionArtifact>;
 }
 
-export type PreparedRun = Data.TaggedEnum<{
-  Unready: { readonly readiness: RunReadiness };
-  Ready: { readonly provisioned: ProvisionedRun };
-}>;
-export const PreparedRun = Data.taggedEnum<PreparedRun>();
-
 export interface RunPreparationRequest {
   readonly id: RunId;
   readonly admission: TriggerAdmission;
   readonly operation: WorkflowOperation;
-  readonly machine: MachineReadiness;
+  readonly harness: HarnessName;
   readonly workspace: RegisteredWorkspace | null;
   readonly runWorkspace: WorkspaceId;
   readonly pendingAttempt: RunId | null;
   readonly startedAtMillis: number;
 }
+
+const modelOptions = (operation: WorkflowOperation) =>
+  Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value]));
 
 export const make = Effect.gen(function* () {
   const harness = yield* Harness;
@@ -130,11 +126,29 @@ export const make = Effect.gen(function* () {
     return { path: checkout.path, branch } as const;
   });
 
-  const provision = Effect.fn("RunPreparation.provision")(function* (
-    request: RunPreparationRequest,
-    selectedHarness: HarnessName,
-    options: ModelOptionSelections,
+  const preflightFailure = (operation: WorkflowOperation, selectedHarness: HarnessName) =>
+    harness
+      .preflight(selectedHarness, operation.permissionProfile, operation.model.model, modelOptions(operation))
+      .pipe(
+        Effect.result,
+        Effect.map((preflight) => (Result.isFailure(preflight) ? preflight.failure.message : null)),
+      );
+
+  const preflight = Effect.fn("RunPreparation.preflight")(function* (
+    operation: WorkflowOperation,
+    machine: MachineReadiness,
   ) {
+    const selectedHarness = operation.model.harness ?? machine.defaultHarness;
+    const missingNeeds = operation.requires.filter((need) => !machine.readyNeeds.includes(need));
+    const preflightable = selectedHarness !== null && missingNeeds.length === 0;
+    return {
+      harness: selectedHarness,
+      missingNeeds,
+      preflightFailure: preflightable ? yield* preflightFailure(operation, selectedHarness) : null,
+    } satisfies PreflightFacts;
+  });
+
+  const prepare = Effect.fn("RunPreparation.prepare")(function* (request: RunPreparationRequest) {
     const { admission, operation } = request;
     const checkout = yield* prepareCheckout(admission, request.workspace, operation.permissionProfile);
     const coordinationView = yield* coordination.read(admission.event.key);
@@ -150,7 +164,7 @@ export const make = Effect.gen(function* () {
       (yield* sessions.mint(
         {
           workspace: request.runWorkspace,
-          harness: selectedHarness,
+          harness: request.harness,
           createdAtMillis: request.startedAtMillis,
         },
         harness.sessionKind,
@@ -165,41 +179,18 @@ export const make = Effect.gen(function* () {
     });
     yield* Effect.addFinalizer(() => contextAssembler.cleanup(request.id).pipe(Effect.ignore));
     const lineageArtifacts = yield* artifacts.byLineage(admission.lineage.root);
-    return PreparedRun.Ready({
-      provisioned: {
-        harness: selectedHarness,
-        options,
-        checkout,
-        session,
-        sessionKind: harness.sessionKind(selectedHarness),
-        middleware: harness.planMiddleware(selectedHarness),
-        instructions,
-        handbackNote: handback?.note?.trim(),
-        lineageArtifacts,
-      },
-    });
+    return {
+      harness: request.harness,
+      options: modelOptions(operation),
+      checkout,
+      session,
+      sessionKind: harness.sessionKind(request.harness),
+      middleware: harness.planMiddleware(request.harness),
+      instructions,
+      handbackNote: handback?.note?.trim(),
+      lineageArtifacts,
+    } satisfies PreparedRun;
   });
 
-  const prepare = Effect.fn("RunPreparation.prepare")(function* (request: RunPreparationRequest) {
-    const { operation, machine } = request;
-    const selectedHarness = operation.model.harness ?? machine.defaultHarness;
-    const missingNeeds = operation.requires.filter((need) => !machine.readyNeeds.includes(need));
-    if (selectedHarness === null || missingNeeds.length > 0) {
-      return PreparedRun.Unready({
-        readiness: { harness: selectedHarness, missingNeeds, preflightFailure: null },
-      });
-    }
-    const options = Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value]));
-    const preflight = yield* Effect.result(
-      harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
-    );
-    if (Result.isFailure(preflight)) {
-      return PreparedRun.Unready({
-        readiness: { harness: selectedHarness, missingNeeds, preflightFailure: preflight.failure.message },
-      });
-    }
-    return yield* provision(request, selectedHarness, options);
-  });
-
-  return { prepare } as const;
+  return { preflight, prepare } as const;
 });

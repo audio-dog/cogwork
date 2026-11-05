@@ -37,7 +37,7 @@ import { defaultRunBudget } from "./provider-runner";
 import { makePullRequestTool } from "./pull-request-tool";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
-import { type RunPlanRejection, RunPlanResolution, resolveRunPlan } from "./run-plan-resolution";
+import { type RunPlanRejection, resolvePreflight, resolveRunPlan } from "./run-plan-resolution";
 import { make as makeRunPreparation } from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
 import { SlackWrite } from "./slack-write";
@@ -201,7 +201,7 @@ export const make = Effect.gen(function* () {
   });
 
   const decline = (admission: TriggerAdmission, reason: RunPlanRejection) =>
-    Effect.logInfo("Run Plan rejected", { reason }).pipe(
+    Effect.logInfo("Run Plan rejected", { reason: reason._tag }).pipe(
       Effect.andThen(
         coordination.park(
           admission.event.key,
@@ -353,6 +353,9 @@ export const make = Effect.gen(function* () {
       outputWorkspaces.includes(config.name),
     );
 
+    const preflight = resolvePreflight(yield* preparation.preflight(operation, catalogResult.machine));
+    if (Result.isFailure(preflight)) return yield* decline(admission, preflight.failure);
+
     const claim =
       pendingClaim ??
       (yield* Effect.acquireRelease(
@@ -370,13 +373,13 @@ export const make = Effect.gen(function* () {
       id,
       admission,
       operation,
-      machine: catalogResult.machine,
+      harness: preflight.success,
       workspace,
       runWorkspace,
       pendingAttempt: pendingPlan !== null && !stalePlan ? pendingPlan.attempt : null,
       startedAtMillis,
     });
-    const resolution = resolveRunPlan({
+    const { plan, toolNeeds } = resolveRunPlan({
       id,
       admission,
       workflow: record,
@@ -388,8 +391,6 @@ export const make = Effect.gen(function* () {
       priorIssues: (yield* Ref.get(decodeIssues)).get(keyOf(admission.event.key)) ?? null,
       prepared,
     });
-    if (RunPlanResolution.$is("Rejected")(resolution)) return yield* decline(admission, resolution.reason);
-    const { plan, toolNeeds, provisioned } = resolution;
     const run: RunRecord = {
       id,
       workspace: runWorkspace,
@@ -397,9 +398,9 @@ export const make = Effect.gen(function* () {
       ...(admission.event.subject ? { subject: admission.event.subject } : {}),
       workflow: record.id,
       operation: operation.id,
-      harness: provisioned.harness,
-      branch: provisioned.checkout.branch,
-      session: provisioned.session,
+      harness: prepared.harness,
+      branch: prepared.checkout.branch,
+      session: prepared.session,
       usage: null,
       status: "running",
       startedAtMillis,
@@ -424,7 +425,7 @@ export const make = Effect.gen(function* () {
         : []),
     ];
     const eventsExit = yield* harness
-      .run({ plan, session: provisioned.session, mcpCredentials: new Map(), engineTools })
+      .run({ plan, session: prepared.session, mcpCredentials: new Map(), engineTools })
       .pipe(
         Stream.tap((event) => recorder.record(run, event)),
         Stream.filter(agUiIsStructuredOutputComplete),

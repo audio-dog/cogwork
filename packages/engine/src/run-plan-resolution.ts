@@ -1,6 +1,7 @@
 import {
   type Claim,
   defaultPriority,
+  type HarnessName,
   keyOf,
   type NeedIdentity,
   type RunId,
@@ -13,9 +14,10 @@ import {
   workflowOperationResultJsonSchema,
 } from "@cogwork/contracts";
 import * as Data from "effect/Data";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace } from "./projector";
-import type { PreparedRun, ProvisionedRun, RunReadiness } from "./run-preparation";
+import type { PreflightFacts, PreparedRun } from "./run-preparation";
 import type { TriggerAdmission } from "./trigger-observation";
 
 const workItemId = Schema.decodeSync(WorkItemId);
@@ -40,18 +42,12 @@ export type RunPlanRejection = Data.TaggedEnum<{
 }>;
 export const RunPlanRejection = Data.taggedEnum<RunPlanRejection>();
 
-export interface ToolNeeds {
+interface ToolNeeds {
   readonly issueSearch: boolean;
   readonly pullRequest: boolean;
 }
 
-export type RunPlanResolution = Data.TaggedEnum<{
-  Accepted: { readonly plan: RunPlan; readonly toolNeeds: ToolNeeds; readonly provisioned: ProvisionedRun };
-  Rejected: { readonly reason: RunPlanRejection };
-}>;
-export const RunPlanResolution = Data.taggedEnum<RunPlanResolution>();
-
-export interface RunPlanFacts {
+interface RunPlanFacts {
   readonly id: RunId;
   readonly admission: TriggerAdmission;
   readonly workflow: Pick<WorkflowRecord, "id" | "publishedRevision">;
@@ -78,22 +74,20 @@ const needsActionTool = (
     });
 };
 
-const rejections: ReadonlyArray<{
-  readonly applies: (readiness: RunReadiness) => boolean;
-  readonly reason: (readiness: RunReadiness) => RunPlanRejection;
-}> = [
-  { applies: ({ harness }) => harness === null, reason: () => RunPlanRejection.NoHarness() },
-  {
-    applies: ({ missingNeeds }) => missingNeeds.length > 0,
-    reason: ({ missingNeeds }) => RunPlanRejection.MissingNeed({ needs: missingNeeds }),
-  },
+const rejections: ReadonlyArray<(facts: PreflightFacts) => RunPlanRejection | undefined> = [
+  ({ missingNeeds }) =>
+    missingNeeds.length === 0 ? undefined : RunPlanRejection.MissingNeed({ needs: missingNeeds }),
+  ({ preflightFailure }) =>
+    preflightFailure === null ? undefined : RunPlanRejection.PreflightFailed({ message: preflightFailure }),
 ];
 
-const preflightRejection = ({ preflightFailure }: RunReadiness) =>
-  RunPlanRejection.PreflightFailed({ message: preflightFailure ?? "Harness preflight failed" });
-
-const rejectionOf = (readiness: RunReadiness) =>
-  (rejections.find(({ applies }) => applies(readiness))?.reason ?? preflightRejection)(readiness);
+export const resolvePreflight = (facts: PreflightFacts): Result.Result<HarnessName, RunPlanRejection> => {
+  if (facts.harness === null) return Result.fail(RunPlanRejection.NoHarness());
+  const rejection = rejections
+    .map((rejectionOf) => rejectionOf(facts))
+    .find((reason) => reason !== undefined);
+  return rejection === undefined ? Result.succeed(facts.harness) : Result.fail(rejection);
+};
 
 const workContextBody = (admission: TriggerAdmission, workflow: string) => {
   const payload = admission.event.payload;
@@ -117,12 +111,12 @@ const workContextBody = (admission: TriggerAdmission, workflow: string) => {
   ].join("\n");
 };
 
-const workContextProse = (facts: RunPlanFacts, provisioned: ProvisionedRun) => {
+const workContextProse = (facts: RunPlanFacts) => {
   const baseProse = facts.admission.event.workContext ?? {
     body: workContextBody(facts.admission, facts.workflow.id),
     comments: [],
   };
-  if (provisioned.lineageArtifacts.length === 0) return baseProse;
+  if (facts.prepared.lineageArtifacts.length === 0) return baseProse;
   return {
     ...baseProse,
     body: [
@@ -130,7 +124,7 @@ const workContextProse = (facts: RunPlanFacts, provisioned: ProvisionedRun) => {
       "",
       "## Artifacts this lineage created",
       encodeArtifactContext(
-        provisioned.lineageArtifacts.map(({ workspace, issue, url }) => ({ workspace, issue, url })),
+        facts.prepared.lineageArtifacts.map(({ workspace, issue, url }) => ({ workspace, issue, url })),
       ),
     ].join("\n"),
   };
@@ -148,9 +142,10 @@ const projection = [
   "Provenance",
 ].map((member) => ({ member, disposition: "projected" as const }));
 
-const acceptedPlan = (facts: RunPlanFacts, provisioned: ProvisionedRun, toolNeeds: ToolNeeds) => {
+const acceptedPlan = (facts: RunPlanFacts, toolNeeds: ToolNeeds) => {
   const { admission, operation, priorIssues } = facts;
-  const { instructions, handbackNote } = provisioned;
+  const { prepared } = facts;
+  const { instructions, handbackNote } = prepared;
   const observation = {
     generation: facts.workflow.publishedRevision ?? 0,
     observedAtMillis: admission.event.atMillis,
@@ -159,9 +154,9 @@ const acceptedPlan = (facts: RunPlanFacts, provisioned: ProvisionedRun, toolNeed
     id: facts.id,
     operation: operation.id,
     harness: {
-      name: provisioned.harness,
+      name: prepared.harness,
       model: operation.model.model,
-      options: provisioned.options,
+      options: prepared.options,
       profile: operation.permissionProfile,
     },
     instructions: instructions.layers,
@@ -190,7 +185,7 @@ const acceptedPlan = (facts: RunPlanFacts, provisioned: ProvisionedRun, toolNeed
     subagents: [],
     commands: [],
     hooks: [],
-    middleware: [...provisioned.middleware],
+    middleware: [...prepared.middleware],
     structuredOutput: workflowOperationResultJsonSchema(operation, facts.catalog, facts.outputWorkspaces)[
       "~standard"
     ].jsonSchema.input({ target: "draft-2020-12" }),
@@ -206,14 +201,14 @@ const acceptedPlan = (facts: RunPlanFacts, provisioned: ProvisionedRun, toolNeed
         claim: facts.claim,
         priority: admission.event.priority ?? defaultPriority,
       },
-      prose: workContextProse(facts, provisioned),
+      prose: workContextProse(facts),
       observation,
     },
     sandbox: {
-      workspace: facts.workspace === null ? null : provisioned.checkout.path,
+      workspace: facts.workspace === null ? null : prepared.checkout.path,
       policy: operation.permissionProfile,
     },
-    persistence: { sessionKind: provisioned.sessionKind },
+    persistence: { sessionKind: prepared.sessionKind },
     provenance: {
       resolution: [],
       stamps: [],
@@ -225,17 +220,9 @@ const acceptedPlan = (facts: RunPlanFacts, provisioned: ProvisionedRun, toolNeed
 };
 
 export const resolveRunPlan = (facts: RunPlanFacts) => {
-  if (facts.prepared._tag === "Unready") {
-    return RunPlanResolution.Rejected({ reason: rejectionOf(facts.prepared.readiness) });
-  }
-  const provisioned = facts.prepared.provisioned;
   const toolNeeds = {
     issueSearch: needsActionTool(facts.operation, facts.catalog, issueSearchActionNames),
     pullRequest: needsActionTool(facts.operation, facts.catalog, namedPullRequestActionNames),
   };
-  return RunPlanResolution.Accepted({
-    plan: acceptedPlan(facts, provisioned, toolNeeds),
-    toolNeeds,
-    provisioned,
-  });
+  return { plan: acceptedPlan(facts, toolNeeds), toolNeeds };
 };
