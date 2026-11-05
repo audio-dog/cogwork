@@ -75,11 +75,12 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
+  TriggerObservation,
   TriggerObservationStore,
   TriggerObservationStoreError,
   type TriggerObservationStoreService,
 } from "./trigger-observation";
-import { Recheck, type TriggerSource, TriggerSources, type TriggerSubscription } from "./trigger-source";
+import { Recheck } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
 import {
   WorkflowActionPlanStore,
@@ -266,31 +267,6 @@ const documentWithTransition = (transition: {
     operations: [{ ...summarize, transitions: [transition] }],
   });
 };
-
-const recheckingSource = (decide: (subscription: TriggerSubscription) => Recheck): TriggerSource => ({
-  id: "clock",
-  entries: [
-    {
-      key: scheduleEntry,
-      name: "Every day",
-      kind: "trigger",
-      triggerKind: "condition",
-      system: null,
-      connection: null,
-      requires: [],
-      parameters: [],
-      itemKind: null,
-      actsOn: [],
-      requiresWorkspace: false,
-      permissionProfile: "read-only",
-      agentInputs: [],
-      emits: [],
-    },
-  ],
-  availability: () => Effect.succeed({ _tag: "Available" }),
-  observe: () => Stream.empty,
-  recheck: (_event, subscription) => Effect.succeed(decide(subscription)),
-});
 
 const workflowServiceWith = (publishedCopy: WorkflowDocument): WorkflowsService => ({
   ...workflowService,
@@ -571,7 +547,7 @@ interface HarnessBehavior {
   readonly issueTracker?: IssueTrackerService;
   readonly registry?: RegistryState;
   readonly sourceControl?: SourceControlProviderService;
-  readonly triggerSources?: ReadonlyArray<TriggerSource>;
+  readonly recheck?: Recheck;
 }
 
 const testProgram = (
@@ -585,6 +561,7 @@ const testProgram = (
     const baseObservationStore = yield* makeMemoryTriggerObservationStore;
     const observationStore = behavior.observationStore?.(baseObservationStore) ?? baseObservationStore;
     const notifications = yield* makeNotifications;
+    const observation = yield* TriggerObservation;
     const issueTracker = behavior.issueTracker ?? (yield* IssueTracker);
     const registry = readOnlyRegistry(behavior.registry ?? emptyRegistry);
     const harness = makeHarness([
@@ -633,7 +610,10 @@ const testProgram = (
       Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
       Effect.provideService(SourceControlProvider, behavior.sourceControl ?? emptySourceControl),
-      Effect.provideService(TriggerSources, behavior.triggerSources ?? []),
+      Effect.provideService(TriggerObservation, {
+        ...observation,
+        recheck: () => Effect.succeed(behavior.recheck ?? Recheck.Matches()),
+      }),
     );
     return { runner, coordination, notifications, observationStore };
   });
@@ -1175,7 +1155,7 @@ describe("WorkflowRun", () => {
   it.effect("skips an admission whose item no longer matches its Trigger, with no attempt", () =>
     Effect.gen(function* () {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
-        triggerSources: [recheckingSource(() => Recheck.Ended({ reason: "Issue #1 is closed" }))],
+        recheck: Recheck.Ended({ reason: "Issue #1 is closed" }),
       });
       yield* observationStore.putAll([admission]);
 
@@ -1192,9 +1172,7 @@ describe("WorkflowRun", () => {
   it.effect("keeps an admission waiting while its item fails a Trigger filter", () =>
     Effect.gen(function* () {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
-        triggerSources: [
-          recheckingSource(() => Recheck.Waiting({ reason: "#1 fails Issue is not blocked" })),
-        ],
+        recheck: Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }),
       });
       yield* observationStore.putAll([admission]);
 
@@ -1202,62 +1180,6 @@ describe("WorkflowRun", () => {
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
       assert.isNull(yield* Ref.get(coordination.processed));
       assert.lengthOf(yield* observationStore.admissions, 1);
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
-  it.effect(
-    "rechecks an admission against the published Trigger, not the subscription it was stored with",
-    () =>
-      Effect.gen(function* () {
-        const notBlocked = decodeEntry("schedule.not-blocked");
-        const published = WorkflowDocument.make({
-          ...document,
-          triggers: document.triggers.map((value) => ({ ...value, filters: [{ entry: notBlocked }] })),
-        });
-        const { runner, observationStore } = yield* testProgram(
-          [{}],
-          {
-            triggerSources: [
-              recheckingSource(({ filters }) =>
-                filters.includes(notBlocked)
-                  ? Recheck.Waiting({ reason: "#1 fails Not blocked" })
-                  : Recheck.Matches(),
-              ),
-            ],
-          },
-          workflowServiceWith(published),
-        );
-        yield* observationStore.putAll([admission]);
-
-        assert.deepStrictEqual(admission.subscription.filters, []);
-        assert.strictEqual(yield* runner.execute(admission), "waiting");
-      }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
-  it.effect("does not recheck an admission handed off past the Trigger's start", () =>
-    Effect.gen(function* () {
-      const next = decodeNode("next");
-      const handedOff: TriggerAdmission = {
-        ...admission,
-        subscription: { ...admission.subscription, operation: next },
-      };
-      const { runner } = yield* testProgram(
-        [{}],
-        {
-          triggerSources: [recheckingSource(() => Recheck.Ended({ reason: "#1 no longer has label ready" }))],
-        },
-        workflowServiceWith(
-          WorkflowDocument.make({
-            ...document,
-            operations: [
-              ...document.operations,
-              ...document.operations.map((value) => ({ ...value, id: next })),
-            ],
-          }),
-        ),
-      );
-
-      assert.strictEqual(yield* runner.execute(handedOff), "retry");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
