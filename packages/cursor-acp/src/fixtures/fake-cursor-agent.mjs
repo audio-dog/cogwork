@@ -28,7 +28,7 @@ const responseContent = (sessionParams, prompt) => {
   if (process.argv.includes("--malformed")) return "Disposition: ready-for-agent";
   if (!process.argv.includes("--observe")) return result;
   return JSON.stringify({
-    instructions: promptText(prompt),
+    prompt: promptText(prompt),
     model: process.argv[process.argv.indexOf("--model") + 1],
     mcp: sessionParams.mcpServers.map((server) => ({
       name: server.name,

@@ -36,7 +36,7 @@ const resumedSessionId = Schema.decodeSync(SessionId)("sess-cursor-resume");
 const decodeObservation = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({
-      instructions: Schema.String,
+      prompt: Schema.String,
       model: Schema.String,
       mcp: Schema.Array(
         Schema.Struct({
@@ -541,8 +541,8 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
             .join("");
           const observation = decodeObservation(output);
 
-          assert.include(observation.instructions, "Mandatory repository context.");
-          assert.include(observation.instructions, "/operating-instructions/triage-agent");
+          assert.include(observation.prompt, "Mandatory repository context.");
+          assert.include(observation.prompt, "/operating-instructions/triage-agent");
           assert.strictEqual(observation.model, "gpt-5.6-sol-high");
           assert.deepStrictEqual(observation.mcp, [
             {
