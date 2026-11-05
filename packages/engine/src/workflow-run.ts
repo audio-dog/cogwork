@@ -59,7 +59,7 @@ import {
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
-import { PullRequestReadiness, ticketSlug, WorktreeManager } from "./worktree";
+import { ticketSlug, WorktreeManager } from "./worktree";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -205,6 +205,8 @@ const fanOutAdmission = (
     },
   } satisfies TriggerAdmission;
 };
+
+const refusalStatus = { invalid: "failed", declined: "declined" } as const;
 
 interface AdmissionExecutionState {
   readonly current: TriggerAdmission | null;
@@ -774,30 +776,14 @@ export const make = Effect.gen(function* () {
         workflowRevision: record.publishedRevision ?? record.workingRevision,
         ...(sourceControl ? { sourceControl } : {}),
         pullRequestSnapshots: reviewedPullRequests,
+        ...(worktrees !== null && run.branch !== null
+          ? { runBranch: { worktrees, branch: run.branch } }
+          : {}),
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
-      return yield* refuseResult(admission, key, run, actionPlanResult.failure.message);
-    }
-    const openPullRequest = actionPlanResult.success.steps.find(
-      ({ entry, status, target }) =>
-        entry === "github.open-pull-request" && status === "pending" && target._tag === "NewPullRequest",
-    );
-    const openPullRequestTarget = openPullRequest?.target;
-    if (openPullRequestTarget?._tag === "NewPullRequest" && run.branch !== null && worktrees !== null) {
-      const workspace = registryState.workspaces.find(
-        ({ config }) => config.name === openPullRequestTarget.workspace,
-      );
-      if (workspace) {
-        const readiness = yield* worktrees.pullRequestReadiness(
-          workspace,
-          { id: openPullRequestTarget.issue, title: "" },
-          run.branch,
-        );
-        if (PullRequestReadiness.$is("Declined")(readiness)) {
-          return yield* refuseResult(admission, key, run, readiness.reason, "declined");
-        }
-      }
+      const { reason, message } = actionPlanResult.failure;
+      return yield* refuseResult(admission, key, run, message, refusalStatus[reason]);
     }
     const actionPlan = yield* actionPlans.create(actionPlanResult.success);
     const actionPlanEvent: AgUiEvent = {

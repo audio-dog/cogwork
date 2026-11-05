@@ -45,11 +45,11 @@ import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observ
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
-import { PullRequestReadiness, WorktreeManager } from "./worktree";
+import { baseBranchOf, PullRequestReadiness, WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
   "WorkflowActionPlanDecodeError",
-  { message: Schema.String },
+  { reason: Schema.Literals(["invalid", "declined"]), message: Schema.String },
 ) {}
 
 const planPreview = (plan: WorkflowActionPlan) =>
@@ -80,6 +80,12 @@ interface BuildInput {
     readonly workspace: string;
     readonly pullRequest: PullRequestContext;
   }>;
+  readonly runBranch?: RunBranch;
+}
+
+interface RunBranch {
+  readonly worktrees: WorktreeManagerService;
+  readonly branch: string;
 }
 
 const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
@@ -91,16 +97,16 @@ const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArra
   return workspaces.filter(({ config }) => selected.includes(config.name));
 };
 
-const decodeFailure = (message: string) => Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
+const invalidPlan = (message: string) => WorkflowActionPlanDecodeError.make({ reason: "invalid", message });
+
+const decodeFailure = (message: string) => Effect.fail(invalidPlan(message));
 
 const planJson = Schema.fromJsonString(WorkflowActionPlan);
 
 const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function* (plan: WorkflowActionPlan) {
   const encoded = yield* Schema.encodeEffect(planJson)(
     WorkflowActionPlan.make({ ...plan, digest: "pending" }),
-  ).pipe(
-    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
-  );
+  ).pipe(Effect.mapError(() => invalidPlan("Action plan encoding failed")));
   return createHash("sha256").update(encoded).digest("hex");
 });
 
@@ -210,9 +216,7 @@ const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(
   }
   const rawIssue = issueInput.startsWith(prefix) ? issueInput.slice(prefix.length) : issueInput;
   const issue = yield* Schema.decodeEffect(WorkItemId)(rawIssue).pipe(
-    Effect.mapError(() =>
-      WorkflowActionPlanDecodeError.make({ message: `The issue input is invalid: ${issueInput}` }),
-    ),
+    Effect.mapError(() => invalidPlan(`The issue input is invalid: ${issueInput}`)),
   );
   return { _tag: "ExistingIssue", ...targetFields(target), issue } as const;
 });
@@ -294,6 +298,20 @@ const reviewCommentFailure = (comment: WorkflowReviewComment, pullRequest: PullR
     : `Review comment ${comment.path}:${comment.line} is not on the new side of the diff`;
 };
 
+const requireAheadHead = Effect.fn("WorkflowActionPlan.requireAheadHead")(function* (
+  workspace: RegisteredWorkspace | undefined,
+  issue: WorkItemId,
+  runBranch: RunBranch | undefined,
+) {
+  if (!workspace || !runBranch) return;
+  const readiness = yield* runBranch.worktrees
+    .pullRequestReadiness(workspace, { id: issue, title: "" }, runBranch.branch)
+    .pipe(Effect.mapError((error) => invalidPlan(error.message)));
+  if (PullRequestReadiness.$is("Declined")(readiness)) {
+    return yield* WorkflowActionPlanDecodeError.make({ reason: "declined", message: readiness.reason });
+  }
+});
+
 const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTargetFor")(function* (
   entry: WorkflowCatalogEntry,
   admission: TriggerAdmission,
@@ -304,6 +322,7 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
   snapshots:
     | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
     | undefined,
+  runBranch: RunBranch | undefined,
 ) {
   const name = actionName(entry.key);
   const named = namedPullRequestActions.has(name);
@@ -320,7 +339,7 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
     if (!sourceControl) return yield* decodeFailure("Source control provider is not configured");
     const currentPullRequest = yield* sourceControl
       .readPullRequest(workspace, reference)
-      .pipe(Effect.mapError((error) => WorkflowActionPlanDecodeError.make({ message: error.message })));
+      .pipe(Effect.mapError((error) => invalidPlan(error.message)));
     if (currentPullRequest === null) return yield* decodeFailure(`Pull request ${reference} was not found`);
     const snapshot = snapshots?.findLast(
       ({ workspace: snapshotWorkspace, pullRequest }) =>
@@ -351,6 +370,11 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
     if (item._tag !== "Issue" || item.workspace !== target.config.name) {
       return yield* decodeFailure("Open a pull request needs an Issue in the selected Workspace");
     }
+    yield* requireAheadHead(
+      selected.find(({ config }) => config.name === target.config.name),
+      item.id,
+      runBranch,
+    );
     return {
       _tag: "NewPullRequest",
       ...sourceControlTargetFields(target),
@@ -400,9 +424,7 @@ const currentIssueTargetProducer: TargetProducer = (context) =>
 const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
 
 const slackTarget = (target: unknown) =>
-  decodeSlackTarget(target).pipe(
-    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "The Slack target is invalid" })),
-  );
+  decodeSlackTarget(target).pipe(Effect.mapError(() => invalidPlan("The Slack target is invalid")));
 
 const slackItemTarget: TargetProducer = ({ admission }) =>
   WorkItemRef.matchOrElse(
@@ -455,10 +477,20 @@ const targetFor = (
   snapshots:
     | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
     | undefined,
+  runBranch: RunBranch | undefined,
 ) => {
   const name = actionName(entry.key);
   if (sourceControlActions.has(name)) {
-    return sourceControlTargetFor(entry, admission, workspaces, inputs, sourceControl, workspace, snapshots);
+    return sourceControlTargetFor(
+      entry,
+      admission,
+      workspaces,
+      inputs,
+      sourceControl,
+      workspace,
+      snapshots,
+      runBranch,
+    );
   }
   const producer = targetProducers.get(name);
   return (
@@ -524,6 +556,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
         input.sourceControl,
         input.output.workspace,
         input.pullRequestSnapshots,
+        input.runBranch,
       );
       return WorkflowActionPlanStep.make({
         position,
@@ -839,19 +872,12 @@ const actionExecutors: Record<string, ActionExecutor> = {
     if (context.step.target._tag !== "NewPullRequest") return yield* invalidTarget(context.step);
     const run = yield* context.ledger.getRun(context.plan.attempt);
     if (run?.branch === null || run?.branch === undefined) return yield* invalidTarget(context.step);
-    const item = { id: context.step.target.issue, title: "" };
-    const readiness = yield* worktrees
-      .pullRequestReadiness(workspace, item, run.branch)
-      .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
-    if (PullRequestReadiness.$is("Declined")(readiness)) {
-      return yield* worktreeError(readiness.reason, true);
-    }
     yield* worktrees
-      .pushBranch(workspace, readiness.headBranch)
+      .pushBranch(workspace, run.branch)
       .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
     return yield* sourceControl.openWorkflowPullRequest(workspace, {
-      headBranch: readiness.headBranch,
-      baseBranch: readiness.baseBranch,
+      headBranch: run.branch,
+      baseBranch: baseBranchOf(workspace.config.worktrees),
       title: stringInput(context.step, "pr_title"),
       body: stringInput(context.step, "pr_body"),
       origin: actionOrigin(context),
