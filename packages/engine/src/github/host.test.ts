@@ -5,8 +5,8 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
-import { GitHubClient, type RawIssue } from "./client";
-import { makeIssueActions } from "./host";
+import { GitHubClient, type RawIssue, type RawIssueComment } from "./client";
+import { makeIssueActions, makeIssueReads } from "./host";
 
 const workspace: WorkspaceIssueTrackerBinding = {
   repository: "acme/example",
@@ -14,6 +14,15 @@ const workspace: WorkspaceIssueTrackerBinding = {
     name: Schema.decodeSync(WorkspaceId)("github-workspace"),
     checkoutPath: "/repos/example",
     issueTracker: { type: "github" },
+  }),
+};
+const allowlistedWorkspace: WorkspaceIssueTrackerBinding = {
+  repository: "acme/example",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    checkoutPath: "/repos/example",
+    issueTracker: { type: "github" },
+    sourceControl: { type: "github", botAllowlist: ["release-bot"] },
   }),
 };
 const issueId = Schema.decodeSync(WorkItemId)("#7");
@@ -76,6 +85,52 @@ describe("GitHub Workflow label writes", () => {
 
       assert.strictEqual(error.reason, "unavailable");
       assert.include(error.message, "not confirmed by read-back");
+    }),
+  );
+});
+
+describe("GitHub trigger prose", () => {
+  it.effect("marks only a member's own comment as a person's", () =>
+    Effect.gen(function* () {
+      const comment = (
+        id: number,
+        authorLogin: string,
+        authorAssociation: string,
+        authorType: string,
+      ): RawIssueComment => ({
+        id,
+        authorLogin,
+        authorAssociation,
+        authorType,
+        body: "",
+        createdAtMillis: id,
+      });
+      const client = yield* GitHubClient.pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            readIssue: () => Effect.succeed(issue([])),
+            listTriggerComments: () =>
+              Effect.succeed([
+                comment(1, "maintainer", "MEMBER", "User"),
+                comment(2, "dependabot[bot]", "MEMBER", "Bot"),
+                comment(3, "release-bot", "MEMBER", "User"),
+                comment(4, "stranger", "NONE", "User"),
+              ]),
+          }),
+        ),
+      );
+
+      const prose = yield* makeIssueReads(client).readTriggerProse(allowlistedWorkspace, issueId);
+
+      assert.deepStrictEqual(
+        prose.comments.map(({ author, authoredByPerson }) => ({ author, authoredByPerson })),
+        [
+          { author: "maintainer", authoredByPerson: true },
+          { author: "dependabot[bot]", authoredByPerson: false },
+          { author: "release-bot", authoredByPerson: false },
+          { author: "stranger", authoredByPerson: false },
+        ],
+      );
     }),
   );
 });

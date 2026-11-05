@@ -14,11 +14,19 @@ import {
   type CreateIssueInput,
   convergeTrackerState,
   IssueTrackerError,
-  type TrackerItem,
+  type ListedTrackerItem,
+  type TrackerComment,
 } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
-import { type GitHubClientService, type GitHubRepoRef, type RawIssue, repoRefFromRepository } from "./client";
+import {
+  type GitHubClientService,
+  type GitHubRepoRef,
+  type RawIssue,
+  type RawIssueComment,
+  repoRefFromRepository,
+} from "./client";
 import { wireCodec } from "./markers";
+import { type BotAllowlist, sourceControlTargetFor } from "./source-control-target";
 
 export interface GitHubTarget extends GitHubRepoRef {
   readonly priority: GitHubPrioritySource | null;
@@ -44,6 +52,13 @@ export const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
 };
 
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
+const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+const authoredByPerson = (comment: RawIssueComment, botAllowlist: BotAllowlist) =>
+  comment.authorLogin !== null &&
+  comment.authorType !== "Bot" &&
+  !botAllowlist.has(comment.authorLogin) &&
+  personAssociations.has(comment.authorAssociation);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
 
 export const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
@@ -139,28 +154,38 @@ export const makeIssueReads = (client: GitHubClientService) => {
     if (!target) return yield* notGitHub(workspace);
     return { target, number: yield* issueNumberOf(id) };
   });
+  const listItems = Effect.fn("github.listItems")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    sinceMillis?: number,
+  ) {
+    const target = targetFor(workspace);
+    if (!target) return [];
+    const issues = (yield* client.listIssues(target, {
+      state: "open",
+      ...(sinceMillis === undefined ? {} : { since: sinceMillis }),
+    })).filter((issue) => !issue.isPullRequest);
+    const priorities = yield* issuePriorities(client, target, issues);
+    return yield* Effect.forEach(issues, (issue) =>
+      Effect.map(
+        itemId(issue.number),
+        (id): ListedTrackerItem => ({
+          id,
+          title: issue.title,
+          url: issue.url,
+          assignees: issue.assignees,
+          openBlockers: issue.openBlockers,
+          priority: priorities.get(issue.number) ?? defaultPriority,
+          states: issue.labels,
+          labels: issue.labels,
+          createdAtMillis: issue.createdAtMillis,
+          lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,
+        }),
+      ),
+    );
+  });
   return {
-    observe: Effect.fn("github.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
-      const target = targetFor(workspace);
-      if (!target) return [];
-      const issues = (yield* client.listIssues(target)).filter((issue) => !issue.isPullRequest);
-      const priorities = yield* issuePriorities(client, target, issues);
-      return yield* Effect.forEach(issues, (issue) =>
-        Effect.map(
-          itemId(issue.number),
-          (id): TrackerItem => ({
-            id,
-            title: issue.title,
-            url: issue.url,
-            assignees: issue.assignees,
-            openBlockers: issue.openBlockers,
-            priority: priorities.get(issue.number) ?? defaultPriority,
-            states: issue.labels,
-            lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,
-          }),
-        ),
-      );
-    }),
+    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace),
+    itemsChangedSince: listItems,
     readProse: Effect.fn("github.readProse")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
@@ -179,6 +204,45 @@ export const makeIssueReads = (client: GitHubClientService) => {
           createdAtMillis: comment.createdAtMillis,
         })),
       };
+    }),
+    readTriggerProse: Effect.fn("github.readTriggerProse")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const [issue, comments] = yield* Effect.all([
+        client.readIssue(target, number),
+        client.listTriggerComments(target, number),
+      ]);
+      const botAllowlist = sourceControlTargetFor(workspace)?.botAllowlist ?? new Map();
+      return {
+        body: issue.body,
+        comments: comments.map(
+          (comment): TrackerComment => ({
+            id: String(comment.id),
+            author: comment.authorLogin,
+            authorAssociation: comment.authorAssociation,
+            authoredByPerson: authoredByPerson(comment, botAllowlist),
+            body: comment.body,
+            createdAtMillis: comment.createdAtMillis,
+          }),
+        ),
+      };
+    }),
+    labelAppliedAt: Effect.fn("github.labelAppliedAt")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      label: string,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const history = yield* client.listIssueEvents(target, number);
+      const applied = history.findLast((event) => event.event === "labeled" && event.labelName === label);
+      return applied?.createdAtMillis ?? null;
+    }),
+    listLabels: Effect.fn("github.listLabels")(function* (workspace: WorkspaceIssueTrackerBinding) {
+      const target = targetFor(workspace);
+      if (!target) return [];
+      return yield* client.listLabels(target);
     }),
     assignees: Effect.fn("github.assignees")(function* (
       workspace: WorkspaceIssueTrackerBinding,
