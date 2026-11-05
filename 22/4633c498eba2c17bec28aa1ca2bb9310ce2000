@@ -1,0 +1,63 @@
+packages/codex-cli/src/harness.ts
+  s_0d3b9f79f9a9e8::t_36a5d791598b8c 352
+packages/engine/CONTEXT.md
+  s_0d3b9f79f9a9e8::t_37e9acbf5a49e2 144-147
+packages/engine/package.json
+  s_0d3b9f79f9a9e8::t_94625c170cfdce 24
+packages/engine/src/daemon.ts
+  s_39eb01622dab60::t_15ca2ccbab25a1 555
+packages/engine/src/external-harness-runtime.ts
+  s_8df59e6f611929::t_2ad37172b5bca1 65,133,516-519,527,664,683,703-706,719,721
+packages/engine/src/provider-runner.ts
+  s_39eb01622dab60::t_93a861d9d2e401 38,154,237-241
+pnpm-workspace.yaml
+  s_0d3b9f79f9a9e8::t_17215bb9de4f87 30,61-62
+packages/claude-code/src/harness.ts
+  s_8df59e6f611929::t_58d26c3f0aa665 422-426
+packages/engine/src/external-harness-runtime.test.ts
+  s_8df59e6f611929::t_a96f713f091d60 453-496
+packages/engine/src/provider-runner.test.ts
+  s_8df59e6f611929::t_8d5f1c307ff7dd 178-182,201,358-384
+packages/engine/src/run-plan-skill-source.test.ts
+  s_8df59e6f611929::t_321882d7c30c7c 1-128
+packages/engine/src/run-plan-skill-source.ts
+  s_8df59e6f611929::t_7fd5ad81f7d3bb 1-58
+packages/engine/src/workflow-run.test.ts
+  s_8df59e6f611929::t_2a89d006d5f697 9,11,65,571,598,641-646,709-749,751-781
+packages/engine/src/workflow-run.ts
+  s_8df59e6f611929::t_bc870fc6257f76 7,43,238-252,257,388-399,525-536,634,661
+pnpm-lock.yaml
+  s_8df59e6f611929::t_5a32ca9adc6f61 203-205,771-773
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "224633c498eba2c17bec28aa1ca2bb9310ce2000",
+  "prompts": {},
+  "sessions": {
+    "s_0d3b9f79f9a9e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1802234b-cf9d-4999-86f3-6bdbe822ef90",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_39eb01622dab60": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5be6fe3b-9bad-4104-a94c-9ac704689d2a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8df59e6f611929": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8e26c6e2-992e-408e-a8da-a8117a5b51c7",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
