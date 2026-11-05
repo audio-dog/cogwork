@@ -61,11 +61,16 @@ const requestDeadline = "30 seconds";
 const failure = (message: string) =>
   new ConnectionFailure({ operation: "login Slack", connectionId: null, message });
 
-const TokenResponse = Schema.Struct({
-  ok: Schema.Literal(true),
+const SlackError = Schema.Struct({ ok: Schema.Literal(false), error: Schema.String });
+
+const RotatingGrant = Schema.Struct({
   access_token: Schema.NonEmptyString,
   refresh_token: Schema.NonEmptyString,
   expires_in: Schema.Finite.check(Schema.isGreaterThan(0)),
+});
+
+const TokenResponse = Schema.Struct({
+  ok: Schema.Literal(true),
   scope: Schema.optional(Schema.String),
   team: Schema.Struct({ id: Schema.NonEmptyString }),
   authed_user: Schema.Struct({
@@ -75,6 +80,8 @@ const TokenResponse = Schema.Struct({
   app_id: Schema.optional(Schema.NonEmptyString),
 });
 
+const WithAuthedUser = Schema.Struct({ authed_user: Schema.Unknown });
+
 const RefreshResponse = Schema.Struct({
   ok: Schema.Literal(true),
   access_token: Schema.NonEmptyString,
@@ -83,6 +90,9 @@ const RefreshResponse = Schema.Struct({
   scope: Schema.optional(Schema.String),
 });
 
+const isSlackError = Schema.is(SlackError);
+const isRotatingGrant = Schema.is(RotatingGrant);
+const hasAuthedUser = Schema.is(WithAuthedUser);
 const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse);
 const decodeRefreshResponse = Schema.decodeUnknownEffect(RefreshResponse);
 
@@ -109,6 +119,29 @@ const readBody = Effect.fn("slack.oauth.readBody")(function* (
   return yield* response.json.pipe(
     Effect.mapError(() => failure(`${operation} returned an unreadable body`)),
   );
+});
+
+const fieldsOf = (body: unknown) =>
+  typeof body === "object" && body !== null ? Object.keys(body).join(", ") : typeof body;
+
+// Slack places a rotating user token at the top level or under authed_user, depending on the grant.
+const rotatingGrantOf = (body: unknown) =>
+  [body, hasAuthedUser(body) ? body.authed_user : undefined].find(isRotatingGrant);
+
+const decodeGrant = Effect.fn("slack.oauth.decodeGrant")(function* (body: unknown) {
+  if (isSlackError(body)) return yield* failure(`Slack token exchange failed: ${body.error}`);
+  const identity = yield* decodeTokenResponse(body).pipe(
+    Effect.mapError(() =>
+      failure(`Slack token exchange returned an unexpected payload with fields: ${fieldsOf(body)}`),
+    ),
+  );
+  const grant = rotatingGrantOf(body);
+  if (!grant) {
+    return yield* failure(
+      "Slack token exchange returned no refresh token; turn on token rotation for the Slack app",
+    );
+  }
+  return { identity, grant };
 });
 
 const execute = <A, R>(effect: Effect.Effect<A, ConnectionFailure, R>, timedOut: string) =>
@@ -142,11 +175,7 @@ const exchange = Effect.fn("slack.oauth.exchange")(function* (
       .pipe(
         Effect.mapError(() => failure("Slack token exchange could not be reached")),
         Effect.flatMap((response) => readBody(response, "Slack token exchange")),
-        Effect.flatMap((body) =>
-          decodeTokenResponse(body).pipe(
-            Effect.mapError(() => failure("Slack token exchange returned an unexpected payload")),
-          ),
-        ),
+        Effect.flatMap(decodeGrant),
       ),
     "Slack token exchange",
   );
@@ -180,21 +209,21 @@ const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) 
     ),
   );
   const client = yield* HttpClient.HttpClient;
-  const tokens = yield* exchange(client, config, code, pkce.verifier);
-  const appIdMismatched = tokens.app_id !== undefined && tokens.app_id !== config.appId;
+  const { identity, grant } = yield* exchange(client, config, code, pkce.verifier);
+  const appIdMismatched = identity.app_id !== undefined && identity.app_id !== config.appId;
   if (appIdMismatched) return yield* failure("Slack returned a grant for another app");
-  const grantedScope = [tokens.scope, tokens.authed_user.scope].find((scope) => scope !== undefined);
+  const grantedScope = [identity.scope, identity.authed_user.scope].find((scope) => scope !== undefined);
   const now = yield* Clock.currentTimeMillis;
   return {
     issueTracker: "slack",
-    organization: tokens.team.id,
-    actorUserId: tokens.authed_user.id,
+    organization: identity.team.id,
+    actorUserId: identity.authed_user.id,
     oauthClientId: config.clientId,
     oauthTokenEndpoint: config.tokenEndpoint,
     token: {
-      accessToken: Redacted.make(tokens.access_token),
-      refreshToken: Redacted.make(tokens.refresh_token),
-      expiresAtMillis: now + tokens.expires_in * 1000,
+      accessToken: Redacted.make(grant.access_token),
+      refreshToken: Redacted.make(grant.refresh_token),
+      expiresAtMillis: now + grant.expires_in * 1000,
       scopes: scopesOf(grantedScope ?? ""),
     },
   } satisfies CredentialStore.StoredCredential;

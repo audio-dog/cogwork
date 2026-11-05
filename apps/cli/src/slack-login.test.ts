@@ -67,55 +67,55 @@ const freePort = () =>
     close,
   );
 
+const signIn = (tokenBody: unknown) =>
+  Effect.gen(function* () {
+    const tokenRequests: Array<URLSearchParams> = [];
+    const server = Http.createServer((request, response) => {
+      const chunks: Array<Buffer> = [];
+      request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+      request.on("end", () => {
+        tokenRequests.push(new URLSearchParams(Buffer.concat(chunks).toString("utf8")));
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(tokenBody));
+      });
+    });
+    yield* Effect.acquireRelease(listen(server), () => close(server));
+    const callbackPort = yield* freePort();
+    const config: SlackLoginConfig = {
+      appId: "A-STUB",
+      clientId: "client-stub",
+      authorizeEndpoint: "https://slack.example/authorize",
+      tokenEndpoint: `http://127.0.0.1:${portOf(server)}/token`,
+      redirectUri: `http://localhost:${callbackPort}/oauth/callback`,
+    };
+    const opened: Array<URL> = [];
+    const browser = Layer.succeed(BrowserOpener, {
+      open: (url: string) =>
+        Effect.suspend(() => {
+          const authorize = new URL(url);
+          opened.push(authorize);
+          const redirect = authorize.searchParams.get("redirect_uri") ?? "";
+          const state = authorize.searchParams.get("state") ?? "";
+          return request(`${redirect}?code=stub-code&state=${encodeURIComponent(state)}`).pipe(Effect.orDie);
+        }),
+    });
+    const context = yield* Layer.build(slackLoginLayer(config, browser));
+    const result = yield* Effect.result(Context.get(context, Slack.SlackLogin).login);
+    return { result, config, opened, tokenRequests };
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer)));
+
+const identity = {
+  ok: true,
+  team: { id: "T-STUB" },
+  authed_user: { id: "U-STUB", scope: expectedScopes },
+};
+
+const rotatingToken = { access_token: "slack-access", refresh_token: "slack-refresh-1", expires_in: 43_200 };
+
 describe("Slack browser login", () => {
   it.live("stores the user grant without a client secret", () =>
     Effect.gen(function* () {
-      const tokenRequests: Array<URLSearchParams> = [];
-      const server = Http.createServer((request, response) => {
-        const chunks: Array<Buffer> = [];
-        request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-        request.on("end", () => {
-          const params = new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
-          tokenRequests.push(params);
-          response.writeHead(200, { "content-type": "application/json" });
-          response.end(
-            JSON.stringify({
-              ok: true,
-              access_token: "slack-access",
-              refresh_token: "slack-refresh-1",
-              expires_in: 43_200,
-              team: { id: "T-STUB" },
-              authed_user: { id: "U-STUB", scope: expectedScopes },
-            }),
-          );
-        });
-      });
-      yield* Effect.acquireRelease(listen(server), () => close(server));
-      const callbackPort = yield* freePort();
-      const endpoint = `http://127.0.0.1:${portOf(server)}/token`;
-      const config: SlackLoginConfig = {
-        appId: "A-STUB",
-        clientId: "client-stub",
-        authorizeEndpoint: "https://slack.example/authorize",
-        tokenEndpoint: endpoint,
-        redirectUri: `http://localhost:${callbackPort}/oauth/callback`,
-      };
-      const opened: Array<URL> = [];
-      const browser = Layer.succeed(BrowserOpener, {
-        open: (url: string) =>
-          Effect.suspend(() => {
-            const authorize = new URL(url);
-            opened.push(authorize);
-            const redirect = authorize.searchParams.get("redirect_uri") ?? "";
-            const state = authorize.searchParams.get("state") ?? "";
-            return request(`${redirect}?code=stub-code&state=${encodeURIComponent(state)}`).pipe(
-              Effect.orDie,
-            );
-          }),
-      });
-
-      const context = yield* Layer.build(slackLoginLayer(config, browser));
-      const result = yield* Effect.result(Context.get(context, Slack.SlackLogin).login);
+      const { result, config, opened, tokenRequests } = yield* signIn({ ...identity, ...rotatingToken });
       assert.isTrue(Result.isSuccess(result));
       if (Result.isFailure(result)) return;
       const credential = result.success;
@@ -129,6 +129,40 @@ describe("Slack browser login", () => {
       assert.strictEqual(tokenRequests[0]?.get("client_secret"), null);
       assert.strictEqual(tokenRequests[0]?.get("redirect_uri"), config.redirectUri);
       assert.strictEqual((tokenRequests[0]?.get("code_verifier")?.length ?? 0) > 0, true);
-    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer))),
+    }),
+  );
+
+  it.live("stores a rotating user token nested under authed_user", () =>
+    Effect.gen(function* () {
+      const { result } = yield* signIn({
+        ...identity,
+        authed_user: { ...identity.authed_user, ...rotatingToken, token_type: "user" },
+      });
+      assert.isTrue(Result.isSuccess(result));
+      if (Result.isFailure(result)) return;
+      assert.strictEqual(Redacted.value(result.success.token.accessToken), "slack-access");
+      assert.strictEqual(
+        result.success.token.refreshToken && Redacted.value(result.success.token.refreshToken),
+        "slack-refresh-1",
+      );
+    }),
+  );
+
+  it.live("reports the error Slack returns", () =>
+    Effect.gen(function* () {
+      const { result } = yield* signIn({ ok: false, error: "invalid_code" });
+      assert.isTrue(Result.isFailure(result));
+      if (Result.isSuccess(result)) return;
+      assert.strictEqual(result.failure.message, "Slack token exchange failed: invalid_code");
+    }),
+  );
+
+  it.live("asks for token rotation when Slack returns no refresh token", () =>
+    Effect.gen(function* () {
+      const { result } = yield* signIn({ ...identity, access_token: "xoxp-long-lived", token_type: "user" });
+      assert.isTrue(Result.isFailure(result));
+      if (Result.isSuccess(result)) return;
+      assert.include(result.failure.message, "turn on token rotation");
+    }),
   );
 });
