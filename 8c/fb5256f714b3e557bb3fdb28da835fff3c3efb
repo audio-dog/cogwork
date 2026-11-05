@@ -1,0 +1,43 @@
+packages/engine/src/issue-tracker-router.ts
+  s_8b394ab263ed0e::t_078af9d2d047f4 24-25,27-29
+packages/engine/src/issue-tracker.ts
+  s_8b394ab263ed0e::t_b5f4c7b22f73de 32-50,127-131,133-134,137-146
+packages/engine/src/projector.ts
+  s_2fab1ac3669d09::t_9a15c8738954d6 11
+packages/engine/src/github/host.test.ts
+  s_8b394ab263ed0e::t_dcabf050ba9bef 8-9,19-27,91-136
+packages/engine/src/github/host.ts
+  s_8b394ab263ed0e::t_2409e900d07052 17-18,21-27,29,55-61,157-185,187-188,208-246
+packages/engine/src/github/source-control-target.ts
+  s_8b394ab263ed0e::t_2c704387314662 2,38-40
+packages/engine/src/issue-tracker-router.test.ts
+  s_8b394ab263ed0e::t_f5ece4bcea6732 46-65,83,97,109-118,187-271
+packages/engine/src/linear/host.test.ts
+  s_8b394ab263ed0e::t_37214ec0d16321 1-51
+packages/engine/src/linear/host.ts
+  s_8b394ab263ed0e::t_1443e919ef3ab4 9-10,109-110,112,117,125-126,131-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8cfb5256f714b3e557bb3fdb28da835fff3c3efb",
+  "prompts": {},
+  "sessions": {
+    "s_2fab1ac3669d09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aad341ad1dd84e6a8",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8b394ab263ed0e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "344c3f58-50ce-4e34-a5c0-c7b7f38f3205",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
