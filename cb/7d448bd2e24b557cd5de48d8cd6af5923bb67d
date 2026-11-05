@@ -1,0 +1,19 @@
+packages/engine/src/run-plan.ts
+  s_ac51a4c5f75f62::t_2e6d55b385e0d2 40-42,44-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb7d448bd2e24b557cd5de48d8cd6af5923bb67d",
+  "prompts": {},
+  "sessions": {
+    "s_ac51a4c5f75f62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e62228ce-df2e-42a1-97ce-a52d1eecd849",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
