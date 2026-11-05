@@ -37,16 +37,17 @@ export const subagentMembers = Effect.fn("RunPlan.subagentMembers")(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
 
+  const unreadable = <A, E>(effect: Effect.Effect<A, E>) =>
+    effect.pipe(Effect.mapError(() => ({ message: "the file could not be read" })));
+
   const readContained = (file: string) =>
-    fs
-      .realPath(file)
-      .pipe(
-        Effect.flatMap((canonical) =>
-          canonical === file
-            ? fs.readFileString(file)
-            : Effect.fail({ message: "the file moved outside its Authoring tree after the scan" }),
-        ),
-      );
+    unreadable(fs.realPath(file)).pipe(
+      Effect.flatMap((canonical) =>
+        canonical === file
+          ? unreadable(fs.readFileString(file))
+          : Effect.fail({ message: "the file changed to a link after the scan" }),
+      ),
+    );
 
   const memberOf = (need: NeedIdentity) => {
     const contribution = contributions.find(({ kind, id }) => kind === subagentKind && id === need);
