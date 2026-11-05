@@ -564,6 +564,7 @@ const requirements = Layer.mergeAll(
 );
 
 interface HarnessBehavior {
+  readonly projectedMembers?: HarnessRunner["projectedMembers"];
   readonly preflight?: HarnessRunner["preflight"];
   readonly run?: HarnessRunner["run"];
   readonly coordination?: (service: CoordinationService) => CoordinationService;
@@ -573,6 +574,47 @@ interface HarnessBehavior {
   readonly sourceControl?: SourceControlProviderService;
   readonly triggerSources?: ReadonlyArray<TriggerSource>;
 }
+
+const issueSearchService = (baseCatalogResult: Effect.Success<WorkflowsService["catalog"]>) => {
+  const createIssueEntry = decodeEntry("github.create-issue");
+  const issueDocument = WorkflowDocument.make({
+    ...document,
+    operations: document.operations.map((candidate) => ({
+      ...candidate,
+      transitions: candidate.transitions.map((candidateTransition) => ({
+        ...candidateTransition,
+        actions: [{ entry: createIssueEntry, parameters: [] }],
+      })),
+    })),
+  });
+  return {
+    ...workflowServiceWith(issueDocument),
+    catalog: Effect.succeed({
+      ...baseCatalogResult,
+      catalog: {
+        ...baseCatalogResult.catalog,
+        entries: [
+          ...baseCatalogResult.catalog.entries,
+          {
+            key: createIssueEntry,
+            name: "Create an issue",
+            kind: "action" as const,
+            system: "github",
+            connection: "github",
+            requires: [],
+            parameters: [],
+            itemKind: null,
+            actsOn: ["*"],
+            requiresWorkspace: true,
+            permissionProfile: "read-only" as const,
+            agentInputs: ["issue_title", "issue_body"],
+            emits: [],
+          },
+        ],
+      },
+    }),
+  } satisfies WorkflowsService;
+};
 
 const testProgram = (
   objects: ReadonlyArray<unknown>,
@@ -591,7 +633,7 @@ const testProgram = (
       {
         name: harnessName,
         sessionKind: "owned-transcript",
-        projectedMembers: [],
+        projectedMembers: behavior.projectedMembers ?? ["Tools"],
         planMiddleware: ["sandbox", "persistence", "instruction-context"],
         execution: fullHarnessExecution,
         capabilities: {
@@ -1432,45 +1474,6 @@ describe("WorkflowRun", () => {
 
   it.effect("adds issue search only when a Transition writes an issue", () =>
     Effect.gen(function* () {
-      const createIssueEntry = decodeEntry("github.create-issue");
-      const issueDocument = WorkflowDocument.make({
-        ...document,
-        operations: document.operations.map((candidate) => ({
-          ...candidate,
-          transitions: candidate.transitions.map((candidateTransition) => ({
-            ...candidateTransition,
-            actions: [{ entry: createIssueEntry, parameters: [] }],
-          })),
-        })),
-      });
-      const baseCatalogResult = yield* workflowService.catalog;
-      const issueService = {
-        ...workflowServiceWith(issueDocument),
-        catalog: Effect.succeed({
-          ...baseCatalogResult,
-          catalog: {
-            ...baseCatalogResult.catalog,
-            entries: [
-              ...baseCatalogResult.catalog.entries,
-              {
-                key: createIssueEntry,
-                name: "Create an issue",
-                kind: "action" as const,
-                system: "github",
-                connection: "github",
-                requires: [],
-                parameters: [],
-                itemKind: null,
-                actsOn: ["*"],
-                requiresWorkspace: true,
-                permissionProfile: "read-only" as const,
-                agentInputs: ["issue_title", "issue_body"],
-                emits: [],
-              },
-            ],
-          },
-        }),
-      } satisfies WorkflowsService;
       const { runner } = yield* testProgram(
         [
           {
@@ -1482,7 +1485,7 @@ describe("WorkflowRun", () => {
           },
         ],
         {},
-        issueService,
+        issueSearchService(yield* workflowService.catalog),
       );
 
       yield* runner.execute(admission);
@@ -1492,6 +1495,44 @@ describe("WorkflowRun", () => {
       const plan = yield* (yield* RunLedger).getRunPlan(run.id);
 
       assert.deepStrictEqual(plan?.tools, ["issue-search"]);
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
+        { member: "Tools", disposition: "projected" },
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("lists no engine tool for a Harness that does not project Tools", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram(
+        [
+          {
+            summary: "Create it",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { issue_title: "Title", issue_body: "Body" },
+            workspace: "none",
+          },
+        ],
+        { projectedMembers: [] },
+        issueSearchService(yield* workflowService.catalog),
+      );
+
+      yield* runner.execute(admission);
+      const [run] = yield* (yield* RunLedger).listRuns(1);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.deepStrictEqual(plan?.tools, []);
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
+        {
+          member: "Tools",
+          disposition: "not-projected",
+          reason: "selected harness does not project Tools",
+        },
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
