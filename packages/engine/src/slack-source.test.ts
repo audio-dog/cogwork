@@ -158,6 +158,7 @@ const subscription = (entry: string, parameters: TriggerSubscription["parameters
   operation: decodeNode("review"),
   entry: decodeEntry(entry),
   parameters,
+  filters: [],
   workspaces: [],
   catchUp: { since: 0 },
 });

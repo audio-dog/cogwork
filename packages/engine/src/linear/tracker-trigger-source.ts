@@ -6,27 +6,40 @@ import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
+  filteredLabels,
   isolateProviderItemRead,
+  issueNotBlockedFilter,
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  passedFilters,
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   providerSubject,
+  recheckIssue,
+  sourceFailure,
   triggerEntry,
   workspaceOptionReader,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
-import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
+import { Recheck, type TriggerEvent, type TriggerSource, type TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import { credentialAccountFor } from "./account";
-import type { LinearClientService, LinearTeamRef, RawComment, RawIssue } from "./client";
+import {
+  isResolvedState,
+  type LinearClientService,
+  type LinearTeamRef,
+  type RawComment,
+  type RawIssue,
+} from "./client";
 import { hasCogworkMarker } from "./markers";
 
 const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-has-label");
 const newIssueCommentKey = Schema.decodeSync(WorkflowCatalogKey)("linear.new-comment-from-person");
-
+const issueNotBlocked = issueNotBlockedFilter("linear");
+const issueFilters = [issueNotBlocked];
+export const linearTrackerFilters = issueFilters.map(({ entry }) => entry);
 export const linearTrackerEntries = [
   triggerEntry("linear.issue-has-label", "Issue has label", "linear", "issue", "condition", [
     liveParameter("label"),
@@ -50,6 +63,9 @@ const targetsFor = (workspace: RegistryState["workspaces"][number]) => {
   );
 };
 
+const targetForIssue = (workspace: RegistryState["workspaces"][number], identifier: string) =>
+  targetsFor(workspace).find(({ team }) => identifier.startsWith(`${team}-`));
+
 const proseOf = (body: string, comments: ReadonlyArray<RawComment>) => ({
   body,
   comments: comments.map((comment) => ({
@@ -72,9 +88,11 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
     const label = parameterValue(subscription.parameters, "label");
     return label !== undefined && issue.labels.includes(label);
   });
-  if (issueSubscriptions.length === 0) return [];
-  const target = targetsFor(workspace).find(({ team }) => issue.identifier.startsWith(`${team}-`));
+  const nothingToMatch = isResolvedState(issue.stateType) || issueSubscriptions.length === 0;
+  if (nothingToMatch) return [];
+  const target = targetForIssue(workspace, issue.identifier);
   if (!target) return [];
+  const passes = passedFilters(issueFilters, issue);
   const prose = yield* client.readTriggerProse(target, issue.id);
   const issueId = itemId(issue.identifier);
   const subject = providerSubject(issue.title, issue.url);
@@ -94,33 +112,35 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
     origin === null
       ? ({ _tag: "Unknown" } as const)
       : ({ _tag: "Cogwork", origin: origin.item, lineage: origin.lineage } as const);
-  const labelEvents = yield* Effect.forEach(issueSubscriptions, (subscription) =>
+  const conditionLabels = new Set(
+    issueSubscriptions.flatMap((subscription) =>
+      subscription.entry === issueHasLabelKey ? [parameterValue(subscription.parameters, "label")] : [],
+    ),
+  );
+  const labelEvents = yield* Effect.forEach(conditionLabels, (label) =>
     Effect.gen(function* () {
-      if (subscription.entry !== issueHasLabelKey) return [];
-      const label = parameterValue(subscription.parameters, "label");
       const appliedAt = label
         ? ((yield* client.labelAppliedAt(target, issue.id, label)) ??
           issue.createdAtMillis ??
           issue.updatedAtMillis)
         : (issue.createdAtMillis ?? issue.updatedAtMillis);
-      return [
-        {
-          key: {
-            _tag: "Issue",
-            workspace: workspace.config.name,
-            id: issueId,
-          },
-          revision: `label:${label}:${appliedAt}`,
-          cause: issueCause,
-          atMillis: appliedAt,
-          entry: issueHasLabelKey,
+      return {
+        key: {
+          _tag: "Issue",
           workspace: workspace.config.name,
-          priority: issue.priority,
-          parameters: [{ id: "label", value: label ?? "" }],
-          subject,
-          workContext: proseOf(prose.body, prose.comments),
-        } satisfies TriggerEvent,
-      ];
+          id: issueId,
+        },
+        revision: `label:${label}:${appliedAt}`,
+        cause: issueCause,
+        atMillis: appliedAt,
+        entry: issueHasLabelKey,
+        workspace: workspace.config.name,
+        priority: issue.priority,
+        parameters: [{ id: "label", value: label ?? "" }],
+        passes,
+        subject,
+        workContext: proseOf(prose.body, prose.comments),
+      } satisfies TriggerEvent;
     }),
   );
   const commentEvents = issueSubscriptions.flatMap((subscription) => {
@@ -150,12 +170,13 @@ const eventsForIssue = Effect.fn("LinearTrackerTriggerSource.eventsForIssue")(fu
             priority: issue.priority,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
+            passes,
             subject,
             workContext: proseOf(prose.body, prose.comments),
           }) satisfies TriggerEvent,
       );
   });
-  return [...labelEvents.flat(), ...commentEvents];
+  return [...labelEvents, ...commentEvents];
 });
 
 const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(function* (
@@ -171,9 +192,13 @@ const readWorkspace = Effect.fn("LinearTrackerTriggerSource.readWorkspace")(func
   const updatedSince =
     cursor === undefined ? undefined : Math.max(0, cursor - providerModifiedSinceGraceMillis);
   const issues = yield* Effect.forEach(targetsFor(workspace), (target) =>
-    client.observeIssues(target, null, null, updatedSince, true),
+    Effect.all([
+      client.observeIssues(target, null, null, updatedSince, true),
+      Effect.forEach(filteredLabels(selected), (label) => client.observeLabelledIssues(target, label)),
+    ]).pipe(Effect.map(([updated, labelled]) => [...updated, ...labelled.flat()])),
   );
-  const events = yield* Effect.forEach(issues.flat(), (issue) =>
+  const unique = [...new Map(issues.flat().map((issue) => [issue.id, issue])).values()];
+  const events = yield* Effect.forEach(unique, (issue) =>
     isolateProviderItemRead(
       { source: "linear", workspace: workspace.config.name, item: issue.identifier },
       eventsForIssue(client, workspace, selected, issue, now, artifacts),
@@ -215,6 +240,29 @@ const read = Effect.fn("LinearTrackerTriggerSource.read")(function* (
   };
 });
 
+const recheck = Effect.fn("LinearTrackerTriggerSource.recheck")(function* (
+  client: LinearClientService,
+  registry: Effect.Effect<RegistryState>,
+  event: TriggerEvent,
+  subscription: TriggerSubscription,
+) {
+  if (event.key._tag !== "Issue") return Recheck.Matches();
+  const { id, workspace } = event.key;
+  const registered = (yield* registry).workspaces.find(({ config }) => config.name === workspace);
+  const target = registered ? targetForIssue(registered, id) : undefined;
+  if (!target) return Recheck.Matches();
+  const issue = yield* client
+    .readTriggerIssue(target, id)
+    .pipe(Effect.mapError((error) => sourceFailure("linear", error)));
+  if (issue === null) return Recheck.Ended({ reason: `${id} no longer exists` });
+  return recheckIssue(issueFilters, subscription, {
+    id,
+    open: !isResolvedState(issue.stateType),
+    labels: issue.labels,
+    item: issue,
+  });
+});
+
 export const makeLinearTrackerTriggerSource = (
   client: LinearClientService,
   registry: Effect.Effect<RegistryState>,
@@ -222,6 +270,7 @@ export const makeLinearTrackerTriggerSource = (
 ): TriggerSource => ({
   id: "linear",
   entries: linearTrackerEntries,
+  filters: linearTrackerFilters,
   availability: () => Effect.succeed({ _tag: "Available" }),
   options: [
     {
@@ -237,4 +286,5 @@ export const makeLinearTrackerTriggerSource = (
     providerPollingStream("linear", (checkpoint) =>
       read(client, registry, subscriptions, checkpoint, artifacts),
     ),
+  recheck: (event, subscription) => recheck(client, registry, event, subscription),
 });

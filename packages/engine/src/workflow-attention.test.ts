@@ -58,6 +58,7 @@ const admission = (revision: string, atMillis: number): TriggerAdmission => ({
     operation,
     entry,
     parameters: [],
+    filters: [],
     workspaces: [workspace],
     catchUp: { since: 0 },
   },
@@ -128,6 +129,27 @@ const requirements = Layer.mergeAll(
   observationLayer,
   workflowActionPlanStoreLayer,
   Layer.succeed(Workflows, workflowService),
+);
+
+it.effect("lists an item that no longer matched its Trigger as a skipped event", () =>
+  Effect.gen(function* () {
+    const observationStore = yield* TriggerObservationStore;
+    const skipped = {
+      ...admission("0", 0),
+      event: {
+        ...admission("0", 0).event,
+        payload: { _tag: "NoLongerMatches", reason: "#7 is closed" } as const,
+      },
+    };
+    yield* observationStore.putAll([skipped]);
+    yield* observationStore.complete(skipped, Effect.void);
+
+    const result = yield* (yield* make).list;
+
+    assert.deepStrictEqual(result.skipped, [
+      { workflow, steps: [], events: [{ summary: entry, reason: "#7 is closed", atMillis: 0 }] },
+    ]);
+  }).pipe(Effect.provide(requirements)),
 );
 
 it.effect("lists one parked item and marks a later source revision", () =>

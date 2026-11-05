@@ -34,11 +34,11 @@ import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { githubSourceControlActionEntries, slackReviewTemplate } from "./github/provider";
 import { githubPullRequestEntries } from "./github/pull-request-trigger-source";
-import { githubTrackerEntries } from "./github/tracker-trigger-source";
+import { githubTrackerEntries, githubTrackerFilters } from "./github/tracker-trigger-source";
 import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
-import { linearTrackerEntries } from "./linear/tracker-trigger-source";
+import { linearTrackerEntries, linearTrackerFilters } from "./linear/tracker-trigger-source";
 import { slackEntries } from "./slack-source";
 import { slackActionEntries } from "./slack-write";
 import { SourceFailure } from "./trigger-source";
@@ -168,8 +168,8 @@ const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
   issueTrackerWorkflowCatalogContribution("github"),
   issueTrackerWorkflowCatalogContribution("linear"),
   { entries: githubSourceControlActionEntries, templates: [] },
-  { entries: [...githubTrackerEntries, ...githubPullRequestEntries], templates: [] },
-  { entries: linearTrackerEntries, templates: [] },
+  { entries: [...githubTrackerEntries, ...githubTrackerFilters, ...githubPullRequestEntries], templates: [] },
+  { entries: [...linearTrackerEntries, ...linearTrackerFilters], templates: [] },
   triggerContribution,
   granolaWorkflowCatalogContribution,
   githubReviewContribution,

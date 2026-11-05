@@ -46,7 +46,7 @@ export const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
 
-const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
+export const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
   const parsed = Number.parseInt(id.replace(/^#/, ""), 10);
   if (Number.isNaN(parsed)) {
     return yield* new IssueTrackerError({

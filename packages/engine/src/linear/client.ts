@@ -234,6 +234,7 @@ const ActionIssueNode = Schema.Struct({
 });
 
 const ActionIssuePayload = Schema.Struct({ issue: Schema.NullOr(ActionIssueNode) });
+const TriggerIssuePayload = Schema.Struct({ issue: Schema.NullOr(IssueNode) });
 
 const ActionIssuesTeamNode = Schema.Struct({
   issues: Schema.Struct({ nodes: Schema.Array(ActionIssueNode) }),
@@ -257,6 +258,7 @@ const decodeComments = Schema.decodeUnknownEffect(CommentsPayload);
 const decodeCoordinationComments = Schema.decodeUnknownEffect(CoordinationCommentsPayload);
 const decodeIssueMarker = Schema.decodeUnknownEffect(IssueMarkerPayload);
 const decodeActionIssue = Schema.decodeUnknownEffect(ActionIssuePayload);
+const decodeTriggerIssue = Schema.decodeUnknownEffect(TriggerIssuePayload);
 const decodeWorkspaceLabels = Schema.decodeUnknownEffect(WorkspaceLabelsPayload);
 const decodeIssueRelations = Schema.decodeUnknownEffect(IssueRelationsPayload);
 const decodeIssueLabel = Schema.decodeUnknownEffect(IssueLabelPayload);
@@ -566,6 +568,12 @@ query ActionIssue($id: String!) {
   }
 }`;
 
+const triggerIssueQuery = `
+query TriggerIssue($id: String!) {
+  issue(id: $id) {${issueFields}
+  }
+}`;
+
 const issueRelationsQuery = `
 query IssueInverseRelations($id: String!, $after: String) {
   issue(id: $id) {
@@ -631,10 +639,10 @@ const actionIssueMarkerShape = teamShape(
   ", $marker: String!",
 );
 
-const isResolvedBlocker = (stateType: string) => stateType === "completed" || stateType === "canceled";
+export const isResolvedState = (stateType: string) => stateType === "completed" || stateType === "canceled";
 
 const isOpenBlocker = (relation: typeof RelationNode.Type) =>
-  relation.type === "blocks" && !isResolvedBlocker(relation.issue.state.type);
+  relation.type === "blocks" && !isResolvedState(relation.issue.state.type);
 
 const countOpenBlockers = (relations: ReadonlyArray<typeof RelationNode.Type>) =>
   relations.filter(isOpenBlocker).length;
@@ -944,6 +952,21 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     updatedSince?: number,
     includeCompleted: boolean = false,
   ) {
+    return yield* observeMatching(
+      ref,
+      coordination,
+      issuesFilter(assigneeIds, updatedSince, includeCompleted),
+    );
+  });
+
+  const observeLabelledIssues = (ref: LinearTeamRef, label: string) =>
+    observeMatching(ref, null, { ...issuesFilter(null), labels: { name: { eq: label } } });
+
+  const observeMatching = Effect.fn("linear.observeMatching")(function* (
+    ref: LinearTeamRef,
+    coordination: CoordinationScope | null,
+    filter: Record<string, unknown>,
+  ) {
     const shape = coordination ? coordinatedIssuesShape : issuesShape;
     const scopeVariables = coordination
       ? {
@@ -952,7 +975,6 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
           proposal: coordination.proposalMarker,
         }
       : {};
-    const filter = issuesFilter(assigneeIds, updatedSince, includeCompleted);
     const loadPage = (after: string | null) => loadTeam(ref, shape, { ...scopeVariables, filter, after });
     const issues = yield* Stream.paginate<string | null, typeof IssueNode.Type, IssueTrackerError>(
       null,
@@ -1168,6 +1190,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* callWithCredential(ref, credential, (sdk) => sdk.viewer.then((viewer) => viewer.id));
     }),
     observeIssues,
+    observeLabelledIssues,
     issueAssignees,
     labelAppliedAt,
     listWorkflowStates: (ref: LinearTeamRef) =>
@@ -1206,6 +1229,13 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       const payload = yield* Effect.mapError(decodeActionIssue(data), toUnavailable);
       if (!payload.issue) return yield* unavailable(`Linear issue not found: ${issueId}`);
       return toActionIssue(payload.issue);
+    }),
+    readTriggerIssue: Effect.fn("linear.readTriggerIssue")(function* (ref: LinearTeamRef, issueId: string) {
+      const data = yield* rawData(ref, triggerIssueQuery, { id: issueId });
+      const payload = yield* Effect.mapError(decodeTriggerIssue(data), toUnavailable);
+      if (!payload.issue) return null;
+      const issue: RawIssue = toRawIssue(payload.issue, yield* openBlockersOf(ref, payload.issue));
+      return issue;
     }),
     findActionIssue: Effect.fn("linear.findActionIssue")(function* (ref: LinearTeamRef, marker: string) {
       const team = yield* loadTeam(ref, actionIssueMarkerShape, { marker });

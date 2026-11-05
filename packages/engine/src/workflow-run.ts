@@ -49,6 +49,7 @@ import { SessionStore } from "./session-store";
 import { SlackWrite } from "./slack-write";
 import { type PullRequestContext, SourceControlProvider } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import { ownsEntry, Recheck, TriggerSources } from "./trigger-source";
 import { Workflows } from "./workflow";
 import {
   buildWorkflowActionPlan,
@@ -127,7 +128,7 @@ const runItemId = WorkItemRef.match({
   FanOutChild: () => workItemId("#workflow"),
 });
 
-export type WorkflowRunOutcome = "completed" | "retry" | "skipped";
+export type WorkflowRunOutcome = "completed" | "retry" | "skipped" | "waiting";
 
 const workContextBody = (admission: TriggerAdmission, workflow: string) => {
   const payload = admission.event.payload;
@@ -249,6 +250,7 @@ export const make = Effect.gen(function* () {
   const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
   const fs = yield* FileSystem.FileSystem;
   const observationStore = yield* TriggerObservationStore;
+  const triggerSources = yield* TriggerSources;
   const slack = yield* SlackWrite;
   const harnessContext = yield* Effect.context<HarnessRunnerEnv>();
   const coreExecutionContext = harnessContext.pipe(
@@ -337,6 +339,33 @@ export const make = Effect.gen(function* () {
         operationKeyOf(admission, admission.subscription.operation),
       )
       .pipe(Effect.map(() => "skipped" as const));
+
+  const recheck = Effect.fn("WorkflowRun.recheck")(function* (admission: TriggerAdmission) {
+    const source = triggerSources.find((candidate) => ownsEntry(candidate, admission.event.entry));
+    if (!source?.recheck) return Recheck.Matches();
+    return yield* source
+      .recheck(admission.event, admission.subscription)
+      .pipe(
+        Effect.catchTag("SourceFailure", (error) =>
+          Effect.logWarning("Trigger recheck failed; the Run proceeds", { error }).pipe(
+            Effect.map(() => Recheck.Matches()),
+          ),
+        ),
+      );
+  });
+
+  const skipNoLongerMatching = Effect.fn("WorkflowRun.skipNoLongerMatching")(function* (
+    admission: TriggerAdmission,
+    reason: string,
+  ) {
+    const skipped: TriggerAdmission = {
+      ...admission,
+      event: { ...admission.event, payload: { _tag: "NoLongerMatches", reason } },
+    };
+    yield* observationStore.putAll([skipped]);
+    yield* complete(skipped);
+    return "skipped" as const;
+  });
 
   const rejectPlan = (admission: TriggerAdmission, reason: string) =>
     coordination
@@ -437,6 +466,10 @@ export const make = Effect.gen(function* () {
     if (admission.event.payload?._tag === "GranolaNoteRejected") {
       return yield* rejectPlan(admission, admission.event.payload.reason);
     }
+    const startsTrigger = operation.id === trigger.start;
+    const current = startsTrigger ? yield* recheck(admission) : Recheck.Matches();
+    if (Recheck.$is("Ended")(current)) return yield* skipNoLongerMatching(admission, current.reason);
+    if (Recheck.$is("Waiting")(current)) return "waiting" as const;
 
     const key = operationKeyOf(admission, operation.id);
     const catalogResult = yield* workflows.catalog;

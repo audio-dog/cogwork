@@ -79,6 +79,7 @@ import {
   TriggerObservationStoreError,
   type TriggerObservationStoreService,
 } from "./trigger-observation";
+import { Recheck, type TriggerSource, TriggerSources } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
 import {
   WorkflowActionPlanStore,
@@ -266,6 +267,31 @@ const documentWithTransition = (transition: {
   });
 };
 
+const recheckingSource = (result: Recheck): TriggerSource => ({
+  id: "clock",
+  entries: [
+    {
+      key: scheduleEntry,
+      name: "Every day",
+      kind: "trigger",
+      triggerKind: "condition",
+      system: null,
+      connection: null,
+      requires: [],
+      parameters: [],
+      itemKind: null,
+      actsOn: [],
+      requiresWorkspace: false,
+      permissionProfile: "read-only",
+      agentInputs: [],
+      emits: [],
+    },
+  ],
+  availability: () => Effect.succeed({ _tag: "Available" }),
+  observe: () => Stream.empty,
+  recheck: () => Effect.succeed(result),
+});
+
 const workflowServiceWith = (publishedCopy: WorkflowDocument): WorkflowsService => ({
   ...workflowService,
   list: Effect.succeed({
@@ -301,6 +327,7 @@ const admission: TriggerAdmission = {
     operation,
     entry: scheduleEntry,
     parameters: [],
+    filters: [],
     workspaces: [],
     catchUp: { since: 0 },
   },
@@ -544,6 +571,7 @@ interface HarnessBehavior {
   readonly issueTracker?: IssueTrackerService;
   readonly registry?: RegistryState;
   readonly sourceControl?: SourceControlProviderService;
+  readonly triggerSources?: ReadonlyArray<TriggerSource>;
 }
 
 const testProgram = (
@@ -605,6 +633,7 @@ const testProgram = (
       Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
       Effect.provideService(SourceControlProvider, behavior.sourceControl ?? emptySourceControl),
+      Effect.provideService(TriggerSources, behavior.triggerSources ?? []),
     );
     return { runner, coordination, notifications, observationStore };
   });
@@ -930,6 +959,7 @@ describe("WorkflowRun", () => {
           operation: selected.start,
           entry: selected.entry,
           parameters: selected.parameters,
+          filters: [],
           workspaces: [workspace.config.name],
           catchUp: { since: 0 },
         },
@@ -1139,6 +1169,62 @@ describe("WorkflowRun", () => {
 
       assert.strictEqual(yield* runner.execute(rejected), "skipped");
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("skips an admission whose item no longer matches its Trigger, with no attempt", () =>
+    Effect.gen(function* () {
+      const { runner, coordination, observationStore } = yield* testProgram([{}], {
+        triggerSources: [recheckingSource(Recheck.Ended({ reason: "Issue #1 is closed" }))],
+      });
+      yield* observationStore.putAll([admission]);
+
+      assert.strictEqual(yield* runner.execute(admission), "skipped");
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+      assert.strictEqual(yield* Ref.get(coordination.processed), admission.event.revision);
+      assert.deepStrictEqual(
+        (yield* observationStore.processed).map(({ event }) => event.payload),
+        [{ _tag: "NoLongerMatches", reason: "Issue #1 is closed" }],
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("keeps an admission waiting while its item fails a Trigger filter", () =>
+    Effect.gen(function* () {
+      const { runner, coordination, observationStore } = yield* testProgram([{}], {
+        triggerSources: [recheckingSource(Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }))],
+      });
+      yield* observationStore.putAll([admission]);
+
+      assert.strictEqual(yield* runner.execute(admission), "waiting");
+      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
+      assert.isNull(yield* Ref.get(coordination.processed));
+      assert.lengthOf(yield* observationStore.admissions, 1);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("does not recheck an admission handed off past the Trigger's start", () =>
+    Effect.gen(function* () {
+      const next = decodeNode("next");
+      const handedOff: TriggerAdmission = {
+        ...admission,
+        subscription: { ...admission.subscription, operation: next },
+      };
+      const { runner } = yield* testProgram(
+        [{}],
+        { triggerSources: [recheckingSource(Recheck.Ended({ reason: "#1 no longer has label ready" }))] },
+        workflowServiceWith(
+          WorkflowDocument.make({
+            ...document,
+            operations: [
+              ...document.operations,
+              ...document.operations.map((value) => ({ ...value, id: next })),
+            ],
+          }),
+        ),
+      );
+
+      assert.strictEqual(yield* runner.execute(handedOff), "retry");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

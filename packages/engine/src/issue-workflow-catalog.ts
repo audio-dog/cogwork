@@ -241,6 +241,7 @@ const codingPipelineTemplate = (system: "github" | "linear") => {
           id: "ready-for-agent",
           entry: issueTrigger,
           parameters: [{ id: "label", value: roleLabel(system, "ready-for-agent") }],
+          filters: [{ entry: `${system}.issue-not-blocked` }],
           start: "implement",
         },
         {

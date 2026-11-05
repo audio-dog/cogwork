@@ -23,6 +23,7 @@ const subscription = (
   operation: decodeNode("summarize"),
   entry: decodeEntry(entry),
   parameters,
+  filters: [],
   workspaces: [],
   catchUp: null,
 });

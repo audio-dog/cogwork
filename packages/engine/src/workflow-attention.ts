@@ -10,8 +10,17 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { Coordination } from "./coordination";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import { type TriggerEvent, TriggerEventPayload } from "./trigger-source";
 import { Workflows } from "./workflow";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+
+const skipReasonOfPayload = TriggerEventPayload.match({
+  GranolaNote: () => null,
+  GranolaNoteRejected: ({ reason }) => reason,
+  NoLongerMatches: ({ reason }) => reason,
+});
+
+const skipReasonOf = ({ payload }: TriggerEvent) => (payload ? skipReasonOfPayload(payload) : null);
 
 const commandsByReason = {
   Stuck: ["hand-back"],
@@ -123,18 +132,12 @@ export const make = Effect.gen(function* () {
                         atMillis: createdAtMillis,
                       })),
                   ),
-                events: processed.flatMap((admission) =>
-                  admission.subscription.workflow === id &&
-                  admission.event.payload?._tag === "GranolaNoteRejected"
-                    ? [
-                        {
-                          summary: admission.event.entry,
-                          reason: admission.event.payload.reason,
-                          atMillis: admission.event.atMillis,
-                        },
-                      ]
-                    : [],
-                ),
+                events: processed.flatMap((admission) => {
+                  const reason = skipReasonOf(admission.event);
+                  return admission.subscription.workflow === id && reason !== null
+                    ? [{ summary: admission.event.entry, reason, atMillis: admission.event.atMillis }]
+                    : [];
+                }),
               })),
             }),
           ),
