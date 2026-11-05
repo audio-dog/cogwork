@@ -45,13 +45,74 @@ layer(NodeServices.layer)((it) => {
         contributions.map(({ id }) => id),
         [
           "local:private/skill/release",
-          "local:repo/command/ship",
           "local:repo/mcp/tools",
           "local:repo/rules/style",
           "local:repo/skill/release",
+          "local:repo/skill/ship",
           "local:repo/subagent/reviewer",
           "local:user/mcp/review",
           "local:user/skill/commit",
+        ],
+      );
+    }),
+  );
+
+  it.effect("scans a Command file in each Authoring tree as a Skill the model cannot start", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-authoring-command-" });
+      const repoRoot = path.join(root, "repo");
+      const cogworkHome = path.join(root, ".cogwork");
+      const userAgentsDir = path.join(root, ".agents");
+      yield* writeFile(path.join(userAgentsDir, "commands", "ship.md"));
+      yield* writeFile(path.join(repoRoot, ".agents", "commands", "ship.md"));
+      yield* writeFile(path.join(cogworkHome, "workspaces", workspace, "commands", "ship.md"));
+
+      const contributions = yield* scanAuthoringTrees({ workspace, repoRoot, cogworkHome, userAgentsDir });
+
+      assert.deepStrictEqual(
+        contributions.map(({ id, kind, localName, disableModelInvocation }) => ({
+          id,
+          kind,
+          localName,
+          disableModelInvocation,
+        })),
+        (["local:private", "local:repo", "local:user"] as const).map((authority) => ({
+          id: `${authority}/skill/ship`,
+          kind: "skill" as const,
+          localName: "ship",
+          disableModelInvocation: true as const,
+        })),
+      );
+    }),
+  );
+
+  it.effect("keeps the Skill directory when a Command file has the same name", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-authoring-command-clash-" });
+      const repoRoot = path.join(root, "repo");
+      const skillFile = path.join(repoRoot, ".agents", "skills", "ship", "SKILL.md");
+      yield* writeFile(skillFile);
+      yield* writeFile(path.join(repoRoot, ".agents", "commands", "ship.md"));
+
+      const contributions = yield* scanAuthoringTrees({
+        workspace,
+        repoRoot,
+        cogworkHome: path.join(root, ".cogwork"),
+        userAgentsDir: path.join(root, ".agents"),
+      });
+
+      assert.deepStrictEqual(
+        contributions.map(({ id, file, disableModelInvocation }) => ({ id, file, disableModelInvocation })),
+        [
+          {
+            id: "local:repo/skill/ship",
+            file: yield* fs.realPath(skillFile),
+            disableModelInvocation: undefined,
+          },
         ],
       );
     }),

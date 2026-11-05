@@ -210,7 +210,6 @@ const request = Schema.decodeSync(RunPlan)({
   skills: [],
   mcp: [],
   subagents: [],
-  commands: [],
   hooks: [],
   middleware: ["sandbox"],
   structuredOutput: {

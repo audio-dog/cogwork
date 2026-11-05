@@ -60,8 +60,8 @@ const contributions: readonly Contribution[] = [
     ],
   },
   {
-    id: "plugin:linear/command/linear-triage",
-    kind: "command",
+    id: "plugin:linear/skill/linear-triage",
+    kind: "skill",
     localName: "linear-triage",
     authority: Authority.plugin({ pluginId: "linear" }),
     summary: "Prompts for a triage pass over one Linear issue.",
@@ -131,8 +131,8 @@ const contributions: readonly Contribution[] = [
   },
 
   {
-    id: "plugin:codex-extras/command/codex-login",
-    kind: "command",
+    id: "plugin:codex-extras/skill/codex-login",
+    kind: "skill",
     localName: "codex-login",
     authority: Authority.plugin({ pluginId: "codex-extras" }),
     summary: "Walks the host-owned Codex CLI login.",
@@ -177,8 +177,8 @@ const contributions: readonly Contribution[] = [
     rows: [],
   },
   {
-    id: "local:user/command/scratch",
-    kind: "command",
+    id: "local:user/skill/scratch",
+    kind: "skill",
     localName: "scratch",
     authority: Authority.local({ tree: "user" }),
     summary: "Opens a scratch prompt you keep on this machine.",
@@ -269,8 +269,8 @@ const contributions: readonly Contribution[] = [
     rows: [],
   },
   {
-    id: "local:repo/command/ship",
-    kind: "command",
+    id: "local:repo/skill/ship",
+    kind: "skill",
     localName: "ship",
     authority: Authority.local({ tree: "repo" }),
     summary: "Prompts for a release checklist.",
@@ -293,7 +293,7 @@ const plugins: readonly InstalledPlugin[] = [
     name: "Linear",
     summary: "Track work in Linear and let cogwork read and write its issues.",
     manifestFailure: null,
-    contributionIds: ["plugin:linear/mcp/linear", "plugin:linear/command/linear-triage"],
+    contributionIds: ["plugin:linear/mcp/linear", "plugin:linear/skill/linear-triage"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
       {
@@ -404,7 +404,7 @@ const plugins: readonly InstalledPlugin[] = [
     name: "Codex harness extras",
     summary: "Notifications and a login walk-through for the host-owned Codex CLI.",
     manifestFailure: null,
-    contributionIds: ["plugin:codex-extras/command/codex-login"],
+    contributionIds: ["plugin:codex-extras/skill/codex-login"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
       {

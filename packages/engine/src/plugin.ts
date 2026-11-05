@@ -4,6 +4,7 @@ import {
   type ConnectionSystem as ConnectionSystemType,
   ContentRevision,
   DeclaredVersion,
+  FileContributionKind,
   type PluginContribution,
   PluginFailure,
   type PluginInstall,
@@ -41,7 +42,7 @@ type CatalogEntry = typeof CatalogEntry.Type;
 const CatalogDocument = Schema.Struct({ plugins: Schema.Array(CatalogEntry) });
 
 const ManifestContribution = Schema.Struct({
-  kind: Schema.Literals(["mcp-server", "skill", "subagent", "rules", "command"]),
+  kind: FileContributionKind,
   localName: TrimmedNonEmptyString,
   summary: TrimmedNonEmptyString,
   file: TrimmedNonEmptyString,
@@ -138,35 +139,34 @@ const missingReadiness = (system: string) =>
 const installedContributionsOf = (plugins: readonly PluginItem[]) =>
   plugins.flatMap((plugin) => (plugin.record ? plugin.contributions : []));
 
+const isCommandFile = (pointer: ManifestContribution) =>
+  pointer.kind === "skill" && /^(?:\.\/)?commands\/[^/]+\.md$/.test(pointer.file);
+
+const contributionOf = (
+  pluginId: string,
+  pointer: ManifestContribution,
+  file: string,
+  load: PluginContribution["load"],
+): PluginContribution => ({
+  id: pluginContributionId(pluginId, pointer.kind, pointer.localName),
+  authority: `plugin:${pluginId}`,
+  kind: pointer.kind,
+  localName: pointer.localName,
+  summary: pointer.summary,
+  file,
+  ...(isCommandFile(pointer) ? { disableModelInvocation: true } : {}),
+  load,
+});
+
 const loadedContribution = (
   pluginId: string,
   pointer: ManifestContribution,
   file: string,
   mcpServer?: PluginMcpServer,
-): PluginContribution => ({
-  id: pluginContributionId(pluginId, pointer.kind, pointer.localName),
-  authority: `plugin:${pluginId}`,
-  kind: pointer.kind,
-  localName: pointer.localName,
-  summary: pointer.summary,
-  file,
-  load: { _tag: "Loaded", ...(mcpServer ? { mcpServer } : {}) },
-});
+) => contributionOf(pluginId, pointer, file, { _tag: "Loaded", ...(mcpServer ? { mcpServer } : {}) });
 
-const failedContribution = (
-  pluginId: string,
-  pointer: ManifestContribution,
-  file: string,
-  reason: string,
-): PluginContribution => ({
-  id: pluginContributionId(pluginId, pointer.kind, pointer.localName),
-  authority: `plugin:${pluginId}`,
-  kind: pointer.kind,
-  localName: pointer.localName,
-  summary: pointer.summary,
-  file,
-  load: { _tag: "Failed", reason },
-});
+const failedContribution = (pluginId: string, pointer: ManifestContribution, file: string, reason: string) =>
+  contributionOf(pluginId, pointer, file, { _tag: "Failed", reason });
 
 export const make = Effect.fn("PluginManager.make")(function* (config: PluginManagerConfig) {
   const fs = yield* FileSystem.FileSystem;

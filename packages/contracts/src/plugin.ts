@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./base-schemas";
 import { ConnectionId, ConnectionSystem } from "./connection";
-import { FileContributionKind, PluginContributionAuthority } from "./contribution";
+import { DisableModelInvocation, FileContributionKind, PluginContributionAuthority } from "./contribution";
 import { PrincipalId } from "./principal";
 import { ProvenanceStamp } from "./provenance";
 
@@ -41,6 +41,7 @@ export const PluginContribution = Schema.Struct({
   localName: TrimmedNonEmptyString,
   summary: TrimmedNonEmptyString,
   file: TrimmedNonEmptyString,
+  disableModelInvocation: DisableModelInvocation,
   load: PluginContributionLoad,
 });
 export type PluginContribution = typeof PluginContribution.Type;

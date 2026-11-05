@@ -177,7 +177,6 @@ const request = (checkoutPath: string, operation = "operate") => {
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput: { type: "object" },

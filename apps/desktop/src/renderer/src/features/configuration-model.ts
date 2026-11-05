@@ -21,7 +21,7 @@ export function scopeKey(scope: ScopeRef): string {
   return scope.workspaceId ? `${scope.kind}:${scope.workspaceId}` : scope.kind;
 }
 
-export const contributionKinds = ["mcp-server", "skill", "subagent", "rules", "command", "hook"] as const;
+export const contributionKinds = ["mcp-server", "skill", "subagent", "rules", "hook"] as const;
 
 export type ContributionKind = (typeof contributionKinds)[number];
 
@@ -30,7 +30,6 @@ export const kindLabels: Record<ContributionKind, string> = {
   skill: "Skill",
   subagent: "Subagent",
   rules: "Rules",
-  command: "Command",
   hook: "Hook",
 };
 
@@ -39,14 +38,12 @@ export const kindLabelsPlural: Record<ContributionKind, string> = {
   skill: "Skills",
   subagent: "Subagents",
   rules: "Rules",
-  command: "Commands",
   hook: "Hooks",
 };
 
 export const enablementScopes: Record<ContributionKind, readonly ScopeKind[]> = {
   skill: [],
   rules: [],
-  command: [],
   subagent: [],
   hook: [],
   "mcp-server": ["settings-profile", "private-overlay"],

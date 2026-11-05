@@ -592,7 +592,6 @@ export const make = Effect.gen(function* () {
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: [...harness.planMiddleware(selectedHarness)],
       structuredOutput: workflowOperationResultJsonSchema(operation, catalogResult.catalog, outputWorkspaces)[

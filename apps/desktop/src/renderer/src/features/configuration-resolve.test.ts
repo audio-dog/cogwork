@@ -39,12 +39,12 @@ describe("resolveEnablement", () => {
   });
 
   it("has nothing to resolve for a kind that has no on / off", () => {
-    // A Skill, Rules, a Command and a Subagent are files: on the disk or not. There is no setting.
+    // A Skill, Rules and a Subagent are files: on the disk or not. There is no setting.
     for (const id of [
       "plugin:gh-review/subagent/reviewer",
       "local:user/skill/commit-style",
       "engine/rules/house-style",
-      "local:user/command/scratch",
+      "local:user/skill/scratch",
     ]) {
       const resolved = resolveEnablement(required(id), view);
       expect(enablementScopes[required(id).kind]).toEqual([]);
@@ -125,7 +125,7 @@ describe("resolveEnablement", () => {
 describe("which kinds have an on / off", () => {
   it("gives an on / off only to the MCP server", () => {
     expect(enablementScopes["mcp-server"]).toEqual(["settings-profile", "private-overlay"]);
-    for (const kind of ["skill", "rules", "command", "subagent", "hook"] as const) {
+    for (const kind of ["skill", "rules", "subagent", "hook"] as const) {
       expect(enablementScopes[kind]).toEqual([]);
     }
   });
@@ -138,11 +138,11 @@ describe("which kinds have an on / off", () => {
 
 describe("the fixture itself", () => {
   it("covers every contribution kind cogwork can run today", () => {
-    // Five of the six. Hooks are out of scope for this map, so the fixture holds none and the
+    // Four of the five. Hooks are out of scope for this map, so the fixture holds none and the
     // facet says so rather than showing an empty list.
     const kinds = new Set(placeholderConfiguration.contributions.map((entry) => entry.kind));
     expect(kinds.has("hook")).toBe(false);
-    expect(kinds.size).toBe(5);
+    expect(kinds.size).toBe(4);
   });
 
   it("keeps two workspaces that share one git remote", () => {

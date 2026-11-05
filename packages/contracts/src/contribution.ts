@@ -4,8 +4,10 @@ import { TrimmedNonEmptyString } from "./base-schemas";
 export const LocalContributionAuthority = Schema.Literals(["local:user", "local:repo", "local:private"]);
 export type LocalContributionAuthority = typeof LocalContributionAuthority.Type;
 
-export const FileContributionKind = Schema.Literals(["mcp-server", "skill", "subagent", "rules", "command"]);
+export const FileContributionKind = Schema.Literals(["mcp-server", "skill", "subagent", "rules"]);
 export type FileContributionKind = typeof FileContributionKind.Type;
+
+export const DisableModelInvocation = Schema.optionalKey(Schema.Literal(true));
 
 export const LocalContribution = Schema.Struct({
   id: TrimmedNonEmptyString,
@@ -13,6 +15,7 @@ export const LocalContribution = Schema.Struct({
   kind: FileContributionKind,
   localName: TrimmedNonEmptyString,
   file: TrimmedNonEmptyString,
+  disableModelInvocation: DisableModelInvocation,
 });
 export type LocalContribution = typeof LocalContribution.Type;
 
@@ -25,6 +28,7 @@ export const FileContribution = Schema.Struct({
   kind: FileContributionKind,
   localName: TrimmedNonEmptyString,
   file: TrimmedNonEmptyString,
+  disableModelInvocation: DisableModelInvocation,
 });
 export type FileContribution = typeof FileContribution.Type;
 
