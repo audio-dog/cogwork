@@ -1,0 +1,21 @@
+packages/engine/src/subagent-file.test.ts
+  s_d81cad6ab53a1e::t_a0c3c852174419 70-74
+packages/engine/src/subagent-file.ts
+  s_d81cad6ab53a1e::t_b688602c786bba 15,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "192dba3f3478b93f4e97eb7476c46faadf7c81db",
+  "prompts": {},
+  "sessions": {
+    "s_d81cad6ab53a1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "68b342b6-8253-4895-b646-8ca8c97ef0a1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
