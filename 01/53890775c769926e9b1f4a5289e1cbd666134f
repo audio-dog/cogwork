@@ -1,0 +1,19 @@
+.gitignore
+  s_40b6efcbb26166::t_46d5bfb467ca22 40-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0153890775c769926e9b1f4a5289e1cbd666134f",
+  "prompts": {},
+  "sessions": {
+    "s_40b6efcbb26166": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2b475a55-cbd6-40a3-8f70-75b92589b974",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
