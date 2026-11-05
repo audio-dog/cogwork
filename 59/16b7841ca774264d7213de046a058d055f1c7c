@@ -1,0 +1,67 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_39eb01622dab60::t_1b89b43a75c4a5 599
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_39eb01622dab60::t_59501b3118452a 24
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_39eb01622dab60::t_9f4c551d123178 42,47,128,141,145
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_0d3b9f79f9a9e8::t_e170ed62b33e56 125,135-137,144-154,219,221
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_39eb01622dab60::t_6b5598bebd96e1 60
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_39eb01622dab60::t_2b8579fd9e4b94 63-64,134-135,180-181,272-273,296,407
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_8df59e6f611929::t_747e0345a443a4 8,213-219
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_8df59e6f611929::t_10520bd356f8a2 6,195-202
+docs/adr/0037-commands-are-skills-and-subagent-files-follow-the-claude-code-shape.md
+  s_8df59e6f611929::t_bc7ea337b67e88 1-70
+packages/contracts/CONTEXT.md
+  s_8df59e6f611929::t_e0aa406f3f0ab0 97,111,131,144-145,160,164-165,187,469
+packages/contracts/src/contribution.ts
+  s_39eb01622dab60::t_a84621c4165f04 7,10-11,18,31
+packages/contracts/src/plugin.ts
+  s_39eb01622dab60::t_e3af93ea22acd6 4,44
+packages/contracts/src/workspace.ts
+  s_0d3b9f79f9a9e8::t_3bba50bfe52f23 51
+packages/engine/src/authoring-tree.test.ts
+  s_0d3b9f79f9a9e8::t_77b93050d664cf 51,60-120
+packages/engine/src/authoring-tree.ts
+  s_39eb01622dab60::t_9690f1b36e5229 30,36,52,60,63-67,116-122,145
+packages/engine/src/plugin.test.ts
+  s_0d3b9f79f9a9e8::t_b490d29ac107a6 71-82,102,335-365
+packages/engine/src/plugin.ts
+  s_39eb01622dab60::t_52eec1e5148101 7,45,142-145,149,157-158,161,165-169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5916b7841ca774264d7213de046a058d055f1c7c",
+  "prompts": {},
+  "sessions": {
+    "s_0d3b9f79f9a9e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1802234b-cf9d-4999-86f3-6bdbe822ef90",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_39eb01622dab60": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5be6fe3b-9bad-4104-a94c-9ac704689d2a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8df59e6f611929": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8e26c6e2-992e-408e-a8da-a8117a5b51c7",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
