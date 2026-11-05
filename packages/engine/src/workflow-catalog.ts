@@ -24,7 +24,7 @@ export class WorkflowCatalogContributions extends Context.Service<
 export const firstPartyInstructionPackages = ["triage-agent", "implement-agent", "follow-up-agent"];
 
 export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
-  entries: registeredActionRows,
+  entries: registeredActionRows.filter(({ system }) => system === null),
   templates: [],
 };
 
