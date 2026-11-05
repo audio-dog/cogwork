@@ -1,0 +1,47 @@
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_84a42e7dc1c6b4::t_4e5ee8393c4ac7 3,24-30,36,221-241,268
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_2e5f3b0be38328::t_83889c51fa0496 228-267
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_2e5f3b0be38328::t_045812aa100bc4 294-312
+packages/contracts/src/ag-ui.test.ts
+  s_2e5f3b0be38328::t_cfe1e4bd30d99f 46-48,62-90
+packages/contracts/src/ag-ui.ts
+  s_59abb0b53c08f2::t_cb42ea62b9ecf6 36,86-96
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_2e5f3b0be38328::t_3a7fd166271478 166,170-180,244-267,272-275,324-333
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_2e5f3b0be38328::t_b220d6a42393e1 14,225,250,285-290,298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b5513c6e784f9859c8f527d3d6de889d6703cddc",
+  "prompts": {},
+  "sessions": {
+    "s_2e5f3b0be38328": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a242d003e68786dbe",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_59abb0b53c08f2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "08b60892-4651-4861-891e-d675b133629c",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_84a42e7dc1c6b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad7a9ae7-e8e0-4118-a49a-a988362f5544",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
