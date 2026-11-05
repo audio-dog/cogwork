@@ -1,0 +1,19 @@
+packages/engine/src/workflow-run.ts
+  s_778fe005d403c7::t_ef6f549764f5a1 462,1020,1022,1029-1031
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9289fda342f224b9cb83118d428aa3cbbe2cdeb",
+  "prompts": {},
+  "sessions": {
+    "s_778fe005d403c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9314172e-4578-46f0-813e-eee7d20ffe90",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
