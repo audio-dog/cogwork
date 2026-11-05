@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/routes/_app/index.tsx
+  s_d93b2dd45a8fe0::t_8e1b2c46ff9630 4,10-15
+apps/desktop/src/renderer/src/store/harness-alerts.ts
+  s_d93b2dd45a8fe0::t_cd51cc01d763a8 1-18
+apps/desktop/src/renderer/src/components/harness-alerts.tsx
+  s_d93b2dd45a8fe0::t_22f40d84950fef 1-75
+apps/desktop/src/renderer/src/features/harness-alerts.test.ts
+  s_d93b2dd45a8fe0::t_301e8f7b31420f 1-147
+apps/desktop/src/renderer/src/features/harness-alerts.ts
+  s_d93b2dd45a8fe0::t_5b2e86d31d10c6 1-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "745b33fc9dc0f645ac87e3709e78e9b9b38d933a",
+  "prompts": {},
+  "sessions": {
+    "s_d93b2dd45a8fe0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b9798f6-a743-4ef4-81f3-10a1fcbd9c88",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
