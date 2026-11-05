@@ -7,7 +7,7 @@ import { workflowCatalogContribution as linearActions } from "./linear/adapter";
 import { slackActionEntries } from "./slack-write";
 import { SourceControlProvider } from "./source-control";
 import { type TriggerSource, TriggerSources } from "./trigger-source";
-import { registeredActionRows } from "./workflow-action-registry";
+import { registeredActionRowsFor } from "./workflow-action-registry";
 import type { SystemOptions } from "./workflow-options";
 
 export interface WorkflowCatalogContribution {
@@ -24,7 +24,7 @@ export class WorkflowCatalogContributions extends Context.Service<
 export const firstPartyInstructionPackages = ["triage-agent", "implement-agent", "follow-up-agent"];
 
 export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
-  entries: registeredActionRows.filter(({ system }) => system === null),
+  entries: registeredActionRowsFor(null),
   templates: [],
 };
 

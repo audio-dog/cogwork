@@ -95,6 +95,9 @@ export const itemWorkspaceOf = (admission: TriggerAdmission) =>
     () => undefined,
   );
 
+export const requireWorkspace = (context: ActionContext) =>
+  context.workspace === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.workspace);
+
 export const invalidTarget = (step: WorkflowActionPlanStep) =>
   new IssueTrackerError({
     reason: "unavailable",

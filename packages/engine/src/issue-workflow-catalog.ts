@@ -1,6 +1,7 @@
 import { WorkflowTemplate } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
-import { issueActionRow, issueActionRows, liveParameter } from "./workflow-actions-issue";
+import { registeredActionRowsFor } from "./workflow-action-registry";
+import { issueActionRow, liveParameter } from "./workflow-actions-issue";
 import type { WorkflowCatalogContribution } from "./workflow-catalog";
 
 const decodeTemplate = Schema.decodeUnknownSync(WorkflowTemplate);
@@ -341,7 +342,7 @@ export const issueTrackerWorkflowCatalogContribution = (system: "github" | "line
         [liveParameter("label", false)],
       ),
       issueActionRow(system, "comment-issue", "Comment on an existing issue", ["issue", "comment"]),
-      ...issueActionRows(system),
+      ...registeredActionRowsFor(system),
     ],
     templates: [granolaIssueTemplate(system), stalenessSweepTemplate(system), codingPipelineTemplate(system)],
   }) satisfies WorkflowCatalogContribution;

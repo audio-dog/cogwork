@@ -16,10 +16,12 @@ import {
   invalidTarget,
   itemWorkspaceOf,
   parameterValues,
+  requireWorkspace,
   stringInput,
   type TargetProducer,
 } from "./workflow-action-entry";
 
+const decodeKey = Schema.decodeSync(WorkflowCatalogKey);
 const issueTrackerApps = ["github", "linear"] as const;
 type IssueTrackerApp = (typeof issueTrackerApps)[number];
 
@@ -40,7 +42,7 @@ export const issueActionRow = (
   actsOn: ReadonlyArray<string> = ["*"],
 ) =>
   ({
-    key: Schema.decodeSync(WorkflowCatalogKey)(`${system}.${id}`),
+    key: decodeKey(`${system}.${id}`),
     name,
     kind: "action",
     system,
@@ -116,9 +118,6 @@ const requireIssueTarget = (step: WorkflowActionPlanStep) => {
   return issue === null ? Effect.fail(invalidTarget(step)) : Effect.succeed(issue);
 };
 
-export const requireWorkspace = (context: ActionContext) =>
-  context.workspace === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.workspace);
-
 export const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (context: ActionContext) {
   const workspace = yield* requireWorkspace(context);
   const issue = yield* requireIssueTarget(context.step);
@@ -156,18 +155,23 @@ const closeIssue = Effect.fn("WorkflowActionPlan.closeIssue")(function* (context
   return null;
 });
 
-const currentIssueEntry = (row: WorkflowCatalogEntry, execute: ActionExecutor): ActionEntry => ({
+const currentIssueEntry = (
+  row: WorkflowCatalogEntry,
+  execute: ActionExecutor,
+  tools: ActionEntry["tools"] = [],
+): ActionEntry => ({
   row,
   target: currentIssueTargetProducer,
   execute,
   phase: "write",
-  tools: [],
+  tools,
 });
 
 const currentIssueEntries = (system: IssueTrackerApp) => [
   currentIssueEntry(
     issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], ["issue"]),
     commentIssue,
+    ["issue-search"],
   ),
   currentIssueEntry(
     issueActionRow(system, "add-label", "Add a label", [], [liveParameter("label", true)], ["issue"]),
@@ -184,6 +188,3 @@ const currentIssueEntries = (system: IssueTrackerApp) => [
 ];
 
 export const issueActionEntries = issueTrackerApps.flatMap(currentIssueEntries);
-
-export const issueActionRows = (system: IssueTrackerApp) =>
-  issueActionEntries.flatMap(({ row }) => (row.system === system ? [row] : []));

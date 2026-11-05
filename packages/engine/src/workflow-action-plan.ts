@@ -46,6 +46,7 @@ import {
   invalidTarget,
   itemWorkspaceOf,
   parameterValues,
+  requireWorkspace,
   stringInput,
   type TargetProducer,
   WorkflowActionPlanDecodeError,
@@ -56,7 +57,6 @@ import {
   commentIssue,
   type FrozenIssueTarget,
   frozenIssueTarget,
-  requireWorkspace,
   targetFields,
 } from "./workflow-actions-issue";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
