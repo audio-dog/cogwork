@@ -1,0 +1,185 @@
+packages/engine/src/workflow-action-plan.test.ts
+  s_19c1b5e0f8d107::t_08f4c99d92b290 96
+packages/engine/src/provider-trigger-source.ts
+  s_7fb20276fc55a9::t_5ed163ce78db48 104
+  s_19c1b5e0f8d107::t_a7ace65b6b88ed 70-71,87-88
+  s_19c1b5e0f8d107::t_507e73ec796af3 65-69,89,101-103
+  s_19c1b5e0f8d107::t_5d28871d715296 116,118,120,123,127-128
+  s_19c1b5e0f8d107::t_42cb18ae8bac47 90-100
+  s_19c1b5e0f8d107::t_054ce8f58f711d 17,19-24
+  s_19c1b5e0f8d107::t_7385d7c92294ac 18
+  s_19c1b5e0f8d107::t_36d16ab8a07709 105-107,113-115,121,124-125,129-134,136-138,140,142-143,145
+  s_7fb20276fc55a9::t_9c97168a742718 108-112,117,119,122,126,135,139,141
+  s_19c1b5e0f8d107::t_93add68798e445 144
+  s_19c1b5e0f8d107::t_63a94308b38f27 72-86
+  s_19c1b5e0f8d107::t_e8ed8db21ba42e 146
+packages/engine/src/clock-source.test.ts
+  s_19c1b5e0f8d107::t_a85ff828b43e8f 26
+packages/engine/src/github/trigger-source.test.ts
+  s_19c1b5e0f8d107::t_d449bfcf01ca98 87
+  s_19c1b5e0f8d107::t_9fae9b5d99c331 330,334-337,341,347,349-355
+  s_19c1b5e0f8d107::t_06025b12489339 272-276,279-293,299-304,375
+  s_19c1b5e0f8d107::t_a8504796267ac4 305-328
+  s_19c1b5e0f8d107::t_2e2482fd341180 294-298
+  s_19c1b5e0f8d107::t_45779195e1f2ef 277-278
+  s_19c1b5e0f8d107::t_0dda322033cafe 329,331,338-340,342-346,348,356-372,374
+  s_19c1b5e0f8d107::t_3d823cf84e9775 72
+  s_19c1b5e0f8d107::t_0f61198e06462c 373
+  s_19c1b5e0f8d107::t_95a814f8102be2 27
+  s_19c1b5e0f8d107::t_4bda0821c93bb3 332-333,376
+packages/engine/src/workflow-run.ts
+  s_7fb20276fc55a9::t_04b79ae961e2ff 344
+  s_19c1b5e0f8d107::t_8682ed2b799d55 470-472
+  s_19c1b5e0f8d107::t_28023bd1f6251f 345,349,351
+  s_19c1b5e0f8d107::t_1c73c89ec454cf 131
+  s_19c1b5e0f8d107::t_d6e8ea300faec8 253
+  s_19c1b5e0f8d107::t_89b4455efed1bd 52
+  s_19c1b5e0f8d107::t_a9ab161f098dc0 343,346-348,350,353-369
+  s_19c1b5e0f8d107::t_f238c8c0f40517 469
+  s_19c1b5e0f8d107::t_2106f88de8231c 352
+packages/engine/src/linear/tracker-trigger-source.ts
+  s_19c1b5e0f8d107::t_1f3d977eba8fdf 115-120,127-129,131-143
+  s_7fb20276fc55a9::t_19cfa545c01736 252
+  s_19c1b5e0f8d107::t_1e51f46d32a395 173,179
+  s_7fb20276fc55a9::t_3baded417d54fa 40-41
+  s_19c1b5e0f8d107::t_6ca62ae79a6a03 9
+  s_19c1b5e0f8d107::t_257179cb15fae9 42
+  s_19c1b5e0f8d107::t_3de2cb84654265 273
+  s_19c1b5e0f8d107::t_2776e34f7214bb 11,15
+  s_19c1b5e0f8d107::t_c7486aed400730 91-92
+  s_19c1b5e0f8d107::t_2592c19e27db10 195-198,200-201
+  s_19c1b5e0f8d107::t_698ef2c8b1f49f 289
+  s_19c1b5e0f8d107::t_bb0fcc38f8d43c 20-21
+  s_7fb20276fc55a9::t_58c8887ebdf60e 66-67
+  s_19c1b5e0f8d107::t_91362485e383bb 243-248,250-251,254-256,258-263
+  s_19c1b5e0f8d107::t_af442610f15f8c 29-35
+  s_19c1b5e0f8d107::t_15407e6b5ae9cd 249,253,257
+  s_19c1b5e0f8d107::t_e8c445caca4713 95
+  s_7fb20276fc55a9::t_11c96dc5fa8f23 93
+  s_19c1b5e0f8d107::t_9d60a0bf69560b 26
+  s_19c1b5e0f8d107::t_323d7a6666054f 68,264-265
+packages/engine/src/issue-workflow-catalog.ts
+  s_19c1b5e0f8d107::t_73f0bee7823208 244
+packages/engine/src/github/tracker-trigger-source.ts
+  s_19c1b5e0f8d107::t_da2f558dce1b0e 79-80
+  s_19c1b5e0f8d107::t_5dfe097a5c665c 107-112
+  s_19c1b5e0f8d107::t_2d3112ac0060f4 293
+  s_19c1b5e0f8d107::t_d83be50ea3cac5 29
+  s_19c1b5e0f8d107::t_15cd489d354d6c 81
+  s_19c1b5e0f8d107::t_001af66b081a01 250-255,257-259,261-270
+  s_19c1b5e0f8d107::t_11b41ec869b669 26
+  s_19c1b5e0f8d107::t_2bcd574193ad55 186-192
+  s_19c1b5e0f8d107::t_a65eaaa03aa20e 164
+  s_19c1b5e0f8d107::t_d26c9ad271f60a 37
+  s_19c1b5e0f8d107::t_30a4c88ccc904f 11,15
+  s_19c1b5e0f8d107::t_3832c1375679a6 115-117,119-131
+  s_19c1b5e0f8d107::t_7c68055f55a8aa 20-21
+  s_19c1b5e0f8d107::t_c6941e6d59ff64 9
+  s_19c1b5e0f8d107::t_e2f301790ed5f1 256,260
+  s_19c1b5e0f8d107::t_035efafc74a594 286
+  s_7fb20276fc55a9::t_48fe48fc34e10b 35-36
+  s_19c1b5e0f8d107::t_2af4e6b0b35255 271-272
+packages/engine/src/trigger-observation.ts
+  s_19c1b5e0f8d107::t_612b416ac64bf9 512,514-515,519,525
+  s_19c1b5e0f8d107::t_837ea1d0c002ce 461,469-470
+  s_19c1b5e0f8d107::t_42590007a9e908 494
+packages/engine/src/workflow.test.ts
+  s_19c1b5e0f8d107::t_415c8629f22662 171-172
+  s_19c1b5e0f8d107::t_0d0074c5f767c7 37,41
+packages/engine/src/granola-source.test.ts
+  s_19c1b5e0f8d107::t_b8bdafcf59ad67 47
+packages/engine/src/linear/client.ts
+  s_19c1b5e0f8d107::t_40832b7a7116dd 571-576
+  s_19c1b5e0f8d107::t_a98bc0b0506b04 261
+  s_19c1b5e0f8d107::t_a0c88228c54324 642,645
+  s_19c1b5e0f8d107::t_34419d3abfaf28 1233-1234
+  s_19c1b5e0f8d107::t_2af73417aa3ecb 237
+  s_19c1b5e0f8d107::t_4a3215dd565cd2 955-963
+  s_19c1b5e0f8d107::t_7c6cc504c9d719 964
+  s_19c1b5e0f8d107::t_4e3b1400be611c 954,965-968,1193,1235-1239
+packages/engine/src/trigger-source.ts
+  s_19c1b5e0f8d107::t_7c4c4d23931634 118,121,123-126
+  s_19c1b5e0f8d107::t_3b4c2d6dc1dfb0 16
+  s_19c1b5e0f8d107::t_474d4920a4b4dc 31-34
+  s_19c1b5e0f8d107::t_d022e0651727ae 137
+  s_19c1b5e0f8d107::t_e058215557b0ec 68
+  s_19c1b5e0f8d107::t_6dc6b4a25b8f66 71
+  s_19c1b5e0f8d107::t_8079f2fb4bcc48 122
+  s_19c1b5e0f8d107::t_a8e42513e80d28 115-117
+  s_19c1b5e0f8d107::t_baf7dd9ca1f9df 157
+  s_7fb20276fc55a9::t_2e766c3c61f51d 128
+  s_19c1b5e0f8d107::t_f2ec750ee887c9 40-51
+  s_19c1b5e0f8d107::t_13ba4ca3962721 155-156
+  s_19c1b5e0f8d107::t_e5ce3cb2d3f750 104
+  s_19c1b5e0f8d107::t_14f23a7e3847eb 52,127
+packages/engine/src/linear/trigger-source.test.ts
+  s_19c1b5e0f8d107::t_38305de4f8951d 275
+  s_19c1b5e0f8d107::t_ce4b6efd616f39 244,258-274,283-284
+  s_19c1b5e0f8d107::t_82d8b957b6469a 245-257
+  s_19c1b5e0f8d107::t_98c6fc48c261f5 276-278,280-282
+  s_19c1b5e0f8d107::t_2f67114426d065 159-204,206-212
+  s_19c1b5e0f8d107::t_3a06141cb71bf1 213-243
+  s_19c1b5e0f8d107::t_33aa6146a30f8a 20
+  s_19c1b5e0f8d107::t_73badbe64232a7 279
+  s_19c1b5e0f8d107::t_a635c990adb304 47
+  s_19c1b5e0f8d107::t_46f52cff5d65e0 37
+  s_19c1b5e0f8d107::t_afb3a6d54fa0de 205
+  s_19c1b5e0f8d107::t_3d71cc87ec0483 38
+  s_19c1b5e0f8d107::t_eff7fb7fa65932 61-62
+  s_19c1b5e0f8d107::t_cc3ca155f4820b 19
+packages/engine/src/scheduler.ts
+  s_19c1b5e0f8d107::t_dbe8353a9a5199 113
+packages/engine/src/workflow-catalog.ts
+  s_19c1b5e0f8d107::t_295c488db65cbe 55
+packages/engine/src/trigger-observation.test.ts
+  s_19c1b5e0f8d107::t_6089b0fd4ec428 121
+packages/engine/src/workflow-attention.test.ts
+  s_19c1b5e0f8d107::t_597eff8578a1b3 61
+  s_19c1b5e0f8d107::t_7393c8881273b3 134-149,153-154
+  s_19c1b5e0f8d107::t_533f43628784f6 150-152
+packages/engine/src/daemon.ts
+  s_19c1b5e0f8d107::t_6a71d41eaf5533 554
+packages/engine/src/workflow-run.test.ts
+  s_19c1b5e0f8d107::t_51c32cf148faee 636
+  s_19c1b5e0f8d107::t_cdf7c472388e46 574
+  s_19c1b5e0f8d107::t_e7968f38796b50 1175-1177,1179-1188
+  s_19c1b5e0f8d107::t_0462b4f798d482 270-294
+  s_19c1b5e0f8d107::t_5028f0280516a9 330
+  s_19c1b5e0f8d107::t_25b060f86833ff 1178,1189-1226,1228-1229
+  s_19c1b5e0f8d107::t_5b1d87466c0cb1 1227
+  s_19c1b5e0f8d107::t_0c0632a67f07b8 962
+  s_19c1b5e0f8d107::t_1f915a0007f6c6 82,1230
+packages/engine/src/slack-source.test.ts
+  s_19c1b5e0f8d107::t_1c59242f0acaa8 161
+packages/engine/src/github/host.ts
+  s_19c1b5e0f8d107::t_5123d7133c6b88 49
+packages/engine/src/workflow-attention.ts
+  s_19c1b5e0f8d107::t_1d837972d1712b 13
+  s_19c1b5e0f8d107::t_80b6124bfb7cbf 17-23
+  s_19c1b5e0f8d107::t_f3c958552b5ad9 24
+  s_19c1b5e0f8d107::t_c88d24feb99e65 135-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c2ee5b5dcf3878d7c06215780362b0083e79d81c",
+  "prompts": {},
+  "sessions": {
+    "s_19c1b5e0f8d107": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f2b1413f-27df-4ab6-adc9-78fb1f8e26dc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7fb20276fc55a9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "82a439de-db43-4899-afc8-632a8ba1ed76",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
