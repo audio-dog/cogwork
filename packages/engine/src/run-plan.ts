@@ -2,7 +2,6 @@ import {
   type FileContribution,
   type NeedIdentity,
   type RunPlan,
-  RunPlanContributionMember,
   RunPlanMessage,
   RunPlanSubagent,
   type RunPlanWorkContext,
@@ -20,24 +19,51 @@ export const workContextMessage = (workContext: RunPlanWorkContext) =>
     ].join("\n\n"),
   });
 
+const subagentKind = "subagent";
+
+const isSubagentNeed = (need: NeedIdentity) => need.split("/")[1] === subagentKind;
+
+const unavailable = (need: NeedIdentity, reason: string) =>
+  RunPlanSubagent.cases.Unavailable.make({
+    identity: need,
+    name: need.split("/").at(-1) ?? need,
+    source: need,
+    reason,
+  });
+
 export const subagentMembers = Effect.fn("RunPlan.subagentMembers")(function* (
   contributions: ReadonlyArray<FileContribution>,
   requires: ReadonlyArray<NeedIdentity>,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const required = contributions.filter(
-    ({ kind, id }) => kind === "subagent" && requires.some((need) => need === id),
-  );
-  return yield* Effect.forEach(required, (contribution) => {
-    const member = { identity: contribution.id, name: contribution.localName, source: contribution.file };
-    return fs.readFileString(contribution.file).pipe(
+
+  const readContained = (file: string) =>
+    fs
+      .realPath(file)
+      .pipe(
+        Effect.flatMap((canonical) =>
+          canonical === file
+            ? fs.readFileString(file)
+            : Effect.fail({ message: "the file moved outside its Authoring tree after the scan" }),
+        ),
+      );
+
+  const memberOf = (need: NeedIdentity) => {
+    const contribution = contributions.find(({ kind, id }) => kind === subagentKind && id === need);
+    if (contribution === undefined) {
+      return Effect.succeed(unavailable(need, "no Subagent file in this Run's Workspace has this identity"));
+    }
+    const source = { identity: contribution.id, name: contribution.localName, source: contribution.file };
+    return readContained(contribution.file).pipe(
       Effect.flatMap((text) => decodeSubagentFile(contribution.localName, text)),
       Effect.match({
-        onFailure: (error) => RunPlanContributionMember.make({ ...member, unavailableReason: error.message }),
-        onSuccess: (definition) => RunPlanSubagent.make({ ...member, ...definition }),
+        onFailure: ({ message }) => RunPlanSubagent.cases.Unavailable.make({ ...source, reason: message }),
+        onSuccess: (definition) => RunPlanSubagent.cases.Available.make({ ...source, ...definition }),
       }),
     );
-  });
+  };
+
+  return yield* Effect.forEach(requires.filter(isSubagentNeed), memberOf);
 });
 
 const isObject = (value: unknown): value is object => typeof value === "object" && value !== null;

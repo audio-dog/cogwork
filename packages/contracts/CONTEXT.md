@@ -190,7 +190,7 @@ A Harness-native lifecycle extension projected only when the selected Harness su
 _Avoid_: Middleware, Command
 
 **Subagent**:
-A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool. A person writes one as `agents/<name>.md` in an **Authoring tree**: YAML frontmatter with a required `name` (lowercase letters, digits, and hyphens, equal to the file name), a required `description`, an optional `tools` list, and an optional `metadata.model-level` (a **Model level**; absent means `standard`), then the prompt as the body. A file that does not decode still reaches the Run Plan, with the reason. A vendor `model` value is one such reason.
+A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool. A person writes one as `agents/<name>.md` in an **Authoring tree**: YAML frontmatter with a required `name` (lowercase letters, digits, and hyphens, equal to the file name), a required `description`, an optional `tools` list (a YAML list or a comma-separated string), and an optional `metadata.model-level` (a **Model level**; absent means `standard`), then the prompt as the body. A file that does not decode still reaches the Run Plan, with the reason. A vendor `model` value is one such reason; `model: inherit` is not.
 _Avoid_: Tool, Harness, Operation
 
 **Sandbox policy**:

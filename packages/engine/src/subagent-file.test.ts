@@ -29,11 +29,11 @@ describe("decodeSubagentFile", () => {
     }),
   );
 
-  it.effect("gives a file with no metadata.model-level the Model level standard", () =>
+  it.effect("gives the Model level standard to a file with no metadata.model-level or model: inherit", () =>
     Effect.gen(function* () {
       const definition = yield* decodeSubagentFile(
         "griller",
-        file("name: griller\ndescription: Interviews an understudy.\ntools:\n  - Read"),
+        file("name: griller\ndescription: Interviews an understudy.\nmodel: inherit\ntools:\n  - Read"),
       );
 
       assert.strictEqual(definition.modelLevel, "standard");
@@ -56,6 +56,11 @@ describe("decodeSubagentFile", () => {
       case: "an unknown Model level",
       text: file("name: griller\ndescription: Interviews.\nmetadata:\n  model-level: heavy"),
       reason: /model-level/,
+    },
+    {
+      case: "frontmatter that is not valid YAML",
+      text: file("name: griller\ndescription: [unclosed"),
+      reason: /^the frontmatter is not valid YAML \(\w+ at line \d+\)$/,
     },
     {
       case: "a vendor model",

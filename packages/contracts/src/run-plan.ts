@@ -59,18 +59,23 @@ export class RunPlanContributionMember extends Schema.Class<RunPlanContributionM
 export const ModelLevel = Schema.Literals(["light", "standard", "deep"]);
 export type ModelLevel = typeof ModelLevel.Type;
 
-export class RunPlanSubagent extends Schema.Class<RunPlanSubagent>("RunPlanSubagent")({
+const RunPlanSubagentSource = {
   identity: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
   source: TrimmedNonEmptyString,
-  description: TrimmedNonEmptyString,
-  tools: Schema.Array(TrimmedNonEmptyString),
-  modelLevel: ModelLevel,
-  prompt: TrimmedNonEmptyString,
-}) {}
+};
 
-export const RunPlanSubagentMember = Schema.Union([RunPlanSubagent, RunPlanContributionMember]);
-export type RunPlanSubagentMember = typeof RunPlanSubagentMember.Type;
+export const RunPlanSubagent = Schema.TaggedUnion({
+  Available: {
+    ...RunPlanSubagentSource,
+    description: TrimmedNonEmptyString,
+    tools: Schema.Array(TrimmedNonEmptyString),
+    modelLevel: ModelLevel,
+    prompt: TrimmedNonEmptyString,
+  },
+  Unavailable: { ...RunPlanSubagentSource, reason: TrimmedNonEmptyString },
+});
+export type RunPlanSubagent = typeof RunPlanSubagent.Type;
 
 export class RunPlanMessage extends Schema.Class<RunPlanMessage>("RunPlanMessage")({
   role: Schema.Literal("user"),
@@ -220,7 +225,7 @@ export class RunPlan extends Schema.Class<RunPlan>("RunPlan")({
   tools: Schema.Array(TrimmedNonEmptyString),
   skills: Schema.Array(RunPlanContributionMember),
   mcp: Schema.Array(RunPlanMcpMember),
-  subagents: Schema.Array(RunPlanSubagentMember),
+  subagents: Schema.Array(RunPlanSubagent),
   commands: Schema.Array(RunPlanContributionMember),
   hooks: Schema.Array(RunPlanContributionMember),
   middleware: Schema.Array(RunPlanMiddlewareName),

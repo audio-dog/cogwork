@@ -2,9 +2,9 @@ import { ModelLevel, TrimmedNonEmptyString } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { parse } from "yaml";
+import { parse, YAMLParseError } from "yaml";
 
-export class SubagentFileError extends Data.TaggedError("SubagentFileError")<{
+class SubagentFileError extends Data.TaggedError("SubagentFileError")<{
   readonly message: string;
 }> {}
 
@@ -37,7 +37,7 @@ const rejections: ReadonlyArray<{
       `name "${frontmatter.name}" does not match the file name "${localName}"`,
   },
   {
-    rejects: ({ frontmatter }) => "model" in frontmatter,
+    rejects: ({ frontmatter }) => "model" in frontmatter && !inheritsModel(frontmatter.model),
     reason: ({ frontmatter }) =>
       `model ${JSON.stringify(frontmatter.model)} is a vendor model, not a Model level; write metadata.model-level (light, standard, or deep)`,
   },
@@ -46,6 +46,18 @@ const rejections: ReadonlyArray<{
     reason: () => "the body has no prompt",
   },
 ];
+
+const inheritsModel = (model: unknown) => model === null || model === "inherit";
+
+const yamlProblem = (error: unknown) => {
+  if (!(error instanceof YAMLParseError)) return "the frontmatter is not valid YAML";
+  const line = error.linePos?.[0].line;
+  return line === undefined
+    ? `the frontmatter is not valid YAML (${error.code})`
+    : `the frontmatter is not valid YAML (${error.code} at line ${line})`;
+};
+
+const singleLine = (message: string) => message.replace(/\s+/g, " ").trim();
 
 const toolList = (tools: SubagentFrontmatter["tools"]) =>
   typeof tools === "string"
@@ -66,10 +78,10 @@ export const decodeSubagentFile = Effect.fn("SubagentFile.decode")(function* (
   const [, yaml = "", body = ""] = sections;
   const raw = yield* Effect.try({
     try: () => parse(yaml),
-    catch: (error) => rejected(`the frontmatter is not valid YAML: ${String(error)}`),
+    catch: (error) => rejected(yamlProblem(error)),
   });
   const frontmatter = yield* decodeFrontmatter(raw).pipe(
-    Effect.mapError((error) => rejected(`the frontmatter does not decode: ${error.message}`)),
+    Effect.mapError((error) => rejected(`the frontmatter does not decode: ${singleLine(error.message)}`)),
   );
   const file = { localName, frontmatter, prompt: body.trim() };
   const rejection = rejections.find(({ rejects }) => rejects(file));
