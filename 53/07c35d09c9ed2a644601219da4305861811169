@@ -1,0 +1,19 @@
+packages/engine/src/tracker-trigger-source.ts
+  s_e5d6b43eb93496::t_4869903ca5fb93 33,81,85,140,146,209,239,260,268,287,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5307c35d09c9ed2a644601219da4305861811169",
+  "prompts": {},
+  "sessions": {
+    "s_e5d6b43eb93496": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c97510ad-794e-45d0-a1fa-91789bc8bbcd",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
