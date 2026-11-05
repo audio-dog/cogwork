@@ -16,7 +16,8 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
-import type { TriggerSubscription } from "../trigger-source";
+import { matchTriggerEvent } from "../trigger-observation";
+import { Recheck, type TriggerSubscription } from "../trigger-source";
 import { makeWorkflowOptions } from "../workflow-options";
 import { LinearClient, type LinearClientService } from "./client";
 import { makeLinearTrackerTriggerSource } from "./tracker-trigger-source";
@@ -33,6 +34,8 @@ const workspace: RegisteredWorkspace = {
 };
 const registryState = { workspaces: [workspace], failures: [] };
 const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-has-label");
+const issueNotBlockedKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-not-blocked");
+const firstIssueId = Schema.decodeSync(WorkItemId)("ENG-1");
 const secondIssueId = Schema.decodeSync(WorkItemId)("ENG-2");
 const thirdIssueId = Schema.decodeSync(WorkItemId)("ENG-3");
 const subscription = (entry: string, trigger: string, label = "needs-triage"): TriggerSubscription => ({
@@ -41,6 +44,7 @@ const subscription = (entry: string, trigger: string, label = "needs-triage"): T
   operation: Schema.decodeSync(WorkflowNodeId)("triage"),
   entry: Schema.decodeSync(WorkflowCatalogKey)(entry),
   parameters: [{ id: "label", value: label }],
+  filters: [],
   workspaces: [workspaceId],
   catchUp: { since: 1_000 },
 });
@@ -54,8 +58,8 @@ const observeIssues = vi.fn<LinearClientService["observeIssues"]>(() =>
       url: "https://linear.app/acme/issue/ENG-1",
       labels: ["needs-triage", "ready-for-human"],
       assignees: ["owner"],
-      stateName: "Done",
-      stateType: "completed",
+      stateName: "In Progress",
+      stateType: "started",
       openBlockers: 0,
       priority: "medium" as const,
       updatedAtMillis: 3_000,
@@ -152,21 +156,133 @@ it.effect("reads Linear updates and keeps comment revisions distinct by label", 
   ),
 );
 
+const issue = (number: number) => ({
+  id: `issue-${number}`,
+  identifier: `ENG-${number}`,
+  title: `Issue ${number}`,
+  url: `https://linear.app/acme/issue/ENG-${number}`,
+  labels: ["needs-triage"],
+  assignees: ["owner"],
+  stateName: "In Progress",
+  stateType: "started",
+  openBlockers: 0,
+  priority: "medium" as const,
+  updatedAtMillis: number + 3_000,
+  coordinationComments: [],
+});
+
+it.effect("matches open issues only, and a not-blocked filter only unblocked issues", () =>
+  Effect.gen(function* () {
+    const client = yield* LinearClient;
+    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const labelled = { ...subscription("linear.issue-has-label", "labelled"), catchUp: null };
+    const unblocked = {
+      ...subscription("linear.issue-has-label", "unblocked"),
+      catchUp: null,
+      filters: [issueNotBlockedKey],
+    };
+    const events = yield* source.observe([labelled, unblocked]).pipe(Stream.take(2), Stream.runCollect);
+    const admitted = (selected: TriggerSubscription) =>
+      [...events].filter((event) => matchTriggerEvent([selected], event).length > 0).map(({ key }) => key);
+
+    assert.deepStrictEqual(admitted(labelled), [
+      { _tag: "Issue", workspace: workspaceId, id: firstIssueId },
+      { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+    ]);
+    assert.deepStrictEqual(admitted(unblocked), [
+      { _tag: "Issue", workspace: workspaceId, id: firstIssueId },
+    ]);
+  }).pipe(
+    Effect.provide(
+      Layer.mock(LinearClient, {
+        observeIssues: () =>
+          Effect.succeed([
+            { ...issue(3), stateType: "canceled" },
+            { ...issue(4), stateType: "completed" },
+            issue(1),
+            { ...issue(2), openBlockers: 1 },
+          ]),
+        observeLabelledIssues: () => Effect.succeed([]),
+        readTriggerProse: () => Effect.succeed({ body: "Body", comments: [] }),
+        labelAppliedAt: (_target, id) => Effect.succeed(id === "issue-3" || id === "issue-4" ? 1_000 : 3_000),
+      }),
+    ),
+  ),
+);
+
+it.effect("reads every open issue with a filtered Trigger's label, so an unblocked issue is seen", () => {
+  const observeLabelledIssues = vi.fn<LinearClientService["observeLabelledIssues"]>(() =>
+    Effect.succeed([issue(1)]),
+  );
+  return Effect.gen(function* () {
+    const client = yield* LinearClient;
+    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const filtered = {
+      ...subscription("linear.issue-has-label", "unblocked"),
+      catchUp: null,
+      filters: [issueNotBlockedKey],
+    };
+    const events = yield* source.observe([filtered]).pipe(Stream.take(1), Stream.runCollect);
+
+    assert.deepStrictEqual(
+      [...events].map(({ key }) => key),
+      [{ _tag: "Issue", workspace: workspaceId, id: firstIssueId }],
+    );
+    assert.strictEqual(observeLabelledIssues.mock.calls[0]?.[1], "needs-triage");
+  }).pipe(
+    Effect.provide(
+      Layer.mock(LinearClient, {
+        observeIssues: () => Effect.succeed([]),
+        observeLabelledIssues,
+        readTriggerProse: () => Effect.succeed({ body: "Body", comments: [] }),
+        labelAppliedAt: () => Effect.succeed(3_000),
+      }),
+    ),
+  );
+});
+
+it.effect.each([
+  { case: "still matches", read: issue(1), expected: Recheck.Matches() },
+  {
+    case: "is canceled",
+    read: { ...issue(1), stateType: "canceled" },
+    expected: Recheck.Ended({ reason: "ENG-1 is closed" }),
+  },
+  {
+    case: "is blocked",
+    read: { ...issue(1), openBlockers: 1 },
+    expected: Recheck.Waiting({ reason: "ENG-1 fails Issue is not blocked" }),
+  },
+  { case: "no longer exists", read: null, expected: Recheck.Ended({ reason: "ENG-1 no longer exists" }) },
+])("rechecks a Linear issue that $case", ({ read, expected }) =>
+  Effect.gen(function* () {
+    const client = yield* LinearClient;
+    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const selected = {
+      ...subscription("linear.issue-has-label", "unblocked"),
+      filters: [issueNotBlockedKey],
+    };
+    const event = {
+      key: { _tag: "Issue" as const, workspace: workspaceId, id: firstIssueId },
+      revision: "label:needs-triage:1",
+      cause: { _tag: "Unknown" as const },
+      atMillis: 1,
+      entry: issueHasLabelKey,
+      workspace: workspaceId,
+    };
+    const result = yield* source.recheck?.(event, selected) ?? Effect.die("missing recheck");
+
+    assert.deepStrictEqual(result, expected);
+  }).pipe(
+    Effect.provide(
+      Layer.mock(LinearClient, {
+        readTriggerIssue: () => Effect.succeed(read),
+      }),
+    ),
+  ),
+);
+
 it.effect("skips a failed Linear issue read and advances the workspace cursor", () => {
-  const issue = (number: number) => ({
-    id: `issue-${number}`,
-    identifier: `ENG-${number}`,
-    title: `Issue ${number}`,
-    url: `https://linear.app/acme/issue/ENG-${number}`,
-    labels: ["needs-triage"],
-    assignees: ["owner"],
-    stateName: "Done",
-    stateType: "completed" as const,
-    openBlockers: 0,
-    priority: "medium" as const,
-    updatedAtMillis: number + 3_000,
-    coordinationComments: [],
-  });
   const listIssues = vi
     .fn<LinearClientService["observeIssues"]>()
     .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]))

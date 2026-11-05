@@ -6,28 +6,35 @@ import type { RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
+  filteredLabels,
   isolateProviderItemRead,
+  issueNotBlockedFilter,
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
+  passedFilters,
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   providerSubject,
+  recheckIssue,
+  sourceFailure,
   triggerEntry,
   workspaceOptionReader,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
-import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
+import { Recheck, type TriggerEvent, type TriggerSource, type TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import type { GitHubClientService, GitHubRepoRef, RawIssue, RawIssueComment } from "./client";
-import { issuePriorities, targetFor } from "./host";
+import { issueNumberOf, issuePriorities, targetFor } from "./host";
 import { hasCogworkMarker } from "./markers";
 import { sourceControlTargetFor } from "./source-control-target";
 
 export const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("github.issue-has-label");
 export const newIssueCommentKey = Schema.decodeSync(WorkflowCatalogKey)("github.new-comment-from-person");
-
+const issueNotBlocked = issueNotBlockedFilter("github");
+const issueFilters = [issueNotBlocked];
+export const githubTrackerFilters = issueFilters.map(({ entry }) => entry);
 export const githubTrackerEntries = [
   triggerEntry("github.issue-has-label", "Issue has label", "github", "issue", "condition", [
     liveParameter("label"),
@@ -69,7 +76,9 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
     const label = parameterValue(subscription.parameters, "label");
     return label !== undefined && issue.labels.includes(label);
   });
-  if (issueSubscriptions.length === 0) return [];
+  const nothingToMatch = issue.state !== "open" || issueSubscriptions.length === 0;
+  if (nothingToMatch) return [];
+  const passes = passedFilters(issueFilters, issue);
   const needsLabels = issueSubscriptions.some(({ entry }) => entry === issueHasLabelKey);
   const needsComments = issueSubscriptions.some(({ entry }) => entry === newIssueCommentKey);
   const botAllowlist = sourceControlTargetFor(workspace)?.botAllowlist ?? new Map();
@@ -95,29 +104,31 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
     origin === null
       ? ({ _tag: "Unknown" } as const)
       : ({ _tag: "Cogwork", origin: origin.item, lineage: origin.lineage } as const);
-  const labelEvents = issueSubscriptions.flatMap((subscription) => {
-    if (subscription.entry !== issueHasLabelKey) return [];
-    const label = parameterValue(subscription.parameters, "label") ?? "";
+  const conditionLabels = new Set(
+    issueSubscriptions.flatMap((subscription) =>
+      subscription.entry === issueHasLabelKey ? [parameterValue(subscription.parameters, "label") ?? ""] : [],
+    ),
+  );
+  const labelEvents = [...conditionLabels].map((label) => {
     const applied = history.findLast((event) => event.event === "labeled" && event.labelName === label);
     const atMillis = applied?.createdAtMillis ?? issue.createdAtMillis;
-    return [
-      {
-        key: {
-          _tag: "Issue",
-          workspace: workspace.config.name,
-          id: issueId,
-        },
-        revision: `label:${label}:${atMillis}`,
-        cause: issueCause,
-        atMillis,
-        entry: issueHasLabelKey,
+    return {
+      key: {
+        _tag: "Issue",
         workspace: workspace.config.name,
-        priority,
-        parameters: [{ id: "label", value: label }],
-        subject,
-        workContext: proseOf(issue, comments),
-      } satisfies TriggerEvent,
-    ];
+        id: issueId,
+      },
+      revision: `label:${label}:${atMillis}`,
+      cause: issueCause,
+      atMillis,
+      entry: issueHasLabelKey,
+      workspace: workspace.config.name,
+      priority,
+      parameters: [{ id: "label", value: label }],
+      passes,
+      subject,
+      workContext: proseOf(issue, comments),
+    } satisfies TriggerEvent;
   });
   const commentEvents = issueSubscriptions.flatMap((subscription) => {
     if (subscription.entry !== newIssueCommentKey) return [];
@@ -150,6 +161,7 @@ const eventsForIssue = Effect.fn("GitHubTrackerTriggerSource.eventsForIssue")(fu
             priority,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "label", value: label }],
+            passes,
             subject,
             workContext: proseOf(issue, comments),
           }) satisfies TriggerEvent,
@@ -171,10 +183,13 @@ const readWorkspace = Effect.fn("GitHubTrackerTriggerSource.readWorkspace")(func
   const target = targetFor(workspace);
   if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
   const since = cursor === undefined ? undefined : Math.max(0, cursor - providerModifiedSinceGraceMillis);
-  const issues = yield* client.listIssues(target, {
-    state: "all",
-    ...(since === undefined ? {} : { since }),
-  });
+  const [updated, labelled] = yield* Effect.all([
+    client.listIssues(target, { state: "all", ...(since === undefined ? {} : { since }) }),
+    Effect.forEach(filteredLabels(selected), (label) => client.listIssues(target, { state: "open", label })),
+  ]);
+  const issues = [
+    ...new Map([...updated, ...labelled.flat()].map((issue) => [issue.number, issue])).values(),
+  ];
   const trackerIssues = issues.filter(({ isPullRequest }) => !isPullRequest);
   const priorities = yield* issuePriorities(
     client,
@@ -232,6 +247,29 @@ const read = Effect.fn("GitHubTrackerTriggerSource.read")(function* (
   };
 });
 
+const recheck = Effect.fn("GitHubTrackerTriggerSource.recheck")(function* (
+  client: GitHubClientService,
+  registry: Effect.Effect<RegistryState>,
+  event: TriggerEvent,
+  subscription: TriggerSubscription,
+) {
+  if (event.key._tag !== "Issue") return Recheck.Matches();
+  const { id, workspace } = event.key;
+  const registered = (yield* registry).workspaces.find(({ config }) => config.name === workspace);
+  const target = registered ? targetFor(registered) : undefined;
+  if (!target) return Recheck.Matches();
+  const issue = yield* issueNumberOf(id).pipe(
+    Effect.flatMap((number) => client.readIssue(target, number)),
+    Effect.mapError((error) => sourceFailure("github", error)),
+  );
+  return recheckIssue(issueFilters, subscription, {
+    id,
+    open: issue.state === "open",
+    labels: issue.labels,
+    item: issue,
+  });
+});
+
 export const makeGitHubTrackerTriggerSource = (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
@@ -245,11 +283,13 @@ export const makeGitHubTrackerTriggerSource = (
   return {
     id: "github",
     entries: githubTrackerEntries,
+    filters: githubTrackerFilters,
     availability: () => Effect.succeed({ _tag: "Available" }),
     options: [{ system: "github", readers: { label } }],
     observe: (subscriptions) =>
       providerPollingStream("github", (checkpoint) =>
         read(client, registry, subscriptions, checkpoint, artifacts),
       ),
+    recheck: (event, subscription) => recheck(client, registry, event, subscription),
   };
 };

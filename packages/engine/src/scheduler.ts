@@ -110,6 +110,7 @@ const workflowRunDispositions = {
   completed: { refundBudget: false, retry: false },
   retry: { refundBudget: false, retry: true },
   skipped: { refundBudget: true, retry: false },
+  waiting: { refundBudget: true, retry: true },
 } satisfies Record<WorkflowRunOutcome, ReservationDisposition>;
 
 const workflowItemKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;

@@ -44,6 +44,7 @@ const subscription: TriggerSubscription = {
   operation: Schema.decodeSync(Schema.String.pipe(Schema.brand("WorkflowNodeId")))("extract"),
   entry: generated,
   parameters: [],
+  filters: [],
   workspaces: [],
   catchUp: { since: Date.parse("2026-10-28T00:00:00.000Z") },
 };

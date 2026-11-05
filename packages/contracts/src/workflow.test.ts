@@ -135,6 +135,35 @@ if (!transition) throw new Error("missing base Transition");
 
 const documentWith = (change: Partial<WorkflowDocument>) => decodeDocument({ ...baseDocument, ...change });
 const catalogWith = (change: Partial<WorkflowCatalog>) => decodeCatalog({ ...baseCatalog, ...change });
+
+const filterEntry = (system: string, itemKind: string) => ({
+  key: `${system}.${itemKind}-not-blocked`,
+  name: "Not blocked",
+  kind: "filter",
+  system,
+  connection: system,
+  requires: [],
+  parameters: [],
+  itemKind,
+  actsOn: [],
+  requiresWorkspace: true,
+  permissionProfile: "read-only",
+  agentInputs: [],
+  emits: [],
+});
+const filterCatalog = decodeCatalog({
+  ...baseCatalog,
+  entries: [
+    ...baseCatalog.entries,
+    filterEntry("github", "issue"),
+    filterEntry("linear", "issue"),
+    filterEntry("github", "pull-request"),
+  ],
+});
+const filteredDocument = (entry: string) =>
+  documentWith({
+    triggers: [{ ...baseDocument.triggers[0], filters: [{ entry: decodeCatalogKey(entry) }] }],
+  });
 const machineWith = (change: Partial<typeof baseMachine>) => decodeMachine({ ...baseMachine, ...change });
 const replaceOperation = (change: Partial<(typeof baseDocument.operations)[number]>) =>
   documentWith({ operations: [{ ...operation, ...change }] });
@@ -361,6 +390,10 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
     },
   },
   {
+    code: "filter-not-applicable",
+    produce: () => codesOf(filteredDocument("linear.issue-not-blocked"), filterCatalog),
+  },
+  {
     code: "hand-off-and-trigger",
     produce: () => {
       const next = decodeDocument({ ...baseDocument, operations: [operation, { ...operation, id: "next" }] });
@@ -502,6 +535,19 @@ describe("Workflow validator", () => {
     });
   });
 
+  it("accepts a filter from the Trigger's app and item kind", () => {
+    assert.isEmpty(codesOf(filteredDocument("github.issue-not-blocked"), filterCatalog));
+  });
+
+  it.each([
+    { case: "another app", entry: "linear.issue-not-blocked", code: "filter-not-applicable" },
+    { case: "another item kind", entry: "github.pull-request-not-blocked", code: "filter-not-applicable" },
+    { case: "no catalog entry", entry: "github.issue-missing", code: "unknown-catalog-entry" },
+    { case: "a Trigger entry", entry: "github.issue-opened", code: "unknown-catalog-entry" },
+  ])("reports a Trigger filter from $case", ({ entry, code }) => {
+    assert.deepStrictEqual(codesOf(filteredDocument(entry), filterCatalog), [code]);
+  });
+
   it("produces every section 5 code", () => {
     diagnosticCases.forEach((testCase) => {
       assert.include(testCase.produce(), testCase.code);
@@ -612,6 +658,29 @@ describe("Workflow edits", () => {
       if (result._tag !== "Ok") return;
       assert.isEmpty(result.value.operations[0]?.transitions ?? []);
     });
+  });
+
+  it("adds a Trigger filter once, removes it, and clears filters when the entry changes", () => {
+    const trigger = decodeNodeId("issue-opened");
+    const filter = { entry: decodeCatalogKey("github.issue-not-blocked") };
+    const added = applyWorkflowEdits(baseDocument, [
+      { _tag: "AddTriggerFilter", trigger, filter },
+      { _tag: "AddTriggerFilter", trigger, filter },
+    ]);
+    assert.strictEqual(added._tag, "Ok");
+    if (added._tag !== "Ok") return;
+    const filtersAfter = (edit: WorkflowEditBatch[number]) => {
+      const result = applyWorkflowEdits(added.value, [edit]);
+      return result._tag === "Ok" ? result.value.triggers[0]?.filters : null;
+    };
+
+    assert.deepStrictEqual(baseDocument.triggers[0]?.filters, []);
+    assert.deepStrictEqual(added.value.triggers[0]?.filters, [filter]);
+    assert.deepStrictEqual(filtersAfter({ _tag: "RemoveTriggerFilter", trigger, entry: filter.entry }), []);
+    assert.deepStrictEqual(
+      filtersAfter({ _tag: "SetTriggerEntry", trigger, entry: decodeCatalogKey("github.issue-closed") }),
+      [],
+    );
   });
 
   it("decodes documents as data", () => {

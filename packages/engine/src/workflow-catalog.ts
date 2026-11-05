@@ -52,7 +52,7 @@ export const cogworkWorkflowCatalogContribution: WorkflowCatalogContribution = {
 };
 
 const sourceContribution = (source: TriggerSource): WorkflowCatalogContribution => ({
-  entries: source.entries,
+  entries: [...source.entries, ...(source.filters ?? [])],
   templates: [],
   options: source.options ?? [],
 });

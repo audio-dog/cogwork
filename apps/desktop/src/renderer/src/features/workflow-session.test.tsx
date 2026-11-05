@@ -129,6 +129,31 @@ const catalog = decodeCatalog({
   harnesses: [{ name: "codex", models: [{ id: "gpt-5", options: [] }] }],
 });
 
+const filterEntry = (key: string, name: string, system: string | null) => ({
+  key,
+  name,
+  kind: "filter",
+  system,
+  connection: null,
+  requires: [],
+  parameters: [],
+  itemKind: null,
+  actsOn: [],
+  requiresWorkspace: true,
+  permissionProfile: "read-only",
+  agentInputs: [],
+  emits: [],
+});
+
+const filterCatalog = decodeCatalog({
+  ...catalog,
+  entries: [
+    ...catalog.entries,
+    filterEntry("test.unblocked", "Item is not blocked", null),
+    filterEntry("github.issue-not-blocked", "Issue is not blocked", "github"),
+  ],
+});
+
 const machine = decodeMachine({
   workspaces: [
     { id: "first", binds: [] },
@@ -201,7 +226,11 @@ const unused = async () => {
   throw new Error("unexpected call");
 };
 
-const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => {
+const mountEditor = async (
+  workflow: WorkflowRecord,
+  client: WorkflowClient,
+  editorCatalog: WorkflowCatalog = catalog,
+) => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -209,7 +238,7 @@ const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => 
     act(async () => {
       root.render(
         <WorkflowProvider
-          value={workflowProviderValue(sessionState([current], { catalog, machine }), client)}
+          value={workflowProviderValue(sessionState([current], { catalog: editorCatalog, machine }), client)}
         >
           <WorkflowEditor workflow={current} />
         </WorkflowProvider>,
@@ -343,6 +372,49 @@ describe("WorkflowProvider", () => {
       { _tag: "RemoveQuestion", operation: "work", question: "outcome" },
     ]);
     expect(container.querySelector('input[aria-label="Question 1"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("adds a Trigger filter from the filters that apply, and removes it", async () => {
+    const current = { record: everyRecord };
+    const edit = vi.fn<WorkflowClient["edit"]>(async (_id, edits) => {
+      const applied = applyWorkflowEdits(current.record.workingCopy, edits);
+      if (applied._tag === "Refused") throw new Error("refused");
+      current.record = { ...current.record, workingCopy: applied.value };
+      return current.record;
+    });
+    const client: WorkflowClient = {
+      create: unused,
+      edit,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const { container, render, root } = await mountEditor(everyRecord, client, filterCatalog);
+    const addFilter = [...container.querySelectorAll("button")].find(
+      ({ textContent }) => textContent === "Add filter",
+    );
+    if (!addFilter) throw new Error("Add filter did not render");
+    const menuItem = (text: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        ({ textContent }) => textContent === text,
+      );
+
+    await act(async () => addFilter.click());
+    expect(menuItem("Issue is not blocked")).toBeUndefined();
+    await act(async () => menuItem("Item is not blocked")?.click());
+    await render(current.record);
+    const remove = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove filter Item is not blocked"]',
+    );
+    if (!remove) throw new Error("The added filter did not render");
+    await act(async () => remove.click());
+
+    expect(edit.mock.calls.map(([, edits]) => edits)).toEqual([
+      [{ _tag: "AddTriggerFilter", trigger: "started", filter: { entry: "test.unblocked" } }],
+      [{ _tag: "RemoveTriggerFilter", trigger: "started", entry: "test.unblocked" }],
+    ]);
     await act(async () => root.unmount());
   });
 

@@ -93,6 +93,7 @@ const admission: TriggerAdmission = {
     operation,
     entry: decodeEntry("github.issue-changed"),
     parameters: [],
+    filters: [],
     workspaces: [workspace.config.name],
     catchUp: { since: 0 },
   },

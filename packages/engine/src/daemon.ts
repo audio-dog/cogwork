@@ -551,6 +551,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         workflowNotifications,
         slackWrite,
         triggerObservationStore,
+        triggerSources,
         adapters.worktrees,
       ),
     ),

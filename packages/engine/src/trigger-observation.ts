@@ -458,6 +458,7 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
       subscription.parameters.some((parameter) => parameter.id === id && parameter.value === value),
     );
     const afterCatchUp = subscription.catchUp === null || event.atMillis >= subscription.catchUp.since;
+    const passesFilters = subscription.filters.every((filter) => event.passes?.includes(filter));
     return (
       subscription.entry === event.entry &&
       sameScheduleWorkflow &&
@@ -465,7 +466,8 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
       sameSchedule &&
       sameTarget &&
       sameParameters &&
-      afterCatchUp
+      afterCatchUp &&
+      passesFilters
     );
   });
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
@@ -489,6 +491,7 @@ const subscriptionsOf = (
           operation: trigger.start,
           entry: trigger.entry,
           parameters: trigger.parameters,
+          filters: trigger.filters.map(({ entry }) => entry),
           workspaces,
           catchUp: conditionEntries.has(trigger.entry) ? null : { since: 0 },
         }) satisfies TriggerSubscription,
@@ -506,17 +509,20 @@ const subscriptionIdentity = ({
   operation,
   entry,
   parameters,
+  filters,
   workspaces,
-}: TriggerSubscription) => JSON.stringify({ workflow, trigger, operation, entry, parameters, workspaces });
+}: TriggerSubscription) =>
+  JSON.stringify({ workflow, trigger, operation, entry, parameters, filters, workspaces });
 
 const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
   JSON.stringify(
-    subscriptions.map(({ workflow, trigger, operation, entry, parameters, workspaces }) => ({
+    subscriptions.map(({ workflow, trigger, operation, entry, parameters, filters, workspaces }) => ({
       workflow,
       trigger,
       operation,
       entry,
       parameters,
+      filters,
       workspaces,
     })),
   );

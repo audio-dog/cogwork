@@ -44,10 +44,19 @@ export const WorkflowWorkspaceSelection = Schema.Union([
 ]).pipe(Schema.toTaggedUnion("_tag"));
 export type WorkflowWorkspaceSelection = typeof WorkflowWorkspaceSelection.Type;
 
+export const WorkflowTriggerFilter = Schema.Struct({
+  entry: WorkflowCatalogKey,
+});
+export type WorkflowTriggerFilter = typeof WorkflowTriggerFilter.Type;
+
 export const WorkflowTrigger = Schema.Struct({
   id: WorkflowNodeId,
   entry: WorkflowCatalogKey,
   parameters: Schema.Array(WorkflowParameterValue),
+  filters: Schema.Array(WorkflowTriggerFilter).pipe(
+    Schema.withConstructorDefault(Effect.succeed([])),
+    Schema.withDecodingDefaultKey(Effect.succeed([])),
+  ),
   start: WorkflowNodeId,
 });
 export type WorkflowTrigger = typeof WorkflowTrigger.Type;
@@ -348,6 +357,8 @@ export const WorkflowEdit = Schema.TaggedUnion({
     values: Schema.Array(Schema.String),
   },
   SetTriggerStart: { trigger: WorkflowNodeId, start: WorkflowNodeId },
+  AddTriggerFilter: { trigger: WorkflowNodeId, filter: WorkflowTriggerFilter },
+  RemoveTriggerFilter: { trigger: WorkflowNodeId, entry: WorkflowCatalogKey },
   AddOperation: { operation: WorkflowOperation },
   RemoveOperation: { operation: WorkflowNodeId },
   RenameOperation: { operation: WorkflowNodeId, name: TrimmedNonEmptyString },
@@ -432,6 +443,7 @@ export const WorkflowDiagnosticCode = Schema.Literals([
   "profile-too-narrow",
   "no-workspace",
   "item-kind-mismatch",
+  "filter-not-applicable",
   "connection-not-ready",
   "need-not-ready",
   "harness-unavailable",
@@ -475,7 +487,7 @@ export type WorkflowCatalogParameter = typeof WorkflowCatalogParameter.Type;
 export const WorkflowCatalogEntry = Schema.Struct({
   key: WorkflowCatalogKey,
   name: TrimmedNonEmptyString,
-  kind: Schema.Literals(["trigger", "action"]),
+  kind: Schema.Literals(["trigger", "action", "filter"]),
   system: Schema.NullOr(TrimmedNonEmptyString),
   connection: Schema.NullOr(TrimmedNonEmptyString),
   requires: Schema.Array(NeedIdentity),
@@ -785,6 +797,15 @@ const updateOperation = (
   return operations._tag === "Ok" ? ok({ ...document, operations: operations.value }) : operations;
 };
 
+const updateTrigger = (
+  document: WorkflowDocument,
+  trigger: WorkflowNodeId,
+  update: (value: WorkflowTrigger) => WorkflowTrigger,
+): Decoded<WorkflowDocument> => {
+  const triggers = updateById(document.triggers, trigger, "trigger", update);
+  return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
+};
+
 const withQuestion = (
   document: WorkflowDocument,
   operation: WorkflowNodeId,
@@ -893,27 +914,22 @@ const applyWorkflowEdit = (document: WorkflowDocument, edit: WorkflowEdit): Deco
         ? refused([unknownTarget(trigger, "trigger")])
         : ok({ ...document, triggers });
     },
-    SetTriggerEntry: ({ trigger, entry }) => {
-      const triggers = updateById(document.triggers, trigger, "trigger", (value) => ({
+    SetTriggerEntry: ({ trigger, entry }) =>
+      updateTrigger(document, trigger, (value) => ({ ...value, entry, parameters: [], filters: [] })),
+    AddTriggerFilter: ({ trigger, filter }) =>
+      updateTrigger(document, trigger, (value) => ({
         ...value,
-        entry,
-        parameters: [],
-      }));
-      return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
-    },
-    SetTriggerParameter: ({ trigger, parameter, values }) => {
-      const triggers = updateById(document.triggers, trigger, "trigger", (value) =>
-        setTriggerParameter(value, parameter, values),
-      );
-      return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
-    },
-    SetTriggerStart: ({ trigger, start }) => {
-      const triggers = updateById(document.triggers, trigger, "trigger", (value) => ({
+        filters: [...value.filters.filter(({ entry }) => entry !== filter.entry), filter],
+      })),
+    RemoveTriggerFilter: ({ trigger, entry }) =>
+      updateTrigger(document, trigger, (value) => ({
         ...value,
-        start,
-      }));
-      return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
-    },
+        filters: value.filters.filter((filter) => filter.entry !== entry),
+      })),
+    SetTriggerParameter: ({ trigger, parameter, values }) =>
+      updateTrigger(document, trigger, (value) => setTriggerParameter(value, parameter, values)),
+    SetTriggerStart: ({ trigger, start }) =>
+      updateTrigger(document, trigger, (value) => ({ ...value, start })),
     AddOperation: ({ operation }) => ok({ ...document, operations: [...document.operations, operation] }),
     RemoveOperation: ({ operation }) => {
       const operations = document.operations
@@ -1179,6 +1195,14 @@ const entryUsages = (document: WorkflowDocument) => [
     expectedKind: "trigger" as const,
     location: location("entry", { trigger: trigger.id }),
   })),
+  ...document.triggers.flatMap((trigger) =>
+    trigger.filters.map(({ entry }) => ({
+      entry,
+      parameters: [],
+      expectedKind: "filter" as const,
+      location: location("filters", { trigger: trigger.id }),
+    })),
+  ),
   ...document.operations.flatMap((operation) =>
     operation.transitions.flatMap((transition) =>
       transition.actions.map((action) => ({
@@ -1414,6 +1438,33 @@ const itemKindDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalo
           ),
         ]
       : [];
+  });
+};
+
+export const filterAppliesTo = (filter: WorkflowCatalogEntry, trigger: WorkflowCatalogEntry) =>
+  filter.kind === "filter" && filter.system === trigger.system && filter.itemKind === trigger.itemKind;
+
+const filterDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
+  const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
+  return document.triggers.flatMap((trigger) => {
+    const triggerEntry = entries.get(trigger.entry);
+    return trigger.filters.flatMap(({ entry }) => {
+      const filterEntry = entries.get(entry);
+      const notApplicable =
+        triggerEntry?.kind === "trigger" &&
+        filterEntry?.kind === "filter" &&
+        !filterAppliesTo(filterEntry, triggerEntry);
+      return notApplicable
+        ? [
+            diagnostic(
+              "filter-not-applicable",
+              "incomplete",
+              `Filter ${entry} does not apply to Trigger ${trigger.id}`,
+              location("filters", { trigger: trigger.id }),
+            ),
+          ]
+        : [];
+    });
   });
 };
 
@@ -1653,6 +1704,7 @@ const validationRules = [
   (document: WorkflowDocument, _catalog: WorkflowCatalog) => emptyInstructionDiagnostics(document),
   operationCapabilityDiagnostics,
   itemKindDiagnostics,
+  filterDiagnostics,
   (document: WorkflowDocument, _catalog: WorkflowCatalog) => unreachableDiagnostics(document),
   handOffTriggerDiagnostics,
 ] satisfies ReadonlyArray<

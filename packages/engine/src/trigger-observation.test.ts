@@ -118,6 +118,7 @@ const subscription: TriggerSubscription = {
   operation: Schema.decodeSync(WorkflowNodeId)("summarize"),
   entry,
   parameters: scheduleParameters,
+  filters: [],
   workspaces: [],
   catchUp: { since: 0 },
 };

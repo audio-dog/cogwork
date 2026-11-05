@@ -24,7 +24,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import type { RegisteredWorkspace } from "../projector";
 import { matchTriggerEvent } from "../trigger-observation";
-import type { TriggerSubscription } from "../trigger-source";
+import { Recheck, type TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import { makeWorkflowOptions } from "../workflow-options";
 import { GitHubClient, type GitHubClientService, type RawPull } from "./client";
@@ -69,6 +69,7 @@ const priorityFieldId = Schema.decodeSync(GitHubIssueFieldId)(42);
 const workflow = Schema.decodeSync(WorkflowId)("coding");
 const operation = Schema.decodeSync(WorkflowNodeId)("follow-up");
 const reviewTrigger = Schema.decodeSync(WorkflowNodeId)("review");
+const issueNotBlockedKey = Schema.decodeSync(WorkflowCatalogKey)("github.issue-not-blocked");
 const firstIssueId = Schema.decodeSync(WorkItemId)("#1");
 const secondIssueId = Schema.decodeSync(WorkItemId)("#2");
 const thirdIssueId = Schema.decodeSync(WorkItemId)("#3");
@@ -83,6 +84,7 @@ const subscription = (
   operation,
   entry: Schema.decodeSync(WorkflowCatalogKey)(entry),
   parameters,
+  filters: [],
   workspaces: [workspaceId],
   catchUp: { since },
 });
@@ -265,6 +267,111 @@ describe("GitHub Trigger sources", () => {
         }),
       ),
     ),
+  );
+
+  it.effect("matches open issues only, and a not-blocked filter only unblocked issues", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const label = [{ id: "label", value: "needs-triage" }];
+      const labelled = { ...subscription("github.issue-has-label", "labelled", label), catchUp: null };
+      const unblocked = { ...labelled, trigger: reviewTrigger, filters: [issueNotBlockedKey] };
+      const events = yield* source.observe([labelled, unblocked]).pipe(Stream.take(2), Stream.runCollect);
+      const admitted = (selected: TriggerSubscription) =>
+        [...events].filter((event) => matchTriggerEvent([selected], event).length > 0).map(({ key }) => key);
+
+      assert.deepStrictEqual(admitted(labelled), [
+        { _tag: "Issue", workspace: workspaceId, id: firstIssueId },
+        { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+      ]);
+      assert.deepStrictEqual(admitted(unblocked), [
+        { _tag: "Issue", workspace: workspaceId, id: firstIssueId },
+      ]);
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          listIssues: () =>
+            Effect.succeed([
+              { ...issue(3), state: "closed", createdAtMillis: 0 },
+              issue(1),
+              { ...issue(2), openBlockers: 1 },
+            ]),
+          listIssueEvents: () => Effect.succeed([]),
+        }),
+      ),
+    ),
+  );
+
+  it.effect("reads every open issue with a filtered Trigger's label, so an unblocked issue is seen", () => {
+    const listIssues = vi.fn<GitHubClientService["listIssues"]>((_target, query) =>
+      Effect.succeed(query?.label === "needs-triage" ? [issue(1)] : []),
+    );
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const filtered = {
+        ...subscription("github.issue-has-label", "unblocked", [{ id: "label", value: "needs-triage" }]),
+        catchUp: null,
+        filters: [issueNotBlockedKey],
+      };
+      const events = yield* source.observe([filtered]).pipe(Stream.take(1), Stream.runCollect);
+
+      assert.deepStrictEqual(
+        [...events].map(({ key }) => key),
+        [{ _tag: "Issue", workspace: workspaceId, id: firstIssueId }],
+      );
+      assert.deepStrictEqual(listIssues.mock.calls.at(-1)?.[1], { state: "open", label: "needs-triage" });
+    }).pipe(
+      Effect.provide(Layer.mock(GitHubClient, { listIssues, listIssueEvents: () => Effect.succeed([]) })),
+    );
+  });
+
+  it.effect.each([
+    { case: "still matches", read: issue(1), filtered: true, expected: Recheck.Matches() },
+    {
+      case: "is closed",
+      read: { ...issue(1), state: "closed" as const },
+      filtered: false,
+      expected: Recheck.Ended({ reason: "#1 is closed" }),
+    },
+    {
+      case: "lost its label",
+      read: { ...issue(1), labels: [] },
+      filtered: false,
+      expected: Recheck.Ended({ reason: "#1 no longer has label needs-triage" }),
+    },
+    {
+      case: "is blocked",
+      read: { ...issue(1), openBlockers: 2 },
+      filtered: true,
+      expected: Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }),
+    },
+    {
+      case: "is blocked, unfiltered",
+      read: { ...issue(1), openBlockers: 2 },
+      filtered: false,
+      expected: Recheck.Matches(),
+    },
+  ])("rechecks an issue that $case", ({ read, filtered, expected }) =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubTrackerTriggerSource(client, Effect.succeed(registryState));
+      const labelled = subscription("github.issue-has-label", "label", [
+        { id: "label", value: "needs-triage" },
+      ]);
+      const selected = filtered ? { ...labelled, filters: [issueNotBlockedKey] } : labelled;
+      const event = {
+        key: { _tag: "Issue" as const, workspace: workspaceId, id: firstIssueId },
+        revision: "label:needs-triage:1",
+        cause: { _tag: "Unknown" as const },
+        atMillis: 1,
+        entry: issueHasLabelKey,
+        workspace: workspaceId,
+      };
+      const result = yield* source.recheck?.(event, selected) ?? Effect.die("missing recheck");
+
+      assert.deepStrictEqual(result, expected);
+    }).pipe(Effect.provide(Layer.mock(GitHubClient, { readIssue: () => Effect.succeed(read) }))),
   );
 
   it.effect("carries the trimmed issue title and its link on a label event", () =>
