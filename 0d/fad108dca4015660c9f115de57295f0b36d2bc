@@ -1,0 +1,29 @@
+packages/engine/src/run-plan-resolution.test.ts
+  s_538b88c1870644::t_21f95f5d6c68b9 1,3,5-6,10,14,19,24,27-28
+packages/engine/src/run-plan-resolution.ts
+  s_538b88c1870644::t_5d78ee3c5a4676 4,17,20,45,50,77-81,84-90,114,119,127,145,147-148,157,159,188,204,208,211,227
+packages/engine/src/run-preparation.test.ts
+  s_538b88c1870644::t_0dcde4951dfd7b 1,13,16,20,34,42-46,99,102,107,116,119,121,127,132-143,150,152-153,165,169,173
+packages/engine/src/run-preparation.ts
+  s_538b88c1870644::t_791fdc0c58bf27 56,62,78,85-87,129-139,141-151,167,182-192,195
+packages/engine/src/testing/run-plan-fixtures.ts
+  s_538b88c1870644::t_33177bd31d9ea8 1-58
+packages/engine/src/workflow-run.ts
+  s_538b88c1870644::t_765421849e392f 40,204,356-358,376,382,401-403,428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0dfad108dca4015660c9f115de57295f0b36d2bc",
+  "prompts": {},
+  "sessions": {
+    "s_538b88c1870644": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c72e8c5d-5267-4a56-b32b-67ced11a7346",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
