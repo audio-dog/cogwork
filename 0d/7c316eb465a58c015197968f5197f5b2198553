@@ -1,0 +1,19 @@
+docs/research/cursor-acp-versus-cursor-sdk.md
+  s_1ac9aba6a00bb9::t_f125cc82a48202 11-37,40-44,48,50-54,56-57,61-102,106-150,154-161,163,167-169,175-176,180-184,188-196,198-199,203-208,210,212-214,216-217,223-245,249,251,254-257,261-265,280-282,287-303
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d7c316eb465a58c015197968f5197f5b2198553",
+  "prompts": {},
+  "sessions": {
+    "s_1ac9aba6a00bb9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a5227d49a1fda99c1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
