@@ -61,50 +61,59 @@ describe("Linear trigger prose", () => {
 });
 
 describe("Linear issue listing", () => {
-  it.effect("lists completed issues changed since a cursor and only open issues when observing", () =>
-    Effect.gen(function* () {
-      const issue = (identifier: string, stateType: string) => ({
-        id: identifier,
-        identifier,
-        title: identifier,
-        url: `https://linear.app/acme/issue/${identifier}`,
-        labels: [],
-        assignees: [],
-        stateName: stateType,
-        stateType,
-        openBlockers: 0,
-        priority: "medium" as const,
-        updatedAtMillis: 1,
-        coordinationComments: [],
-      });
-      const client = yield* LinearClient.pipe(
-        Effect.provide(
-          Layer.mock(LinearClient, {
-            observeIssues: (_ref, _coordination, _assignees, _updatedSince, includeCompleted) =>
-              Effect.succeed(
-                includeCompleted
-                  ? [issue("AUD-7", "started"), issue("AUD-8", "completed")]
-                  : [issue("AUD-7", "started")],
-              ),
-          }),
-        ),
-      );
-      const reads = makeIssueReads(client);
+  it.effect(
+    "lists completed issues changed since a cursor, and only open issues when observing or reading a label",
+    () =>
+      Effect.gen(function* () {
+        const issue = (identifier: string, stateType: string) => ({
+          id: identifier,
+          identifier,
+          title: identifier,
+          url: `https://linear.app/acme/issue/${identifier}`,
+          labels: [],
+          assignees: [],
+          stateName: stateType,
+          stateType,
+          openBlockers: 0,
+          priority: "medium" as const,
+          updatedAtMillis: 1,
+          coordinationComments: [],
+        });
+        const client = yield* LinearClient.pipe(
+          Effect.provide(
+            Layer.mock(LinearClient, {
+              observeIssues: (_ref, _coordination, _assignees, _updatedSince, includeCompleted) =>
+                Effect.succeed(
+                  includeCompleted
+                    ? [issue("AUD-7", "started"), issue("AUD-8", "completed")]
+                    : [issue("AUD-7", "started")],
+                ),
+              observeLabelledIssues: (_ref, label) =>
+                Effect.succeed([{ ...issue("AUD-7", "started"), labels: [label] }]),
+            }),
+          ),
+        );
+        const reads = makeIssueReads(client);
 
-      const observed = yield* reads.observe(workspace);
-      const changed = yield* reads.itemsChangedSince(workspace, 1);
+        const observed = yield* reads.observe(workspace);
+        const changed = yield* reads.itemsChangedSince(workspace, 1);
+        const labelled = yield* reads.openItemsWithLabel(workspace, "needs-triage");
 
-      assert.deepStrictEqual(
-        observed.map(({ id }) => id),
-        [issueId],
-      );
-      assert.deepStrictEqual(
-        changed.map(({ id, open }) => [id, open]),
-        [
-          [issueId, true],
-          [completedIssueId, false],
-        ],
-      );
-    }),
+        assert.deepStrictEqual(
+          observed.map(({ id }) => id),
+          [issueId],
+        );
+        assert.deepStrictEqual(
+          changed.map(({ id, open }) => [id, open]),
+          [
+            [issueId, true],
+            [completedIssueId, false],
+          ],
+        );
+        assert.deepStrictEqual(
+          labelled.map(({ id, labels }) => [id, labels]),
+          [[issueId, ["needs-triage"]]],
+        );
+      }),
   );
 });

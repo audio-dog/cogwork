@@ -11,7 +11,7 @@ import {
 } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
-import { isResolvedState, type LinearClientService, type LinearTeamRef } from "./client";
+import { isResolvedState, type LinearClientService, type LinearTeamRef, type RawIssue } from "./client";
 import { hasCogworkMarker, wireCodec } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
@@ -106,41 +106,39 @@ const targetForIssue = Effect.fn("linear.issueTarget")(function* (
   return target;
 });
 
-const listItems = (client: LinearClientService) =>
-  Effect.fn("linear.listItems")(function* (
-    workspace: WorkspaceIssueTrackerBinding,
-    sinceMillis: number | undefined,
-    includeCompleted: boolean,
-  ) {
-    const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
-      client.observeIssues(target, null, null, sinceMillis, includeCompleted),
-    );
-    return yield* Effect.forEach(perTeam.flat(), (issue) =>
-      Effect.map(
-        itemId(issue.identifier),
-        (id): ListedTrackerItem => ({
-          id,
-          title: issue.title,
-          url: issue.url,
-          assignees: issue.assignees,
-          openBlockers: issue.openBlockers,
-          priority: issue.priority,
-          states: [...issue.labels, issue.stateName],
-          open: !isResolvedState(issue.stateType),
-          labels: issue.labels,
-          createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
-          lastTouchedAtMillis: issue.updatedAtMillis,
-        }),
-      ),
-    );
-  });
+const listItems = Effect.fn("linear.listItems")(function* (
+  workspace: WorkspaceIssueTrackerBinding,
+  readTeam: (target: LinearTarget) => Effect.Effect<ReadonlyArray<RawIssue>, IssueTrackerError>,
+) {
+  const perTeam = yield* Effect.forEach(targetsFor(workspace), readTeam);
+  return yield* Effect.forEach(perTeam.flat(), (issue) =>
+    Effect.map(
+      itemId(issue.identifier),
+      (id): ListedTrackerItem => ({
+        id,
+        title: issue.title,
+        url: issue.url,
+        assignees: issue.assignees,
+        openBlockers: issue.openBlockers,
+        priority: issue.priority,
+        states: [...issue.labels, issue.stateName],
+        open: !isResolvedState(issue.stateType),
+        labels: issue.labels,
+        createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
+        lastTouchedAtMillis: issue.updatedAtMillis,
+      }),
+    ),
+  );
+});
 
 export const makeIssueReads = (client: LinearClientService) => {
-  const list = listItems(client);
   return {
-    observe: (workspace: WorkspaceIssueTrackerBinding) => list(workspace, undefined, false),
+    observe: (workspace: WorkspaceIssueTrackerBinding) =>
+      listItems(workspace, (target) => client.observeIssues(target, null)),
     itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
-      list(workspace, sinceMillis, true),
+      listItems(workspace, (target) => client.observeIssues(target, null, null, sinceMillis, true)),
+    openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
+      listItems(workspace, (target) => client.observeLabelledIssues(target, label)),
     readProse: Effect.fn("linear.readProse")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,

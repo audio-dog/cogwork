@@ -66,37 +66,28 @@ const item = (number: number, overrides: Partial<ListedTrackerItem> = {}): Liste
   ...overrides,
 });
 
-const comment = (
-  id: string,
-  createdAtMillis: number,
-  authoredByPerson: boolean,
-  body = id,
-): TrackerComment => ({
+const comment = (id: string, createdAtMillis: number, authoredByPerson: boolean): TrackerComment => ({
   id,
   author: authoredByPerson ? "maintainer" : "outside-user",
   authorAssociation: authoredByPerson ? "MEMBER" : "NONE",
   authoredByPerson,
-  body,
+  body: id,
   createdAtMillis,
 });
 
-const comments = [
-  comment("1", 900, true),
-  comment("2", 2_000, true),
-  comment("3", 1_900, false, "written by Cogwork\n<!-- cogwork:agent-note -->"),
-  comment("5", 1_600, false),
-];
+const comments = [comment("1", 900, true), comment("2", 2_000, true), comment("5", 1_600, false)];
 
 const tracker = (options: {
   readonly changed?: ReadonlyArray<ListedTrackerItem>;
-  readonly open?: ReadonlyArray<ListedTrackerItem>;
+  readonly labelled?: ReadonlyArray<ListedTrackerItem>;
   readonly read?: (workspace: WorkspaceIssueTrackerBinding) => void;
 }) => ({
   itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding) => {
     options.read?.(workspace);
     return Effect.succeed(options.changed ?? []);
   },
-  observe: () => Effect.succeed(options.open ?? []),
+  openItemsWithLabel: (_workspace: WorkspaceIssueTrackerBinding, label: string) =>
+    Effect.succeed((options.labelled ?? []).filter(({ labels }) => labels.includes(label))),
   readTriggerProse: () => Effect.succeed({ body: "Body", comments }),
   labelAppliedAt: (_workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) =>
     Effect.succeed(id === firstIssueId ? 1_500 : null),
@@ -105,12 +96,11 @@ const tracker = (options: {
 
 const workContext = {
   body: "Body",
-  comments: comments.map(({ author, authorAssociation, body, createdAtMillis }) => ({
-    author,
-    authorAssociation,
-    body,
-    createdAtMillis,
-  })),
+  comments: [
+    { author: "maintainer", authorAssociation: "MEMBER", body: "1", createdAtMillis: 900 },
+    { author: "maintainer", authorAssociation: "MEMBER", body: "2", createdAtMillis: 2_000 },
+    { author: "outside-user", authorAssociation: "NONE", body: "5", createdAtMillis: 1_600 },
+  ],
 };
 
 describe("Tracker Trigger source", () => {
@@ -125,6 +115,7 @@ describe("Tracker Trigger source", () => {
           read: (workspace) => read.push(workspace.config.name),
         }),
         Effect.succeed(registryState),
+        null,
       );
       return Effect.gen(function* () {
         const events = yield* source
@@ -196,12 +187,13 @@ describe("Tracker Trigger source", () => {
   });
 
   it.effect(
-    "reads every open item for a filtered Trigger, so an unblocked item that did not change is seen first by its earlier label time",
+    "reads open items with a filtered Trigger's label, so an unblocked item that did not change is seen",
     () => {
       const source = makeTrackerTriggerSource(
         "github",
-        tracker({ changed: [item(1)], open: [item(3)] }),
+        tracker({ changed: [item(1)], labelled: [item(3), item(4, { labels: ["other"] })] }),
         Effect.succeed(registryState),
+        null,
       );
       const filtered = { ...subscription(issueHasLabelKey, "unblocked"), filters: [issueNotBlockedKey] };
       return Effect.gen(function* () {

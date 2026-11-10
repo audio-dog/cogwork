@@ -157,7 +157,7 @@ export const makeIssueReads = (client: GitHubClientService) => {
   });
   const listItems = Effect.fn("github.listItems")(function* (
     workspace: WorkspaceIssueTrackerBinding,
-    query: { readonly state: "open" | "all"; readonly since?: number },
+    query: { readonly state: "open" | "all"; readonly since?: number; readonly label?: string },
   ) {
     const target = targetFor(workspace);
     if (!target) return [];
@@ -186,6 +186,8 @@ export const makeIssueReads = (client: GitHubClientService) => {
     observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, { state: "open" }),
     itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
       listItems(workspace, { state: "all", since: sinceMillis }),
+    openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
+      listItems(workspace, { state: "open", label }),
     readProse: Effect.fn("github.readProse")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,

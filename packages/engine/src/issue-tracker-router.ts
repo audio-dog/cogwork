@@ -23,6 +23,7 @@ export const route = (
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
     itemsChangedSince: (workspace, sinceMillis) =>
       forWorkspace(workspace).itemsChangedSince(workspace, sinceMillis),
+    openItemsWithLabel: (workspace, label) => forWorkspace(workspace).openItemsWithLabel(workspace, label),
     readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
     readTriggerProse: (workspace, id) => forWorkspace(workspace).readTriggerProse(workspace, id),
     labelAppliedAt: (workspace, id, label) => forWorkspace(workspace).labelAppliedAt(workspace, id, label),

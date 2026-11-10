@@ -2,13 +2,8 @@ import { type Cause, WorkflowCatalogKey, type WorkItemId, type WorkspaceId } fro
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type {
-  IssueTrackerError,
-  IssueTrackerService,
-  ListedTrackerItem,
-  TrackerProse,
-} from "./issue-tracker";
-import type { RegisteredWorkspace, RegistryState, WorkspaceIssueTrackerBinding } from "./projector";
+import type { IssueTrackerService, ListedTrackerItem, TrackerProse } from "./issue-tracker";
+import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
   catchUpParameter,
   catchUpSince,
@@ -33,12 +28,8 @@ import type { WorkflowArtifactStoreService } from "./workflow-artifact-store";
 type TrackerSystem = "github" | "linear";
 type TrackerReads = Pick<
   IssueTrackerService,
-  "itemsChangedSince" | "readTriggerProse" | "labelAppliedAt" | "listLabels"
-> & {
-  readonly observe: (
-    workspace: WorkspaceIssueTrackerBinding,
-  ) => Effect.Effect<ReadonlyArray<ListedTrackerItem>, IssueTrackerError>;
-};
+  "itemsChangedSince" | "openItemsWithLabel" | "readTriggerProse" | "labelAppliedAt" | "listLabels"
+>;
 
 const unknownCause: Cause = { _tag: "Unknown" };
 
@@ -60,7 +51,7 @@ export const makeTrackerTriggerSource = (
   system: TrackerSystem,
   issueTracker: TrackerReads,
   registry: Effect.Effect<RegistryState>,
-  artifacts: WorkflowArtifactStoreService | null = null,
+  artifacts: WorkflowArtifactStoreService | null,
 ): TriggerSource => {
   const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)(`${system}.issue-has-label`);
   const newCommentKey = Schema.decodeSync(WorkflowCatalogKey)(`${system}.new-comment-from-person`);
@@ -89,9 +80,9 @@ export const makeTrackerTriggerSource = (
     item: ListedTrackerItem,
     now: number,
   ) {
-    const matching = selected.filter((subscription) => {
+    const matching = selected.flatMap((subscription) => {
       const label = parameterValue(subscription.parameters, "label");
-      return label !== undefined && item.labels.includes(label);
+      return label !== undefined && item.labels.includes(label) ? [{ subscription, label }] : [];
     });
     if (!item.open || matching.length === 0) return [];
     const name = workspace.config.name;
@@ -106,11 +97,7 @@ export const makeTrackerTriggerSource = (
       workContext: workContextOf(prose),
     } as const;
     const conditionLabels = new Set(
-      matching.flatMap((subscription) =>
-        subscription.entry === issueHasLabelKey
-          ? [parameterValue(subscription.parameters, "label") ?? ""]
-          : [],
-      ),
+      matching.flatMap(({ subscription, label }) => (subscription.entry === issueHasLabelKey ? [label] : [])),
     );
     const labelEvents = yield* Effect.forEach(conditionLabels, (label) =>
       Effect.map(issueTracker.labelAppliedAt(workspace, item.id, label), (appliedAt) => {
@@ -125,9 +112,8 @@ export const makeTrackerTriggerSource = (
         } satisfies TriggerEvent;
       }),
     );
-    const commentEvents = matching.flatMap((subscription) => {
+    const commentEvents = matching.flatMap(({ subscription, label }) => {
       if (subscription.entry !== newCommentKey) return [];
-      const label = parameterValue(subscription.parameters, "label") ?? "";
       const cutoff = catchUpSince(subscription.parameters, subscription.catchUp?.since ?? now, now);
       return prose.comments
         .filter((comment) => comment.authoredByPerson && comment.createdAtMillis > cutoff)
@@ -157,12 +143,11 @@ export const makeTrackerTriggerSource = (
     const selected = workspaceSubscriptions(name, subscriptions);
     if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: name };
     const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
-    const readsOpenItems = filteredLabels(selected).length > 0;
-    const [changed, open] = yield* Effect.all([
+    const [changed, labelled] = yield* Effect.all([
       issueTracker.itemsChangedSince(workspace, since),
-      readsOpenItems ? issueTracker.observe(workspace) : Effect.succeed([]),
+      Effect.forEach(filteredLabels(selected), (label) => issueTracker.openItemsWithLabel(workspace, label)),
     ]);
-    const events = yield* Effect.forEach(uniqueItems([...changed, ...open]), (item) =>
+    const events = yield* Effect.forEach(uniqueItems([...changed, ...labelled.flat()]), (item) =>
       isolateProviderItemRead(
         { source: system, workspace: name, item: item.id },
         eventsForItem(workspace, selected, item, now),
