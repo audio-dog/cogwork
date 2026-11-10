@@ -1,8 +1,10 @@
 import {
+  WorkflowActionOrigin,
   type WorkflowActionPlanStep,
   type WorkflowActionTarget,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
+  WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -17,18 +19,20 @@ import {
   itemWorkspaceOf,
   parameterValues,
   stringInput,
+  type TargetContext,
   type TargetProducer,
+  WorkflowActionPlanDecodeError,
 } from "./workflow-action-entry";
 
 export const issueTrackerApps = ["github", "linear"] as const;
 export type IssueTrackerApp = (typeof issueTrackerApps)[number];
 
-export type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
+type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
   readonly app: WorkspaceIssueTrackerBinding["config"]["issueTracker"]["type"];
   readonly config: WorkspaceIssueTrackerBinding["config"];
 };
 
-export const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
+const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
   entry: WorkflowCatalogEntry,
   selected: ReadonlyArray<RegisteredWorkspace>,
   workspaceId: string | undefined,
@@ -47,7 +51,7 @@ export const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget
   } satisfies FrozenIssueTarget;
 });
 
-export const targetFields = (target: FrozenIssueTarget) => ({
+const targetFields = (target: FrozenIssueTarget) => ({
   workspace: target.config.name,
   app: target.app,
   issueTracker: target.config.issueTracker,
@@ -74,7 +78,44 @@ const currentIssueTargetProducer: TargetProducer = (context) =>
     itemWorkspaceOf(context.admission) ?? context.workspace,
   ).pipe(Effect.flatMap((target) => currentIssueTarget(context.admission, target)));
 
-export const issueParameter = (id: string, required: boolean) =>
+const selectedIssueTarget = (context: TargetContext) =>
+  frozenIssueTarget(context.entry, context.workspaces, context.workspace);
+
+const newIssueTargetProducer: TargetProducer = (context) =>
+  selectedIssueTarget(context).pipe(
+    Effect.map(
+      (target): WorkflowActionTarget =>
+        target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
+    ),
+  );
+
+const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(function* (
+  issueInput: string,
+  target: FrozenIssueTarget | null,
+) {
+  if (target === null) return { _tag: "NoWorkspace" } as const;
+  const prefix = `${target.config.name}:`;
+  const hasWorkspacePrefix = issueInput.includes(":");
+  if (hasWorkspacePrefix && !issueInput.startsWith(prefix)) {
+    return yield* decodeFailure("The issue input does not identify the selected Workspace");
+  }
+  const rawIssue = issueInput.startsWith(prefix) ? issueInput.slice(prefix.length) : issueInput;
+  const issue = yield* Schema.decodeEffect(WorkItemId)(rawIssue).pipe(
+    Effect.mapError(() =>
+      WorkflowActionPlanDecodeError.make({ message: `The issue input is invalid: ${issueInput}` }),
+    ),
+  );
+  return { _tag: "ExistingIssue", ...targetFields(target), issue } as const;
+});
+
+const existingIssueTargetProducer: TargetProducer = (context) =>
+  selectedIssueTarget(context).pipe(
+    Effect.flatMap((target) =>
+      existingIssueTarget(typeof context.inputs.issue === "string" ? context.inputs.issue : "", target),
+    ),
+  );
+
+const issueParameter = (id: string, required: boolean) =>
   ({
     id,
     required,
@@ -82,7 +123,7 @@ export const issueParameter = (id: string, required: boolean) =>
     values: [],
   }) satisfies WorkflowCatalogEntry["parameters"][number];
 
-export const issueActionRow = (
+const issueActionRow = (
   system: IssueTrackerApp,
   id: string,
   name: string,
@@ -116,10 +157,27 @@ const requireIssueTarget = (step: WorkflowActionPlanStep) => {
   return issue === null ? Effect.fail(invalidTarget(step)) : Effect.succeed(issue);
 };
 
-export const requireWorkspace = (context: ActionContext) =>
+const requireWorkspace = (context: ActionContext) =>
   context.workspace === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.workspace);
 
-export const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (context: ActionContext) {
+const createIssue = Effect.fn("WorkflowActionPlan.createIssue")(function* (context: ActionContext) {
+  const workspace = yield* requireWorkspace(context);
+  if (context.step.target._tag !== "NewIssue") return yield* invalidTarget(context.step);
+  return yield* context.tracker.createIssue(workspace, {
+    title: stringInput(context.step, "issue_title"),
+    body: stringInput(context.step, "issue_body"),
+    labels: parameterValues(context.step.parameters, "label"),
+    origin: WorkflowActionOrigin.make({
+      item: context.plan.item,
+      workflow: context.plan.workflow,
+      attempt: context.plan.attempt,
+      writeKey: context.step.writeKey,
+      lineage: context.plan.lineage,
+    }),
+  });
+});
+
+const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (context: ActionContext) {
   const workspace = yield* requireWorkspace(context);
   const issue = yield* requireIssueTarget(context.step);
   yield* context.tracker.commentIssue(
@@ -156,15 +214,38 @@ const closeIssue = Effect.fn("WorkflowActionPlan.closeIssue")(function* (context
   return null;
 });
 
-const currentIssueEntry = (row: WorkflowCatalogEntry, execute: ActionExecutor): ActionEntry => ({
+const issueEntry = (
+  row: WorkflowCatalogEntry,
+  target: TargetProducer,
+  execute: ActionExecutor,
+): ActionEntry => ({
   row,
-  target: currentIssueTargetProducer,
+  target,
   execute,
   phase: "write",
   tools: [],
 });
 
-const currentIssueEntries = (system: IssueTrackerApp) => [
+const currentIssueEntry = (row: WorkflowCatalogEntry, execute: ActionExecutor) =>
+  issueEntry(row, currentIssueTargetProducer, execute);
+
+const issueEntries = (system: IssueTrackerApp) => [
+  issueEntry(
+    issueActionRow(
+      system,
+      "create-issue",
+      "Create an issue",
+      ["issue_title", "issue_body"],
+      [issueParameter("label", false)],
+    ),
+    newIssueTargetProducer,
+    createIssue,
+  ),
+  issueEntry(
+    issueActionRow(system, "comment-issue", "Comment on an existing issue", ["issue", "comment"]),
+    existingIssueTargetProducer,
+    commentIssue,
+  ),
   currentIssueEntry(
     issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], ["issue"]),
     commentIssue,
@@ -183,4 +264,4 @@ const currentIssueEntries = (system: IssueTrackerApp) => [
   ),
 ];
 
-export const issueActionEntries = issueTrackerApps.flatMap(currentIssueEntries);
+export const issueActionEntries = issueTrackerApps.flatMap(issueEntries);

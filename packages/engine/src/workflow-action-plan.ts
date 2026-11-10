@@ -20,7 +20,6 @@ import {
   type WorkflowParameterValue,
   type WorkflowReviewComment,
   WorkflowSlackActionArtifact,
-  WorkItemId,
   WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
@@ -52,13 +51,6 @@ import {
 } from "./workflow-action-entry";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { actionEntryFor, compareActionPhase } from "./workflow-action-registry";
-import {
-  commentIssue,
-  type FrozenIssueTarget,
-  frozenIssueTarget,
-  requireWorkspace,
-  targetFields,
-} from "./workflow-actions-issue";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 import { PullRequestReadiness, WorktreeManager } from "./worktree";
@@ -150,53 +142,6 @@ const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceCont
     repository: workspace.repository,
   } satisfies FrozenSourceControlTarget;
 });
-
-const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(function* (
-  issueInput: string,
-  target: FrozenIssueTarget | null,
-) {
-  if (target === null) return { _tag: "NoWorkspace" } as const;
-  const prefix = `${target.config.name}:`;
-  const hasWorkspacePrefix = issueInput.includes(":");
-  if (hasWorkspacePrefix && !issueInput.startsWith(prefix)) {
-    return yield* decodeFailure("The issue input does not identify the selected Workspace");
-  }
-  const rawIssue = issueInput.startsWith(prefix) ? issueInput.slice(prefix.length) : issueInput;
-  const issue = yield* Schema.decodeEffect(WorkItemId)(rawIssue).pipe(
-    Effect.mapError(() =>
-      WorkflowActionPlanDecodeError.make({ message: `The issue input is invalid: ${issueInput}` }),
-    ),
-  );
-  return { _tag: "ExistingIssue", ...targetFields(target), issue } as const;
-});
-
-type IssueTargetProducer = (
-  admission: TriggerAdmission,
-  target: FrozenIssueTarget | null,
-  inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-) => Effect.Effect<WorkflowActionTarget, WorkflowActionPlanDecodeError>;
-
-const issueTargetProducers = new Map<string, IssueTargetProducer>([
-  [
-    "create-issue",
-    (
-      _admission: TriggerAdmission,
-      target: FrozenIssueTarget | null,
-      _inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-    ) =>
-      Effect.succeed<WorkflowActionTarget>(
-        target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
-      ),
-  ],
-  [
-    "comment-issue",
-    (
-      _admission: TriggerAdmission,
-      target: FrozenIssueTarget | null,
-      inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-    ) => existingIssueTarget(typeof inputs.issue === "string" ? inputs.issue : "", target),
-  ],
-]);
 
 const sourceControlActions = new Set([
   "open-pull-request",
@@ -320,13 +265,6 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
 
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
 
-const issueTargetProducer =
-  (producer: IssueTargetProducer): TargetProducer =>
-  (context) =>
-    frozenIssueTarget(context.entry, context.workspaces, context.workspace).pipe(
-      Effect.flatMap((target) => producer(context.admission, target, context.inputs)),
-    );
-
 const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
 
 const slackTarget = (target: unknown) =>
@@ -366,7 +304,6 @@ const slackChannelTarget: TargetProducer = ({ parameters }) => {
 };
 
 const targetProducers = new Map<string, TargetProducer>([
-  ...[...issueTargetProducers].map(([name, producer]) => [name, issueTargetProducer(producer)] as const),
   ["send-message", slackChannelTarget],
   ["reply-in-thread", slackItemTarget],
   ["add-reaction", slackItemTarget],
@@ -589,23 +526,6 @@ const worktreeError = (message: string, retryable: boolean) =>
   new IssueTrackerError({ reason: "unavailable", message, retryable });
 
 const actionExecutors: Record<string, ActionExecutor> = {
-  "create-issue": Effect.fn("WorkflowActionPlan.createIssue")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    if (context.step.target._tag !== "NewIssue") return yield* invalidTarget(context.step);
-    return yield* context.tracker.createIssue(workspace, {
-      title: stringInput(context.step, "issue_title"),
-      body: stringInput(context.step, "issue_body"),
-      labels: parameterValues(context.step.parameters, "label"),
-      origin: WorkflowActionOrigin.make({
-        item: context.plan.item,
-        workflow: context.plan.workflow,
-        attempt: context.plan.attempt,
-        writeKey: context.step.writeKey,
-        lineage: context.plan.lineage,
-      }),
-    });
-  }),
-  "comment-issue": commentIssue,
   "open-pull-request": Effect.fn("WorkflowActionPlan.openPullRequest")(function* (context: ActionContext) {
     const workspace = yield* requireSourceWorkspace(context);
     const sourceControl = yield* requireSourceControl(context);
