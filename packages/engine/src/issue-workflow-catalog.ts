@@ -1,7 +1,7 @@
 import { WorkflowTemplate } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { registeredActionRowsFor } from "./workflow-action-registry";
-import { type IssueTrackerApp, issueActionRow, issueParameter } from "./workflow-actions-issue";
+import type { IssueTrackerApp } from "./workflow-actions-issue";
 import type { WorkflowCatalogContribution } from "./workflow-catalog";
 
 const decodeTemplate = Schema.decodeUnknownSync(WorkflowTemplate);
@@ -333,16 +333,6 @@ const codingPipelineTemplate = (system: "github" | "linear") => {
 
 export const issueTrackerWorkflowCatalogContribution = (system: IssueTrackerApp) =>
   ({
-    entries: [
-      issueActionRow(
-        system,
-        "create-issue",
-        "Create an issue",
-        ["issue_title", "issue_body"],
-        [issueParameter("label", false)],
-      ),
-      issueActionRow(system, "comment-issue", "Comment on an existing issue", ["issue", "comment"]),
-      ...registeredActionRowsFor(system),
-    ],
+    entries: registeredActionRowsFor(system),
     templates: [granolaIssueTemplate(system), stalenessSweepTemplate(system), codingPipelineTemplate(system)],
   }) satisfies WorkflowCatalogContribution;
