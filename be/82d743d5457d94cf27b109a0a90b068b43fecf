@@ -1,0 +1,29 @@
+packages/engine/src/workflow-actions-issue.test.ts
+  s_8a95cebd8955b2::t_a3304ade992012 15,43,133,137,179-182
+packages/engine/src/workflow-actions-issue.ts
+  s_663ef55bbdc3be::t_b9fa0ade89f3dd 30,35,54,118,126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be82d743d5457d94cf27b109a0a90b068b43fecf",
+  "prompts": {},
+  "sessions": {
+    "s_663ef55bbdc3be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9542fe47-343b-4574-a7dd-b49b64560833",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8a95cebd8955b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "75cbb65d-2ce3-40ad-bd7f-c3a495eb0b40",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
