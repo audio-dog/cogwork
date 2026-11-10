@@ -164,8 +164,11 @@ describe("GitHub issue listing", () => {
         [issueId],
       );
       assert.deepStrictEqual(
-        changed.map(({ id }) => id),
-        [issueId, closedIssueId],
+        changed.map(({ id, open }) => [id, open]),
+        [
+          [issueId, true],
+          [closedIssueId, false],
+        ],
       );
     }),
   );

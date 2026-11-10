@@ -30,6 +30,7 @@ export interface TrackerItem {
 }
 
 export interface ListedTrackerItem extends TrackerItem {
+  readonly open: boolean;
   readonly labels: ReadonlyArray<string>;
   readonly createdAtMillis: number;
 }

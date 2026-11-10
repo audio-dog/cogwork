@@ -174,6 +174,7 @@ export const makeIssueReads = (client: GitHubClientService) => {
           openBlockers: issue.openBlockers,
           priority: priorities.get(issue.number) ?? defaultPriority,
           states: issue.labels,
+          open: issue.state === "open",
           labels: issue.labels,
           createdAtMillis: issue.createdAtMillis,
           lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,

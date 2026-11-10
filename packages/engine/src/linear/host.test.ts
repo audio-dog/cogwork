@@ -99,8 +99,11 @@ describe("Linear issue listing", () => {
         [issueId],
       );
       assert.deepStrictEqual(
-        changed.map(({ id }) => id),
-        [issueId, completedIssueId],
+        changed.map(({ id, open }) => [id, open]),
+        [
+          [issueId, true],
+          [completedIssueId, false],
+        ],
       );
     }),
   );

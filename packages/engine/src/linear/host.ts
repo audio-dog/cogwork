@@ -11,7 +11,7 @@ import {
 } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
-import type { LinearClientService, LinearTeamRef } from "./client";
+import { isResolvedState, type LinearClientService, type LinearTeamRef } from "./client";
 import { hasCogworkMarker, wireCodec } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
@@ -126,6 +126,7 @@ const listItems = (client: LinearClientService) =>
           openBlockers: issue.openBlockers,
           priority: issue.priority,
           states: [...issue.labels, issue.stateName],
+          open: !isResolvedState(issue.stateType),
           labels: issue.labels,
           createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
           lastTouchedAtMillis: issue.updatedAtMillis,
