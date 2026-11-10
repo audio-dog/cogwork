@@ -8,7 +8,7 @@ import type {
 } from "@cogwork/contracts";
 
 export interface WorkspaceIssueTrackerBinding {
-  readonly config: Pick<WorkspaceConfig, "name" | "issueTracker">;
+  readonly config: Pick<WorkspaceConfig, "name" | "issueTracker" | "sourceControl">;
   readonly repository?: string;
 }
 

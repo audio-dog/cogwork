@@ -21,7 +21,12 @@ export const route = (
   return {
     triggerSources,
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
+    itemsChangedSince: (workspace, sinceMillis) =>
+      forWorkspace(workspace).itemsChangedSince(workspace, sinceMillis),
     readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
+    readTriggerProse: (workspace, id) => forWorkspace(workspace).readTriggerProse(workspace, id),
+    labelAppliedAt: (workspace, id, label) => forWorkspace(workspace).labelAppliedAt(workspace, id, label),
+    listLabels: (workspace) => forWorkspace(workspace).listLabels(workspace),
     assignees: (workspace, id) => forWorkspace(workspace).assignees?.(workspace, id) ?? Effect.succeed([]),
     createIssue: (workspace, input) => forWorkspace(workspace).createIssue(workspace, input),
     commentIssue: (workspace, id, body, writeKey) =>
