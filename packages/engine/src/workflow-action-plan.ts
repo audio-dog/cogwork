@@ -9,7 +9,6 @@ import {
   WorkflowActionArtifact,
   WorkflowActionOrigin,
   WorkflowActionPlan,
-  type WorkflowActionPlanArtifact,
   WorkflowActionPlanStep,
   WorkflowActionTarget,
   type WorkflowAgentInputValue,
@@ -17,7 +16,6 @@ import {
   type WorkflowCatalogEntry,
   type WorkflowDocument,
   type WorkflowNodeId,
-  WorkflowNotificationId,
   type WorkflowOperation,
   type WorkflowParameterValue,
   type WorkflowReviewComment,
@@ -25,13 +23,12 @@ import {
   WorkItemId,
   WorkItemRef,
 } from "@cogwork/contracts";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Coordination, defaultClaimant } from "./coordination";
-import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
-import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
+import { Coordination } from "./coordination";
+import { IssueTracker, IssueTrackerError } from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { type SlackPostReceipt, SlackWrite, SlackWriteError } from "./slack-write";
@@ -42,15 +39,29 @@ import {
   type SourceControlProviderService,
 } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import {
+  type ActionContext,
+  type ActionExecutor,
+  decodeFailure,
+  invalidTarget,
+  itemWorkspaceOf,
+  parameterValues,
+  stringInput,
+  type TargetProducer,
+  WorkflowActionPlanDecodeError,
+} from "./workflow-action-entry";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { actionEntryFor, compareActionPhase } from "./workflow-action-registry";
+import {
+  commentIssue,
+  type FrozenIssueTarget,
+  frozenIssueTarget,
+  requireWorkspace,
+  targetFields,
+} from "./workflow-actions-issue";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 import { PullRequestReadiness, WorktreeManager } from "./worktree";
-
-export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
-  "WorkflowActionPlanDecodeError",
-  { message: Schema.String },
-) {}
 
 const planPreview = (plan: WorkflowActionPlan) =>
   JSON.stringify({
@@ -91,8 +102,6 @@ const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArra
   return workspaces.filter(({ config }) => selected.includes(config.name));
 };
 
-const decodeFailure = (message: string) => Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
-
 const planJson = Schema.fromJsonString(WorkflowActionPlan);
 
 const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function* (plan: WorkflowActionPlan) {
@@ -104,45 +113,12 @@ const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function
   return createHash("sha256").update(encoded).digest("hex");
 });
 
-type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
-  readonly app: WorkspaceIssueTrackerBinding["config"]["issueTracker"]["type"];
-  readonly config: WorkspaceIssueTrackerBinding["config"];
-};
-
 type FrozenSourceControlTarget = Pick<RegisteredWorkspace, "repository"> & {
   readonly app: SourceControlType;
   readonly config: Pick<RegisteredWorkspace["config"], "name" | "issueTracker" | "sourceControl">;
 };
 
 const githubSourceControlType = Schema.decodeSync(SourceControlType)("github");
-
-const issueTrackerApps = ["github", "linear"] as const;
-
-const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
-  entry: WorkflowCatalogEntry,
-  selected: ReadonlyArray<RegisteredWorkspace>,
-  workspaceId: string | undefined,
-) {
-  if (workspaceId === "none") return null;
-  if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
-  const app = issueTrackerApps.find((candidate) => candidate === entry.system);
-  const workspace = selected.find(({ config }) => config.name === workspaceId);
-  if (!app || workspace?.config.issueTracker.type !== app) {
-    return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
-  }
-  return {
-    app: workspace.config.issueTracker.type,
-    config: { name: workspace.config.name, issueTracker: workspace.config.issueTracker },
-    repository: workspace.repository,
-  } satisfies FrozenIssueTarget;
-});
-
-const targetFields = (target: FrozenIssueTarget) => ({
-  workspace: target.config.name,
-  app: target.app,
-  issueTracker: target.config.issueTracker,
-  repository: target.repository ?? null,
-});
 
 const sourceControlTargetFields = (target: FrozenSourceControlTarget) => ({
   workspace: target.config.name,
@@ -174,29 +150,6 @@ const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceCont
     repository: workspace.repository,
   } satisfies FrozenSourceControlTarget;
 });
-
-const itemWorkspaceOf = (admission: TriggerAdmission) =>
-  WorkItemRef.matchOrElse(
-    admission.event.key,
-    {
-      Issue: ({ workspace }) => workspace,
-      PullRequest: ({ workspace }) => workspace,
-    },
-    () => undefined,
-  );
-
-const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarget | null) => {
-  if (target === null) return Effect.succeed<WorkflowActionTarget>({ _tag: "NoWorkspace" });
-  const ref = admission.event.key;
-  if (ref._tag !== "Issue" || ref.workspace !== target.config.name) {
-    return decodeFailure("The action cannot target this item in the selected Workspaces");
-  }
-  return Effect.succeed<WorkflowActionTarget>({
-    _tag: "CurrentIssue",
-    ...targetFields(target),
-    issue: ref.id,
-  });
-};
 
 const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(function* (
   issueInput: string,
@@ -244,8 +197,6 @@ const issueTargetProducers = new Map<string, IssueTargetProducer>([
     ) => existingIssueTarget(typeof inputs.issue === "string" ? inputs.issue : "", target),
   ],
 ]);
-
-const currentIssueActions = ["comment-this-item", "add-label", "remove-label", "close-this-issue"];
 
 const sourceControlActions = new Set([
   "open-pull-request",
@@ -369,33 +320,12 @@ const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTarget
 
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
 
-interface TargetContext {
-  readonly entry: WorkflowCatalogEntry;
-  readonly admission: TriggerAdmission;
-  readonly workspaces: ReadonlyArray<RegisteredWorkspace>;
-  readonly inputs: Readonly<Record<string, WorkflowAgentInputValue>>;
-  readonly parameters: ReadonlyArray<WorkflowParameterValue>;
-  readonly workspace: string | undefined;
-  readonly sourceControl: SourceControlProviderService | undefined;
-}
-
-type TargetProducer = (
-  context: TargetContext,
-) => Effect.Effect<WorkflowActionTarget, WorkflowActionPlanDecodeError>;
-
 const issueTargetProducer =
   (producer: IssueTargetProducer): TargetProducer =>
   (context) =>
     frozenIssueTarget(context.entry, context.workspaces, context.workspace).pipe(
       Effect.flatMap((target) => producer(context.admission, target, context.inputs)),
     );
-
-const currentIssueTargetProducer: TargetProducer = (context) =>
-  frozenIssueTarget(
-    context.entry,
-    context.workspaces,
-    itemWorkspaceOf(context.admission) ?? context.workspace,
-  ).pipe(Effect.flatMap((target) => currentIssueTarget(context.admission, target)));
 
 const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
 
@@ -437,7 +367,6 @@ const slackChannelTarget: TargetProducer = ({ parameters }) => {
 
 const targetProducers = new Map<string, TargetProducer>([
   ...[...issueTargetProducers].map(([name, producer]) => [name, issueTargetProducer(producer)] as const),
-  ...currentIssueActions.map((name) => [name, currentIssueTargetProducer] as const),
   ["send-message", slackChannelTarget],
   ["reply-in-thread", slackItemTarget],
   ["add-reaction", slackItemTarget],
@@ -456,15 +385,14 @@ const targetFor = (
     | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
     | undefined,
 ) => {
+  const context = { entry, admission, workspaces, inputs, parameters, workspace, sourceControl };
+  const registered = actionEntryFor(entry.key);
+  if (registered) return registered.target(context);
   const name = actionName(entry.key);
   if (sourceControlActions.has(name)) {
     return sourceControlTargetFor(entry, admission, workspaces, inputs, sourceControl, workspace, snapshots);
   }
-  const producer = targetProducers.get(name);
-  return (
-    producer?.({ entry, admission, workspaces, inputs, parameters, workspace, sourceControl }) ??
-    cogworkTarget
-  );
+  return targetProducers.get(name)?.(context) ?? cogworkTarget;
 };
 
 const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
@@ -485,17 +413,6 @@ const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
   return Object.fromEntries(entries);
 });
 
-const actionRanks = [
-  { when: (entry: string) => entry === "cogwork.wait-for-approval", rank: 0 },
-  { when: (entry: string) => entry === "cogwork.notify", rank: 2 },
-  {
-    when: (entry: string) => entry === "cogwork.hand-to-me" || entry === "cogwork.stop",
-    rank: 3,
-  },
-] as const;
-
-const actionRank = (entry: string) => actionRanks.find(({ when }) => when(entry))?.rank ?? 1;
-
 export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(function* (input: BuildInput) {
   const entries = new Map(input.catalog.entries.map((entry) => [entry.key, entry]));
   const matched = matchWorkflowTransitions(input.operation, input.output.answers);
@@ -504,7 +421,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     .map((action, documentPosition) => ({ action, documentPosition }))
     .toSorted(
       (left, right) =>
-        actionRank(left.action.entry) - actionRank(right.action.entry) ||
+        compareActionPhase(left.action.entry, right.action.entry) ||
         left.documentPosition - right.documentPosition,
     );
   const steps = yield* Effect.forEach(actions, ({ action }, position) =>
@@ -561,14 +478,6 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
   return WorkflowActionPlan.make({ ...pending, digest });
 });
 
-const parameterValues = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
-  parameters.filter((parameter) => parameter.id === id).map(({ value }) => value);
-
-const stringInput = (step: WorkflowActionPlanStep, name: string) => {
-  const value = step.inputs[name];
-  return typeof value === "string" ? value : "";
-};
-
 const reviewCommentsInput = (step: WorkflowActionPlanStep) => {
   const value = step.inputs.review_comments;
   return Array.isArray(value) ? value : [];
@@ -592,11 +501,6 @@ const targetWorkspace = (step: WorkflowActionPlanStep) => {
   };
 };
 
-const targetIssue = (step: WorkflowActionPlanStep) => {
-  const target = step.target;
-  return target._tag === "CurrentIssue" || target._tag === "ExistingIssue" ? target.issue : null;
-};
-
 const sourceTargetWorkspace = (
   step: WorkflowActionPlanStep,
   workspaces: ReadonlyArray<RegisteredWorkspace>,
@@ -609,42 +513,6 @@ const sourceTargetWorkspace = (
   const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
   return app === target.app ? (workspace ?? null) : null;
 };
-
-const invalidTarget = (step: WorkflowActionPlanStep) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    retryable: false,
-    message: `Action ${step.entry} has an invalid target`,
-  });
-
-interface ActionContext {
-  readonly item: TriggerAdmission["event"]["key"];
-  readonly plan: WorkflowActionPlan;
-  readonly step: WorkflowActionPlanStep;
-  readonly workspace: WorkspaceIssueTrackerBinding | null;
-  readonly tracker: IssueTrackerActionService;
-  readonly notifications: Effect.Success<typeof WorkflowNotifications>;
-  readonly ledger: Effect.Success<typeof RunLedger>;
-  readonly sourceControl: Effect.Success<typeof SourceControlProvider> | null;
-  readonly sourceWorkspace: RegisteredWorkspace | null;
-  readonly worktrees: Effect.Success<typeof WorktreeManager> | null;
-  readonly slack: Effect.Success<typeof SlackWrite>;
-  readonly actionPlans: Effect.Success<typeof WorkflowActionPlanStore>;
-  readonly coordination: Effect.Success<typeof Coordination>;
-  readonly observationStore: Effect.Success<typeof TriggerObservationStore>;
-}
-
-const requireIssueTarget = (step: WorkflowActionPlanStep) => {
-  const issue = targetIssue(step);
-  return issue === null ? Effect.fail(invalidTarget(step)) : Effect.succeed(issue);
-};
-
-const requireWorkspace = (context: ActionContext) =>
-  context.workspace === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.workspace);
-
-type ActionExecutor = (
-  context: ActionContext,
-) => Effect.Effect<WorkflowActionPlanArtifact | null, IssueTrackerError | SlackWriteError>;
 
 const slackInvalidTarget = (step: WorkflowActionPlanStep) =>
   new SlackWriteError({
@@ -720,77 +588,6 @@ const requirePullRequest = Effect.fn("WorkflowActionPlan.requirePullRequest")(fu
 const worktreeError = (message: string, retryable: boolean) =>
   new IssueTrackerError({ reason: "unavailable", message, retryable });
 
-const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (context: ActionContext) {
-  const workspace = yield* requireWorkspace(context);
-  const issue = yield* requireIssueTarget(context.step);
-  yield* context.tracker.commentIssue(
-    workspace,
-    issue,
-    stringInput(context.step, "comment"),
-    context.step.writeKey,
-  );
-  return null;
-});
-
-const actionFailure = (error: unknown) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    retryable: true,
-    message: error instanceof Error ? error.message : String(error),
-  });
-
-const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPendingApproval")(function* (
-  context: ActionContext,
-) {
-  const plans = yield* context.actionPlans.list;
-  const waiting = plans.filter(
-    (plan) =>
-      plan.item === context.plan.item &&
-      plan.attempt !== context.plan.attempt &&
-      plan.steps.some(({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending"),
-  );
-  const admissions = yield* context.observationStore.admissions;
-  const endedAtMillis = yield* Clock.currentTimeMillis;
-  yield* Effect.forEach(
-    waiting,
-    (plan) =>
-      Effect.gen(function* () {
-        const matchingAdmissions = admissions.filter(
-          (admission) =>
-            keyOf(admission.event.key) === plan.item &&
-            admission.subscription.workflow === plan.workflow &&
-            admission.event.revision === plan.revision,
-        );
-        yield* Effect.forEach(
-          matchingAdmissions,
-          (admission) =>
-            context.observationStore.complete(
-              admission,
-              context.coordination.markProcessed(admission.event.key, admission.event.revision),
-            ),
-          { discard: true },
-        );
-        yield* context.actionPlans.remove(plan.item, plan.workflow, plan.attempt);
-        const run = yield* context.ledger.getRun(plan.attempt);
-        if (run !== null) {
-          yield* context.ledger.updateRun(plan.attempt, {
-            status: "interrupted",
-            usage: null,
-            endedAtMillis,
-          });
-        }
-      }),
-    { discard: true },
-  );
-  if (waiting.length > 0) {
-    yield* context.coordination.handBack(context.item, { by: defaultClaimant });
-  }
-  return null;
-});
-
-const withdrawPendingApproval = (context: ActionContext) =>
-  withdrawPendingApprovalRaw(context).pipe(Effect.mapError(actionFailure));
-
 const actionExecutors: Record<string, ActionExecutor> = {
   "create-issue": Effect.fn("WorkflowActionPlan.createIssue")(function* (context: ActionContext) {
     const workspace = yield* requireWorkspace(context);
@@ -808,30 +605,7 @@ const actionExecutors: Record<string, ActionExecutor> = {
       }),
     });
   }),
-  "comment-this-item": commentIssue,
   "comment-issue": commentIssue,
-  "add-label": Effect.fn("WorkflowActionPlan.addLabel")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    const labels = parameterValues(context.step.parameters, "label");
-    if (labels.length === 0) return yield* invalidTarget(context.step);
-    yield* context.tracker.addLabels(workspace, issue, labels);
-    return null;
-  }),
-  "remove-label": Effect.fn("WorkflowActionPlan.removeLabel")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    const label = parameterValues(context.step.parameters, "label").at(0);
-    if (!label) return yield* invalidTarget(context.step);
-    yield* context.tracker.removeLabel(workspace, issue, label);
-    return null;
-  }),
-  "close-this-issue": Effect.fn("WorkflowActionPlan.closeIssue")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    yield* context.tracker.closeIssue(workspace, issue);
-    return null;
-  }),
   "open-pull-request": Effect.fn("WorkflowActionPlan.openPullRequest")(function* (context: ActionContext) {
     const workspace = yield* requireSourceWorkspace(context);
     const sourceControl = yield* requireSourceControl(context);
@@ -963,42 +737,11 @@ const actionExecutors: Record<string, ActionExecutor> = {
     yield* context.slack.draftReply(target, stringInput(context.step, "reply"));
     return null;
   }),
-  notify: Effect.fn("WorkflowActionPlan.notify")(function* (context: ActionContext) {
-    const run = yield* context.ledger.getRun(context.plan.attempt);
-    if (run === null) return yield* invalidTarget(context.step);
-    yield* context.notifications
-      .write(run, {
-        id: WorkflowNotificationId.make(
-          `${keyOf(context.item)}:${context.plan.attempt}:${context.step.writeKey}`,
-        ),
-        item: context.item,
-        workflow: context.plan.workflow,
-        operation: context.plan.operation,
-        summary: stringInput(context.step, "notification"),
-        answers: context.plan.answers,
-        artifacts: context.plan.steps.flatMap(({ artifact }) =>
-          Schema.is(WorkflowActionArtifact)(artifact) ? [artifact] : [],
-        ),
-        atMillis: context.plan.createdAtMillis,
-      })
-      .pipe(
-        Effect.mapError(
-          (error) =>
-            new IssueTrackerError({
-              reason: "unavailable",
-              retryable: error.retryable,
-              message: error.message,
-            }),
-        ),
-      );
-    return null;
-  }),
-  stop: () => Effect.succeed(null),
-  "hand-to-me": () => Effect.succeed(null),
-  "withdraw-pending-approval": withdrawPendingApproval,
 };
 
 const executorFor = (step: WorkflowActionPlanStep) => {
+  const registered = actionEntryFor(step.entry);
+  if (registered) return registered.execute;
   const name = actionName(step.entry);
   return Object.entries(actionExecutors).find(([candidate]) => candidate === name)?.[1];
 };

@@ -75,11 +75,12 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
+  TriggerObservation,
   TriggerObservationStore,
   TriggerObservationStoreError,
   type TriggerObservationStoreService,
 } from "./trigger-observation";
-import { Recheck, type TriggerSource, TriggerSources } from "./trigger-source";
+import { Recheck } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
 import {
   WorkflowActionPlanStore,
@@ -266,31 +267,6 @@ const documentWithTransition = (transition: {
     operations: [{ ...summarize, transitions: [transition] }],
   });
 };
-
-const recheckingSource = (result: Recheck): TriggerSource => ({
-  id: "clock",
-  entries: [
-    {
-      key: scheduleEntry,
-      name: "Every day",
-      kind: "trigger",
-      triggerKind: "condition",
-      system: null,
-      connection: null,
-      requires: [],
-      parameters: [],
-      itemKind: null,
-      actsOn: [],
-      requiresWorkspace: false,
-      permissionProfile: "read-only",
-      agentInputs: [],
-      emits: [],
-    },
-  ],
-  availability: () => Effect.succeed({ _tag: "Available" }),
-  observe: () => Stream.empty,
-  recheck: () => Effect.succeed(result),
-});
 
 const workflowServiceWith = (publishedCopy: WorkflowDocument): WorkflowsService => ({
   ...workflowService,
@@ -564,6 +540,7 @@ const requirements = Layer.mergeAll(
 );
 
 interface HarnessBehavior {
+  readonly projectedMembers?: HarnessRunner["projectedMembers"];
   readonly preflight?: HarnessRunner["preflight"];
   readonly run?: HarnessRunner["run"];
   readonly coordination?: (service: CoordinationService) => CoordinationService;
@@ -571,8 +548,49 @@ interface HarnessBehavior {
   readonly issueTracker?: IssueTrackerService;
   readonly registry?: RegistryState;
   readonly sourceControl?: SourceControlProviderService;
-  readonly triggerSources?: ReadonlyArray<TriggerSource>;
+  readonly recheck?: Recheck;
 }
+
+const issueSearchService = (baseCatalogResult: Effect.Success<WorkflowsService["catalog"]>) => {
+  const createIssueEntry = decodeEntry("github.create-issue");
+  const issueDocument = WorkflowDocument.make({
+    ...document,
+    operations: document.operations.map((candidate) => ({
+      ...candidate,
+      transitions: candidate.transitions.map((candidateTransition) => ({
+        ...candidateTransition,
+        actions: [{ entry: createIssueEntry, parameters: [] }],
+      })),
+    })),
+  });
+  return {
+    ...workflowServiceWith(issueDocument),
+    catalog: Effect.succeed({
+      ...baseCatalogResult,
+      catalog: {
+        ...baseCatalogResult.catalog,
+        entries: [
+          ...baseCatalogResult.catalog.entries,
+          {
+            key: createIssueEntry,
+            name: "Create an issue",
+            kind: "action" as const,
+            system: "github",
+            connection: "github",
+            requires: [],
+            parameters: [],
+            itemKind: null,
+            actsOn: ["*"],
+            requiresWorkspace: true,
+            permissionProfile: "read-only" as const,
+            agentInputs: ["issue_title", "issue_body"],
+            emits: [],
+          },
+        ],
+      },
+    }),
+  } satisfies WorkflowsService;
+};
 
 const testProgram = (
   objects: ReadonlyArray<unknown>,
@@ -585,13 +603,14 @@ const testProgram = (
     const baseObservationStore = yield* makeMemoryTriggerObservationStore;
     const observationStore = behavior.observationStore?.(baseObservationStore) ?? baseObservationStore;
     const notifications = yield* makeNotifications;
+    const observation = yield* TriggerObservation;
     const issueTracker = behavior.issueTracker ?? (yield* IssueTracker);
     const registry = readOnlyRegistry(behavior.registry ?? emptyRegistry);
     const harness = makeHarness([
       {
         name: harnessName,
         sessionKind: "owned-transcript",
-        projectedMembers: [],
+        projectedMembers: behavior.projectedMembers ?? ["Tools"],
         planMiddleware: ["sandbox", "persistence", "instruction-context"],
         execution: fullHarnessExecution,
         capabilities: {
@@ -633,7 +652,10 @@ const testProgram = (
       Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
       Effect.provideService(SourceControlProvider, behavior.sourceControl ?? emptySourceControl),
-      Effect.provideService(TriggerSources, behavior.triggerSources ?? []),
+      Effect.provideService(TriggerObservation, {
+        ...observation,
+        recheck: () => Effect.succeed(behavior.recheck ?? Recheck.Matches()),
+      }),
     );
     return { runner, coordination, notifications, observationStore };
   });
@@ -1175,7 +1197,7 @@ describe("WorkflowRun", () => {
   it.effect("skips an admission whose item no longer matches its Trigger, with no attempt", () =>
     Effect.gen(function* () {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
-        triggerSources: [recheckingSource(Recheck.Ended({ reason: "Issue #1 is closed" }))],
+        recheck: Recheck.Ended({ reason: "Issue #1 is closed" }),
       });
       yield* observationStore.putAll([admission]);
 
@@ -1192,7 +1214,7 @@ describe("WorkflowRun", () => {
   it.effect("keeps an admission waiting while its item fails a Trigger filter", () =>
     Effect.gen(function* () {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
-        triggerSources: [recheckingSource(Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }))],
+        recheck: Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }),
       });
       yield* observationStore.putAll([admission]);
 
@@ -1200,31 +1222,6 @@ describe("WorkflowRun", () => {
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
       assert.isNull(yield* Ref.get(coordination.processed));
       assert.lengthOf(yield* observationStore.admissions, 1);
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
-  it.effect("does not recheck an admission handed off past the Trigger's start", () =>
-    Effect.gen(function* () {
-      const next = decodeNode("next");
-      const handedOff: TriggerAdmission = {
-        ...admission,
-        subscription: { ...admission.subscription, operation: next },
-      };
-      const { runner } = yield* testProgram(
-        [{}],
-        { triggerSources: [recheckingSource(Recheck.Ended({ reason: "#1 no longer has label ready" }))] },
-        workflowServiceWith(
-          WorkflowDocument.make({
-            ...document,
-            operations: [
-              ...document.operations,
-              ...document.operations.map((value) => ({ ...value, id: next })),
-            ],
-          }),
-        ),
-      );
-
-      assert.strictEqual(yield* runner.execute(handedOff), "retry");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -1432,45 +1429,6 @@ describe("WorkflowRun", () => {
 
   it.effect("adds issue search only when a Transition writes an issue", () =>
     Effect.gen(function* () {
-      const createIssueEntry = decodeEntry("github.create-issue");
-      const issueDocument = WorkflowDocument.make({
-        ...document,
-        operations: document.operations.map((candidate) => ({
-          ...candidate,
-          transitions: candidate.transitions.map((candidateTransition) => ({
-            ...candidateTransition,
-            actions: [{ entry: createIssueEntry, parameters: [] }],
-          })),
-        })),
-      });
-      const baseCatalogResult = yield* workflowService.catalog;
-      const issueService = {
-        ...workflowServiceWith(issueDocument),
-        catalog: Effect.succeed({
-          ...baseCatalogResult,
-          catalog: {
-            ...baseCatalogResult.catalog,
-            entries: [
-              ...baseCatalogResult.catalog.entries,
-              {
-                key: createIssueEntry,
-                name: "Create an issue",
-                kind: "action" as const,
-                system: "github",
-                connection: "github",
-                requires: [],
-                parameters: [],
-                itemKind: null,
-                actsOn: ["*"],
-                requiresWorkspace: true,
-                permissionProfile: "read-only" as const,
-                agentInputs: ["issue_title", "issue_body"],
-                emits: [],
-              },
-            ],
-          },
-        }),
-      } satisfies WorkflowsService;
       const { runner } = yield* testProgram(
         [
           {
@@ -1482,7 +1440,7 @@ describe("WorkflowRun", () => {
           },
         ],
         {},
-        issueService,
+        issueSearchService(yield* workflowService.catalog),
       );
 
       yield* runner.execute(admission);
@@ -1492,6 +1450,44 @@ describe("WorkflowRun", () => {
       const plan = yield* (yield* RunLedger).getRunPlan(run.id);
 
       assert.deepStrictEqual(plan?.tools, ["issue-search"]);
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
+        { member: "Tools", disposition: "projected" },
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("lists no engine tool for a Harness that does not project Tools", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram(
+        [
+          {
+            summary: "Create it",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { issue_title: "Title", issue_body: "Body" },
+            workspace: "none",
+          },
+        ],
+        { projectedMembers: [] },
+        issueSearchService(yield* workflowService.catalog),
+      );
+
+      yield* runner.execute(admission);
+      const [run] = yield* (yield* RunLedger).listRuns(1);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.deepStrictEqual(plan?.tools, []);
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
+        {
+          member: "Tools",
+          disposition: "not-projected",
+          reason: "selected harness does not project Tools",
+        },
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

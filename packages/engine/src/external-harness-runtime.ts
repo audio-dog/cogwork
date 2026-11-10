@@ -7,6 +7,7 @@ import {
   type ModelOptionSelections,
   type RunId,
   type RunPlanInstruction,
+  type RunPlanMember,
   type RunPlanMessage,
   type RunPlanOperatingInstructions,
   type SessionId,
@@ -145,6 +146,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter> {
   readonly catalog: HarnessCatalogOptions;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
+  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Tools">>;
   readonly inheritedEnvironment: ReadonlyArray<string>;
   readonly makeAdapter: (input: {
     readonly model: AdapterModel<Adapter>;
@@ -473,8 +475,16 @@ const gitWritablePaths = (
   return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
 };
 
+const projectedTools = (
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "declaredMembers">,
+  request: HarnessRequest,
+) =>
+  descriptor.declaredMembers?.includes("Tools")
+    ? (request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [])
+    : [];
+
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
-  descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "sharedGit" | "declaredMembers">,
   request: HarnessRequest,
   checkoutPath: string,
   session: SessionId,
@@ -494,7 +504,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     checkout: { path: checkoutPath, gitWritablePaths: writablePaths },
     prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
-    tools: request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [],
+    tools: projectedTools(descriptor, request),
   } satisfies ExternalHarnessResolvedRequest;
 });
 
@@ -691,6 +701,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
   return {
     name: descriptor.name,
     ...externalHarnessDeclaration,
+    projectedMembers: [...externalHarnessDeclaration.projectedMembers, ...(descriptor.declaredMembers ?? [])],
     execution: descriptor.capabilities.execution,
     capabilities: descriptor.capabilities.profile,
     authentication: descriptor.authentication,

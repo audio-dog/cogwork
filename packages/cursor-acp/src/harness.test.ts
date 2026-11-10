@@ -36,7 +36,7 @@ const resumedSessionId = Schema.decodeSync(SessionId)("sess-cursor-resume");
 const decodeObservation = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({
-      instructions: Schema.String,
+      prompt: Schema.String,
       model: Schema.String,
       mcp: Schema.Array(
         Schema.Struct({
@@ -489,7 +489,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
   );
 
   it.effect(
-    "uses host login and the shared mandatory Workspace projection",
+    "uses host login and projects instructions without touching repo instruction files",
     () =>
       withCursorEnvironment(
         Effect.gen(function* () {
@@ -497,6 +497,8 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
             Effect.promise(() => localProcessSandbox({}).create({})),
             (sandbox) => Effect.promise(() => sandbox.destroy()),
           );
+          yield* Effect.promise(() => checkout.fs.write("AGENTS.md", "existing repo agents\n"));
+          yield* Effect.promise(() => checkout.fs.write("CLAUDE.md", "existing repo claude\n"));
           const base = request(checkout.id);
           const projectedRequest = {
             ...base,
@@ -539,8 +541,8 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
             .join("");
           const observation = decodeObservation(output);
 
-          assert.include(observation.instructions, "Mandatory repository context.");
-          assert.include(observation.instructions, "/operating-instructions/triage-agent");
+          assert.include(observation.prompt, "Mandatory repository context.");
+          assert.include(observation.prompt, "/operating-instructions/triage-agent");
           assert.strictEqual(observation.model, "gpt-5.6-sol-high");
           assert.deepStrictEqual(observation.mcp, [
             {
@@ -554,6 +556,14 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           assert.deepStrictEqual(observation.networkEnvironment, cursorNetworkEnvironmentProbe);
           assert.isFalse(observation.hasCursorApiKey);
           assert.notInclude(output, "cursor-mcp-secret");
+          assert.strictEqual(
+            yield* Effect.promise(() => checkout.fs.read("AGENTS.md")),
+            "existing repo agents\n",
+          );
+          assert.strictEqual(
+            yield* Effect.promise(() => checkout.fs.read("CLAUDE.md")),
+            "existing repo claude\n",
+          );
         }),
       ),
     30_000,

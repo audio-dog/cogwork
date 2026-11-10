@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
@@ -19,11 +18,17 @@ const result = JSON.stringify({
   proposal: "Verified and ready.",
 });
 
-const responseContent = async (sessionParams) => {
+const promptText = (prompt) =>
+  prompt
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+const responseContent = (sessionParams, prompt) => {
   if (process.argv.includes("--malformed")) return "Disposition: ready-for-agent";
   if (!process.argv.includes("--observe")) return result;
   return JSON.stringify({
-    instructions: await readFile("AGENTS.md", "utf8"),
+    prompt: promptText(prompt),
     model: process.argv[process.argv.indexOf("--model") + 1],
     mcp: sessionParams.mcpServers.map((server) => ({
       name: server.name,
@@ -94,7 +99,7 @@ class FakeCursorAgent {
       );
       if (!refused) throw new Error("cursor/create_plan was not refused with method-not-found");
     }
-    const content = await responseContent(this.sessionParams);
+    const content = responseContent(this.sessionParams, params.prompt);
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,
       update: {
