@@ -1,0 +1,25 @@
+packages/engine/src/github/host.test.ts
+  s_f41f7d4b466b1e::t_88334850d632f0 10,30,120-123,138,144-172
+packages/engine/src/github/host.ts
+  s_f41f7d4b466b1e::t_1005eb1a2e04d0 28,61-62,160,164,185-187
+packages/engine/src/linear/host.test.ts
+  s_f41f7d4b466b1e::t_50e2c372949874 9,20,35-41,56,62-107
+packages/engine/src/linear/host.ts
+  s_f41f7d4b466b1e::t_0760e3c3e48f17 15,110-114,116,140-142,172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "224f0bef7c77e80fe4ee03096983737705adccd0",
+  "prompts": {},
+  "sessions": {
+    "s_f41f7d4b466b1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31eaaffb-0f8a-4a6c-bef3-44727a5a1f41",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
