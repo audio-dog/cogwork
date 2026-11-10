@@ -233,6 +233,15 @@ const projection = [
   "Provenance",
 ].map((member) => ({ member, disposition: "projected" as const }));
 
+const toolsDisposition = (projected: boolean) =>
+  projected
+    ? { member: "Tools", disposition: "projected" as const }
+    : {
+        member: "Tools",
+        disposition: "not-projected" as const,
+        reason: "selected harness does not project Tools",
+      };
+
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
   const coordination = yield* Coordination;
@@ -477,6 +486,7 @@ export const make = Effect.gen(function* () {
       harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
     );
     if (Result.isFailure(preflight)) return yield* decline(admission);
+    const projectsTools = harness.projectedMembers(selectedHarness).includes("Tools");
 
     const claim =
       pendingClaim ??
@@ -570,10 +580,12 @@ export const make = Effect.gen(function* () {
             : `Run Workflow Operation: ${operation.name}`,
         },
       ],
-      tools: [
-        ...(issueSearchEnabled ? ["issue-search" as const] : []),
-        ...(pullRequestToolEnabled ? ["pull-request" as const] : []),
-      ],
+      tools: projectsTools
+        ? [
+            ...(issueSearchEnabled ? ["issue-search" as const] : []),
+            ...(pullRequestToolEnabled ? ["pull-request" as const] : []),
+          ]
+        : [],
       skills: [],
       mcp: [],
       subagents: [],
@@ -601,7 +613,7 @@ export const make = Effect.gen(function* () {
         resolution: [],
         stamps: [],
         projectedNames: [],
-        projection,
+        projection: [...projection, toolsDisposition(projectsTools)],
         observation,
       },
     });

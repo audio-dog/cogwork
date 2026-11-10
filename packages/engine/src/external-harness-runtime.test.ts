@@ -448,6 +448,11 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         "Connections",
       ]);
       assert.deepStrictEqual(runner.planMiddleware, ["sandbox"]);
+      const toolRunner = externalHarnessRunner(
+        { ...descriptor([], new ControlledProbe()), declaredMembers: ["Tools"] },
+        { authentication: () => Effect.succeed({ mode: "host", secrets: {} }) },
+      );
+      assert.include(toolRunner.projectedMembers, "Tools");
     });
 
     it.effect(
@@ -485,12 +490,10 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         }),
     );
 
-    it.effect("renders only engine-owned tools named by the Run Plan", () =>
+    it.effect("renders only the Run Plan's engine tools, and only for a descriptor that declares Tools", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-engine-tool-" });
-        const probe = new ControlledProbe();
-        const harness = makeHarness(descriptor(terminalEvents, probe));
         const pullRequestTool = toolDefinition({
           name: "pull-request",
           description: "Read a pull request",
@@ -504,20 +507,23 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           tools: ["pull-request"],
           sandbox: { ...request.sandbox, workspace: checkout },
         });
+        const chatTools = (declaredMembers: ReadonlyArray<"Tools">) => {
+          const probe = new ControlledProbe();
+          return makeHarness({ ...descriptor(terminalEvents, probe), declaredMembers })
+            .run({
+              plan,
+              session: freshSession,
+              mcpCredentials: new Map(),
+              engineTools: [pullRequestTool, hiddenTool],
+            })
+            .pipe(
+              Stream.runDrain,
+              Effect.map(() => probe.chatOptions[0]?.tools?.map(({ name }) => name)),
+            );
+        };
 
-        yield* harness
-          .run({
-            plan,
-            session: freshSession,
-            mcpCredentials: new Map(),
-            engineTools: [pullRequestTool, hiddenTool],
-          })
-          .pipe(Stream.runDrain);
-
-        assert.deepStrictEqual(
-          probe.chatOptions[0]?.tools?.map(({ name }) => name),
-          ["pull-request"],
-        );
+        assert.deepStrictEqual(yield* chatTools(["Tools"]), ["pull-request"]);
+        assert.deepStrictEqual(yield* chatTools([]), []);
       }),
     );
 
