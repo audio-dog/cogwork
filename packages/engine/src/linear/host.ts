@@ -12,7 +12,7 @@ import {
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
 import type { LinearClientService, LinearTeamRef } from "./client";
-import { wireCodec } from "./markers";
+import { hasCogworkMarker, wireCodec } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
   readonly account: LinearTeamRef["account"];
@@ -107,9 +107,13 @@ const targetForIssue = Effect.fn("linear.issueTarget")(function* (
 });
 
 const listItems = (client: LinearClientService) =>
-  Effect.fn("linear.listItems")(function* (workspace: WorkspaceIssueTrackerBinding, sinceMillis?: number) {
+  Effect.fn("linear.listItems")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    sinceMillis: number | undefined,
+    includeCompleted: boolean,
+  ) {
     const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
-      client.observeIssues(target, null, null, sinceMillis),
+      client.observeIssues(target, null, null, sinceMillis, includeCompleted),
     );
     return yield* Effect.forEach(perTeam.flat(), (issue) =>
       Effect.map(
@@ -133,8 +137,9 @@ const listItems = (client: LinearClientService) =>
 export const makeIssueReads = (client: LinearClientService) => {
   const list = listItems(client);
   return {
-    observe: (workspace: WorkspaceIssueTrackerBinding) => list(workspace),
-    itemsChangedSince: list,
+    observe: (workspace: WorkspaceIssueTrackerBinding) => list(workspace, undefined, false),
+    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      list(workspace, sinceMillis, true),
     readProse: Effect.fn("linear.readProse")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
@@ -164,7 +169,7 @@ export const makeIssueReads = (client: LinearClientService) => {
             id: comment.id,
             author: comment.authorId,
             authorAssociation: comment.authorAssociation,
-            authoredByPerson: comment.authorAssociation !== "NONE",
+            authoredByPerson: comment.authorAssociation !== "NONE" && !hasCogworkMarker(comment.body),
             body: comment.body,
             createdAtMillis: comment.createdAtMillis,
           }),

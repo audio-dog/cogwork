@@ -25,7 +25,7 @@ import {
   type RawIssueComment,
   repoRefFromRepository,
 } from "./client";
-import { wireCodec } from "./markers";
+import { hasCogworkMarker, wireCodec } from "./markers";
 import { type BotAllowlist, sourceControlTargetFor } from "./source-control-target";
 
 export interface GitHubTarget extends GitHubRepoRef {
@@ -58,7 +58,8 @@ const authoredByPerson = (comment: RawIssueComment, botAllowlist: BotAllowlist) 
   comment.authorLogin !== null &&
   comment.authorType !== "Bot" &&
   !botAllowlist.has(comment.authorLogin) &&
-  personAssociations.has(comment.authorAssociation);
+  personAssociations.has(comment.authorAssociation) &&
+  !hasCogworkMarker(comment.body);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
 
 export const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
@@ -156,14 +157,11 @@ export const makeIssueReads = (client: GitHubClientService) => {
   });
   const listItems = Effect.fn("github.listItems")(function* (
     workspace: WorkspaceIssueTrackerBinding,
-    sinceMillis?: number,
+    query: { readonly state: "open" | "all"; readonly since?: number },
   ) {
     const target = targetFor(workspace);
     if (!target) return [];
-    const issues = (yield* client.listIssues(target, {
-      state: "open",
-      ...(sinceMillis === undefined ? {} : { since: sinceMillis }),
-    })).filter((issue) => !issue.isPullRequest);
+    const issues = (yield* client.listIssues(target, query)).filter((issue) => !issue.isPullRequest);
     const priorities = yield* issuePriorities(client, target, issues);
     return yield* Effect.forEach(issues, (issue) =>
       Effect.map(
@@ -184,8 +182,9 @@ export const makeIssueReads = (client: GitHubClientService) => {
     );
   });
   return {
-    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace),
-    itemsChangedSince: listItems,
+    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, { state: "open" }),
+    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      listItems(workspace, { state: "all", since: sinceMillis }),
     readProse: Effect.fn("github.readProse")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,

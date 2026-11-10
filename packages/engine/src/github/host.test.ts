@@ -7,6 +7,7 @@ import * as Schema from "effect/Schema";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { GitHubClient, type RawIssue, type RawIssueComment } from "./client";
 import { makeIssueActions, makeIssueReads } from "./host";
+import { wireCodec } from "./markers";
 
 const workspace: WorkspaceIssueTrackerBinding = {
   repository: "acme/example",
@@ -26,6 +27,7 @@ const allowlistedWorkspace: WorkspaceIssueTrackerBinding = {
   }),
 };
 const issueId = Schema.decodeSync(WorkItemId)("#7");
+const closedIssueId = Schema.decodeSync(WorkItemId)("#8");
 
 const issue = (labels: ReadonlyArray<string>): RawIssue => ({
   nodeId: "issue-7",
@@ -115,6 +117,10 @@ describe("GitHub trigger prose", () => {
                 comment(2, "dependabot[bot]", "MEMBER", "Bot"),
                 comment(3, "release-bot", "MEMBER", "User"),
                 comment(4, "stranger", "NONE", "User"),
+                {
+                  ...comment(5, "maintainer", "MEMBER", "User"),
+                  body: wireCodec.encode({ name: "agent-note", pairs: "" }),
+                },
               ]),
           }),
         ),
@@ -129,7 +135,37 @@ describe("GitHub trigger prose", () => {
           { author: "dependabot[bot]", authoredByPerson: false },
           { author: "release-bot", authoredByPerson: false },
           { author: "stranger", authoredByPerson: false },
+          { author: "maintainer", authoredByPerson: false },
         ],
+      );
+    }),
+  );
+});
+
+describe("GitHub issue listing", () => {
+  it.effect("lists closed issues changed since a cursor and only open issues when observing", () =>
+    Effect.gen(function* () {
+      const closed: RawIssue = { ...issue([]), number: 8, state: "closed", updatedAtMillis: 9 };
+      const client = yield* GitHubClient.pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            listIssues: (_repo, query) =>
+              Effect.succeed(query?.state === "all" ? [issue([]), closed] : [issue([])]),
+          }),
+        ),
+      );
+      const reads = makeIssueReads(client);
+
+      const observed = yield* reads.observe(workspace);
+      const changed = yield* reads.itemsChangedSince(workspace, 1);
+
+      assert.deepStrictEqual(
+        observed.map(({ id }) => id),
+        [issueId],
+      );
+      assert.deepStrictEqual(
+        changed.map(({ id }) => id),
+        [issueId, closedIssueId],
       );
     }),
   );

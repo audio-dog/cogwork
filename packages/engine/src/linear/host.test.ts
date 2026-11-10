@@ -6,6 +6,7 @@ import * as Schema from "effect/Schema";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { LinearClient } from "./client";
 import { makeIssueReads } from "./host";
+import { wireCodec } from "./markers";
 
 const workspace: WorkspaceIssueTrackerBinding = {
   config: Schema.decodeSync(WorkspaceConfig)({
@@ -16,6 +17,7 @@ const workspace: WorkspaceIssueTrackerBinding = {
 };
 
 const issueId = Schema.decodeSync(WorkItemId)("AUD-7");
+const completedIssueId = Schema.decodeSync(WorkItemId)("AUD-8");
 
 describe("Linear trigger prose", () => {
   it.effect("marks a comment with no steering association as not a person's", () =>
@@ -30,6 +32,13 @@ describe("Linear trigger prose", () => {
                   { id: "a", authorId: "owner", authorAssociation: "OWNER", body: "", createdAtMillis: 1 },
                   { id: "b", authorId: "member", authorAssociation: "MEMBER", body: "", createdAtMillis: 2 },
                   { id: "c", authorId: "guest", authorAssociation: "NONE", body: "", createdAtMillis: 3 },
+                  {
+                    id: "d",
+                    authorId: "member",
+                    authorAssociation: "MEMBER",
+                    body: wireCodec.encode({ name: "agent-note", pairs: "" }),
+                    createdAtMillis: 4,
+                  },
                 ],
               }),
           }),
@@ -44,7 +53,54 @@ describe("Linear trigger prose", () => {
           { author: "owner", authoredByPerson: true },
           { author: "member", authoredByPerson: true },
           { author: "guest", authoredByPerson: false },
+          { author: "member", authoredByPerson: false },
         ],
+      );
+    }),
+  );
+});
+
+describe("Linear issue listing", () => {
+  it.effect("lists completed issues changed since a cursor and only open issues when observing", () =>
+    Effect.gen(function* () {
+      const issue = (identifier: string, stateType: string) => ({
+        id: identifier,
+        identifier,
+        title: identifier,
+        url: `https://linear.app/acme/issue/${identifier}`,
+        labels: [],
+        assignees: [],
+        stateName: stateType,
+        stateType,
+        openBlockers: 0,
+        priority: "medium" as const,
+        updatedAtMillis: 1,
+        coordinationComments: [],
+      });
+      const client = yield* LinearClient.pipe(
+        Effect.provide(
+          Layer.mock(LinearClient, {
+            observeIssues: (_ref, _coordination, _assignees, _updatedSince, includeCompleted) =>
+              Effect.succeed(
+                includeCompleted
+                  ? [issue("AUD-7", "started"), issue("AUD-8", "completed")]
+                  : [issue("AUD-7", "started")],
+              ),
+          }),
+        ),
+      );
+      const reads = makeIssueReads(client);
+
+      const observed = yield* reads.observe(workspace);
+      const changed = yield* reads.itemsChangedSince(workspace, 1);
+
+      assert.deepStrictEqual(
+        observed.map(({ id }) => id),
+        [issueId],
+      );
+      assert.deepStrictEqual(
+        changed.map(({ id }) => id),
+        [issueId, completedIssueId],
       );
     }),
   );
