@@ -38,7 +38,15 @@ const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const attempt = Schema.decodeSync(RunId)("issue-plan");
 const operation = Schema.decodeSync(WorkflowNodeId)("write");
 const item = Schema.decodeSync(WorkItemId)("#899");
-const currentIssueActions = ["comment-this-item", "add-label", "remove-label", "close-this-issue"];
+const existingIssue = Schema.decodeSync(WorkItemId)("#7");
+const issueActions = [
+  "create-issue",
+  "comment-issue",
+  "comment-this-item",
+  "add-label",
+  "remove-label",
+  "close-this-issue",
+];
 
 const issueTrackers = {
   github: { type: "github" },
@@ -128,11 +136,11 @@ const requirements = Layer.mergeAll(
 );
 
 describe("Issue Action entries", () => {
-  it("derive each tracker's current-item catalog rows from the registry", () => {
+  it("derive each tracker's catalog rows from the registry", () => {
     const cogworkKeys = cogworkWorkflowCatalogContribution.entries.map(({ key }) => key);
     for (const system of issueTrackerApps) {
       const rows = issueTrackerWorkflowCatalogContribution(system).entries;
-      for (const action of currentIssueActions) {
+      for (const action of issueActions) {
         const key = `${system}.${action}`;
         assert.strictEqual(
           rows.find((row) => row.key === key),
@@ -144,6 +152,39 @@ describe("Issue Action entries", () => {
   });
 
   for (const system of issueTrackerApps) {
+    it.effect(`freezes ${system} new and existing issue targets from the selected Workspace`, () =>
+      Effect.gen(function* () {
+        const workspace = workspaceFor(system);
+        const name = workspace.config.name;
+        const targetOf = (action: string, selected: string, inputs: Record<string, string>) => {
+          const entry = actionEntryFor(`${system}.${action}`);
+          assert.isDefined(entry);
+          return entry.target({
+            entry: entry.row,
+            admission: admissionFor(workspace),
+            workspaces: [workspace],
+            inputs,
+            parameters: [],
+            workspace: selected,
+            sourceControl: undefined,
+          });
+        };
+        const frozen = {
+          workspace: name,
+          app: workspace.config.issueTracker.type,
+          issueTracker: workspace.config.issueTracker,
+          repository: null,
+        };
+
+        assert.deepStrictEqual(yield* targetOf("create-issue", name, {}), { _tag: "NewIssue", ...frozen });
+        assert.deepStrictEqual(yield* targetOf("create-issue", "none", {}), { _tag: "NoWorkspace" });
+        assert.deepStrictEqual(
+          yield* targetOf("comment-issue", name, { issue: `${name}:${existingIssue}` }),
+          { _tag: "ExistingIssue", ...frozen, issue: existingIssue },
+        );
+      }),
+    );
+
     it.effect(`freezes the current ${system} issue and writes through the issue tracker port`, () =>
       Effect.gen(function* () {
         const workspace = workspaceFor(system);
