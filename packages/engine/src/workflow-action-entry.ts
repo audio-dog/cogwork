@@ -1,11 +1,12 @@
-import type {
-  WorkflowActionPlan,
-  WorkflowActionPlanArtifact,
-  WorkflowActionPlanStep,
-  WorkflowActionTarget,
-  WorkflowAgentInputValue,
-  WorkflowCatalogEntry,
-  WorkflowParameterValue,
+import {
+  type WorkflowActionPlan,
+  type WorkflowActionPlanArtifact,
+  type WorkflowActionPlanStep,
+  type WorkflowActionTarget,
+  type WorkflowAgentInputValue,
+  type WorkflowCatalogEntry,
+  type WorkflowParameterValue,
+  WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -87,3 +88,16 @@ export const invalidTarget = (step: WorkflowActionPlanStep) =>
     retryable: false,
     message: `Action ${step.entry} has an invalid target`,
   });
+
+export const parameterValues = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
+  parameters.filter((parameter) => parameter.id === id).map(({ value }) => value);
+
+export const itemWorkspaceOf = (admission: TriggerAdmission) =>
+  WorkItemRef.matchOrElse(
+    admission.event.key,
+    {
+      Issue: ({ workspace }) => workspace,
+      PullRequest: ({ workspace }) => workspace,
+    },
+    () => undefined,
+  );
