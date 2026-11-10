@@ -1,0 +1,33 @@
+packages/engine/src/github/host.test.ts
+  s_663ef55bbdc3be::t_125f4c288ebaff 146-161,163-165,167-182
+packages/engine/src/github/host.ts
+  s_663ef55bbdc3be::t_f58ae1c6b69fd8 160,189-190
+packages/engine/src/issue-tracker-router.ts
+  s_663ef55bbdc3be::t_f3cb714b34a154 26
+packages/engine/src/issue-tracker.ts
+  s_663ef55bbdc3be::t_3004fb0702c3f6 141-142
+packages/engine/src/linear/host.test.ts
+  s_663ef55bbdc3be::t_c50c284e307901 64-96,98-100,102-117
+packages/engine/src/linear/host.ts
+  s_663ef55bbdc3be::t_71f3f3b88aac28 14,109-132,136-137,139-141
+packages/engine/src/tracker-trigger-source.test.ts
+  s_663ef55bbdc3be::t_c50ef5fb808c01 69,74,78,82,89-90,99-103,118,190,194,196
+packages/engine/src/tracker-trigger-source.ts
+  s_663ef55bbdc3be::t_40edde282c89ea 5-6,31-32,54,83,85,100,115,146,148,150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a3fa0ab47c0d9500284d4adeb6518a2bae21c1dd",
+  "prompts": {},
+  "sessions": {
+    "s_663ef55bbdc3be": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9542fe47-343b-4574-a7dd-b49b64560833",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
