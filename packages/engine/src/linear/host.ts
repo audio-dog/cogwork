@@ -6,12 +6,13 @@ import {
   type CreateIssueInput,
   convergeTrackerState,
   IssueTrackerError,
-  type TrackerItem,
+  type ListedTrackerItem,
+  type TrackerComment,
 } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
 import type { LinearClientService, LinearTeamRef } from "./client";
-import { wireCodec } from "./markers";
+import { hasCogworkMarker, wireCodec } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
   readonly account: LinearTeamRef["account"];
@@ -105,15 +106,19 @@ const targetForIssue = Effect.fn("linear.issueTarget")(function* (
   return target;
 });
 
-export const makeIssueReads = (client: LinearClientService) => ({
-  observe: Effect.fn("linear.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
+const listItems = (client: LinearClientService) =>
+  Effect.fn("linear.listItems")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    sinceMillis: number | undefined,
+    includeCompleted: boolean,
+  ) {
     const perTeam = yield* Effect.forEach(targetsFor(workspace), (target) =>
-      client.observeIssues(target, null),
+      client.observeIssues(target, null, null, sinceMillis, includeCompleted),
     );
     return yield* Effect.forEach(perTeam.flat(), (issue) =>
       Effect.map(
         itemId(issue.identifier),
-        (id): TrackerItem => ({
+        (id): ListedTrackerItem => ({
           id,
           title: issue.title,
           url: issue.url,
@@ -121,35 +126,77 @@ export const makeIssueReads = (client: LinearClientService) => ({
           openBlockers: issue.openBlockers,
           priority: issue.priority,
           states: [...issue.labels, issue.stateName],
+          labels: issue.labels,
+          createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
           lastTouchedAtMillis: issue.updatedAtMillis,
         }),
       ),
     );
-  }),
-  readProse: Effect.fn("linear.readProse")(function* (
-    workspace: WorkspaceIssueTrackerBinding,
-    id: WorkItemId,
-  ) {
-    const target = yield* targetForIssue(workspace, id);
-    const { body, comments } = yield* client.readProse(target, id);
-    return {
-      body,
-      comments: comments.map((comment) => ({
-        author: comment.authorId,
-        authorAssociation: comment.authorAssociation,
-        body: comment.body,
-        createdAtMillis: comment.createdAtMillis,
-      })),
-    };
-  }),
-  assignees: Effect.fn("linear.assignees")(function* (
-    workspace: WorkspaceIssueTrackerBinding,
-    id: WorkItemId,
-  ) {
-    const target = yield* targetForIssue(workspace, id);
-    return yield* client.issueAssignees(target, id);
-  }),
-});
+  });
+
+export const makeIssueReads = (client: LinearClientService) => {
+  const list = listItems(client);
+  return {
+    observe: (workspace: WorkspaceIssueTrackerBinding) => list(workspace, undefined, false),
+    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      list(workspace, sinceMillis, true),
+    readProse: Effect.fn("linear.readProse")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      const { body, comments } = yield* client.readProse(target, id);
+      return {
+        body,
+        comments: comments.map((comment) => ({
+          author: comment.authorId,
+          authorAssociation: comment.authorAssociation,
+          body: comment.body,
+          createdAtMillis: comment.createdAtMillis,
+        })),
+      };
+    }),
+    readTriggerProse: Effect.fn("linear.readTriggerProse")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      const { body, comments } = yield* client.readTriggerProse(target, id);
+      return {
+        body,
+        comments: comments.map(
+          (comment): TrackerComment => ({
+            id: comment.id,
+            author: comment.authorId,
+            authorAssociation: comment.authorAssociation,
+            authoredByPerson: comment.authorAssociation !== "NONE" && !hasCogworkMarker(comment.body),
+            body: comment.body,
+            createdAtMillis: comment.createdAtMillis,
+          }),
+        ),
+      };
+    }),
+    labelAppliedAt: Effect.fn("linear.labelAppliedAt")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      label: string,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      return yield* client.labelAppliedAt(target, id, label);
+    }),
+    listLabels: Effect.fn("linear.listLabels")(function* (workspace: WorkspaceIssueTrackerBinding) {
+      const perTeam = yield* Effect.forEach(targetsFor(workspace), client.listLabels);
+      return perTeam.flat();
+    }),
+    assignees: Effect.fn("linear.assignees")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      return yield* client.issueAssignees(target, id);
+    }),
+  };
+};
 
 export const makeIssueActions = (client: LinearClientService) => {
   const targetForCreate = Effect.fn("linear.workflowCreateTarget")(function* (
