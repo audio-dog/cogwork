@@ -143,14 +143,16 @@ describe("GitHub trigger prose", () => {
 });
 
 describe("GitHub issue listing", () => {
-  it.effect("lists closed issues changed since a cursor and only open issues when observing", () =>
+  it.effect("lists closed issues since a cursor, and open ones when observing or by label", () =>
     Effect.gen(function* () {
       const closed: RawIssue = { ...issue([]), number: 8, state: "closed", updatedAtMillis: 9 };
       const client = yield* GitHubClient.pipe(
         Effect.provide(
           Layer.mock(GitHubClient, {
-            listIssues: (_repo, query) =>
-              Effect.succeed(query?.state === "all" ? [issue([]), closed] : [issue([])]),
+            listIssues: (_repo, query) => {
+              if (query?.label) return Effect.succeed([issue([query.label])]);
+              return Effect.succeed(query?.state === "all" ? [issue([]), closed] : [issue([])]);
+            },
           }),
         ),
       );
@@ -158,14 +160,22 @@ describe("GitHub issue listing", () => {
 
       const observed = yield* reads.observe(workspace);
       const changed = yield* reads.itemsChangedSince(workspace, 1);
+      const labelled = yield* reads.openItemsWithLabel(workspace, "needs-triage");
 
       assert.deepStrictEqual(
         observed.map(({ id }) => id),
         [issueId],
       );
       assert.deepStrictEqual(
-        changed.map(({ id }) => id),
-        [issueId, closedIssueId],
+        changed.map(({ id, open }) => [id, open]),
+        [
+          [issueId, true],
+          [closedIssueId, false],
+        ],
+      );
+      assert.deepStrictEqual(
+        labelled.map(({ id, labels }) => [id, labels]),
+        [[issueId, ["needs-triage"]]],
       );
     }),
   );

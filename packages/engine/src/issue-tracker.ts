@@ -30,6 +30,7 @@ export interface TrackerItem {
 }
 
 export interface ListedTrackerItem extends TrackerItem {
+  readonly open: boolean;
   readonly labels: ReadonlyArray<string>;
   readonly createdAtMillis: number;
 }
@@ -136,6 +137,8 @@ const emptyTriggerProse: TrackerProse = { body: "", comments: [] };
 export const makeEmpty = Effect.succeed({
   observe: emptyRead<ReadonlyArray<TrackerItem>>([]),
   itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, _sinceMillis: number) =>
+    emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
+  openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, _label: string) =>
     emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
   readProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
     emptyRead(emptyProse)(workspace),

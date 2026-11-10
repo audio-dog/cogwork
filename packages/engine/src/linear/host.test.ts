@@ -61,7 +61,7 @@ describe("Linear trigger prose", () => {
 });
 
 describe("Linear issue listing", () => {
-  it.effect("lists completed issues changed since a cursor and only open issues when observing", () =>
+  it.effect("lists completed issues since a cursor, and open ones when observing or by label", () =>
     Effect.gen(function* () {
       const issue = (identifier: string, stateType: string) => ({
         id: identifier,
@@ -86,6 +86,8 @@ describe("Linear issue listing", () => {
                   ? [issue("AUD-7", "started"), issue("AUD-8", "completed")]
                   : [issue("AUD-7", "started")],
               ),
+            observeLabelledIssues: (_ref, label) =>
+              Effect.succeed([{ ...issue("AUD-7", "started"), labels: [label] }]),
           }),
         ),
       );
@@ -93,14 +95,22 @@ describe("Linear issue listing", () => {
 
       const observed = yield* reads.observe(workspace);
       const changed = yield* reads.itemsChangedSince(workspace, 1);
+      const labelled = yield* reads.openItemsWithLabel(workspace, "needs-triage");
 
       assert.deepStrictEqual(
         observed.map(({ id }) => id),
         [issueId],
       );
       assert.deepStrictEqual(
-        changed.map(({ id }) => id),
-        [issueId, completedIssueId],
+        changed.map(({ id, open }) => [id, open]),
+        [
+          [issueId, true],
+          [completedIssueId, false],
+        ],
+      );
+      assert.deepStrictEqual(
+        labelled.map(({ id, labels }) => [id, labels]),
+        [[issueId, ["needs-triage"]]],
       );
     }),
   );
