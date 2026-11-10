@@ -45,17 +45,6 @@ const effortOption_medium_low_medium_high_xhigh = selectOption(
   "medium",
 );
 const speedOption_false = { type: "boolean", id: "speed", label: "Speed", defaultValue: false } as const;
-const effortOption_high_low_medium_high_xhigh = selectOption(
-  "effort",
-  "Effort",
-  [
-    ["low", "Low"],
-    ["medium", "Medium"],
-    ["high", "High"],
-    ["xhigh", "Extra High"],
-  ],
-  "high",
-);
 const effortOption_high_low_medium_high_xhigh_max = selectOption(
   "effort",
   "Effort",
@@ -103,15 +92,37 @@ const effortOption_high_low_medium_high = selectOption(
   ],
   "high",
 );
-const effortOption_medium_none_low_medium_high_extra_high = selectOption(
+const effortOption_low_low_medium_high_xhigh = selectOption(
   "effort",
   "Effort",
   [
-    ["none", "None"],
     ["low", "Low"],
     ["medium", "Medium"],
     ["high", "High"],
-    ["extra-high", "Extra High"],
+    ["xhigh", "Extra High"],
+  ],
+  "low",
+);
+const effortOption_high_low_medium_high_xhigh = selectOption(
+  "effort",
+  "Effort",
+  [
+    ["low", "Low"],
+    ["medium", "Medium"],
+    ["high", "High"],
+    ["xhigh", "Extra High"],
+  ],
+  "high",
+);
+const effortOption_medium_low_medium_high_xhigh_max = selectOption(
+  "effort",
+  "Effort",
+  [
+    ["low", "Low"],
+    ["medium", "Medium"],
+    ["high", "High"],
+    ["xhigh", "Extra High"],
+    ["max", "Max"],
   ],
   "medium",
 );
@@ -125,6 +136,31 @@ const effortOption_low_low_medium_high = selectOption(
   ],
   "low",
 );
+const effortOption_minimal_minimal_low_medium_high_xhigh_max = selectOption(
+  "effort",
+  "Effort",
+  [
+    ["minimal", "Minimal"],
+    ["low", "Low"],
+    ["medium", "Medium"],
+    ["high", "High"],
+    ["xhigh", "Extra High"],
+    ["max", "Max"],
+  ],
+  "minimal",
+);
+const effortOption_medium_none_low_medium_high_extra_high = selectOption(
+  "effort",
+  "Effort",
+  [
+    ["none", "None"],
+    ["low", "Low"],
+    ["medium", "Medium"],
+    ["high", "High"],
+    ["extra-high", "Extra High"],
+  ],
+  "medium",
+);
 const effortOption_high_minimal_low_medium_high_xhigh_max = selectOption(
   "effort",
   "Effort",
@@ -137,6 +173,18 @@ const effortOption_high_minimal_low_medium_high_xhigh_max = selectOption(
     ["max", "Max"],
   ],
   "high",
+);
+const effortOption_low_low_medium_high_xhigh_max = selectOption(
+  "effort",
+  "Effort",
+  [
+    ["low", "Low"],
+    ["medium", "Medium"],
+    ["high", "High"],
+    ["xhigh", "Extra High"],
+    ["max", "Max"],
+  ],
+  "low",
 );
 const effortOption_medium_medium = selectOption("effort", "Effort", [["medium", "Medium"]], "medium");
 const effortOption_xhigh_low_medium_high_xhigh_max = selectOption(
@@ -161,17 +209,6 @@ const effortOption_high_high_max = selectOption(
   "high",
 );
 const effortOption_high_high = selectOption("effort", "Effort", [["high", "High"]], "high");
-const effortOption_high_minimal_low_medium_high = selectOption(
-  "effort",
-  "Effort",
-  [
-    ["minimal", "Minimal"],
-    ["low", "Low"],
-    ["medium", "Medium"],
-    ["high", "High"],
-  ],
-  "high",
-);
 const effortOption_medium_none_low_medium_high_xhigh = selectOption(
   "effort",
   "Effort",
@@ -204,6 +241,18 @@ const effortOption_max_low_high_max = selectOption(
   ],
   "max",
 );
+const effortOption_none_none_low_medium_high_max = selectOption(
+  "effort",
+  "Effort",
+  [
+    ["none", "None"],
+    ["low", "Low"],
+    ["medium", "Medium"],
+    ["high", "High"],
+    ["max", "Max"],
+  ],
+  "none",
+);
 
 export const cursorModels = [
   "auto",
@@ -216,7 +265,6 @@ export const cursorModels = [
   "gpt-5.3-codex-xhigh",
   "gpt-5.3-codex-xhigh-fast",
   "gpt-5.2",
-  "cursor-grok-4.6-high-fast",
   "composer-2.5",
   "claude-opus-5-thinking-high",
   "claude-opus-5-thinking-high-fast",
@@ -228,18 +276,36 @@ export const cursorModels = [
   "claude-fable-5-thinking-xhigh",
   "cursor-grok-4.5-high",
   "cursor-grok-4.5-high-fast",
-  "gemini-3.7-flash-high",
   "claude-sonnet-5-thinking-high",
   "claude-sonnet-5-thinking-xhigh",
   "gpt-5.6-luna-high",
+  "grok-4.7-low",
+  "grok-4.7-low-fast",
+  "grok-4.7-medium",
+  "grok-4.7-medium-fast",
+  "grok-4.7-high",
+  "grok-4.7-high-fast",
+  "grok-4.7-xhigh",
+  "grok-4.7-xhigh-fast",
   "cursor-grok-4.6-low",
   "cursor-grok-4.6-low-fast",
   "cursor-grok-4.6-medium",
   "cursor-grok-4.6-medium-fast",
   "cursor-grok-4.6-high",
+  "cursor-grok-4.6-high-fast",
   "cursor-grok-4.6-xhigh",
   "cursor-grok-4.6-xhigh-fast",
   "composer-2.5-fast",
+  "claude-opus-5-5-low",
+  "claude-opus-5-5-low-fast",
+  "claude-opus-5-5-medium",
+  "claude-opus-5-5-medium-fast",
+  "claude-opus-5-5-high",
+  "claude-opus-5-5-high-fast",
+  "claude-opus-5-5-xhigh",
+  "claude-opus-5-5-xhigh-fast",
+  "claude-opus-5-5-max",
+  "claude-opus-5-5-max-fast",
   "claude-opus-5-low",
   "claude-opus-5-low-fast",
   "claude-opus-5-medium",
@@ -274,6 +340,18 @@ export const cursorModels = [
   "claude-opus-4-8-thinking-xhigh-fast",
   "claude-opus-4-8-thinking-max",
   "claude-opus-4-8-thinking-max-fast",
+  "gemini-4-carbon-low",
+  "gemini-4-carbon-medium",
+  "gemini-4-carbon-high",
+  "gemini-4-argon-low",
+  "gemini-4-argon-medium",
+  "gemini-4-argon-high",
+  "muse-wonder-1.0-minimal",
+  "muse-wonder-1.0-low",
+  "muse-wonder-1.0-medium",
+  "muse-wonder-1.0-high",
+  "muse-wonder-1.0-xhigh",
+  "muse-wonder-1.0-max",
   "gpt-5.6-sol-none",
   "gpt-5.6-sol-none-fast",
   "gpt-5.6-sol-low",
@@ -292,6 +370,16 @@ export const cursorModels = [
   "gpt-5.5-high-fast",
   "gpt-5.5-extra-high",
   "gpt-5.5-extra-high-fast",
+  "claude-fable-5-2-low",
+  "claude-fable-5-2-low-fast",
+  "claude-fable-5-2-medium",
+  "claude-fable-5-2-medium-fast",
+  "claude-fable-5-2-high",
+  "claude-fable-5-2-high-fast",
+  "claude-fable-5-2-xhigh",
+  "claude-fable-5-2-xhigh-fast",
+  "claude-fable-5-2-max",
+  "claude-fable-5-2-max-fast",
   "claude-fable-5-1-low",
   "claude-fable-5-1-medium",
   "claude-fable-5-1-high",
@@ -317,8 +405,6 @@ export const cursorModels = [
   "gemini-3.8-flash-low",
   "gemini-3.8-flash-medium",
   "gemini-3.8-flash-high",
-  "gemini-3.7-flash-low",
-  "gemini-3.7-flash-medium",
   "muse-spark-1.3-minimal",
   "muse-spark-1.3-low",
   "muse-spark-1.3-medium",
@@ -337,6 +423,11 @@ export const cursorModels = [
   "gpt-5.6-terra-xhigh-fast",
   "gpt-5.6-terra-max",
   "gpt-5.6-terra-max-fast",
+  "claude-sonnet-5-5-low",
+  "claude-sonnet-5-5-medium",
+  "claude-sonnet-5-5-high",
+  "claude-sonnet-5-5-xhigh",
+  "claude-sonnet-5-5-max",
   "claude-sonnet-5-low",
   "claude-sonnet-5-medium",
   "claude-sonnet-5-high",
@@ -398,10 +489,6 @@ export const cursorModels = [
   "gpt-5.6-luna-xhigh-fast",
   "gpt-5.6-luna-max",
   "gpt-5.6-luna-max-fast",
-  "gemini-3.6-flash-minimal",
-  "gemini-3.6-flash-low",
-  "gemini-3.6-flash-medium",
-  "gemini-3.6-flash-high",
   "gemini-3.1-pro",
   "gpt-5.4-mini-none",
   "gpt-5.4-mini-low",
@@ -413,6 +500,16 @@ export const cursorModels = [
   "gpt-5.4-nano-medium",
   "gpt-5.4-nano-high",
   "gpt-5.4-nano-xhigh",
+  "claude-haiku-5-5-low",
+  "claude-haiku-5-5-medium",
+  "claude-haiku-5-5-high",
+  "claude-haiku-5-5-xhigh",
+  "claude-haiku-5-5-max",
+  "claude-haiku-5-5-thinking-low",
+  "claude-haiku-5-5-thinking-medium",
+  "claude-haiku-5-5-thinking-high",
+  "claude-haiku-5-5-thinking-xhigh",
+  "claude-haiku-5-5-thinking-max",
   "claude-4.5-sonnet",
   "claude-4.5-sonnet-thinking",
   "gpt-5.1-low",
@@ -429,10 +526,15 @@ export const cursorModels = [
   "kimi-k2.7-code",
   "glm-5.2-high",
   "glm-5.2-max",
+  "deepseek-v41-flash-1017-none",
+  "deepseek-v41-flash-1017-low",
+  "deepseek-v41-flash-1017-medium",
+  "deepseek-v41-flash-1017-high",
+  "deepseek-v41-flash-1017-max",
 ] as const;
 
 export const cursorCatalog = {
-  generatedAgainst: "2026.08.11-e8db854",
+  generatedAgainst: "2026.11.05-86047df",
   models: [
     model("auto", "Auto", true),
     model("gpt-5.3-codex", "Codex 5.3", false, [
@@ -440,10 +542,6 @@ export const cursorCatalog = {
       speedOption_false,
     ]),
     model("gpt-5.2", "GPT-5.2", false, [effortOption_medium_low_medium_high_xhigh, speedOption_false]),
-    model("cursor-grok-4.6", "Cursor Grok 4.6", false, [
-      effortOption_high_low_medium_high_xhigh,
-      speedOption_false,
-    ]),
     model("composer-2.5", "Composer 2.5", false, [speedOption_false]),
     model("claude-opus-5", "Claude Opus 5", false, [
       effortOption_high_low_medium_high_xhigh_max,
@@ -461,11 +559,7 @@ export const cursorCatalog = {
       contextOption_true,
       thinkingOption_false,
     ]),
-    model("cursor-grok-4.5", "Cursor Grok 4.5", false, [
-      effortOption_high_low_medium_high,
-      speedOption_false,
-    ]),
-    model("gemini-3.7-flash", "Gemini 3.7 Flash", false, [effortOption_high_low_medium_high]),
+    model("cursor-grok-4.5", "Grok 4.5", false, [effortOption_high_low_medium_high, speedOption_false]),
     model("claude-sonnet-5", "Claude Sonnet 5", false, [
       effortOption_high_low_medium_high_xhigh_max,
       contextOption_true,
@@ -476,14 +570,29 @@ export const cursorCatalog = {
       speedOption_false,
       contextOption_true,
     ]),
+    model("grok-4.7", "Grok 4.7", false, [effortOption_low_low_medium_high_xhigh, speedOption_false]),
+    model("cursor-grok-4.6", "Grok 4.6", false, [effortOption_high_low_medium_high_xhigh, speedOption_false]),
+    model("claude-opus-5-5", "Claude Opus 5.5", false, [
+      effortOption_medium_low_medium_high_xhigh_max,
+      speedOption_false,
+      contextOption_true,
+    ]),
     model("claude-opus-4-8", "Claude Opus 4.8", false, [
       effortOption_high_low_medium_high_xhigh_max,
       speedOption_false,
       contextOption_true,
       thinkingOption_false,
     ]),
+    model("gemini-4-carbon", "Gemini 4 Carbon", false, [effortOption_low_low_medium_high]),
+    model("gemini-4-argon", "Gemini 4 Argon", false, [effortOption_low_low_medium_high]),
+    model("muse-wonder-1.0", "Muse Wonder", false, [effortOption_minimal_minimal_low_medium_high_xhigh_max]),
     model("gpt-5.5", "GPT-5.5", false, [
       effortOption_medium_none_low_medium_high_extra_high,
+      speedOption_false,
+      contextOption_true,
+    ]),
+    model("claude-fable-5-2", "Claude Fable 5.2 (NO ZDR)", false, [
+      effortOption_high_low_medium_high_xhigh_max,
       speedOption_false,
       contextOption_true,
     ]),
@@ -502,6 +611,7 @@ export const cursorCatalog = {
       speedOption_false,
       contextOption_true,
     ]),
+    model("claude-sonnet-5-5", "Claude Sonnet 5.5", false, [effortOption_low_low_medium_high_xhigh_max]),
     model("claude-4.6-sonnet", "Claude Sonnet 4.6", false, [
       effortOption_medium_medium,
       contextOption_true,
@@ -524,10 +634,13 @@ export const cursorCatalog = {
       thinkingOption_false,
     ]),
     model("claude-4.5-opus", "Claude Opus 4.5", false, [effortOption_high_high, thinkingOption_false]),
-    model("gemini-3.6-flash", "Gemini 3.6 Flash", false, [effortOption_high_minimal_low_medium_high]),
     model("gemini-3.1-pro", "Gemini 3.1 Pro", false),
     model("gpt-5.4-mini", "GPT-5.4 Mini", false, [effortOption_medium_none_low_medium_high_xhigh]),
     model("gpt-5.4-nano", "GPT-5.4 Nano", false, [effortOption_medium_none_low_medium_high_xhigh]),
+    model("claude-haiku-5-5", "Claude Haiku 5.5 No", false, [
+      effortOption_low_low_medium_high_xhigh_max,
+      thinkingOption_false,
+    ]),
     model("claude-4.5-sonnet", "Claude Sonnet 4.5", false, [thinkingOption_false]),
     model("gpt-5.1", "GPT-5.1", false, [effortOption_medium_low_medium_high]),
     model("gemini-3-flash", "Gemini 3 Flash", false),
@@ -537,6 +650,9 @@ export const cursorCatalog = {
     model("kimi-k3", "Kimi K3", false, [effortOption_max_low_high_max]),
     model("kimi-k2.7-code", "Kimi K2.7 Code", false),
     model("glm-5.2", "GLM 5.2", false, [effortOption_high_high_max]),
+    model("deepseek-v41-flash-1017", "DeepSeek V4.1 Flash 1017", false, [
+      effortOption_none_none_low_medium_high_max,
+    ]),
   ],
   rawModelIds: cursorModels,
   rawModelSelections: {
@@ -550,7 +666,6 @@ export const cursorCatalog = {
     "gpt-5.3-codex-xhigh": { model: "gpt-5.3-codex", options: { effort: "xhigh", speed: false } },
     "gpt-5.3-codex-xhigh-fast": { model: "gpt-5.3-codex", options: { effort: "xhigh", speed: true } },
     "gpt-5.2": { model: "gpt-5.2", options: { effort: "medium", speed: false } },
-    "cursor-grok-4.6-high-fast": { model: "cursor-grok-4.6", options: { effort: "high", speed: true } },
     "composer-2.5": { model: "composer-2.5", options: { speed: false } },
     "claude-opus-5-thinking-high": {
       model: "claude-opus-5",
@@ -580,7 +695,6 @@ export const cursorCatalog = {
     },
     "cursor-grok-4.5-high": { model: "cursor-grok-4.5", options: { effort: "high", speed: false } },
     "cursor-grok-4.5-high-fast": { model: "cursor-grok-4.5", options: { effort: "high", speed: true } },
-    "gemini-3.7-flash-high": { model: "gemini-3.7-flash", options: { effort: "high" } },
     "claude-sonnet-5-thinking-high": {
       model: "claude-sonnet-5",
       options: { effort: "high", context: true, thinking: true },
@@ -590,14 +704,63 @@ export const cursorCatalog = {
       options: { effort: "xhigh", context: true, thinking: true },
     },
     "gpt-5.6-luna-high": { model: "gpt-5.6-luna", options: { effort: "high", speed: false, context: true } },
+    "grok-4.7-low": { model: "grok-4.7", options: { effort: "low", speed: false } },
+    "grok-4.7-low-fast": { model: "grok-4.7", options: { effort: "low", speed: true } },
+    "grok-4.7-medium": { model: "grok-4.7", options: { effort: "medium", speed: false } },
+    "grok-4.7-medium-fast": { model: "grok-4.7", options: { effort: "medium", speed: true } },
+    "grok-4.7-high": { model: "grok-4.7", options: { effort: "high", speed: false } },
+    "grok-4.7-high-fast": { model: "grok-4.7", options: { effort: "high", speed: true } },
+    "grok-4.7-xhigh": { model: "grok-4.7", options: { effort: "xhigh", speed: false } },
+    "grok-4.7-xhigh-fast": { model: "grok-4.7", options: { effort: "xhigh", speed: true } },
     "cursor-grok-4.6-low": { model: "cursor-grok-4.6", options: { effort: "low", speed: false } },
     "cursor-grok-4.6-low-fast": { model: "cursor-grok-4.6", options: { effort: "low", speed: true } },
     "cursor-grok-4.6-medium": { model: "cursor-grok-4.6", options: { effort: "medium", speed: false } },
     "cursor-grok-4.6-medium-fast": { model: "cursor-grok-4.6", options: { effort: "medium", speed: true } },
     "cursor-grok-4.6-high": { model: "cursor-grok-4.6", options: { effort: "high", speed: false } },
+    "cursor-grok-4.6-high-fast": { model: "cursor-grok-4.6", options: { effort: "high", speed: true } },
     "cursor-grok-4.6-xhigh": { model: "cursor-grok-4.6", options: { effort: "xhigh", speed: false } },
     "cursor-grok-4.6-xhigh-fast": { model: "cursor-grok-4.6", options: { effort: "xhigh", speed: true } },
     "composer-2.5-fast": { model: "composer-2.5", options: { speed: true } },
+    "claude-opus-5-5-low": {
+      model: "claude-opus-5-5",
+      options: { effort: "low", speed: false, context: true },
+    },
+    "claude-opus-5-5-low-fast": {
+      model: "claude-opus-5-5",
+      options: { effort: "low", speed: true, context: true },
+    },
+    "claude-opus-5-5-medium": {
+      model: "claude-opus-5-5",
+      options: { effort: "medium", speed: false, context: true },
+    },
+    "claude-opus-5-5-medium-fast": {
+      model: "claude-opus-5-5",
+      options: { effort: "medium", speed: true, context: true },
+    },
+    "claude-opus-5-5-high": {
+      model: "claude-opus-5-5",
+      options: { effort: "high", speed: false, context: true },
+    },
+    "claude-opus-5-5-high-fast": {
+      model: "claude-opus-5-5",
+      options: { effort: "high", speed: true, context: true },
+    },
+    "claude-opus-5-5-xhigh": {
+      model: "claude-opus-5-5",
+      options: { effort: "xhigh", speed: false, context: true },
+    },
+    "claude-opus-5-5-xhigh-fast": {
+      model: "claude-opus-5-5",
+      options: { effort: "xhigh", speed: true, context: true },
+    },
+    "claude-opus-5-5-max": {
+      model: "claude-opus-5-5",
+      options: { effort: "max", speed: false, context: true },
+    },
+    "claude-opus-5-5-max-fast": {
+      model: "claude-opus-5-5",
+      options: { effort: "max", speed: true, context: true },
+    },
     "claude-opus-5-low": {
       model: "claude-opus-5",
       options: { effort: "low", speed: false, context: true, thinking: false },
@@ -734,6 +897,18 @@ export const cursorCatalog = {
       model: "claude-opus-4-8",
       options: { effort: "max", speed: true, context: true, thinking: true },
     },
+    "gemini-4-carbon-low": { model: "gemini-4-carbon", options: { effort: "low" } },
+    "gemini-4-carbon-medium": { model: "gemini-4-carbon", options: { effort: "medium" } },
+    "gemini-4-carbon-high": { model: "gemini-4-carbon", options: { effort: "high" } },
+    "gemini-4-argon-low": { model: "gemini-4-argon", options: { effort: "low" } },
+    "gemini-4-argon-medium": { model: "gemini-4-argon", options: { effort: "medium" } },
+    "gemini-4-argon-high": { model: "gemini-4-argon", options: { effort: "high" } },
+    "muse-wonder-1.0-minimal": { model: "muse-wonder-1.0", options: { effort: "minimal" } },
+    "muse-wonder-1.0-low": { model: "muse-wonder-1.0", options: { effort: "low" } },
+    "muse-wonder-1.0-medium": { model: "muse-wonder-1.0", options: { effort: "medium" } },
+    "muse-wonder-1.0-high": { model: "muse-wonder-1.0", options: { effort: "high" } },
+    "muse-wonder-1.0-xhigh": { model: "muse-wonder-1.0", options: { effort: "xhigh" } },
+    "muse-wonder-1.0-max": { model: "muse-wonder-1.0", options: { effort: "max" } },
     "gpt-5.6-sol-none": { model: "gpt-5.6-sol", options: { effort: "none", speed: false, context: true } },
     "gpt-5.6-sol-none-fast": {
       model: "gpt-5.6-sol",
@@ -766,6 +941,46 @@ export const cursorCatalog = {
     "gpt-5.5-extra-high-fast": {
       model: "gpt-5.5",
       options: { effort: "extra-high", speed: true, context: false },
+    },
+    "claude-fable-5-2-low": {
+      model: "claude-fable-5-2",
+      options: { effort: "low", speed: false, context: true },
+    },
+    "claude-fable-5-2-low-fast": {
+      model: "claude-fable-5-2",
+      options: { effort: "low", speed: true, context: true },
+    },
+    "claude-fable-5-2-medium": {
+      model: "claude-fable-5-2",
+      options: { effort: "medium", speed: false, context: true },
+    },
+    "claude-fable-5-2-medium-fast": {
+      model: "claude-fable-5-2",
+      options: { effort: "medium", speed: true, context: true },
+    },
+    "claude-fable-5-2-high": {
+      model: "claude-fable-5-2",
+      options: { effort: "high", speed: false, context: true },
+    },
+    "claude-fable-5-2-high-fast": {
+      model: "claude-fable-5-2",
+      options: { effort: "high", speed: true, context: true },
+    },
+    "claude-fable-5-2-xhigh": {
+      model: "claude-fable-5-2",
+      options: { effort: "xhigh", speed: false, context: true },
+    },
+    "claude-fable-5-2-xhigh-fast": {
+      model: "claude-fable-5-2",
+      options: { effort: "xhigh", speed: true, context: true },
+    },
+    "claude-fable-5-2-max": {
+      model: "claude-fable-5-2",
+      options: { effort: "max", speed: false, context: true },
+    },
+    "claude-fable-5-2-max-fast": {
+      model: "claude-fable-5-2",
+      options: { effort: "max", speed: true, context: true },
     },
     "claude-fable-5-1-low": {
       model: "claude-fable-5-1",
@@ -846,8 +1061,6 @@ export const cursorCatalog = {
     "gemini-3.8-flash-low": { model: "gemini-3.8-flash", options: { effort: "low" } },
     "gemini-3.8-flash-medium": { model: "gemini-3.8-flash", options: { effort: "medium" } },
     "gemini-3.8-flash-high": { model: "gemini-3.8-flash", options: { effort: "high" } },
-    "gemini-3.7-flash-low": { model: "gemini-3.7-flash", options: { effort: "low" } },
-    "gemini-3.7-flash-medium": { model: "gemini-3.7-flash", options: { effort: "medium" } },
     "muse-spark-1.3-minimal": { model: "muse-spark-1.3", options: { effort: "minimal", context: true } },
     "muse-spark-1.3-low": { model: "muse-spark-1.3", options: { effort: "low", context: true } },
     "muse-spark-1.3-medium": { model: "muse-spark-1.3", options: { effort: "medium", context: true } },
@@ -896,6 +1109,11 @@ export const cursorCatalog = {
       model: "gpt-5.6-terra",
       options: { effort: "max", speed: true, context: true },
     },
+    "claude-sonnet-5-5-low": { model: "claude-sonnet-5-5", options: { effort: "low" } },
+    "claude-sonnet-5-5-medium": { model: "claude-sonnet-5-5", options: { effort: "medium" } },
+    "claude-sonnet-5-5-high": { model: "claude-sonnet-5-5", options: { effort: "high" } },
+    "claude-sonnet-5-5-xhigh": { model: "claude-sonnet-5-5", options: { effort: "xhigh" } },
+    "claude-sonnet-5-5-max": { model: "claude-sonnet-5-5", options: { effort: "max" } },
     "claude-sonnet-5-low": {
       model: "claude-sonnet-5",
       options: { effort: "low", context: true, thinking: false },
@@ -1086,10 +1304,6 @@ export const cursorCatalog = {
       model: "gpt-5.6-luna",
       options: { effort: "max", speed: true, context: true },
     },
-    "gemini-3.6-flash-minimal": { model: "gemini-3.6-flash", options: { effort: "minimal" } },
-    "gemini-3.6-flash-low": { model: "gemini-3.6-flash", options: { effort: "low" } },
-    "gemini-3.6-flash-medium": { model: "gemini-3.6-flash", options: { effort: "medium" } },
-    "gemini-3.6-flash-high": { model: "gemini-3.6-flash", options: { effort: "high" } },
     "gemini-3.1-pro": { model: "gemini-3.1-pro", options: {} },
     "gpt-5.4-mini-none": { model: "gpt-5.4-mini", options: { effort: "none" } },
     "gpt-5.4-mini-low": { model: "gpt-5.4-mini", options: { effort: "low" } },
@@ -1101,6 +1315,31 @@ export const cursorCatalog = {
     "gpt-5.4-nano-medium": { model: "gpt-5.4-nano", options: { effort: "medium" } },
     "gpt-5.4-nano-high": { model: "gpt-5.4-nano", options: { effort: "high" } },
     "gpt-5.4-nano-xhigh": { model: "gpt-5.4-nano", options: { effort: "xhigh" } },
+    "claude-haiku-5-5-low": { model: "claude-haiku-5-5", options: { effort: "low", thinking: false } },
+    "claude-haiku-5-5-medium": { model: "claude-haiku-5-5", options: { effort: "medium", thinking: false } },
+    "claude-haiku-5-5-high": { model: "claude-haiku-5-5", options: { effort: "high", thinking: false } },
+    "claude-haiku-5-5-xhigh": { model: "claude-haiku-5-5", options: { effort: "xhigh", thinking: false } },
+    "claude-haiku-5-5-max": { model: "claude-haiku-5-5", options: { effort: "max", thinking: false } },
+    "claude-haiku-5-5-thinking-low": {
+      model: "claude-haiku-5-5",
+      options: { effort: "low", thinking: true },
+    },
+    "claude-haiku-5-5-thinking-medium": {
+      model: "claude-haiku-5-5",
+      options: { effort: "medium", thinking: true },
+    },
+    "claude-haiku-5-5-thinking-high": {
+      model: "claude-haiku-5-5",
+      options: { effort: "high", thinking: true },
+    },
+    "claude-haiku-5-5-thinking-xhigh": {
+      model: "claude-haiku-5-5",
+      options: { effort: "xhigh", thinking: true },
+    },
+    "claude-haiku-5-5-thinking-max": {
+      model: "claude-haiku-5-5",
+      options: { effort: "max", thinking: true },
+    },
     "claude-4.5-sonnet": { model: "claude-4.5-sonnet", options: { thinking: false } },
     "claude-4.5-sonnet-thinking": { model: "claude-4.5-sonnet", options: { thinking: true } },
     "gpt-5.1-low": { model: "gpt-5.1", options: { effort: "low" } },
@@ -1117,6 +1356,11 @@ export const cursorCatalog = {
     "kimi-k2.7-code": { model: "kimi-k2.7-code", options: {} },
     "glm-5.2-high": { model: "glm-5.2", options: { effort: "high" } },
     "glm-5.2-max": { model: "glm-5.2", options: { effort: "max" } },
+    "deepseek-v41-flash-1017-none": { model: "deepseek-v41-flash-1017", options: { effort: "none" } },
+    "deepseek-v41-flash-1017-low": { model: "deepseek-v41-flash-1017", options: { effort: "low" } },
+    "deepseek-v41-flash-1017-medium": { model: "deepseek-v41-flash-1017", options: { effort: "medium" } },
+    "deepseek-v41-flash-1017-high": { model: "deepseek-v41-flash-1017", options: { effort: "high" } },
+    "deepseek-v41-flash-1017-max": { model: "deepseek-v41-flash-1017", options: { effort: "max" } },
   },
 } satisfies HarnessManagedCatalog;
 
