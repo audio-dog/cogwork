@@ -1,0 +1,37 @@
+packages/engine/src/workflow-actions-source-control.ts
+  s_8f66a398187220::t_044853a8d14b0d 1-249,258-275
+  s_8f66a398187220::t_6f93d89ae1d26d 250-257
+packages/engine/src/workflow-actions-source-control.test.ts
+  s_8f66a398187220::t_34e7e870a88d07 10
+  s_8f66a398187220::t_755316cc063009 40
+  s_8f66a398187220::t_6c91af5f7751e1 36
+  s_8f66a398187220::t_60215d9a9920f5 45-52
+  s_8f66a398187220::t_b3eb7933ac95df 1-9,11-35,37-39,41-44,53-125,131-134
+  s_8f66a398187220::t_1cd42f11d024e1 126-130
+packages/engine/src/github/provider.ts
+  s_8f66a398187220::t_5342925eee4789 60-61
+packages/engine/src/workflow-action-registry.ts
+  s_8f66a398187220::t_50f9887b7c7945 4,8
+packages/engine/src/workflow-action-plan.ts
+  s_8f66a398187220::t_aa086024762e73 61
+  s_8f66a398187220::t_b3c797ab680eb8 150,160,162-175,177-178,180-183,185,187-191
+  s_8f66a398187220::t_aa549d550539e9 258-259
+  s_8f66a398187220::t_ad3dd2f054c3c7 28
+  s_8f66a398187220::t_2753b32539a54b 52-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18e50b57c03d9e280ed94c1ed4f5b4b3ac6fe779",
+  "prompts": {},
+  "sessions": {
+    "s_8f66a398187220": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4f09c8d-d32c-46f3-9908-8706f830e3a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
