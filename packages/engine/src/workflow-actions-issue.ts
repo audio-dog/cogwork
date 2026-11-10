@@ -27,12 +27,12 @@ import {
 export const issueTrackerApps = ["github", "linear"] as const;
 export type IssueTrackerApp = (typeof issueTrackerApps)[number];
 
-export type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
+type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
   readonly app: WorkspaceIssueTrackerBinding["config"]["issueTracker"]["type"];
   readonly config: WorkspaceIssueTrackerBinding["config"];
 };
 
-export const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
+const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
   entry: WorkflowCatalogEntry,
   selected: ReadonlyArray<RegisteredWorkspace>,
   workspaceId: string | undefined,
@@ -51,7 +51,7 @@ export const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget
   } satisfies FrozenIssueTarget;
 });
 
-export const targetFields = (target: FrozenIssueTarget) => ({
+const targetFields = (target: FrozenIssueTarget) => ({
   workspace: target.config.name,
   app: target.app,
   issueTracker: target.config.issueTracker,
@@ -115,7 +115,7 @@ const existingIssueTargetProducer: TargetProducer = (context) =>
     ),
   );
 
-export const issueParameter = (id: string, required: boolean) =>
+const issueParameter = (id: string, required: boolean) =>
   ({
     id,
     required,
@@ -123,7 +123,7 @@ export const issueParameter = (id: string, required: boolean) =>
     values: [],
   }) satisfies WorkflowCatalogEntry["parameters"][number];
 
-export const issueActionRow = (
+const issueActionRow = (
   system: IssueTrackerApp,
   id: string,
   name: string,

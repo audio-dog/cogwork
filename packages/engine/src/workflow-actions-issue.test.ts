@@ -12,6 +12,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Coordination, fold } from "./coordination";
 import { IssueTracker, makeEmpty } from "./issue-tracker";
@@ -39,14 +40,7 @@ const attempt = Schema.decodeSync(RunId)("issue-plan");
 const operation = Schema.decodeSync(WorkflowNodeId)("write");
 const item = Schema.decodeSync(WorkItemId)("#899");
 const existingIssue = Schema.decodeSync(WorkItemId)("#7");
-const issueActions = [
-  "create-issue",
-  "comment-issue",
-  "comment-this-item",
-  "add-label",
-  "remove-label",
-  "close-this-issue",
-];
+const currentIssueActions = ["comment-this-item", "add-label", "remove-label", "close-this-issue"];
 
 const issueTrackers = {
   github: { type: "github" },
@@ -136,11 +130,11 @@ const requirements = Layer.mergeAll(
 );
 
 describe("Issue Action entries", () => {
-  it("derive each tracker's catalog rows from the registry", () => {
+  it("derive each tracker's current-item catalog rows from the registry", () => {
     const cogworkKeys = cogworkWorkflowCatalogContribution.entries.map(({ key }) => key);
     for (const system of issueTrackerApps) {
       const rows = issueTrackerWorkflowCatalogContribution(system).entries;
-      for (const action of issueActions) {
+      for (const action of currentIssueActions) {
         const key = `${system}.${action}`;
         assert.strictEqual(
           rows.find((row) => row.key === key),
@@ -182,6 +176,10 @@ describe("Issue Action entries", () => {
           yield* targetOf("comment-issue", name, { issue: `${name}:${existingIssue}` }),
           { _tag: "ExistingIssue", ...frozen, issue: existingIssue },
         );
+        const otherWorkspace = yield* Effect.result(
+          targetOf("comment-issue", name, { issue: `other-repo:${existingIssue}` }),
+        );
+        assert.isTrue(Result.isFailure(otherWorkspace));
       }),
     );
 
