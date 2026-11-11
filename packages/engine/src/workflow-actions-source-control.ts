@@ -390,7 +390,7 @@ const currentPullRequestEntry = (row: WorkflowCatalogEntry, execute: ActionExecu
 const namedPullRequestEntry = (row: WorkflowCatalogEntry, execute: ActionExecutor) =>
   sourceControlEntry(row, namedPullRequestTarget, execute, ["pull-request"]);
 
-const reviewInputs = ["pull_request", "review_body", "review_comments"];
+const reviewAgentInputs = ["pull_request", "review_body", "review_comments"];
 
 export const sourceControlActionEntries = [
   sourceControlEntry(
@@ -435,14 +435,14 @@ export const sourceControlActionEntries = [
       "post-review",
       "Post a review",
       "read-only",
-      reviewInputs,
+      reviewAgentInputs,
       [reviewEventParameter],
       ["*"],
     ),
     postReview,
   ),
   namedPullRequestEntry(
-    sourceControlActionRow("draft-review", "Draft a review", "read-only", reviewInputs, [], ["*"]),
+    sourceControlActionRow("draft-review", "Draft a review", "read-only", reviewAgentInputs, [], ["*"]),
     draftReview,
   ),
 ];

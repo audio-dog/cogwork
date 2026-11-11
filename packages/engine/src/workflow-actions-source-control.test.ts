@@ -74,7 +74,7 @@ const admissionFor = (ref: WorkItemRef): TriggerAdmission => {
   };
 };
 
-const targetOf = (action: string, ref: WorkItemRef, named: Partial<TargetContext> = {}) => {
+const targetOf = (action: string, ref: WorkItemRef, overrides: Partial<TargetContext> = {}) => {
   const entry = actionEntryFor(`github.${action}`);
   assert.isDefined(entry);
   return entry.target({
@@ -85,7 +85,7 @@ const targetOf = (action: string, ref: WorkItemRef, named: Partial<TargetContext
     parameters: [],
     workspace: workspace.config.name,
     sourceControl: undefined,
-    ...named,
+    ...overrides,
   });
 };
 
@@ -120,7 +120,7 @@ const frozen = {
 };
 
 describe("Source control Action entries", () => {
-  it("publishes each row once, from the GitHub tracker catalog", () => {
+  it("publishes each row in the GitHub tracker catalog", () => {
     const keys = sourceControlActions.map((action) => `github.${action}`);
     const trackerKeys = issueTrackerWorkflowCatalogContribution("github").entries.map(({ key }) => key);
     assert.includeMembers(trackerKeys, keys);
@@ -175,6 +175,7 @@ describe("Source control Action entries", () => {
         assert.strictEqual(unread._tag, "WorkflowActionPlanDecodeError");
         assert.strictEqual(unread.message, "Read pull request #826 with the pull-request Tool");
         const moved = yield* Effect.flip(namedTargetOf(action, [namedPullRequest]));
+        assert.strictEqual(moved._tag, "WorkflowActionPlanDecodeError");
         assert.strictEqual(moved.message, "Pull request #826 received a new commit after it was read");
       }
     }),
