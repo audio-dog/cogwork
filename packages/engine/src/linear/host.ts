@@ -106,29 +106,30 @@ const targetForIssue = Effect.fn("linear.issueTarget")(function* (
   return target;
 });
 
+const listedItem = (issue: RawIssue) =>
+  Effect.map(
+    itemId(issue.identifier),
+    (id): ListedTrackerItem => ({
+      id,
+      title: issue.title,
+      url: issue.url,
+      assignees: issue.assignees,
+      openBlockers: issue.openBlockers,
+      priority: issue.priority,
+      states: [...issue.labels, issue.stateName],
+      open: !isResolvedState(issue.stateType),
+      labels: issue.labels,
+      createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
+      lastTouchedAtMillis: issue.updatedAtMillis,
+    }),
+  );
+
 const listItems = Effect.fn("linear.listItems")(function* (
   workspace: WorkspaceIssueTrackerBinding,
   readTeam: (target: LinearTarget) => Effect.Effect<ReadonlyArray<RawIssue>, IssueTrackerError>,
 ) {
   const perTeam = yield* Effect.forEach(targetsFor(workspace), readTeam);
-  return yield* Effect.forEach(perTeam.flat(), (issue) =>
-    Effect.map(
-      itemId(issue.identifier),
-      (id): ListedTrackerItem => ({
-        id,
-        title: issue.title,
-        url: issue.url,
-        assignees: issue.assignees,
-        openBlockers: issue.openBlockers,
-        priority: issue.priority,
-        states: [...issue.labels, issue.stateName],
-        open: !isResolvedState(issue.stateType),
-        labels: issue.labels,
-        createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
-        lastTouchedAtMillis: issue.updatedAtMillis,
-      }),
-    ),
-  );
+  return yield* Effect.forEach(perTeam.flat(), listedItem);
 });
 
 export const makeIssueReads = (client: LinearClientService) => {
@@ -139,6 +140,15 @@ export const makeIssueReads = (client: LinearClientService) => {
       listItems(workspace, (target) => client.observeIssues(target, null, null, sinceMillis, true)),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
       listItems(workspace, (target) => client.observeLabelledIssues(target, label)),
+    readItem: Effect.fn("linear.readItem")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const target = yield* targetForIssue(workspace, id);
+      const issue = yield* client.readTriggerIssue(target, id);
+      if (issue === null) return null;
+      return yield* listedItem(issue);
+    }),
     readProse: Effect.fn("linear.readProse")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,

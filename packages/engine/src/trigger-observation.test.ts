@@ -34,7 +34,6 @@ import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
-import { githubTrackerEntries, issueHasLabelKey } from "./github/tracker-trigger-source";
 import { granolaEntries } from "./granola-source";
 import {
   IssueTracker,
@@ -45,6 +44,7 @@ import {
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { makeScriptedSource } from "./scripted-source";
+import { trackerTriggerEntries } from "./tracker-trigger-source";
 import {
   make,
   makeControlStoreTriggerObservationStore,
@@ -70,6 +70,7 @@ const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
 const otherWorkflowId = Schema.decodeSync(WorkflowId)("other-workflow");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
+const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("github.issue-has-label");
 const scheduleParameters = [
   { id: "hour", value: "0" },
   { id: "minute", value: "0" },
@@ -1002,7 +1003,7 @@ describe("TriggerObservation", () => {
       });
       const { observation, scripted } = yield* makeWorkspaceObservation({
         document: labelDocument,
-        source: { id: "github", entries: githubTrackerEntries },
+        source: { id: "github", entries: trackerTriggerEntries("github") },
       });
       const changed = yield* observation.changes.pipe(
         Stream.take(1),

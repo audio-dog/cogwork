@@ -62,7 +62,7 @@ const authoredByPerson = (comment: RawIssueComment, botAllowlist: BotAllowlist) 
   !hasCogworkMarker(comment.body);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
 
-export const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
+const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
   const parsed = Number.parseInt(id.replace(/^#/, ""), 10);
   if (Number.isNaN(parsed)) {
     return yield* new IssueTrackerError({
@@ -103,7 +103,7 @@ const ambiguousWriteNotConfirmed = (writeKey: string) =>
     message: `GitHub write ${writeKey} may have committed but was not confirmed by read-back`,
   });
 
-export const issuePriorities = Effect.fn("github.issuePriorities")(function* (
+const issuePriorities = Effect.fn("github.issuePriorities")(function* (
   client: GitHubClientService,
   target: GitHubTarget,
   issues: ReadonlyArray<RawIssue>,
@@ -155,13 +155,10 @@ export const makeIssueReads = (client: GitHubClientService) => {
     if (!target) return yield* notGitHub(workspace);
     return { target, number: yield* issueNumberOf(id) };
   });
-  const listItems = Effect.fn("github.listItems")(function* (
-    workspace: WorkspaceIssueTrackerBinding,
-    query: { readonly state: "open" | "all"; readonly since?: number; readonly label?: string },
+  const listedItems = Effect.fn("github.listedItems")(function* (
+    target: GitHubTarget,
+    issues: ReadonlyArray<RawIssue>,
   ) {
-    const target = targetFor(workspace);
-    if (!target) return [];
-    const issues = (yield* client.listIssues(target, query)).filter((issue) => !issue.isPullRequest);
     const priorities = yield* issuePriorities(client, target, issues);
     return yield* Effect.forEach(issues, (issue) =>
       Effect.map(
@@ -182,12 +179,32 @@ export const makeIssueReads = (client: GitHubClientService) => {
       ),
     );
   });
+  const listItems = Effect.fn("github.listItems")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    query: { readonly state: "open" | "all"; readonly since?: number; readonly label?: string },
+  ) {
+    const target = targetFor(workspace);
+    if (!target) return [];
+    const issues = yield* client.listIssues(target, query);
+    return yield* listedItems(
+      target,
+      issues.filter((issue) => !issue.isPullRequest),
+    );
+  });
   return {
     observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, { state: "open" }),
     itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
       listItems(workspace, { state: "all", since: sinceMillis }),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
       listItems(workspace, { state: "open", label }),
+    readItem: Effect.fn("github.readItem")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const [item] = yield* listedItems(target, [yield* client.readIssue(target, number)]);
+      return item ?? null;
+    }),
     readProse: Effect.fn("github.readProse")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,

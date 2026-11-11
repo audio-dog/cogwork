@@ -88,6 +88,7 @@ const tracker = (options: {
   },
   openItemsWithLabel: (_workspace: WorkspaceIssueTrackerBinding, label: string) =>
     Effect.succeed((options.labelled ?? []).filter(({ labels }) => labels.includes(label))),
+  readItem: () => Effect.succeed(null),
   readTriggerProse: () => Effect.succeed({ body: "Body", comments }),
   labelAppliedAt: (_workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) =>
     Effect.succeed(id === firstIssueId ? 1_500 : null),

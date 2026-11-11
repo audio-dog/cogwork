@@ -140,6 +140,8 @@ export const makeEmpty = Effect.succeed({
     emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
   openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, _label: string) =>
     emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
+  readItem: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead<ListedTrackerItem | null>(null)(workspace),
   readProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
     emptyRead(emptyProse)(workspace),
   readTriggerProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
