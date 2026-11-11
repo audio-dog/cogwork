@@ -1,0 +1,31 @@
+packages/contracts/src/contribution.ts
+  s_8765b5b0cd7ff8::t_0f24cb39117601 10
+packages/contracts/CONTEXT.md
+  s_8765b5b0cd7ff8::t_da5ca02381ee13 164
+docs/adr/0037-commands-are-skills-and-subagent-files-follow-the-claude-code-shape.md
+  s_8765b5b0cd7ff8::t_8fbc367da0e274 67-68
+  s_8765b5b0cd7ff8::t_c91e81d9b4efed 32
+  s_8765b5b0cd7ff8::t_990283c5e778a2 69
+packages/contracts/src/plugin.ts
+  s_8765b5b0cd7ff8::t_0a193d8ec60479 4
+packages/engine/src/plugin.test.ts
+  s_8765b5b0cd7ff8::t_0972045eeadd97 71
+packages/engine/src/plugin.ts
+  s_8765b5b0cd7ff8::t_906a1ed7080712 142,146,154,157,161-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "77c071c4a55670c1353459f504625469b270d7ff",
+  "prompts": {},
+  "sessions": {
+    "s_8765b5b0cd7ff8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "78499375-cc31-4281-9d6e-bfd2bbf5be77",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
