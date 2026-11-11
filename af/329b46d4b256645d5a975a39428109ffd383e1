@@ -1,0 +1,19 @@
+packages/engine/src/authoring-tree.ts
+  s_7508bbaae2cd30::t_004388082accf6 107,130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af329b46d4b256645d5a975a39428109ffd383e1",
+  "prompts": {},
+  "sessions": {
+    "s_7508bbaae2cd30": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6846209f-8dea-4bc6-a984-081d49313f49",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
