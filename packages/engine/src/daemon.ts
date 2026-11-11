@@ -79,6 +79,7 @@ import { IssueTracker } from "./issue-tracker";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
+import { withParkNotices } from "./park-notice";
 import { PerformanceHealthSource } from "./performance-health-source";
 import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
 import {
@@ -500,8 +501,8 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const machineReadiness = machineReadinessLayer.pipe(
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness, plugins)),
   );
-  const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
-    Layer.provide(controlStore),
+  const coordination = Layer.effect(Coordination, withParkNotices(makeControlStoreCoordination)).pipe(
+    Layer.provide(Layer.mergeAll(controlStore, issueTracker, registry)),
   );
   const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources: Layer.Layer<

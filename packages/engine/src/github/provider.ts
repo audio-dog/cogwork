@@ -45,13 +45,6 @@ export { baseDivergenceOf } from "./source-control-target";
 const catalogKey = Schema.decodeSync(WorkflowCatalogKey);
 const decodeTemplate = Schema.decodeUnknownSync(WorkflowTemplate);
 
-const reviewerParameter = {
-  id: "reviewer",
-  required: true,
-  source: "live",
-  values: [],
-} satisfies WorkflowCatalogEntry["parameters"][number];
-
 const reviewEventParameter = {
   id: "event",
   required: true,
@@ -64,8 +57,8 @@ const sourceControlAction = (
   name: string,
   permissionProfile: WorkflowCatalogEntry["permissionProfile"],
   agentInputs: ReadonlyArray<string>,
-  parameters: WorkflowCatalogEntry["parameters"] = [],
-  actsOn: ReadonlyArray<string> = ["issue", "pull-request"],
+  parameters: WorkflowCatalogEntry["parameters"],
+  actsOn: ReadonlyArray<string>,
 ) =>
   ({
     key: catalogKey(`github.${id}`),
@@ -84,19 +77,6 @@ const sourceControlAction = (
   }) satisfies WorkflowCatalogEntry;
 
 export const githubSourceControlActionEntries = [
-  sourceControlAction(
-    "open-pull-request",
-    "Open a pull request",
-    "full",
-    ["pr_title", "pr_body"],
-    [],
-    ["issue"],
-  ),
-  sourceControlAction("push-to-this-pull-request", "Push to this pull request", "full", []),
-  sourceControlAction("comment-on-this-pull-request", "Comment on this pull request", "read-only", [
-    "comment",
-  ]),
-  sourceControlAction("request-review", "Request a review", "read-only", [], [reviewerParameter]),
   sourceControlAction(
     "comment-on-named-pull-request",
     "Comment on a named pull request",

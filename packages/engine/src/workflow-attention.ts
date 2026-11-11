@@ -22,7 +22,7 @@ const skipReasonOfPayload = TriggerEventPayload.match({
 
 const skipReasonOf = ({ payload }: TriggerEvent) => (payload ? skipReasonOfPayload(payload) : null);
 
-const commandsByReason = {
+export const parkCommandsByReason = {
   Stuck: ["hand-back"],
   Exhausted: ["hand-back"],
   HopCap: ["hand-back"],
@@ -50,7 +50,7 @@ const summaryByReason = {
   [Tag in ParkReason["_tag"]]: (reason: Extract<ParkReason, { readonly _tag: Tag }>) => string;
 };
 
-const summaryOf = (reason: ParkReason) => ParkReason.match(reason, summaryByReason);
+export const parkSummary = (reason: ParkReason) => ParkReason.match(reason, summaryByReason);
 
 const parkedAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =>
   admissions
@@ -105,9 +105,9 @@ export const make = Effect.gen(function* () {
                 publishedRevision: record?.publishedRevision ?? 0,
                 operation: admission.subscription.operation,
                 lineage: admission.lineage,
-                summary: plan?.summary ?? summaryOf(gate.reason),
+                summary: plan?.summary ?? parkSummary(gate.reason),
                 changedSinceParked,
-                commands: commandsByReason[gate.reason._tag],
+                commands: parkCommandsByReason[gate.reason._tag],
                 reason: gate.reason,
                 attempt: plan?.attempt ?? null,
                 parkedAtMillis: view.park?.atMillis ?? plan?.createdAtMillis ?? admission.event.atMillis,
