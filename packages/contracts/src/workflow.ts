@@ -553,10 +553,13 @@ const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => 
   );
 };
 
+const actsOnAnyItem = ({ actsOn }: WorkflowCatalogEntry) => actsOn.includes("*");
+
 export const workflowOperationResultSchema = (
   operation: WorkflowOperation,
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
+  itemWorkspace?: WorkspaceId,
 ) => {
   const elementFields = {
     summary: TrimmedNonEmptyString,
@@ -564,15 +567,19 @@ export const workflowOperationResultSchema = (
     inputs: Schema.Struct(inputFields(operation, catalog)),
   };
   const parseOptions = { onExcessProperty: "error" } as const;
-  const needsWorkspace = operationActionEntries(operation, catalog).some(
+  const workspaceEntries = operationActionEntries(operation, catalog).filter(
     ({ requiresWorkspace }) => requiresWorkspace,
+  );
+  const needsWorkspace = workspaceEntries.length > 0;
+  const onceNeedsWorkspace = workspaceEntries.some(
+    (entry) => itemWorkspace === undefined || actsOnAnyItem(entry),
   );
   const element = needsWorkspace
     ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
         parseOptions,
       })
     : Schema.Struct(elementFields).annotate({ parseOptions });
-  const once = needsWorkspace
+  const once = onceNeedsWorkspace
     ? Schema.Struct({
         summary: TrimmedNonEmptyString,
         stuck: Schema.Boolean,
@@ -599,9 +606,10 @@ export const workflowOperationResultJsonSchema = (
   operation: WorkflowOperation,
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
+  itemWorkspace?: WorkspaceId,
 ) =>
   Schema.toStandardJSONSchemaV1(
-    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces)),
+    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces, itemWorkspace)),
   );
 
 export const matchWorkflowTransitions = (

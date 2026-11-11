@@ -1026,21 +1026,18 @@ describe("WorkflowRun", () => {
         stuck: false,
         answers: { role: "needs-info" },
         inputs: { comment: "Please add the failing logs.", hand_off: "Waiting for logs." },
-        workspace: "none",
       });
       yield* runCodingAdmission(admissionFor("needs-info-comment", issue("#801")), {
         summary: "Ready after reporter reply",
         stuck: false,
         answers: { role: "ready-for-agent" },
         inputs: { comment: "Thanks, this is ready.", hand_off: "" },
-        workspace: workspace.config.name,
       });
       yield* runCodingAdmission(admissionFor("ready-for-agent", issue("#802")), {
         summary: "Implementation complete",
         stuck: false,
         answers: {},
         inputs: { pr_title: "Implement retries", pr_body: "Closes #802" },
-        workspace: workspace.config.name,
       });
       yield* runCodingAdmission(
         admissionFor("checks-failed", {
@@ -1053,7 +1050,6 @@ describe("WorkflowRun", () => {
           stuck: false,
           answers: { reply: "no" },
           inputs: { comment: "" },
-          workspace: workspace.config.name,
         },
       );
 
@@ -1762,14 +1758,12 @@ describe("WorkflowRun", () => {
           {
             summary: "Open it",
             stuck: false,
-            workspace: workspace.config.name,
             answers: {},
             inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
           },
           {
             summary: "Open it",
             stuck: false,
-            workspace: workspace.config.name,
             answers: {},
             inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
           },

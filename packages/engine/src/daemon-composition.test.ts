@@ -50,15 +50,20 @@ import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 const harnessName = HarnessName.make("scripted");
 const githubType = Schema.decodeSync(IssueTrackerType)("github");
 const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
-const structuredOutput = (workspace: string) => ({
+const structuredOutput = {
   summary: "Ready for implementation",
   stuck: false,
   answers: { role: "ready-for-agent" },
   inputs: { comment: "Ready for implementation.", hand_off: "" },
-  workspace,
+};
+
+const resultEvent = (object: unknown) => ({
+  type: "CUSTOM" as const,
+  name: "structured-output.complete" as const,
+  value: { object, raw: JSON.stringify(object) },
 });
 
-const runner = <Workspace extends string>(workspace: Ref.Ref<Workspace>): HarnessRunner => ({
+const runner: HarnessRunner = {
   name: harnessName,
   sessionKind: "owned-transcript",
   projectedMembers: [],
@@ -86,20 +91,8 @@ const runner = <Workspace extends string>(workspace: Ref.Ref<Workspace>): Harnes
       diagnostics: [],
     }),
   preflight: () => Effect.void,
-  run: () =>
-    Stream.fromEffect(
-      Ref.get(workspace).pipe(
-        Effect.map((selected) => {
-          const object = structuredOutput(selected);
-          return {
-            type: "CUSTOM" as const,
-            name: "structured-output.complete" as const,
-            value: { object, raw: JSON.stringify(object) },
-          };
-        }),
-      ),
-    ),
-});
+  run: () => Stream.succeed(resultEvent(structuredOutput)),
+};
 
 const reconcileWorktrees = vi.fn<WorktreeManagerService["reconcile"]>(() =>
   Effect.succeed({ tornDown: [], reaped: [] }),
@@ -208,15 +201,8 @@ class SlackReviewProbe extends Context.Service<SlackReviewProbe, SlackReviewProb
   );
 }
 
-const resultEvent = (object: unknown) => ({
-  type: "CUSTOM" as const,
-  name: "structured-output.complete" as const,
-  value: { object, raw: JSON.stringify(object) },
-});
-
 const slackReviewRunner = (probe: SlackReviewProbeService): HarnessRunner => ({
-  ...runner(probe.workspace),
-  capabilities: { ...runner(probe.workspace).capabilities, structuredOutput: "native" },
+  ...runner,
   run: (request) => {
     const body = request.plan.workContext.prose.body;
     const executePullRequest = request.engineTools?.find(({ name }) => name === "pull-request")?.execute;
@@ -489,7 +475,6 @@ function makeFixture() {
     yield* fs.makeDirectory(checkoutPath);
     const labels = ["needs-triage"];
     const comments: Array<Record<string, unknown>> = [];
-    const selectedWorkspace = yield* Ref.make("none");
     const fetchStub = vi.fn<typeof globalThis.fetch>((input, init) => {
       const request = new Request(input, init);
       const url = new URL(request.url);
@@ -555,7 +540,6 @@ function makeFixture() {
     return {
       checkoutPath,
       fetchStub,
-      selectedWorkspace,
       clientLayer,
       serverLayer: Daemon.serverLayer({
         transport,
@@ -565,7 +549,7 @@ function makeFixture() {
         controlStorePath: path.join(root, "control.db"),
         userAgentsDir: path.join(root, ".agents"),
         worktrees: worktreeLayer,
-        harnessRunners: [runner(selectedWorkspace)],
+        harnessRunners: [runner],
         appVersion: "test",
         performanceEvidenceRoot: path.join(root, "perf"),
         performanceHealth: Layer.succeed(PerformanceHealthSource, {
@@ -649,7 +633,6 @@ describe("daemon composition", () => {
       });
       assert.strictEqual(registration._tag, "Registered");
       if (registration._tag !== "Registered") return;
-      yield* Ref.set(fixture.selectedWorkspace, registration.name);
       yield* rpc.SetOperationSetting({
         updates: [
           {

@@ -730,6 +730,25 @@ describe("Workflow Operation result", () => {
     assert.strictEqual(json.additionalProperties, false);
   });
 
+  it("asks for a Workspace from an item's Workspace only for an action that acts on any item", () => {
+    const requiredFor = (catalog: WorkflowCatalog) =>
+      workflowOperationResultJsonSchema(operation, catalog, [cogworkWorkspace], cogworkWorkspace)[
+        "~standard"
+      ].jsonSchema.input({ target: "draft-2020-12" }).required;
+    const anyItemCatalog = catalogWith({
+      entries: baseCatalog.entries.map((entry) => ({ ...entry, actsOn: ["*"] })),
+    });
+
+    assert.deepStrictEqual(requiredFor(baseCatalog), ["summary", "stuck", "answers", "inputs"]);
+    assert.deepStrictEqual(requiredFor(anyItemCatalog), [
+      "summary",
+      "stuck",
+      "answers",
+      "inputs",
+      "workspace",
+    ]);
+  });
+
   it("builds review comments as one required list shape", () => {
     const reviewEntry = {
       ...baseCatalog.entries[1],
