@@ -1,0 +1,25 @@
+packages/engine/src/daemon.ts
+  s_f92eeddda219c5::t_6d56d4f96539f4 427
+packages/engine/src/issue-tracker-router.ts
+  s_f92eeddda219c5::t_3941f570185464 10,38
+packages/engine/src/linear/trigger-source.test.ts
+  s_f92eeddda219c5::t_53c87bd0578c52 18-19,24-27,116,132,181,211,223,264,298,323
+packages/engine/src/workflow.test.ts
+  s_f92eeddda219c5::t_17c8e827fb0038 178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "37f8ccbf8a3856ccf124cb34e73b18f7529890e7",
+  "prompts": {},
+  "sessions": {
+    "s_f92eeddda219c5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "21e2f9a1-aae9-4912-9478-c8475ab69b11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
