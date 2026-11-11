@@ -5,7 +5,7 @@
 - **Amended:** 2026-08-24 — resolution narrows, see [Amendment](#amendment-2026-08-24--resolution-is-per-settings-family-and-merge-by-key-is-retired)
 - **Amended:** 2026-08-25 — the Plugin-supplied settings-blob schema governs an empty set, see [Amendment](#amendment-2026-08-25--the-plugin-supplied-settings-blob-schema-governs-an-empty-set)
 - **Amended:** 2026-08-26 — `local` splits into three, see [Amendment](#amendment-2026-08-26--local-splits-into-three-one-per-authoring-tree)
-- **Amended:** 2026-11-05 — Command is no longer a contribution kind, see [Amendment](#amendment-2026-11-05--commands-are-skills)
+- **Amended:** 2026-11-05 — Command is no longer a contribution kind, see [Amendment](#amendment-2026-11-05--commands-are-retired)
 
 ## Context
 
@@ -211,9 +211,8 @@ and an admin config file. `private` is named here, not borrowed.
 
 Full reasoning: [#204](https://github.com/taylorfsteele/cogwork/issues/204).
 
-## Amendment (2026-11-05) — Commands are Skills
+## Amendment (2026-11-05) — Commands are retired
 
-ADR [0037](./0037-commands-are-skills-and-subagent-files-follow-the-claude-code-shape.md) removes
+ADR [0037](./0037-commands-are-retired-and-subagent-files-follow-the-claude-code-shape.md) removes
 **Command** from both lists. The contribution kinds are **MCP server, Skill, Subagent, Rules, Hook**,
-and the Run Plan has no Commands member. A `commands/<name>.md` file is read as a Skill named
-`<name>` that the model cannot start by itself.
+and the Run Plan has no Commands member. Cogwork does not read `commands/` files.
