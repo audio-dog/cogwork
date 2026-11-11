@@ -62,7 +62,7 @@ const authoredByPerson = (comment: RawIssueComment, botAllowlist: BotAllowlist) 
   !hasCogworkMarker(comment.body);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
 
-export const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
+const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
   const parsed = Number.parseInt(id.replace(/^#/, ""), 10);
   if (Number.isNaN(parsed)) {
     return yield* new IssueTrackerError({
@@ -103,7 +103,7 @@ const ambiguousWriteNotConfirmed = (writeKey: string) =>
     message: `GitHub write ${writeKey} may have committed but was not confirmed by read-back`,
   });
 
-export const issuePriorities = Effect.fn("github.issuePriorities")(function* (
+const issuePriorities = Effect.fn("github.issuePriorities")(function* (
   client: GitHubClientService,
   target: GitHubTarget,
   issues: ReadonlyArray<RawIssue>,
