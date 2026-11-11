@@ -20,7 +20,11 @@ import { actionEntryFor } from "./workflow-action-registry";
 
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const item = Schema.decodeSync(WorkItemId)("#901");
-const currentPullRequestActions = ["push-to-this-pull-request", "comment-on-this-pull-request", "request-review"];
+const currentPullRequestActions = [
+  "push-to-this-pull-request",
+  "comment-on-this-pull-request",
+  "request-review",
+];
 const sourceControlActions = ["open-pull-request", ...currentPullRequestActions];
 
 const workspace: RegisteredWorkspace = {
@@ -111,7 +115,10 @@ describe("Source control Action entries", () => {
         issue: item,
       });
       const fromPullRequest = yield* Effect.flip(targetOf("open-pull-request", pullRequestRef));
-      assert.strictEqual(fromPullRequest.message, "Open a pull request needs an Issue in the selected Workspace");
+      assert.strictEqual(
+        fromPullRequest.message,
+        "Open a pull request needs an Issue in the selected Workspace",
+      );
     }),
   );
 
@@ -119,9 +126,15 @@ describe("Source control Action entries", () => {
     Effect.gen(function* () {
       for (const action of currentPullRequestActions) {
         for (const ref of [issueRef, pullRequestRef]) {
-          assert.deepStrictEqual(yield* targetOf(action, ref), { _tag: "CurrentPullRequest", ...frozen, item: ref });
+          assert.deepStrictEqual(yield* targetOf(action, ref), {
+            _tag: "CurrentPullRequest",
+            ...frozen,
+            item: ref,
+          });
         }
-        const elsewhere = yield* Effect.flip(targetOf(action, { ...pullRequestRef, workspace: otherWorkspace }));
+        const elsewhere = yield* Effect.flip(
+          targetOf(action, { ...pullRequestRef, workspace: otherWorkspace }),
+        );
         assert.strictEqual(elsewhere.message, "Workspace other does not bind github");
         const slack = yield* Effect.flip(targetOf(action, slackRef));
         assert.strictEqual(
