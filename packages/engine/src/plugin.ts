@@ -139,14 +139,11 @@ const missingReadiness = (system: string) =>
 const installedContributionsOf = (plugins: readonly PluginItem[]) =>
   plugins.flatMap((plugin) => (plugin.record ? plugin.contributions : []));
 
-const isCommandFile = (pointer: ManifestContribution) =>
-  pointer.kind === "skill" && /^(?:\.\/)?commands\/[^/]+\.md$/.test(pointer.file);
-
-const contributionOf = (
+const loadedContribution = (
   pluginId: string,
   pointer: ManifestContribution,
   file: string,
-  load: PluginContribution["load"],
+  mcpServer?: PluginMcpServer,
 ): PluginContribution => ({
   id: pluginContributionId(pluginId, pointer.kind, pointer.localName),
   authority: `plugin:${pluginId}`,
@@ -154,19 +151,23 @@ const contributionOf = (
   localName: pointer.localName,
   summary: pointer.summary,
   file,
-  ...(isCommandFile(pointer) ? { disableModelInvocation: true } : {}),
-  load,
+  load: { _tag: "Loaded", ...(mcpServer ? { mcpServer } : {}) },
 });
 
-const loadedContribution = (
+const failedContribution = (
   pluginId: string,
   pointer: ManifestContribution,
   file: string,
-  mcpServer?: PluginMcpServer,
-) => contributionOf(pluginId, pointer, file, { _tag: "Loaded", ...(mcpServer ? { mcpServer } : {}) });
-
-const failedContribution = (pluginId: string, pointer: ManifestContribution, file: string, reason: string) =>
-  contributionOf(pluginId, pointer, file, { _tag: "Failed", reason });
+  reason: string,
+): PluginContribution => ({
+  id: pluginContributionId(pluginId, pointer.kind, pointer.localName),
+  authority: `plugin:${pluginId}`,
+  kind: pointer.kind,
+  localName: pointer.localName,
+  summary: pointer.summary,
+  file,
+  load: { _tag: "Failed", reason },
+});
 
 export const make = Effect.fn("PluginManager.make")(function* (config: PluginManagerConfig) {
   const fs = yield* FileSystem.FileSystem;

@@ -68,18 +68,7 @@ const unavailableConnectionStoreLayer = Layer.succeed(ConnectionStore, {
 });
 const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: { LINEAR_API_KEY: "test-key" } }));
 
-interface ManifestPointer {
-  readonly kind: string;
-  readonly localName: string;
-  readonly summary: string;
-  readonly file: string;
-}
-
-const manifestDocument = (
-  version: string | null,
-  provenance = `fixture-${version}`,
-  extraContributions: ReadonlyArray<ManifestPointer> = [],
-) =>
+const manifestDocument = (version: string | null, provenance = `fixture-${version}`) =>
   JSON.stringify({
     pluginId: "linear",
     ...(version === null ? {} : { version }),
@@ -99,7 +88,6 @@ const manifestDocument = (
         summary: "Linear conventions",
         file: "rules/linear-style.md",
       },
-      ...extraContributions,
     ],
   });
 
@@ -329,37 +317,6 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(item?.contributions.find((row) => row.kind === "rules")?.load._tag, "Loaded");
       assert.strictEqual(item?.contributions.find((row) => row.kind === "mcp-server")?.load._tag, "Failed");
       assert.strictEqual(picture.contributionSettings[0]?.contribution.id, "plugin:linear/mcp/linear");
-    }).pipe(Effect.provide(fixtureLayer())),
-  );
-
-  it.effect("loads a bundled Command file as a Skill the model cannot start", () =>
-    Effect.gen(function* () {
-      const path = yield* Path.Path;
-      const fixture = yield* PluginFixture;
-      yield* write(
-        path.join(fixture.bundlePath, "plugin.json"),
-        manifestDocument("1.0.0", "fixture-1.0.0", [
-          { kind: "skill", localName: "ship", summary: "Release checklist", file: "commands/ship.md" },
-          { kind: "skill", localName: "triage", summary: "Triage", file: "skills/triage/SKILL.md" },
-        ]),
-      );
-      yield* write(path.join(fixture.bundlePath, "commands", "ship.md"), "Run the release checklist.");
-      yield* write(path.join(fixture.bundlePath, "skills", "triage", "SKILL.md"), "Triage the issue.");
-
-      const overview = (yield* (yield* PluginManager).install("linear", localOwnerId)).overview;
-      const skills = overview.plugins[0]?.contributions.filter((row) => row.kind === "skill");
-
-      assert.deepStrictEqual(
-        skills?.map(({ id, load, disableModelInvocation }) => ({
-          id,
-          load: load._tag,
-          disableModelInvocation,
-        })),
-        [
-          { id: "plugin:linear/skill/ship", load: "Loaded", disableModelInvocation: true },
-          { id: "plugin:linear/skill/triage", load: "Loaded", disableModelInvocation: undefined },
-        ],
-      );
     }).pipe(Effect.provide(fixtureLayer())),
   );
 

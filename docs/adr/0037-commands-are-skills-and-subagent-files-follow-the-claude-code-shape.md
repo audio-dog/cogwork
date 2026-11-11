@@ -29,8 +29,7 @@ standard, not a new format. The research in
 ## Decision
 
 1. **Commands become Skills.** The Command contribution kind goes away. A `commands/<name>.md` file
-   in any Authoring tree, or a Plugin manifest Skill whose file is `commands/<name>.md`, is read as a
-   Skill named `<name>` that the model cannot start by itself — the `disable-model-invocation: true`
+   in any Authoring tree is read as a Skill named `<name>` that the model cannot start by itself — the `disable-model-invocation: true`
    of the Claude Code shape. The contribution carries that mark. The Skill reaches a Run through the
    same mechanism as every other Skill. The contribution kinds are **MCP server, Skill, Subagent,
    Rules, and Hook**, and the Run Plan has no Commands member.
@@ -65,6 +64,8 @@ and the Command file is not read. That is the rule Claude Code applies.
 - The `command` kind leaves the contracts, the Plugin manifest, Operation needs, and Customize. A
   stored Workflow document whose Operation needs a `command` no longer decodes; this is pre-alpha
   and no migration is written.
-- A Command file shows under Skills in Customize, with its Authoring tree or Plugin as its badge.
+- A Command file shows under Skills in Customize, with its Authoring tree as its badge.
+- No shipped Plugin bundles `commands/`, so a Plugin manifest names no Command and the Plugin loader
+  has no Command rule.
 - Decisions 2 and 3 are implemented by a separate ticket, "Subagent files live in agents/ and carry
   a Model level". Until it lands, the scanner still reads `subagents/`.

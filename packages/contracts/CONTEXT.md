@@ -161,7 +161,7 @@ _Avoid_: MCP server (one server may expose many Tools)
 
 **Skill**:
 A discoverable package of instructions and supporting resources an agent may use during a Run. It remains distinct from mandatory Operating Instructions.
-A Skill may be one that only a person can start: the model cannot start it by itself (`disable-model-invocation: true`). A `commands/<name>.md` file in an Authoring tree or a Plugin is read as such a Skill, named `<name>` (ADR 0037).
+A Skill may be one that only a person can start: the model cannot start it by itself (`disable-model-invocation: true`). A `commands/<name>.md` file in an Authoring tree is read as such a Skill, named `<name>` (ADR 0037).
 _Avoid_: Operating-instructions package, MCP server, Plugin, Command (a Command is a Skill that only a person can start)
 
 **MCP server**:
