@@ -1,0 +1,21 @@
+docs/adr/0037-commands-are-skills-and-subagent-files-follow-the-claude-code-shape.md
+  s_4fcde3c42b561a::t_5914c19936f500 32-33
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_4fcde3c42b561a::t_b564b97027c656 68,139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ce237f7a42e08d8e4fef295a7f8c2b84ad8ece3e",
+  "prompts": {},
+  "sessions": {
+    "s_4fcde3c42b561a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0228ad1b-89b4-4244-90bc-ecb4e3ff0a83",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
