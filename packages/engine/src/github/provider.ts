@@ -2,8 +2,6 @@ import {
   type PrReviewStatus,
   WorkflowActionArtifact,
   type WorkflowActionOrigin,
-  type WorkflowCatalogEntry,
-  WorkflowCatalogKey,
   WorkflowTemplate,
   type WorkItem,
   WorkItemId,
@@ -26,6 +24,7 @@ import {
   SourceControlProvider,
   type SourceControlProviderService,
 } from "../source-control";
+import { sourceControlActionEntries } from "../workflow-actions-source-control";
 import type { WorkflowCatalogContribution } from "../workflow-catalog";
 import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
 import {
@@ -42,66 +41,9 @@ import { baseDivergenceOf, type GitHubTargetConfig, sourceControlTargetFor } fro
 
 export { baseDivergenceOf } from "./source-control-target";
 
-const catalogKey = Schema.decodeSync(WorkflowCatalogKey);
 const decodeTemplate = Schema.decodeUnknownSync(WorkflowTemplate);
 
-const reviewEventParameter = {
-  id: "event",
-  required: true,
-  source: "fixed",
-  values: ["approve", "comment", "request-changes"],
-} satisfies WorkflowCatalogEntry["parameters"][number];
-
-const sourceControlAction = (
-  id: string,
-  name: string,
-  permissionProfile: WorkflowCatalogEntry["permissionProfile"],
-  agentInputs: ReadonlyArray<string>,
-  parameters: WorkflowCatalogEntry["parameters"],
-  actsOn: ReadonlyArray<string>,
-) =>
-  ({
-    key: catalogKey(`github.${id}`),
-    name,
-    kind: "action",
-    system: "github",
-    connection: "github",
-    requires: [],
-    parameters,
-    itemKind: null,
-    actsOn,
-    requiresWorkspace: true,
-    permissionProfile,
-    agentInputs,
-    emits: [],
-  }) satisfies WorkflowCatalogEntry;
-
-export const githubSourceControlActionEntries = [
-  sourceControlAction(
-    "comment-on-named-pull-request",
-    "Comment on a named pull request",
-    "read-only",
-    ["pull_request", "comment_body"],
-    [],
-    ["*"],
-  ),
-  sourceControlAction(
-    "post-review",
-    "Post a review",
-    "read-only",
-    ["pull_request", "review_body", "review_comments"],
-    [reviewEventParameter],
-    ["*"],
-  ),
-  sourceControlAction(
-    "draft-review",
-    "Draft a review",
-    "read-only",
-    ["pull_request", "review_body", "review_comments"],
-    [],
-    ["*"],
-  ),
-] as const;
+export const githubSourceControlActionEntries = sourceControlActionEntries.map(({ row }) => row);
 
 export const slackReviewTemplate = decodeTemplate({
   id: "slack-to-github-review",
@@ -561,7 +503,7 @@ const make = (
   });
 
   const contribution: WorkflowCatalogContribution = {
-    entries: githubSourceControlActionEntries,
+    entries: [],
     templates: [slackReviewTemplate],
     options: [{ system: "github", readers: { reviewer } }],
   };
