@@ -1,0 +1,29 @@
+packages/engine/src/github/host.ts
+  s_6b63a1ad049824::t_9c5f14c47ed8d3 65,106
+packages/engine/src/tracker-trigger-source.test.ts
+  s_f0953c6e237d49::t_dbafa4ea4dc394 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "19496b766705d4b9980086e7fc768a0f9c0a1b7c",
+  "prompts": {},
+  "sessions": {
+    "s_6b63a1ad049824": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ec903d74-d614-465d-8b92-32d8e8612852",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f0953c6e237d49": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b65767b2-560f-4c6f-8bd8-7422773ec581",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
