@@ -29,6 +29,26 @@ export interface TrackerItem {
   readonly lastTouchedAtMillis?: number;
 }
 
+export interface ListedTrackerItem extends TrackerItem {
+  readonly open: boolean;
+  readonly labels: ReadonlyArray<string>;
+  readonly createdAtMillis: number;
+}
+
+export interface TrackerComment {
+  readonly id: string;
+  readonly author: string | null;
+  readonly authorAssociation: string;
+  readonly authoredByPerson: boolean;
+  readonly body: string;
+  readonly createdAtMillis: number;
+}
+
+export interface TrackerProse {
+  readonly body: string;
+  readonly comments: ReadonlyArray<TrackerComment>;
+}
+
 export interface CreateIssueInput {
   readonly title: string;
   readonly body: string;
@@ -105,22 +125,30 @@ const hasRemoteSource = (workspace: WorkspaceIssueTrackerBinding) => {
   return source.type === "linear" ? linearTeams(source).length > 0 : true;
 };
 
-const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
-  if (hasRemoteSource(workspace)) return yield* noAdapter(workspace);
-  return [] as ReadonlyArray<TrackerItem>;
-});
+const emptyRead = <A>(value: A) =>
+  Effect.fn("IssueTracker.emptyRead")(function* (workspace: WorkspaceIssueTrackerBinding) {
+    if (hasRemoteSource(workspace)) return yield* noAdapter(workspace);
+    return value;
+  });
 
-const readEmptyProse = Effect.fn("IssueTracker.readProse")(function* (
-  workspace: WorkspaceIssueTrackerBinding,
-) {
-  if (hasRemoteSource(workspace)) return yield* noAdapter(workspace);
-  const prose: RunPlanWorkContextProse = { body: "", comments: [] };
-  return prose;
-});
+const emptyProse: RunPlanWorkContextProse = { body: "", comments: [] };
+const emptyTriggerProse: TrackerProse = { body: "", comments: [] };
 
 export const makeEmpty = Effect.succeed({
-  observe: observeEmpty,
-  readProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) => readEmptyProse(workspace),
+  observe: emptyRead<ReadonlyArray<TrackerItem>>([]),
+  itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, _sinceMillis: number) =>
+    emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
+  openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, _label: string) =>
+    emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
+  readItem: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead<ListedTrackerItem | null>(null)(workspace),
+  readProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead(emptyProse)(workspace),
+  readTriggerProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead(emptyTriggerProse)(workspace),
+  labelAppliedAt: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _label: string) =>
+    emptyRead<number | null>(null)(workspace),
+  listLabels: emptyRead<ReadonlyArray<string>>([]),
   ...unsupportedWorkflowActions,
 });
 

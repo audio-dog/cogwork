@@ -5,11 +5,9 @@ import {
   matchWorkflowTransitions,
   type RunId,
   SlackWriteKey,
-  SourceControlType,
   WorkflowActionArtifact,
   WorkflowActionOrigin,
   WorkflowActionPlan,
-  type WorkflowActionPlanArtifact,
   WorkflowActionPlanStep,
   WorkflowActionTarget,
   type WorkflowAgentInputValue,
@@ -17,40 +15,38 @@ import {
   type WorkflowCatalogEntry,
   type WorkflowDocument,
   type WorkflowNodeId,
-  WorkflowNotificationId,
   type WorkflowOperation,
   type WorkflowParameterValue,
-  type WorkflowReviewComment,
   WorkflowSlackActionArtifact,
-  WorkItemId,
   WorkItemRef,
 } from "@cogwork/contracts";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Coordination, defaultClaimant } from "./coordination";
-import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
-import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
+import { Coordination } from "./coordination";
+import { IssueTracker } from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { type SlackPostReceipt, SlackWrite, SlackWriteError } from "./slack-write";
-import {
-  type PullRequestContext,
-  type PullRequestReviewEvent,
-  SourceControlProvider,
-  type SourceControlProviderService,
-} from "./source-control";
+import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import {
+  type ActionContext,
+  type ActionExecutor,
+  decodeFailure,
+  invalidTarget,
+  type PullRequestSnapshot,
+  parameterValues,
+  stringInput,
+  type TargetProducer,
+  WorkflowActionPlanDecodeError,
+} from "./workflow-action-entry";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { actionEntryFor, compareActionPhase } from "./workflow-action-registry";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
-import { PullRequestReadiness, WorktreeManager } from "./worktree";
-
-export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
-  "WorkflowActionPlanDecodeError",
-  { message: Schema.String },
-) {}
+import { WorktreeManager } from "./worktree";
 
 const planPreview = (plan: WorkflowActionPlan) =>
   JSON.stringify({
@@ -76,10 +72,7 @@ interface BuildInput {
   readonly createdAtMillis: number;
   readonly workflowRevision: number;
   readonly sourceControl?: SourceControlProviderService;
-  readonly pullRequestSnapshots?: ReadonlyArray<{
-    readonly workspace: string;
-    readonly pullRequest: PullRequestContext;
-  }>;
+  readonly pullRequestSnapshots?: ReadonlyArray<PullRequestSnapshot>;
 }
 
 const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
@@ -90,8 +83,6 @@ const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArra
       : document.workspaces.workspaces;
   return workspaces.filter(({ config }) => selected.includes(config.name));
 };
-
-const decodeFailure = (message: string) => Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
 
 const planJson = Schema.fromJsonString(WorkflowActionPlan);
 
@@ -104,298 +95,7 @@ const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function
   return createHash("sha256").update(encoded).digest("hex");
 });
 
-type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
-  readonly app: WorkspaceIssueTrackerBinding["config"]["issueTracker"]["type"];
-  readonly config: WorkspaceIssueTrackerBinding["config"];
-};
-
-type FrozenSourceControlTarget = Pick<RegisteredWorkspace, "repository"> & {
-  readonly app: SourceControlType;
-  readonly config: Pick<RegisteredWorkspace["config"], "name" | "issueTracker" | "sourceControl">;
-};
-
-const githubSourceControlType = Schema.decodeSync(SourceControlType)("github");
-
-const issueTrackerApps = ["github", "linear"] as const;
-
-const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
-  entry: WorkflowCatalogEntry,
-  selected: ReadonlyArray<RegisteredWorkspace>,
-  workspaceId: string | undefined,
-) {
-  if (workspaceId === "none") return null;
-  if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
-  const app = issueTrackerApps.find((candidate) => candidate === entry.system);
-  const workspace = selected.find(({ config }) => config.name === workspaceId);
-  if (!app || workspace?.config.issueTracker.type !== app) {
-    return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
-  }
-  return {
-    app: workspace.config.issueTracker.type,
-    config: { name: workspace.config.name, issueTracker: workspace.config.issueTracker },
-    repository: workspace.repository,
-  } satisfies FrozenIssueTarget;
-});
-
-const targetFields = (target: FrozenIssueTarget) => ({
-  workspace: target.config.name,
-  app: target.app,
-  issueTracker: target.config.issueTracker,
-  repository: target.repository ?? null,
-});
-
-const sourceControlTargetFields = (target: FrozenSourceControlTarget) => ({
-  workspace: target.config.name,
-  app: target.app,
-  issueTracker: target.config.issueTracker,
-  ...(target.config.sourceControl ? { sourceControl: target.config.sourceControl } : {}),
-  repository: target.repository ?? null,
-});
-
-const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceControlTarget")(function* (
-  entry: WorkflowCatalogEntry,
-  selected: ReadonlyArray<RegisteredWorkspace>,
-  workspaceId: string | undefined,
-) {
-  if (workspaceId === "none") return null;
-  if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
-  const workspace = selected.find(({ config }) => config.name === workspaceId);
-  const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
-  if (entry.system !== "github" || app !== "github" || !workspace) {
-    return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
-  }
-  return {
-    app: githubSourceControlType,
-    config: {
-      name: workspace.config.name,
-      issueTracker: workspace.config.issueTracker,
-      ...(workspace.config.sourceControl ? { sourceControl: workspace.config.sourceControl } : {}),
-    },
-    repository: workspace.repository,
-  } satisfies FrozenSourceControlTarget;
-});
-
-const itemWorkspaceOf = (admission: TriggerAdmission) =>
-  WorkItemRef.matchOrElse(
-    admission.event.key,
-    {
-      Issue: ({ workspace }) => workspace,
-      PullRequest: ({ workspace }) => workspace,
-    },
-    () => undefined,
-  );
-
-const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarget | null) => {
-  if (target === null) return Effect.succeed<WorkflowActionTarget>({ _tag: "NoWorkspace" });
-  const ref = admission.event.key;
-  if (ref._tag !== "Issue" || ref.workspace !== target.config.name) {
-    return decodeFailure("The action cannot target this item in the selected Workspaces");
-  }
-  return Effect.succeed<WorkflowActionTarget>({
-    _tag: "CurrentIssue",
-    ...targetFields(target),
-    issue: ref.id,
-  });
-};
-
-const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(function* (
-  issueInput: string,
-  target: FrozenIssueTarget | null,
-) {
-  if (target === null) return { _tag: "NoWorkspace" } as const;
-  const prefix = `${target.config.name}:`;
-  const hasWorkspacePrefix = issueInput.includes(":");
-  if (hasWorkspacePrefix && !issueInput.startsWith(prefix)) {
-    return yield* decodeFailure("The issue input does not identify the selected Workspace");
-  }
-  const rawIssue = issueInput.startsWith(prefix) ? issueInput.slice(prefix.length) : issueInput;
-  const issue = yield* Schema.decodeEffect(WorkItemId)(rawIssue).pipe(
-    Effect.mapError(() =>
-      WorkflowActionPlanDecodeError.make({ message: `The issue input is invalid: ${issueInput}` }),
-    ),
-  );
-  return { _tag: "ExistingIssue", ...targetFields(target), issue } as const;
-});
-
-type IssueTargetProducer = (
-  admission: TriggerAdmission,
-  target: FrozenIssueTarget | null,
-  inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-) => Effect.Effect<WorkflowActionTarget, WorkflowActionPlanDecodeError>;
-
-const issueTargetProducers = new Map<string, IssueTargetProducer>([
-  [
-    "create-issue",
-    (
-      _admission: TriggerAdmission,
-      target: FrozenIssueTarget | null,
-      _inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-    ) =>
-      Effect.succeed<WorkflowActionTarget>(
-        target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
-      ),
-  ],
-  [
-    "comment-issue",
-    (
-      _admission: TriggerAdmission,
-      target: FrozenIssueTarget | null,
-      inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-    ) => existingIssueTarget(typeof inputs.issue === "string" ? inputs.issue : "", target),
-  ],
-]);
-
-const currentIssueActions = ["comment-this-item", "add-label", "remove-label", "close-this-issue"];
-
-const sourceControlActions = new Set([
-  "open-pull-request",
-  "push-to-this-pull-request",
-  "comment-on-this-pull-request",
-  "request-review",
-  "comment-on-named-pull-request",
-  "post-review",
-  "draft-review",
-]);
-
-const namedPullRequestActions = new Set(["comment-on-named-pull-request", "post-review", "draft-review"]);
-
-interface DiffLineState {
-  inHunk: boolean;
-  newLine: number;
-  readonly lines: Set<number>;
-}
-
-const diffNewSideLines = (patch: string) =>
-  patch.split("\n").reduce<DiffLineState>(
-    (state, line) => {
-      const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
-      if (hunk) {
-        state.inHunk = true;
-        state.newLine = Number(hunk[1]);
-        return state;
-      }
-      if (!state.inHunk || line.startsWith("\\")) return state;
-      if (line.startsWith("-")) return state;
-      state.lines.add(state.newLine);
-      state.newLine += 1;
-      return state;
-    },
-    { inHunk: false, newLine: 0, lines: new Set() },
-  ).lines;
-
-const reviewCommentFailure = (comment: WorkflowReviewComment, pullRequest: PullRequestContext) => {
-  const fileIsChanged = pullRequest.changedFiles.some(({ path }) => path === comment.path);
-  const fileDiff = pullRequest.diff
-    .split(/(?=^diff --git )/m)
-    .find((section) => section.split("\n").includes(`+++ b/${comment.path}`));
-  const lineIsInDiff = fileIsChanged && fileDiff ? diffNewSideLines(fileDiff).has(comment.line) : false;
-  return lineIsInDiff
-    ? null
-    : `Review comment ${comment.path}:${comment.line} is not on the new side of the diff`;
-};
-
-const sourceControlTargetFor = Effect.fn("WorkflowActionPlan.sourceControlTargetFor")(function* (
-  entry: WorkflowCatalogEntry,
-  admission: TriggerAdmission,
-  selected: ReadonlyArray<RegisteredWorkspace>,
-  inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-  sourceControl: SourceControlProviderService | undefined,
-  workspaceId: string | undefined,
-  snapshots:
-    | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
-    | undefined,
-) {
-  const name = actionName(entry.key);
-  const named = namedPullRequestActions.has(name);
-  const target = yield* frozenSourceControlTarget(
-    entry,
-    selected,
-    named ? workspaceId : (itemWorkspaceOf(admission) ?? workspaceId),
-  );
-  if (target === null) return { _tag: "NoWorkspace" } as const;
-  if (named) {
-    const reference = typeof inputs.pull_request === "string" ? inputs.pull_request : "";
-    const workspace = selected.find(({ config }) => config.name === target.config.name);
-    if (!workspace) return yield* decodeFailure("The named pull request Workspace is unavailable");
-    if (!sourceControl) return yield* decodeFailure("Source control provider is not configured");
-    const currentPullRequest = yield* sourceControl
-      .readPullRequest(workspace, reference)
-      .pipe(Effect.mapError((error) => WorkflowActionPlanDecodeError.make({ message: error.message })));
-    if (currentPullRequest === null) return yield* decodeFailure(`Pull request ${reference} was not found`);
-    const snapshot = snapshots?.findLast(
-      ({ workspace: snapshotWorkspace, pullRequest }) =>
-        snapshotWorkspace === workspace.config.name && pullRequest.number === currentPullRequest.number,
-    );
-    if (snapshots && !snapshot) {
-      return yield* decodeFailure(`Read pull request ${reference} with the pull-request Tool`);
-    }
-    if (snapshot && snapshot.pullRequest.headSha !== currentPullRequest.headSha) {
-      return yield* decodeFailure(`Pull request ${reference} received a new commit after it was read`);
-    }
-    const pullRequest = snapshot?.pullRequest ?? currentPullRequest;
-    const comments = Array.isArray(inputs.review_comments) ? inputs.review_comments : [];
-    const failure = comments.map((comment) => reviewCommentFailure(comment, pullRequest)).find(Boolean);
-    if (failure) return yield* decodeFailure(failure);
-    return {
-      _tag: "NamedPullRequest",
-      ...sourceControlTargetFields(target),
-      number: pullRequest.number,
-      url: pullRequest.url,
-      headBranch: pullRequest.headBranch,
-      baseBranch: pullRequest.baseBranch,
-      headSha: pullRequest.headSha,
-    } as const;
-  }
-  const item = admission.event.key;
-  if (name === "open-pull-request") {
-    if (item._tag !== "Issue" || item.workspace !== target.config.name) {
-      return yield* decodeFailure("Open a pull request needs an Issue in the selected Workspace");
-    }
-    return {
-      _tag: "NewPullRequest",
-      ...sourceControlTargetFields(target),
-      issue: item.id,
-    } as const;
-  }
-  if ((item._tag !== "Issue" && item._tag !== "PullRequest") || item.workspace !== target.config.name) {
-    return yield* decodeFailure("The action cannot target this pull request in the selected Workspace");
-  }
-  return {
-    _tag: "CurrentPullRequest",
-    ...sourceControlTargetFields(target),
-    item,
-  } as const;
-});
-
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
-
-interface TargetContext {
-  readonly entry: WorkflowCatalogEntry;
-  readonly admission: TriggerAdmission;
-  readonly workspaces: ReadonlyArray<RegisteredWorkspace>;
-  readonly inputs: Readonly<Record<string, WorkflowAgentInputValue>>;
-  readonly parameters: ReadonlyArray<WorkflowParameterValue>;
-  readonly workspace: string | undefined;
-  readonly sourceControl: SourceControlProviderService | undefined;
-}
-
-type TargetProducer = (
-  context: TargetContext,
-) => Effect.Effect<WorkflowActionTarget, WorkflowActionPlanDecodeError>;
-
-const issueTargetProducer =
-  (producer: IssueTargetProducer): TargetProducer =>
-  (context) =>
-    frozenIssueTarget(context.entry, context.workspaces, context.workspace).pipe(
-      Effect.flatMap((target) => producer(context.admission, target, context.inputs)),
-    );
-
-const currentIssueTargetProducer: TargetProducer = (context) =>
-  frozenIssueTarget(
-    context.entry,
-    context.workspaces,
-    itemWorkspaceOf(context.admission) ?? context.workspace,
-  ).pipe(Effect.flatMap((target) => currentIssueTarget(context.admission, target)));
 
 const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
 
@@ -436,8 +136,6 @@ const slackChannelTarget: TargetProducer = ({ parameters }) => {
 };
 
 const targetProducers = new Map<string, TargetProducer>([
-  ...[...issueTargetProducers].map(([name, producer]) => [name, issueTargetProducer(producer)] as const),
-  ...currentIssueActions.map((name) => [name, currentIssueTargetProducer] as const),
   ["send-message", slackChannelTarget],
   ["reply-in-thread", slackItemTarget],
   ["add-reaction", slackItemTarget],
@@ -452,19 +150,21 @@ const targetFor = (
   parameters: ReadonlyArray<WorkflowParameterValue>,
   sourceControl: SourceControlProviderService | undefined,
   workspace: string | undefined,
-  snapshots:
-    | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
-    | undefined,
+  pullRequestSnapshots: ReadonlyArray<PullRequestSnapshot> | undefined,
 ) => {
-  const name = actionName(entry.key);
-  if (sourceControlActions.has(name)) {
-    return sourceControlTargetFor(entry, admission, workspaces, inputs, sourceControl, workspace, snapshots);
-  }
-  const producer = targetProducers.get(name);
-  return (
-    producer?.({ entry, admission, workspaces, inputs, parameters, workspace, sourceControl }) ??
-    cogworkTarget
-  );
+  const context = {
+    entry,
+    admission,
+    workspaces,
+    inputs,
+    parameters,
+    workspace,
+    sourceControl,
+    pullRequestSnapshots,
+  };
+  const registered = actionEntryFor(entry.key);
+  if (registered) return registered.target(context);
+  return targetProducers.get(actionName(entry.key))?.(context) ?? cogworkTarget;
 };
 
 const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
@@ -485,17 +185,6 @@ const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
   return Object.fromEntries(entries);
 });
 
-const actionRanks = [
-  { when: (entry: string) => entry === "cogwork.wait-for-approval", rank: 0 },
-  { when: (entry: string) => entry === "cogwork.notify", rank: 2 },
-  {
-    when: (entry: string) => entry === "cogwork.hand-to-me" || entry === "cogwork.stop",
-    rank: 3,
-  },
-] as const;
-
-const actionRank = (entry: string) => actionRanks.find(({ when }) => when(entry))?.rank ?? 1;
-
 export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(function* (input: BuildInput) {
   const entries = new Map(input.catalog.entries.map((entry) => [entry.key, entry]));
   const matched = matchWorkflowTransitions(input.operation, input.output.answers);
@@ -504,7 +193,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     .map((action, documentPosition) => ({ action, documentPosition }))
     .toSorted(
       (left, right) =>
-        actionRank(left.action.entry) - actionRank(right.action.entry) ||
+        compareActionPhase(left.action.entry, right.action.entry) ||
         left.documentPosition - right.documentPosition,
     );
   const steps = yield* Effect.forEach(actions, ({ action }, position) =>
@@ -561,25 +250,6 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
   return WorkflowActionPlan.make({ ...pending, digest });
 });
 
-const parameterValues = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
-  parameters.filter((parameter) => parameter.id === id).map(({ value }) => value);
-
-const stringInput = (step: WorkflowActionPlanStep, name: string) => {
-  const value = step.inputs[name];
-  return typeof value === "string" ? value : "";
-};
-
-const reviewCommentsInput = (step: WorkflowActionPlanStep) => {
-  const value = step.inputs.review_comments;
-  return Array.isArray(value) ? value : [];
-};
-
-const reviewEvents: ReadonlyMap<string, PullRequestReviewEvent> = new Map([
-  ["approve", "approve"],
-  ["comment", "comment"],
-  ["request-changes", "request-changes"],
-] as const);
-
 const targetWorkspace = (step: WorkflowActionPlanStep) => {
   const target = step.target;
   if (!WorkflowActionTarget.isAnyOf(["CurrentIssue", "ExistingIssue", "NewIssue"])(target)) return null;
@@ -590,11 +260,6 @@ const targetWorkspace = (step: WorkflowActionPlanStep) => {
     config: { name: target.workspace, issueTracker: target.issueTracker },
     ...(target.repository === null ? {} : { repository: target.repository }),
   };
-};
-
-const targetIssue = (step: WorkflowActionPlanStep) => {
-  const target = step.target;
-  return target._tag === "CurrentIssue" || target._tag === "ExistingIssue" ? target.issue : null;
 };
 
 const sourceTargetWorkspace = (
@@ -609,42 +274,6 @@ const sourceTargetWorkspace = (
   const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
   return app === target.app ? (workspace ?? null) : null;
 };
-
-const invalidTarget = (step: WorkflowActionPlanStep) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    retryable: false,
-    message: `Action ${step.entry} has an invalid target`,
-  });
-
-interface ActionContext {
-  readonly item: TriggerAdmission["event"]["key"];
-  readonly plan: WorkflowActionPlan;
-  readonly step: WorkflowActionPlanStep;
-  readonly workspace: WorkspaceIssueTrackerBinding | null;
-  readonly tracker: IssueTrackerActionService;
-  readonly notifications: Effect.Success<typeof WorkflowNotifications>;
-  readonly ledger: Effect.Success<typeof RunLedger>;
-  readonly sourceControl: Effect.Success<typeof SourceControlProvider> | null;
-  readonly sourceWorkspace: RegisteredWorkspace | null;
-  readonly worktrees: Effect.Success<typeof WorktreeManager> | null;
-  readonly slack: Effect.Success<typeof SlackWrite>;
-  readonly actionPlans: Effect.Success<typeof WorkflowActionPlanStore>;
-  readonly coordination: Effect.Success<typeof Coordination>;
-  readonly observationStore: Effect.Success<typeof TriggerObservationStore>;
-}
-
-const requireIssueTarget = (step: WorkflowActionPlanStep) => {
-  const issue = targetIssue(step);
-  return issue === null ? Effect.fail(invalidTarget(step)) : Effect.succeed(issue);
-};
-
-const requireWorkspace = (context: ActionContext) =>
-  context.workspace === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.workspace);
-
-type ActionExecutor = (
-  context: ActionContext,
-) => Effect.Effect<WorkflowActionPlanArtifact | null, IssueTrackerError | SlackWriteError>;
 
 const slackInvalidTarget = (step: WorkflowActionPlanStep) =>
   new SlackWriteError({
@@ -673,266 +302,7 @@ const slackArtifact = (context: ActionContext, receipt: SlackPostReceipt) =>
     }),
   });
 
-const requireSourceWorkspace = (context: ActionContext) =>
-  context.sourceWorkspace === null
-    ? Effect.fail(invalidTarget(context.step))
-    : Effect.succeed(context.sourceWorkspace);
-
-const requireSourceControl = (context: ActionContext) =>
-  context.sourceControl === null
-    ? Effect.fail(invalidTarget(context.step))
-    : Effect.succeed(context.sourceControl);
-
-const requireWorktrees = (context: ActionContext) =>
-  context.worktrees === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.worktrees);
-
-const actionOrigin = (context: ActionContext) =>
-  WorkflowActionOrigin.make({
-    item: context.plan.item,
-    workflow: context.plan.workflow,
-    attempt: context.plan.attempt,
-    writeKey: context.step.writeKey,
-    lineage: context.plan.lineage,
-  });
-
-const requirePullRequest = Effect.fn("WorkflowActionPlan.requirePullRequest")(function* (
-  context: ActionContext,
-) {
-  const workspace = yield* requireSourceWorkspace(context);
-  const sourceControl = yield* requireSourceControl(context);
-  if (context.step.target._tag === "NamedPullRequest") {
-    return {
-      workspace,
-      pullRequest: {
-        number: context.step.target.number,
-        url: context.step.target.url,
-        headBranch: context.step.target.headBranch,
-        baseBranch: context.step.target.baseBranch,
-      },
-    };
-  }
-  if (context.step.target._tag !== "CurrentPullRequest") return yield* invalidTarget(context.step);
-  const pullRequest = yield* sourceControl.resolvePullRequest(workspace, context.step.target.item);
-  if (pullRequest === null) return yield* invalidTarget(context.step);
-  return { workspace, pullRequest };
-});
-
-const worktreeError = (message: string, retryable: boolean) =>
-  new IssueTrackerError({ reason: "unavailable", message, retryable });
-
-const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (context: ActionContext) {
-  const workspace = yield* requireWorkspace(context);
-  const issue = yield* requireIssueTarget(context.step);
-  yield* context.tracker.commentIssue(
-    workspace,
-    issue,
-    stringInput(context.step, "comment"),
-    context.step.writeKey,
-  );
-  return null;
-});
-
-const actionFailure = (error: unknown) =>
-  new IssueTrackerError({
-    reason: "unavailable",
-    retryable: true,
-    message: error instanceof Error ? error.message : String(error),
-  });
-
-const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPendingApproval")(function* (
-  context: ActionContext,
-) {
-  const plans = yield* context.actionPlans.list;
-  const waiting = plans.filter(
-    (plan) =>
-      plan.item === context.plan.item &&
-      plan.attempt !== context.plan.attempt &&
-      plan.steps.some(({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending"),
-  );
-  const admissions = yield* context.observationStore.admissions;
-  const endedAtMillis = yield* Clock.currentTimeMillis;
-  yield* Effect.forEach(
-    waiting,
-    (plan) =>
-      Effect.gen(function* () {
-        const matchingAdmissions = admissions.filter(
-          (admission) =>
-            keyOf(admission.event.key) === plan.item &&
-            admission.subscription.workflow === plan.workflow &&
-            admission.event.revision === plan.revision,
-        );
-        yield* Effect.forEach(
-          matchingAdmissions,
-          (admission) =>
-            context.observationStore.complete(
-              admission,
-              context.coordination.markProcessed(admission.event.key, admission.event.revision),
-            ),
-          { discard: true },
-        );
-        yield* context.actionPlans.remove(plan.item, plan.workflow, plan.attempt);
-        const run = yield* context.ledger.getRun(plan.attempt);
-        if (run !== null) {
-          yield* context.ledger.updateRun(plan.attempt, {
-            status: "interrupted",
-            usage: null,
-            endedAtMillis,
-          });
-        }
-      }),
-    { discard: true },
-  );
-  if (waiting.length > 0) {
-    yield* context.coordination.handBack(context.item, { by: defaultClaimant });
-  }
-  return null;
-});
-
-const withdrawPendingApproval = (context: ActionContext) =>
-  withdrawPendingApprovalRaw(context).pipe(Effect.mapError(actionFailure));
-
 const actionExecutors: Record<string, ActionExecutor> = {
-  "create-issue": Effect.fn("WorkflowActionPlan.createIssue")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    if (context.step.target._tag !== "NewIssue") return yield* invalidTarget(context.step);
-    return yield* context.tracker.createIssue(workspace, {
-      title: stringInput(context.step, "issue_title"),
-      body: stringInput(context.step, "issue_body"),
-      labels: parameterValues(context.step.parameters, "label"),
-      origin: WorkflowActionOrigin.make({
-        item: context.plan.item,
-        workflow: context.plan.workflow,
-        attempt: context.plan.attempt,
-        writeKey: context.step.writeKey,
-        lineage: context.plan.lineage,
-      }),
-    });
-  }),
-  "comment-this-item": commentIssue,
-  "comment-issue": commentIssue,
-  "add-label": Effect.fn("WorkflowActionPlan.addLabel")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    const labels = parameterValues(context.step.parameters, "label");
-    if (labels.length === 0) return yield* invalidTarget(context.step);
-    yield* context.tracker.addLabels(workspace, issue, labels);
-    return null;
-  }),
-  "remove-label": Effect.fn("WorkflowActionPlan.removeLabel")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    const label = parameterValues(context.step.parameters, "label").at(0);
-    if (!label) return yield* invalidTarget(context.step);
-    yield* context.tracker.removeLabel(workspace, issue, label);
-    return null;
-  }),
-  "close-this-issue": Effect.fn("WorkflowActionPlan.closeIssue")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    yield* context.tracker.closeIssue(workspace, issue);
-    return null;
-  }),
-  "open-pull-request": Effect.fn("WorkflowActionPlan.openPullRequest")(function* (context: ActionContext) {
-    const workspace = yield* requireSourceWorkspace(context);
-    const sourceControl = yield* requireSourceControl(context);
-    const worktrees = yield* requireWorktrees(context);
-    if (context.step.target._tag !== "NewPullRequest") return yield* invalidTarget(context.step);
-    const run = yield* context.ledger.getRun(context.plan.attempt);
-    if (run?.branch === null || run?.branch === undefined) return yield* invalidTarget(context.step);
-    const item = { id: context.step.target.issue, title: "" };
-    const readiness = yield* worktrees
-      .pullRequestReadiness(workspace, item, run.branch)
-      .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
-    if (PullRequestReadiness.$is("Declined")(readiness)) {
-      return yield* worktreeError(readiness.reason, true);
-    }
-    yield* worktrees
-      .pushBranch(workspace, readiness.headBranch)
-      .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
-    return yield* sourceControl.openWorkflowPullRequest(workspace, {
-      headBranch: readiness.headBranch,
-      baseBranch: readiness.baseBranch,
-      title: stringInput(context.step, "pr_title"),
-      body: stringInput(context.step, "pr_body"),
-      origin: actionOrigin(context),
-    });
-  }),
-  "push-to-this-pull-request": Effect.fn("WorkflowActionPlan.pushPullRequest")(function* (
-    context: ActionContext,
-  ) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    const worktrees = yield* requireWorktrees(context);
-    const pushed = yield* worktrees
-      .pushBranchIfAhead(workspace, pullRequest.headBranch)
-      .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
-    if (!pushed) return null;
-    return yield* sourceControl.recordPullRequestPush(workspace, pullRequest, actionOrigin(context));
-  }),
-  "comment-on-this-pull-request": Effect.fn("WorkflowActionPlan.commentPullRequest")(function* (
-    context: ActionContext,
-  ) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    return yield* sourceControl.commentPullRequest(
-      workspace,
-      pullRequest,
-      stringInput(context.step, "comment"),
-      actionOrigin(context),
-    );
-  }),
-  "request-review": Effect.fn("WorkflowActionPlan.requestReview")(function* (context: ActionContext) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    const reviewer = parameterValues(context.step.parameters, "reviewer").at(0);
-    if (!reviewer) return yield* invalidTarget(context.step);
-    return yield* sourceControl.requestReview(workspace, pullRequest, reviewer, actionOrigin(context));
-  }),
-  "comment-on-named-pull-request": Effect.fn("WorkflowActionPlan.commentNamedPullRequest")(function* (
-    context: ActionContext,
-  ) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    return yield* sourceControl.commentNamedPullRequest(
-      workspace,
-      pullRequest,
-      stringInput(context.step, "comment_body"),
-      actionOrigin(context),
-    );
-  }),
-  "post-review": Effect.fn("WorkflowActionPlan.postReview")(function* (context: ActionContext) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    if (context.step.target._tag !== "NamedPullRequest") return yield* invalidTarget(context.step);
-    const event = reviewEvents.get(parameterValues(context.step.parameters, "event").at(0) ?? "");
-    if (!event) return yield* invalidTarget(context.step);
-    return yield* sourceControl.postReview(
-      workspace,
-      pullRequest,
-      event,
-      {
-        body: stringInput(context.step, "review_body"),
-        comments: reviewCommentsInput(context.step),
-        commitId: context.step.target.headSha,
-      },
-      actionOrigin(context),
-    );
-  }),
-  "draft-review": Effect.fn("WorkflowActionPlan.draftReview")(function* (context: ActionContext) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    if (context.step.target._tag !== "NamedPullRequest") return yield* invalidTarget(context.step);
-    return yield* sourceControl.draftReview(
-      workspace,
-      pullRequest,
-      {
-        body: stringInput(context.step, "review_body"),
-        comments: reviewCommentsInput(context.step),
-        commitId: context.step.target.headSha,
-      },
-      actionOrigin(context),
-    );
-  }),
   "send-message": Effect.fn("WorkflowActionPlan.sendSlackMessage")(function* (context: ActionContext) {
     if (!WorkflowActionTarget.guards.SlackChannel(context.step.target)) {
       return yield* slackInvalidTarget(context.step);
@@ -963,42 +333,11 @@ const actionExecutors: Record<string, ActionExecutor> = {
     yield* context.slack.draftReply(target, stringInput(context.step, "reply"));
     return null;
   }),
-  notify: Effect.fn("WorkflowActionPlan.notify")(function* (context: ActionContext) {
-    const run = yield* context.ledger.getRun(context.plan.attempt);
-    if (run === null) return yield* invalidTarget(context.step);
-    yield* context.notifications
-      .write(run, {
-        id: WorkflowNotificationId.make(
-          `${keyOf(context.item)}:${context.plan.attempt}:${context.step.writeKey}`,
-        ),
-        item: context.item,
-        workflow: context.plan.workflow,
-        operation: context.plan.operation,
-        summary: stringInput(context.step, "notification"),
-        answers: context.plan.answers,
-        artifacts: context.plan.steps.flatMap(({ artifact }) =>
-          Schema.is(WorkflowActionArtifact)(artifact) ? [artifact] : [],
-        ),
-        atMillis: context.plan.createdAtMillis,
-      })
-      .pipe(
-        Effect.mapError(
-          (error) =>
-            new IssueTrackerError({
-              reason: "unavailable",
-              retryable: error.retryable,
-              message: error.message,
-            }),
-        ),
-      );
-    return null;
-  }),
-  stop: () => Effect.succeed(null),
-  "hand-to-me": () => Effect.succeed(null),
-  "withdraw-pending-approval": withdrawPendingApproval,
 };
 
 const executorFor = (step: WorkflowActionPlanStep) => {
+  const registered = actionEntryFor(step.entry);
+  if (registered) return registered.execute;
   const name = actionName(step.entry);
   return Object.entries(actionExecutors).find(([candidate]) => candidate === name)?.[1];
 };

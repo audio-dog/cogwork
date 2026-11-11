@@ -11,6 +11,7 @@ import { ContextAssembler, CredentialStore, type Harness, SessionStore } from "@
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert } from "@effect/vitest";
+import type { AnyTool } from "@tanstack/ai";
 import { codexText } from "@tanstack/ai-codex";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
@@ -81,6 +82,7 @@ interface RequestOverrides {
   readonly operation?: string;
   readonly prompt?: string;
   readonly mcpSkills?: ReadonlyArray<Harness.ResolvedMcpSkill>;
+  readonly engineTools?: ReadonlyArray<AnyTool>;
 }
 
 const projectedMcpName = (name: string, index: number) =>
@@ -115,7 +117,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
         path: `/operating-instructions/${operation}`,
         resources: [],
       },
-      tools: [],
+      tools: (overrides.engineTools ?? []).map(({ name }) => name),
       skills: [],
       mcp,
       subagents: [],
@@ -146,6 +148,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
       },
     }),
     session: overrides.session === undefined ? freshSession : overrides.session,
+    ...(overrides.engineTools ? { engineTools: overrides.engineTools } : {}),
     mcpCredentials: new Map(
       mcpSkills.flatMap((server, index) =>
         server.bearer ? ([[`test/mcp/${index}`, server.bearer]] as const) : [],

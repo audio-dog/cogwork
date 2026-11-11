@@ -1,4 +1,5 @@
 import {
+  type ControlStoreFailure,
   DaemonEvent,
   defaultPriority,
   keyOf,
@@ -36,6 +37,8 @@ import { IssueTracker } from "./issue-tracker";
 import { providerSubject } from "./provider-trigger-source";
 import { WorkspaceRegistry } from "./registry";
 import {
+  ownsEntry,
+  Recheck,
   SourceFailure,
   type SweepCandidate,
   TriggerEvent,
@@ -498,6 +501,12 @@ const subscriptionsOf = (
     );
   });
 
+const startsSamePublishedTrigger = (published: TriggerSubscription, { subscription }: TriggerAdmission) =>
+  published.workflow === subscription.workflow &&
+  published.trigger === subscription.trigger &&
+  published.entry === subscription.entry &&
+  published.operation === subscription.operation;
+
 const sourceSubscriptions = (source: TriggerSource, subscriptions: ReadonlyArray<TriggerSubscription>) => {
   const entries = new Set(source.entries.map(({ key }) => key));
   return subscriptions.filter(({ entry }) => entries.has(entry));
@@ -559,6 +568,7 @@ const waitForRetry = (failure: SourceFailure) => {
 
 export interface TriggerObservationService {
   readonly eligible: Effect.Effect<ReadonlyArray<TriggerAdmission>>;
+  readonly recheck: (admission: TriggerAdmission) => Effect.Effect<Recheck, ControlStoreFailure>;
   readonly changes: Stream.Stream<TriggerAdmission>;
   readonly health: Effect.Effect<ReadonlyArray<TriggerSourceHealth>>;
   readonly catalog: WorkflowCatalog["entries"];
@@ -785,6 +795,15 @@ export const make = Effect.gen(function* () {
     return assignees.some((assignee) => allowlist.includes(assignee));
   });
 
+  const publishedSubscriptions = Effect.fn("TriggerObservation.publishedSubscriptions")(function* () {
+    const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
+    return subscriptionsOf(
+      listed.workflows,
+      registryState.workspaces.map(({ config }) => config.name),
+      conditionEntries,
+    );
+  });
+
   const admit = Effect.fn("TriggerObservation.admit")(function* (
     source: TriggerSource,
     subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -800,12 +819,8 @@ export const make = Effect.gen(function* () {
       ),
     );
     if (!passesGate) return;
-    const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
-    const workspaceIds = registryState.workspaces.map(({ config }) => config.name);
     const current = new Set(
-      sourceSubscriptions(source, subscriptionsOf(listed.workflows, workspaceIds, conditionEntries)).map(
-        subscriptionIdentity,
-      ),
+      sourceSubscriptions(source, yield* publishedSubscriptions()).map(subscriptionIdentity),
     );
     const active = subscriptions.filter((subscription) => current.has(subscriptionIdentity(subscription)));
     if (active.length === 0) return;
@@ -954,6 +969,24 @@ export const make = Effect.gen(function* () {
     ),
   );
 
+  const recheck = Effect.fn("TriggerObservation.recheck")(function* (admission: TriggerAdmission) {
+    const source = sources.find((candidate) => ownsEntry(candidate, admission.event.entry));
+    if (!source?.recheck) return Recheck.Matches();
+    const published = (yield* publishedSubscriptions()).find((candidate) =>
+      startsSamePublishedTrigger(candidate, admission),
+    );
+    if (published === undefined) return Recheck.Matches();
+    return yield* source
+      .recheck(admission.event, published)
+      .pipe(
+        Effect.catchTag("SourceFailure", (error) =>
+          Effect.logWarning("Trigger recheck failed; the item counts as matching", { error }).pipe(
+            Effect.map(() => Recheck.Matches()),
+          ),
+        ),
+      );
+  });
+
   return {
     eligible: Effect.all([workflows.list, store.admissions]).pipe(
       Effect.flatMap(([listed, current]) => {
@@ -1015,6 +1048,7 @@ export const make = Effect.gen(function* () {
       ),
       Effect.catchCause(() => Effect.succeed([])),
     ),
+    recheck,
     changes: Stream.fromPubSub(changes),
     health: Effect.map(Ref.get(health), (current) => [...current.values()]),
     catalog: sources.flatMap(({ entries }) => entries),
@@ -1024,6 +1058,7 @@ export const make = Effect.gen(function* () {
 
 const unavailableObservation: TriggerObservationService = {
   eligible: Effect.succeed([]),
+  recheck: () => Effect.succeed(Recheck.Matches()),
   changes: Stream.empty,
   health: Effect.succeed([]),
   catalog: [],

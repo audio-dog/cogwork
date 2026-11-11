@@ -23,6 +23,12 @@ deletes that pipeline, and with it the only writer of tracker-side coordination.
 - **The tracker carries Workflow output, not coordination.** Labels, comments, and issues the plan
   writes stay on the tracker; the origin record and write markers stay on the artifacts they mark. No
   claim label and no coordination comment is written, and none written before the cut-over is read.
+- **A park tells the person on the issue.** A park record stays in the Control store. When the
+  parked item is an issue, the Coordination module also posts one marked comment on it. The comment
+  gives the park reason and the Attention command that continues the item. This comment is Workflow
+  output for a person, not a coordination record, and the engine never reads it back. The raw failure
+  behind an `exhausted` or `write-failed` park stays in Cogwork, because the tracker can be public. A comment that
+  does not post does not stop the park.
 - **Restart recovery releases the Claim.** A Run left `running` by a daemon that stopped without
   draining is marked `crashed` at the next boot, its Claim is released, and the item is admitted
   again. Three crashed Runs in a row for one item park it `exhausted`.
@@ -44,4 +50,7 @@ deletes that pipeline, and with it the only writer of tracker-side coordination.
   store to a backup (ADR [0015](./0015-one-control-store-with-engine-owned-migrations.md)), so open
   issues are triaged again after one. The Control store fails closed, so dispatch stops rather than
   running under a lost Claim.
-- Other people on a shared tracker no longer see a claim label or retry comments.
+- Other people on a shared tracker no longer see a claim label or retry comments. They do see a
+  park notice, because a parked issue waits for a person. Before the notice, a stuck Implement Run
+  for [#901](https://github.com/taylorfsteele/cogwork/issues/901) parked with no trace on the issue,
+  although its Operating Instructions told the agent that the engine posts the stuck summary.

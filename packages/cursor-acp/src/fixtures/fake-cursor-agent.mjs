@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
@@ -19,11 +18,17 @@ const result = JSON.stringify({
   proposal: "Verified and ready.",
 });
 
-const responseContent = async (sessionParams) => {
+const promptText = (prompt) =>
+  prompt
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+const responseContent = (sessionParams, prompt) => {
   if (process.argv.includes("--malformed")) return "Disposition: ready-for-agent";
   if (!process.argv.includes("--observe")) return result;
   return JSON.stringify({
-    instructions: await readFile("AGENTS.md", "utf8"),
+    prompt: promptText(prompt),
     model: process.argv[process.argv.indexOf("--model") + 1],
     mcp: sessionParams.mcpServers.map((server) => ({
       name: server.name,
@@ -49,6 +54,23 @@ const responseContent = async (sessionParams) => {
     },
     hasCursorApiKey: process.env.CURSOR_API_KEY !== undefined,
   });
+};
+
+const commandPermissionContent = async (connection, sessionId) => {
+  const { outcome } = await connection.requestPermission({
+    sessionId,
+    toolCall: {
+      toolCallId: "fake-command",
+      title: "`pnpm typecheck`",
+      kind: "execute",
+      rawInput: { command: "pnpm typecheck" },
+    },
+    options: [
+      { optionId: "allow-once", name: "Allow once", kind: "allow_once" },
+      { optionId: "reject-once", name: "Reject once", kind: "reject_once" },
+    ],
+  });
+  return JSON.stringify(outcome);
 };
 
 class FakeCursorAgent {
@@ -94,7 +116,9 @@ class FakeCursorAgent {
       );
       if (!refused) throw new Error("cursor/create_plan was not refused with method-not-found");
     }
-    const content = await responseContent(this.sessionParams);
+    const content = process.argv.includes("--request-command-permission")
+      ? await commandPermissionContent(this.connection, params.sessionId)
+      : responseContent(this.sessionParams, params.prompt);
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,
       update: {

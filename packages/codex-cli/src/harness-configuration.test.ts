@@ -2,6 +2,7 @@ import { Harness } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
+import { toolDefinition } from "@tanstack/ai";
 import { type CodexTextConfig, codexText } from "@tanstack/ai-codex";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -260,6 +261,26 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
           }),
         ),
       10_000,
+    );
+
+    it.effect("hands Codex the native MCP servers and the engine tool bridge side by side", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const engineTool = toolDefinition({
+            name: "issue-search",
+            description: "Search issues",
+          }).server(() => Promise.resolve({}));
+          const events = yield* runInRepository(Harness.make([runner()]), handle, {
+            mcpSkills: authenticatedMcp("bridge-secret"),
+            engineTools: [engineTool],
+          });
+          const args = (yield* structuredCapture(events)).args.join("\n");
+
+          assert.include(args, "mcp_servers.test__linear_api__0.url=");
+          assert.include(args, "mcp_servers.tanstack.url=");
+        }),
+      ),
     );
 
     it.effect("keeps every Operation on a networked Codex Sandbox", () =>
