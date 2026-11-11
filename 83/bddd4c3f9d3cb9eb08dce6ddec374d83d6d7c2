@@ -1,0 +1,31 @@
+packages/engine/src/workflow-run.ts
+  s_04f0ca46b1b8d4::t_c690da46022341 39
+  s_04f0ca46b1b8d4::t_d1f53d8eb2e50b 286
+  s_04f0ca46b1b8d4::t_b42525c847ff02 397-408
+  s_04f0ca46b1b8d4::t_edf02a1bd93af5 670-673,684-691
+  s_04f0ca46b1b8d4::t_42962f4b49d671 70
+  s_04f0ca46b1b8d4::t_2672eff0ff903f 692-694
+packages/engine/src/workflow-run.test.ts
+  s_04f0ca46b1b8d4::t_19048f072cfac2 2783,2785-2786,2788-2794,2797
+  s_04f0ca46b1b8d4::t_34725de3c4e9f9 664,669,672-675
+packages/engine/src/harness.ts
+  s_04f0ca46b1b8d4::t_1afb7cd77eec5a 493-496
+packages/engine/src/harness-readiness.ts
+  s_04f0ca46b1b8d4::t_057cb07c59cd77 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "83bddd4c3f9d3cb9eb08dce6ddec374d83d6d7c2",
+  "prompts": {},
+  "sessions": {
+    "s_04f0ca46b1b8d4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2160c6be-5e42-48bf-8cce-b03437f572df",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
