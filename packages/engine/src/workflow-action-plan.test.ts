@@ -27,6 +27,7 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Coordination, type CoordinationService, fold } from "./coordination";
+import { GitError } from "./git";
 import { githubSourceControlActionEntries } from "./github/provider";
 import { IssueTracker, IssueTrackerError, makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -1146,13 +1147,19 @@ describe("Workflow action plan", () => {
       operations: [openOperation],
     });
     const reason = "head 811-behind is not ahead of origin/main";
+    const offline = "could not fetch origin";
+    const readiness: Record<string, Effect.Effect<PullRequestReadiness, GitError>> = {
+      "811-ahead": Effect.succeed(
+        PullRequestReadiness.Ready({ headBranch: "811-ahead", baseBranch: "main" }),
+      ),
+      "811-behind": Effect.succeed(PullRequestReadiness.Declined({ reason })),
+      "811-offline": Effect.fail(
+        new GitError({ command: "git fetch origin", message: offline, retryable: true }),
+      ),
+    };
     const worktreeLayer = Layer.mock(WorktreeManager, {
       pullRequestReadiness: (_workspace, _item, headBranch = "") =>
-        Effect.succeed(
-          headBranch === "811-ahead"
-            ? PullRequestReadiness.Ready({ headBranch, baseBranch: "main" })
-            : PullRequestReadiness.Declined({ reason }),
-        ),
+        readiness[headBranch] ?? Effect.die(`unexpected head ${headBranch}`),
     });
     return Effect.gen(function* () {
       const worktrees = yield* WorktreeManager;
@@ -1177,12 +1184,12 @@ describe("Workflow action plan", () => {
         });
 
       const ready = yield* build("811-ahead");
-      const declined = yield* Effect.result(build("811-behind"));
+      const declined = yield* Effect.flip(build("811-behind"));
+      const unavailable = yield* Effect.flip(build("811-offline"));
 
       assert.deepStrictEqual(ready.steps[0]?.target, openPullRequestStep.target);
-      assert.isTrue(Result.isFailure(declined));
-      if (Result.isFailure(declined))
-        assert.deepInclude(declined.failure, { reason: "declined", message: reason });
+      assert.deepInclude(declined, { reason: "declined", message: reason });
+      assert.deepInclude(unavailable, { reason: "unavailable", message: offline });
     }).pipe(Effect.provide(worktreeLayer));
   });
 

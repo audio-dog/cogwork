@@ -51,6 +51,7 @@ import { type PullRequestContext, SourceControlProvider } from "./source-control
 import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } from "./trigger-observation";
 import { Recheck } from "./trigger-source";
 import { Workflows } from "./workflow";
+import type { WorkflowActionPlanDecodeError } from "./workflow-action-entry";
 import {
   buildWorkflowActionPlan,
   executeWorkflowActionPlan,
@@ -398,6 +399,16 @@ export const make = Effect.gen(function* () {
     yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
     return "completed" as const;
   });
+
+  const refusePlan = (
+    admission: TriggerAdmission,
+    key: ReturnType<typeof operationKeyOf>,
+    run: RunRecord,
+    error: WorkflowActionPlanDecodeError,
+  ) =>
+    error.reason === "unavailable"
+      ? settle(run.id, "failed").pipe(Effect.map(() => "retry" as const))
+      : refuseResult(admission, key, run, error.message, refusalStatus[error.reason]);
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
     const pendingPlan = yield* actionPlans.pending(
@@ -759,7 +770,7 @@ export const make = Effect.gen(function* () {
         }),
       ).pipe(
         Effect.matchEffect({
-          onFailure: (error) => refuseResult(admission, key, run, error.message, refusalStatus[error.reason]),
+          onFailure: (error) => refusePlan(admission, key, run, error),
           onSuccess: acceptPlans,
         }),
       );
@@ -781,8 +792,7 @@ export const make = Effect.gen(function* () {
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
-      const { reason, message } = actionPlanResult.failure;
-      return yield* refuseResult(admission, key, run, message, refusalStatus[reason]);
+      return yield* refusePlan(admission, key, run, actionPlanResult.failure);
     }
     const actionPlan = yield* actionPlans.create(actionPlanResult.success);
     const actionPlanEvent: AgUiEvent = {

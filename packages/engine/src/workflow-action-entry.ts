@@ -27,7 +27,7 @@ import type { WorktreeManager, WorktreeManagerService } from "./worktree";
 
 export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
   "WorkflowActionPlanDecodeError",
-  { reason: Schema.Literals(["invalid", "declined"]), message: Schema.String },
+  { reason: Schema.Literals(["invalid", "declined", "unavailable"]), message: Schema.String },
 ) {}
 
 export const decodeFailure = (message: string) =>

@@ -90,7 +90,10 @@ const newPullRequestTarget = Effect.fn("WorkflowActionPlan.newPullRequestTarget"
     .pullRequestReadiness(workspace, { id: item.id, title: "" }, context.runBranch)
     .pipe(
       Effect.mapError((error) =>
-        WorkflowActionPlanDecodeError.make({ reason: "invalid", message: error.message }),
+        WorkflowActionPlanDecodeError.make({
+          reason: error.retryable ? "unavailable" : "invalid",
+          message: error.message,
+        }),
       ),
     );
   if (PullRequestReadiness.$is("Declined")(readiness)) {
