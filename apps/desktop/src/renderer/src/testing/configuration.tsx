@@ -60,18 +60,6 @@ const contributions: readonly Contribution[] = [
     ],
   },
   {
-    id: "plugin:linear/skill/linear-triage",
-    kind: "skill",
-    localName: "linear-triage",
-    authority: Authority.plugin({ pluginId: "linear" }),
-    summary: "Prompts for a triage pass over one Linear issue.",
-    file: "~/.cogwork/plugins/linear@1.4.0/skills/linear-triage/SKILL.md",
-    definedAt: "settings-profile",
-    load: LoadState.loaded({}),
-    rows: [],
-  },
-
-  {
     id: "plugin:gh-review/skill/pr-summary",
     kind: "skill",
     localName: "pr-summary",
@@ -177,17 +165,6 @@ const contributions: readonly Contribution[] = [
     rows: [],
   },
   {
-    id: "local:user/skill/scratch",
-    kind: "skill",
-    localName: "scratch",
-    authority: Authority.local({ tree: "user" }),
-    summary: "Opens a scratch prompt you keep on this machine.",
-    file: "~/.agents/commands/scratch.md",
-    definedAt: "settings-profile",
-    load: LoadState.loaded({}),
-    rows: [],
-  },
-  {
     id: "local:private/mcp/linear",
     kind: "mcp-server",
     localName: "linear",
@@ -268,18 +245,6 @@ const contributions: readonly Contribution[] = [
     load: LoadState.loaded({}),
     rows: [],
   },
-  {
-    id: "local:repo/skill/ship",
-    kind: "skill",
-    localName: "ship",
-    authority: Authority.local({ tree: "repo" }),
-    summary: "Prompts for a release checklist.",
-    file: ".agents/commands/ship.md",
-    definedAt: "workspace-input",
-    definedIn: clankerWorkspaceId,
-    load: LoadState.loaded({}),
-    rows: [],
-  },
 ];
 
 const plugins: readonly InstalledPlugin[] = [
@@ -293,7 +258,7 @@ const plugins: readonly InstalledPlugin[] = [
     name: "Linear",
     summary: "Track work in Linear and let cogwork read and write its issues.",
     manifestFailure: null,
-    contributionIds: ["plugin:linear/mcp/linear", "plugin:linear/skill/linear-triage"],
+    contributionIds: ["plugin:linear/mcp/linear"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
       {

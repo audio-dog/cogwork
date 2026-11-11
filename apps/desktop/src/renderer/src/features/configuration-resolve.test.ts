@@ -44,7 +44,6 @@ describe("resolveEnablement", () => {
       "plugin:gh-review/subagent/reviewer",
       "local:user/skill/commit-style",
       "engine/rules/house-style",
-      "local:user/skill/scratch",
     ]) {
       const resolved = resolveEnablement(required(id), view);
       expect(enablementScopes[required(id).kind]).toEqual([]);

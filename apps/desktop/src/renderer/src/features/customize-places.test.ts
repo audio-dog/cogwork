@@ -141,10 +141,7 @@ describe("groupContributions", () => {
   it("keeps your own machine-level files in the User group", () => {
     const groups = groupContributions("skill", allPlaceKeys, "");
     const mine = groups.find((group) => group.label === "User");
-    expect(mine?.rows.map((row) => row.id)).toEqual([
-      "local:user/skill/commit-style",
-      "local:user/skill/scratch",
-    ]);
+    expect(mine?.rows.map((row) => row.id)).toEqual(["local:user/skill/commit-style"]);
   });
 
   it("names engine-authored contributions as built in", () => {
@@ -209,9 +206,9 @@ describe("search", () => {
 
 describe("countAt and kindCount", () => {
   it("counts only the given kind at the given place", () => {
-    expect(countAt(profilePlace, "skill")).toBe(5);
+    expect(countAt(profilePlace, "skill")).toBe(3);
     expect(countAt({ kind: "workspace-input", workspaceId: cogworkWorkspaceId }, "skill")).toBe(1);
-    expect(countAt({ kind: "workspace-input", workspaceId: clankerWorkspaceId }, "skill")).toBe(1);
+    expect(countAt({ kind: "workspace-input", workspaceId: clankerWorkspaceId }, "skill")).toBe(0);
     expect(countAt(profilePlace, "rules")).toBe(2);
   });
 
