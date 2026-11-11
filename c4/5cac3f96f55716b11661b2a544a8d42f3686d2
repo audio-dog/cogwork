@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_b908afd3118a77::t_39bedbce141c38 209
+  s_b908afd3118a77::t_345a0b3978fae4 144,211
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_b908afd3118a77::t_8b87e816ee506f 261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c45cac3f96f55716b11661b2a544a8d42f3686d2",
+  "prompts": {},
+  "sessions": {
+    "s_b908afd3118a77": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ca3fe2ae-2b86-415d-b5db-077e6ca9959e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
