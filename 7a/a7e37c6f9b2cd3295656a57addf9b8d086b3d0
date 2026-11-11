@@ -1,0 +1,26 @@
+packages/contracts/src/workflow.test.ts
+  s_b64e3ea2dbd1fa::t_d78c36e39d476c 733-745
+  s_b64e3ea2dbd1fa::t_635fe65b8f52a1 746-751
+packages/contracts/src/workflow.ts
+  s_b64e3ea2dbd1fa::t_8b6c6e26ecbddf 556-557,562,570,573-576,582,609,612
+packages/engine/src/daemon-composition.test.ts
+  s_b64e3ea2dbd1fa::t_eb29043bf76353 53,58-63,66,94-95,205,552
+packages/engine/src/workflow-run.ts
+  s_b64e3ea2dbd1fa::t_801365d225b10f 54,475-481,603-608,690
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7aa7e37c6f9b2cd3295656a57addf9b8d086b3d0",
+  "prompts": {},
+  "sessions": {
+    "s_b64e3ea2dbd1fa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "26cb207e-62ec-4732-9de9-838e6e9ef033",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
