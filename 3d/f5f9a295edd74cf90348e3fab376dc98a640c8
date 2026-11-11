@@ -1,0 +1,23 @@
+packages/contracts/CONTEXT.md
+  s_b64e3ea2dbd1fa::t_c994177ac4abe9 305,589
+packages/contracts/src/workflow.test.ts
+  s_b64e3ea2dbd1fa::t_b0eeba1e48d112 723-747,749-758
+packages/contracts/src/workflow.ts
+  s_b64e3ea2dbd1fa::t_9631a9bdd805aa 571,573,575
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3df5f9a295edd74cf90348e3fab376dc98a640c8",
+  "prompts": {},
+  "sessions": {
+    "s_b64e3ea2dbd1fa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "26cb207e-62ec-4732-9de9-838e6e9ef033",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
