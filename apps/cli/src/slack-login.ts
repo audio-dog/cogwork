@@ -65,11 +65,12 @@ const failure = (message: string) =>
 
 const SlackError = Schema.Struct({ ok: Schema.Literal(false), error: Schema.String });
 
-const RotatingGrant = Schema.Struct({
-  access_token: Schema.NonEmptyString,
-  refresh_token: Schema.NonEmptyString,
-  expires_in: Schema.Finite.check(Schema.isGreaterThan(0)),
-});
+// Slack places a rotating user token at the top level or under authed_user, depending on the grant.
+const rotatingTokenFields = {
+  access_token: Schema.optional(Schema.NonEmptyString),
+  refresh_token: Schema.optional(Schema.NonEmptyString),
+  expires_in: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
+};
 
 const TokenResponse = Schema.Struct({
   ok: Schema.Literal(true),
@@ -78,11 +79,22 @@ const TokenResponse = Schema.Struct({
   authed_user: Schema.Struct({
     id: Schema.NonEmptyString,
     scope: Schema.optional(Schema.String),
+    ...rotatingTokenFields,
   }),
   app_id: Schema.optional(Schema.NonEmptyString),
+  ...rotatingTokenFields,
 });
 
-const WithAuthedUser = Schema.Struct({ authed_user: Schema.Unknown });
+const ExchangeResponse = Schema.Union([SlackError, TokenResponse]);
+
+interface RotatingTokens {
+  readonly access_token?: string;
+  readonly refresh_token?: string;
+  readonly expires_in?: number;
+}
+
+const isRotatingGrant = <T extends RotatingTokens>(tokens: T): tokens is T & Required<RotatingTokens> =>
+  tokens.access_token !== undefined && tokens.refresh_token !== undefined && tokens.expires_in !== undefined;
 
 const RefreshResponse = Schema.Struct({
   ok: Schema.Literal(true),
@@ -92,10 +104,7 @@ const RefreshResponse = Schema.Struct({
   scope: Schema.optional(Schema.String),
 });
 
-const isSlackError = Schema.is(SlackError);
-const isRotatingGrant = Schema.is(RotatingGrant);
-const hasAuthedUser = Schema.is(WithAuthedUser);
-const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse);
+const decodeExchangeResponse = Schema.decodeUnknownEffect(ExchangeResponse);
 const decodeRefreshResponse = Schema.decodeUnknownEffect(RefreshResponse);
 
 const scopesOf = (scope: string) => scope.split(/[\s,]+/).filter(Boolean);
@@ -126,18 +135,14 @@ const readBody = Effect.fn("slack.oauth.readBody")(function* (
 const fieldsOf = (body: unknown) =>
   typeof body === "object" && body !== null ? Object.keys(body).join(", ") : typeof body;
 
-// Slack places a rotating user token at the top level or under authed_user, depending on the grant.
-const rotatingGrantOf = (body: unknown) =>
-  [body, hasAuthedUser(body) ? body.authed_user : undefined].find(isRotatingGrant);
-
 const decodeGrant = Effect.fn("slack.oauth.decodeGrant")(function* (body: unknown) {
-  if (isSlackError(body)) return yield* failure(`Slack token exchange failed: ${body.error}`);
-  const identity = yield* decodeTokenResponse(body).pipe(
+  const identity = yield* decodeExchangeResponse(body).pipe(
     Effect.mapError(() =>
       failure(`Slack token exchange returned an unexpected payload with fields: ${fieldsOf(body)}`),
     ),
   );
-  const grant = rotatingGrantOf(body);
+  if (!identity.ok) return yield* failure(`Slack token exchange failed: ${identity.error}`);
+  const grant = [identity, identity.authed_user].find(isRotatingGrant);
   if (!grant) {
     return yield* failure(
       "Slack token exchange returned no refresh token; turn on token rotation for the Slack app",
@@ -209,10 +214,8 @@ const makeLogin = Effect.fn("slack.login")(function* (
     Effect.mapError((error) => failure(error.message)),
     Effect.provide(serverLayer),
     Effect.scoped,
-    Effect.mapError((error) =>
-      error._tag === "ConnectionFailure"
-        ? error
-        : failure(`Could not start the Slack callback server on ${callback.host}`),
+    Effect.catchTag("ServeError", () =>
+      Effect.fail(failure(`Could not start the Slack callback server on ${callback.host}`)),
     ),
   );
   const client = yield* HttpClient.HttpClient;

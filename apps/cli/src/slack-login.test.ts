@@ -113,7 +113,7 @@ const identity = {
 const rotatingToken = { access_token: "slack-access", refresh_token: "slack-refresh-1", expires_in: 43_200 };
 
 describe("Slack browser login", () => {
-  it.live("stores the user grant without a client secret", () =>
+  it.effect("stores the user grant without a client secret", () =>
     Effect.gen(function* () {
       const { result, opened, tokenRequests } = yield* signIn({ ...identity, ...rotatingToken });
       assert.isTrue(Result.isSuccess(result));
@@ -124,7 +124,6 @@ describe("Slack browser login", () => {
       assert.strictEqual(opened[0]?.searchParams.get("code_challenge_method"), "S256");
       assert.strictEqual(credential.organization, "T-STUB");
       assert.strictEqual(credential.actorUserId, "U-STUB");
-      assert.strictEqual(Redacted.value(credential.token.accessToken), "slack-access");
       assert.deepStrictEqual(credential.token.scopes, expectedScopes.split(","));
       assert.strictEqual(tokenRequests[0]?.get("client_secret"), null);
       assert.strictEqual(tokenRequests[0]?.get("redirect_uri"), config.redirectUri);
@@ -132,37 +131,45 @@ describe("Slack browser login", () => {
     }),
   );
 
-  it.live("stores a rotating user token nested under authed_user", () =>
+  it.effect.each([
+    { place: "at the top level", body: { ...identity, ...rotatingToken } },
+    {
+      place: "under authed_user",
+      body: { ...identity, authed_user: { ...identity.authed_user, ...rotatingToken, token_type: "user" } },
+    },
+  ])("stores a rotating user token $place", ({ body }) =>
     Effect.gen(function* () {
-      const { result } = yield* signIn({
-        ...identity,
-        authed_user: { ...identity.authed_user, ...rotatingToken, token_type: "user" },
-      });
+      const { result } = yield* signIn(body);
       assert.isTrue(Result.isSuccess(result));
       if (Result.isFailure(result)) return;
-      assert.strictEqual(Redacted.value(result.success.token.accessToken), "slack-access");
-      assert.strictEqual(
-        result.success.token.refreshToken && Redacted.value(result.success.token.refreshToken),
-        "slack-refresh-1",
-      );
+      const { accessToken, refreshToken } = result.success.token;
+      assert.strictEqual(Redacted.value(accessToken), "slack-access");
+      assert.strictEqual(refreshToken && Redacted.value(refreshToken), "slack-refresh-1");
     }),
   );
 
-  it.live("reports the error Slack returns", () =>
+  it.effect.each([
+    {
+      reason: "the error Slack returns",
+      body: { ok: false, error: "invalid_code" },
+      message: "Slack token exchange failed: invalid_code",
+    },
+    {
+      reason: "a missing refresh token",
+      body: { ...identity, access_token: "xoxp-long-lived", token_type: "user" },
+      message: "Slack token exchange returned no refresh token; turn on token rotation for the Slack app",
+    },
+    {
+      reason: "the fields of an unknown payload",
+      body: { ok: true, user: "U-STUB" },
+      message: "Slack token exchange returned an unexpected payload with fields: ok, user",
+    },
+  ])("reports $reason", ({ body, message }) =>
     Effect.gen(function* () {
-      const { result } = yield* signIn({ ok: false, error: "invalid_code" });
+      const { result } = yield* signIn(body);
       assert.isTrue(Result.isFailure(result));
       if (Result.isSuccess(result)) return;
-      assert.strictEqual(result.failure.message, "Slack token exchange failed: invalid_code");
-    }),
-  );
-
-  it.live("asks for token rotation when Slack returns no refresh token", () =>
-    Effect.gen(function* () {
-      const { result } = yield* signIn({ ...identity, access_token: "xoxp-long-lived", token_type: "user" });
-      assert.isTrue(Result.isFailure(result));
-      if (Result.isSuccess(result)) return;
-      assert.include(result.failure.message, "turn on token rotation");
+      assert.strictEqual(result.failure.message, message);
     }),
   );
 });
