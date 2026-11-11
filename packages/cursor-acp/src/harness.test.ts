@@ -67,6 +67,10 @@ const decodeObservation = Schema.decodeUnknownSync(
   ),
 );
 
+const decodePermissionOutcome = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ outcome: Schema.String, optionId: Schema.String })),
+);
+
 const restoreEnvironment = (name: string, value: string | undefined) =>
   value === undefined ? Reflect.deleteProperty(process.env, name) : Reflect.set(process.env, name, value);
 
@@ -706,6 +710,42 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
         assert.isTrue(Array.from(events).some(agUiIsStructuredOutputComplete));
         assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+      }),
+    30_000,
+  );
+
+  it.effect(
+    "allows a command Cursor asks permission for, because a headless Run has nobody to answer",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const base = request(checkout.id);
+        const fullRequest = {
+          ...base,
+          plan: new RunPlan({
+            ...base.plan,
+            harness: { ...base.plan.harness, profile: "full" },
+            sandbox: { ...base.plan.sandbox, policy: "full" },
+          }),
+        } satisfies Harness.HarnessRequest;
+        const runner = cursorRunner({
+          name: cursorName,
+          agentBin: `node ${fakeCursorAgent} --request-command-permission`,
+        });
+
+        const events = yield* Stream.runCollect(runner.run(fullRequest));
+        const output = Array.from(events)
+          .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
+          .map(({ delta }) => delta ?? "")
+          .join("");
+
+        assert.deepStrictEqual(decodePermissionOutcome(output), {
+          outcome: "selected",
+          optionId: "allow-once",
+        });
       }),
     30_000,
   );

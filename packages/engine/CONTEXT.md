@@ -197,6 +197,10 @@ _Avoid_: Session, Connection record (the `login linear` command mints the grant;
 The authority-neutral fold over claims, attempts, parks, handbacks, source revisions, and lineage. Every item's records live in the Control store, issue-backed items included (ADR 0036). A **hand-off** means only a Workflow Transition routing to another Operation; coordination never uses it to mean escalation or explanation.
 _Avoid_: Coordination tracker, role write, hand-off explanation, follow-up marker
 
+**Park notice**:
+The one marked comment the Coordination module posts on a parked issue: the park reason and the Attention command that continues the item. It is Workflow output for a person, never a coordination record, so nothing reads it back. The raw failure behind an `exhausted` park stays in Cogwork. A notice that does not post is logged, and the park stands (ADR 0036).
+_Avoid_: Coordination comment (the deleted fixed-pipeline ledger), stuck comment (every park kind gets one)
+
 **Worktree manager**:
 The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list it, remove it, and reconcile away idle ones. An implement worktree blocks its normal push path with a worktree-only invalid `pushurl`; follow-up retains agent-owned push. Before the Engine opens a pull request, it refreshes the base and requires the local Engine-cut head to be ahead. The Engine then pushes that head through the selected remote's explicit URL. Pull request readiness does not depend on a Run worktree still existing. "Reconcile" here means worktree cleanup: the maintenance heartbeat keeps the worktrees of open tracker items, open pull requests, and running Runs, and removes the rest. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
 _Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)

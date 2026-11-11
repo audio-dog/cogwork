@@ -411,7 +411,7 @@ export const cursorRunner = (options: CursorRunnerOptions): Harness.HarnessRunne
           openTransport,
           planEventName: `${options.name}.plan`,
           authMode: "host",
-          permissionMode: "default",
+          permissionMode: "bypassPermissions",
           permissions: "headless",
         })(model),
       projectModel: () => model,

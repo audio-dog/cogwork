@@ -56,6 +56,21 @@ const responseContent = (sessionParams, prompt) => {
   });
 };
 
+const requestCommandPermission = (connection, sessionId) =>
+  connection.requestPermission({
+    sessionId,
+    toolCall: {
+      toolCallId: "fake-command",
+      title: "`pnpm typecheck`",
+      kind: "execute",
+      rawInput: { command: "pnpm typecheck" },
+    },
+    options: [
+      { optionId: "allow-once", name: "Allow once", kind: "allow_once" },
+      { optionId: "reject-once", name: "Reject once", kind: "reject_once" },
+    ],
+  });
+
 class FakeCursorAgent {
   constructor(connection) {
     this.connection = connection;
@@ -99,7 +114,9 @@ class FakeCursorAgent {
       );
       if (!refused) throw new Error("cursor/create_plan was not refused with method-not-found");
     }
-    const content = responseContent(this.sessionParams, params.prompt);
+    const content = process.argv.includes("--request-command-permission")
+      ? JSON.stringify((await requestCommandPermission(this.connection, params.sessionId)).outcome)
+      : responseContent(this.sessionParams, params.prompt);
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,
       update: {
