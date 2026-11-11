@@ -19,6 +19,7 @@ const entry = (key: string, permissionProfile: "read-only" | "full") =>
     itemKind: null,
     actsOn: ["*"],
     requiresWorkspace: false,
+    workspaceSource: null,
     permissionProfile,
     agentInputs: [],
     emits: [],

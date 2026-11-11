@@ -4,6 +4,7 @@ import {
   type WorkflowActionTarget,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
+  type WorkflowWorkspaceSource,
   WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
@@ -16,11 +17,11 @@ import {
   type ActionExecutor,
   decodeFailure,
   invalidTarget,
-  itemWorkspaceOf,
   parameterValues,
   stringInput,
   type TargetContext,
   type TargetProducer,
+  targetWorkspaceOf,
   WorkflowActionPlanDecodeError,
 } from "./workflow-action-entry";
 
@@ -71,18 +72,14 @@ const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarg
   });
 };
 
-const currentIssueTargetProducer: TargetProducer = (context) =>
-  frozenIssueTarget(
-    context.entry,
-    context.workspaces,
-    itemWorkspaceOf(context.admission) ?? context.workspace,
-  ).pipe(Effect.flatMap((target) => currentIssueTarget(context.admission, target)));
+const issueTarget = (context: TargetContext) =>
+  frozenIssueTarget(context.entry, context.workspaces, targetWorkspaceOf(context));
 
-const selectedIssueTarget = (context: TargetContext) =>
-  frozenIssueTarget(context.entry, context.workspaces, context.workspace);
+const currentIssueTargetProducer: TargetProducer = (context) =>
+  issueTarget(context).pipe(Effect.flatMap((target) => currentIssueTarget(context.admission, target)));
 
 const newIssueTargetProducer: TargetProducer = (context) =>
-  selectedIssueTarget(context).pipe(
+  issueTarget(context).pipe(
     Effect.map(
       (target): WorkflowActionTarget =>
         target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
@@ -109,7 +106,7 @@ const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(
 });
 
 const existingIssueTargetProducer: TargetProducer = (context) =>
-  selectedIssueTarget(context).pipe(
+  issueTarget(context).pipe(
     Effect.flatMap((target) =>
       existingIssueTarget(typeof context.inputs.issue === "string" ? context.inputs.issue : "", target),
     ),
@@ -145,7 +142,7 @@ const issueActionRow = (
     permissionProfile: "read-only",
     agentInputs,
     emits: [],
-  }) satisfies WorkflowCatalogEntry;
+  }) satisfies Omit<WorkflowCatalogEntry, "workspaceSource">;
 
 const targetIssue = (step: WorkflowActionPlanStep) => {
   const target = step.target;
@@ -214,20 +211,23 @@ const closeIssue = Effect.fn("WorkflowActionPlan.closeIssue")(function* (context
   return null;
 });
 
+type IssueActionRow = ReturnType<typeof issueActionRow>;
+
 const issueEntry = (
-  row: WorkflowCatalogEntry,
+  row: IssueActionRow,
   target: TargetProducer,
   execute: ActionExecutor,
+  workspaceSource: WorkflowWorkspaceSource = "agent",
 ): ActionEntry => ({
-  row,
+  row: { ...row, workspaceSource },
   target,
   execute,
   phase: "write",
   tools: [],
 });
 
-const currentIssueEntry = (row: WorkflowCatalogEntry, execute: ActionExecutor) =>
-  issueEntry(row, currentIssueTargetProducer, execute);
+const currentIssueEntry = (row: IssueActionRow, execute: ActionExecutor) =>
+  issueEntry(row, currentIssueTargetProducer, execute, "item-else-agent");
 
 const issueEntries = (system: IssueTrackerApp) => [
   issueEntry(

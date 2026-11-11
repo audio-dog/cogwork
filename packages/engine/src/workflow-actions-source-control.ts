@@ -6,6 +6,7 @@ import {
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
   type WorkflowReviewComment,
+  type WorkflowWorkspaceSource,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -19,11 +20,11 @@ import {
   decodeFailure,
   type EngineToolName,
   invalidTarget,
-  itemWorkspaceOf,
   parameterValues,
   stringInput,
   type TargetContext,
   type TargetProducer,
+  targetWorkspaceOf,
   WorkflowActionPlanDecodeError,
 } from "./workflow-action-entry";
 import { PullRequestReadiness } from "./worktree";
@@ -66,17 +67,13 @@ const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceCont
   } satisfies FrozenSourceControlTarget;
 });
 
-const itemSourceControlTarget = (context: TargetContext) =>
-  frozenSourceControlTarget(
-    context.entry,
-    context.workspaces,
-    itemWorkspaceOf(context.admission) ?? context.workspace,
-  );
+const sourceControlTarget = (context: TargetContext) =>
+  frozenSourceControlTarget(context.entry, context.workspaces, targetWorkspaceOf(context));
 
 const newPullRequestTarget = Effect.fn("WorkflowActionPlan.newPullRequestTarget")(function* (
   context: TargetContext,
 ) {
-  const target = yield* itemSourceControlTarget(context);
+  const target = yield* sourceControlTarget(context);
   if (target === null) return { _tag: "NoWorkspace" } satisfies WorkflowActionTarget;
   const item = context.admission.event.key;
   if (item._tag !== "Issue" || item.workspace !== target.config.name) {
@@ -92,7 +89,7 @@ const newPullRequestTarget = Effect.fn("WorkflowActionPlan.newPullRequestTarget"
 const currentPullRequestTarget = Effect.fn("WorkflowActionPlan.currentPullRequestTarget")(function* (
   context: TargetContext,
 ) {
-  const target = yield* itemSourceControlTarget(context);
+  const target = yield* sourceControlTarget(context);
   if (target === null) return { _tag: "NoWorkspace" } satisfies WorkflowActionTarget;
   const item = context.admission.event.key;
   if ((item._tag !== "Issue" && item._tag !== "PullRequest") || item.workspace !== target.config.name) {
@@ -144,7 +141,7 @@ const namedPullRequestTarget = Effect.fn("WorkflowActionPlan.namedPullRequestTar
   context: TargetContext,
 ) {
   const { inputs, sourceControl, pullRequestSnapshots: snapshots } = context;
-  const target = yield* frozenSourceControlTarget(context.entry, context.workspaces, context.workspace);
+  const target = yield* sourceControlTarget(context);
   if (target === null) return { _tag: "NoWorkspace" } satisfies WorkflowActionTarget;
   const reference = typeof inputs.pull_request === "string" ? inputs.pull_request : "";
   const workspace = context.workspaces.find(({ config }) => config.name === target.config.name);
@@ -375,20 +372,23 @@ const sourceControlActionRow = (
     permissionProfile,
     agentInputs,
     emits: [],
-  }) satisfies WorkflowCatalogEntry;
+  }) satisfies Omit<WorkflowCatalogEntry, "workspaceSource">;
+
+type SourceControlActionRow = ReturnType<typeof sourceControlActionRow>;
 
 const sourceControlEntry = (
-  row: WorkflowCatalogEntry,
+  row: SourceControlActionRow,
   target: TargetProducer,
   execute: ActionExecutor,
+  workspaceSource: WorkflowWorkspaceSource,
   tools: ReadonlyArray<EngineToolName> = [],
-): ActionEntry => ({ row, target, execute, phase: "write", tools });
+): ActionEntry => ({ row: { ...row, workspaceSource }, target, execute, phase: "write", tools });
 
-const currentPullRequestEntry = (row: WorkflowCatalogEntry, execute: ActionExecutor) =>
-  sourceControlEntry(row, currentPullRequestTarget, execute);
+const currentPullRequestEntry = (row: SourceControlActionRow, execute: ActionExecutor) =>
+  sourceControlEntry(row, currentPullRequestTarget, execute, "item-else-agent");
 
-const namedPullRequestEntry = (row: WorkflowCatalogEntry, execute: ActionExecutor) =>
-  sourceControlEntry(row, namedPullRequestTarget, execute, ["pull-request"]);
+const namedPullRequestEntry = (row: SourceControlActionRow, execute: ActionExecutor) =>
+  sourceControlEntry(row, namedPullRequestTarget, execute, "agent", ["pull-request"]);
 
 const reviewAgentInputs = ["pull_request", "review_body", "review_comments"];
 
@@ -404,6 +404,7 @@ export const sourceControlActionEntries = [
     ),
     newPullRequestTarget,
     openPullRequest,
+    "item-else-agent",
   ),
   currentPullRequestEntry(
     sourceControlActionRow("push-to-this-pull-request", "Push to this pull request", "full", []),

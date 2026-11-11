@@ -91,6 +91,7 @@ const baseCatalog = decodeCatalog({
       itemKind: "issue",
       actsOn: [],
       requiresWorkspace: true,
+      workspaceSource: null,
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],
@@ -106,6 +107,7 @@ const baseCatalog = decodeCatalog({
       itemKind: null,
       actsOn: ["issue"],
       requiresWorkspace: true,
+      workspaceSource: "item-else-agent",
       permissionProfile: "full",
       agentInputs: ["comment"],
       emits: [],
@@ -147,6 +149,7 @@ const filterEntry = (system: string, itemKind: string) => ({
   itemKind,
   actsOn: [],
   requiresWorkspace: true,
+  workspaceSource: null,
   permissionProfile: "read-only",
   agentInputs: [],
   emits: [],
@@ -724,7 +727,7 @@ describe("Workflow Operation result", () => {
     const anyItemEntry = {
       ...baseCatalog.entries[1],
       key: decodeCatalogKey("github.create-issue"),
-      actsOn: ["*"],
+      workspaceSource: "agent" as const,
       agentInputs: [],
     };
     const mixedCatalog = catalogWith({ entries: [...baseCatalog.entries, anyItemEntry] });

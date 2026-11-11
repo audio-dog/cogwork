@@ -302,7 +302,7 @@ The person's default Harness, model, and model options for every Operation, held
 _Avoid_: Playbook, operation definition, run plan, target (say default / Workflow / Operation)
 
 **Question**:
-What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action takes its Workspace from the agent — the Workspace the element is about. An action that acts on the item takes the Workspace of an issue or pull request item from the item; an action that acts on any item, and every action on an item with no Workspace, takes it from the agent.
+What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action takes its Workspace from the agent — the Workspace the element is about. Each Action entry's Workspace source decides this: an `item-else-agent` action takes the Workspace of an issue or pull request item from the item, and takes it from the agent only when the item has no Workspace; an `agent` action always takes it from the agent.
 _Avoid_: Outcome (overloaded — say answer, or Operation result for the whole value), route condition, enum, disposition
 
 **Agent input**:

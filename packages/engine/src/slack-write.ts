@@ -422,6 +422,7 @@ const action = (
     itemKind: null,
     actsOn,
     requiresWorkspace: false,
+    workspaceSource: null,
     permissionProfile: "read-only",
     agentInputs,
     emits: [],

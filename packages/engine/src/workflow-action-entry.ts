@@ -111,3 +111,6 @@ export const itemWorkspaceOf = (admission: TriggerAdmission) =>
     },
     () => undefined,
   );
+
+export const targetWorkspaceOf = ({ entry, admission, workspace }: TargetContext) =>
+  entry.workspaceSource === "item-else-agent" ? (itemWorkspaceOf(admission) ?? workspace) : workspace;
