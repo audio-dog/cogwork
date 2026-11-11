@@ -1,0 +1,28 @@
+packages/contracts/CONTEXT.md
+  s_b908afd3118a77::t_edd2aeae2d12ac 164
+  s_b908afd3118a77::t_1091c5e447d5f4 144
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_b908afd3118a77::t_57f40c7208bf45 6
+  s_b908afd3118a77::t_a61ed501320eb0 196,198-200
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_b908afd3118a77::t_88b3a22df41340 214,216,218
+  s_b908afd3118a77::t_aea874e1577534 8
+docs/adr/0037-commands-are-retired-and-subagent-files-follow-the-claude-code-shape.md
+  s_b908afd3118a77::t_085de516d83513 1-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ea6ede946fb4464166c86eaa8856c460ba301da",
+  "prompts": {},
+  "sessions": {
+    "s_b908afd3118a77": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ca3fe2ae-2b86-415d-b5db-077e6ca9959e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
