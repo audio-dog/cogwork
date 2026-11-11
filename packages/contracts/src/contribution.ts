@@ -7,15 +7,12 @@ export type LocalContributionAuthority = typeof LocalContributionAuthority.Type;
 export const FileContributionKind = Schema.Literals(["mcp-server", "skill", "subagent", "rules"]);
 export type FileContributionKind = typeof FileContributionKind.Type;
 
-const DisableModelInvocation = Schema.optionalKey(Schema.Literal(true));
-
 export const LocalContribution = Schema.Struct({
   id: TrimmedNonEmptyString,
   authority: LocalContributionAuthority,
   kind: FileContributionKind,
   localName: TrimmedNonEmptyString,
   file: TrimmedNonEmptyString,
-  disableModelInvocation: DisableModelInvocation,
 });
 export type LocalContribution = typeof LocalContribution.Type;
 
@@ -28,7 +25,6 @@ export const FileContribution = Schema.Struct({
   kind: FileContributionKind,
   localName: TrimmedNonEmptyString,
   file: TrimmedNonEmptyString,
-  disableModelInvocation: DisableModelInvocation,
 });
 export type FileContribution = typeof FileContribution.Type;
 

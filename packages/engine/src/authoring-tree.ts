@@ -27,13 +27,11 @@ interface FlatKindSpec {
   readonly kind: FileContributionKind;
   readonly directory: string;
   readonly extension: string;
-  readonly disableModelInvocation?: true;
 }
 
 const flatKinds: ReadonlyArray<FlatKindSpec> = [
   { kind: "mcp-server", directory: "mcp", extension: ".json" },
   { kind: "rules", directory: "rules", extension: ".md" },
-  { kind: "skill", directory: "commands", extension: ".md", disableModelInvocation: true },
   { kind: "subagent", directory: "subagents", extension: ".md" },
 ];
 
@@ -49,7 +47,6 @@ const contribution = (
   kind: FileContributionKind,
   localName: string,
   file: string,
-  disableModelInvocation?: true,
 ) =>
   ({
     id: localContributionId(authority, kind, localName),
@@ -57,13 +54,7 @@ const contribution = (
     kind,
     localName,
     file,
-    ...(disableModelInvocation ? { disableModelInvocation } : {}),
   }) satisfies LocalContribution;
-
-const firstOfEachId = (contributions: ReadonlyArray<LocalContribution>) =>
-  contributions.filter(
-    (candidate, index) => contributions.findIndex(({ id }) => id === candidate.id) === index,
-  );
 
 export const scanAuthoringTrees = Effect.fn("AuthoringTree.scan")(function* (
   request: ScanAuthoringTreesRequest,
@@ -113,13 +104,7 @@ export const scanAuthoringTrees = Effect.fn("AuthoringTree.scan")(function* (
     return entries
       .flat()
       .map(({ file, name }) =>
-        contribution(
-          tree.authority,
-          spec.kind,
-          localNameFrom(name, spec.extension),
-          file,
-          spec.disableModelInvocation,
-        ),
+        contribution(tree.authority, spec.kind, localNameFrom(name, spec.extension), file),
       );
   });
 
@@ -142,7 +127,7 @@ export const scanAuthoringTrees = Effect.fn("AuthoringTree.scan")(function* (
       scanSkills(canonicalTree),
       ...flatKinds.map((kind) => scanFlatKind(canonicalTree, kind)),
     ]);
-    return firstOfEachId([...skills, ...flat.flat()]);
+    return [...skills, ...flat.flat()];
   });
 
   const userTree: ReadonlyArray<TreeSpec> = request.userAgentsDir
