@@ -1,0 +1,21 @@
+packages/engine/src/workflow-actions-source-control.test.ts
+  s_361d1fbca72890::t_8769b0e0179c75 77,88,123,178
+packages/engine/src/workflow-actions-source-control.ts
+  s_361d1fbca72890::t_35a25058498490 393,438,445
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f373a7c5d9211419c05752b7553f512199f6bcdc",
+  "prompts": {},
+  "sessions": {
+    "s_361d1fbca72890": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ffca9c40-41c3-4f6b-a2a6-8c509a169324",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
