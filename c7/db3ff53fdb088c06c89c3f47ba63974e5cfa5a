@@ -1,0 +1,25 @@
+packages/engine/src/workflow-run.test.ts
+  s_55f5b174d3d25e::t_fd323b22e07cd7 663-672
+  s_55f5b174d3d25e::t_4f43bc0ac5ea51 2780-2786,2789,2791-2793,2798
+  s_55f5b174d3d25e::t_7fd99b57b7c9a4 2778
+packages/engine/src/workflow-run.ts
+  s_55f5b174d3d25e::t_584b54dad26dbd 659,669-677
+  s_55f5b174d3d25e::t_1fcfbb5b526cc9 39
+  s_55f5b174d3d25e::t_cacdfa804cda53 70-71,73-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c7db3ff53fdb088c06c89c3f47ba63974e5cfa5a",
+  "prompts": {},
+  "sessions": {
+    "s_55f5b174d3d25e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8b9ebe4a-4aba-436b-82a3-4d438211b221",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
