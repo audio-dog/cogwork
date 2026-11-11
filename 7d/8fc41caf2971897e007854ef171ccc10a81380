@@ -1,0 +1,27 @@
+packages/cursor-acp/src/harness.test.ts
+  s_55f5b174d3d25e::t_85b65034d339d7 219-227
+  s_55f5b174d3d25e::t_d0597635f1deee 270,272-275,277-279,281-284,289-291,293
+  s_55f5b174d3d25e::t_bda0224996403f 214
+packages/cursor-acp/src/harness.ts
+  s_55f5b174d3d25e::t_17dec28db45fff 412-413
+  s_55f5b174d3d25e::t_d43a04600e6ce8 405
+  s_55f5b174d3d25e::t_3ea501865deb08 408
+packages/engine/src/harness.ts
+  s_55f5b174d3d25e::t_aabd6f57f7fbf4 490-494
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7d8fc41caf2971897e007854ef171ccc10a81380",
+  "prompts": {},
+  "sessions": {
+    "s_55f5b174d3d25e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8b9ebe4a-4aba-436b-82a3-4d438211b221",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
