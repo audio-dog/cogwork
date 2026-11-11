@@ -12,6 +12,8 @@ import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
+import type * as HttpServer from "effect/unstable/http/HttpServer";
+import type * as HttpServerError from "effect/unstable/http/HttpServerError";
 import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { awaitLoopbackAuthorization, BrowserOpener, browserOpenerLayer } from "./login";
 
@@ -181,7 +183,17 @@ const exchange = Effect.fn("slack.oauth.exchange")(function* (
   );
 });
 
-const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) {
+type CallbackServerLayer = Layer.Layer<HttpServer.HttpServer, HttpServerError.ServeError>;
+
+const callbackServerLayer = (redirectUri: string): CallbackServerLayer => {
+  const callback = new URL(redirectUri);
+  return NodeHttpServer.layer(Http.createServer, { host: callback.hostname, port: Number(callback.port) });
+};
+
+const makeLogin = Effect.fn("slack.login")(function* (
+  config: SlackLoginConfig,
+  serverLayer: CallbackServerLayer,
+) {
   const pkce = yield* Linear.OAuth.makePkce().pipe(
     Effect.mapError(() => failure("Could not create secure Slack PKCE values")),
   );
@@ -195,12 +207,7 @@ const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) 
     loginName: "Slack",
   }).pipe(
     Effect.mapError((error) => failure(error.message)),
-    Effect.provide(
-      NodeHttpServer.layer(Http.createServer, {
-        host: callback.hostname,
-        port: Number(callback.port),
-      }),
-    ),
+    Effect.provide(serverLayer),
     Effect.scoped,
     Effect.mapError((error) =>
       error._tag === "ConnectionFailure"
@@ -289,6 +296,7 @@ export const makeTokenRefresh = (client: HttpClient.HttpClient): CredentialStore
 export const slackLoginLayer = (
   config: SlackLoginConfig = defaultConfig,
   openerLayer: Layer.Layer<BrowserOpener, never, ChildProcessSpawner> = browserOpenerLayer,
+  serverLayer: CallbackServerLayer = callbackServerLayer(config.redirectUri),
 ) =>
   Layer.effect(
     Slack.SlackLogin,
@@ -297,7 +305,7 @@ export const slackLoginLayer = (
       const crypto = yield* Crypto.Crypto;
       const client = yield* HttpClient.HttpClient;
       return {
-        login: makeLogin(config).pipe(
+        login: makeLogin(config, serverLayer).pipe(
           Effect.provideService(BrowserOpener, opener),
           Effect.provideService(Crypto.Crypto, crypto),
           Effect.provideService(HttpClient.HttpClient, client),

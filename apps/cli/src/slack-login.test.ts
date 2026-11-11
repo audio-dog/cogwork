@@ -1,14 +1,18 @@
-// @effect-diagnostics-next-line nodeBuiltinImport:off
-import * as Http from "node:http";
 import { Slack } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
+import type * as Scope from "effect/Scope";
+import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
+import * as HttpServer from "effect/unstable/http/HttpServer";
+import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
+import type * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import { BrowserOpener } from "./login";
 import { type SlackLoginConfig, slackLoginLayer } from "./slack-login";
 
@@ -34,60 +38,40 @@ const expectedScopes = [
   "search:read.users",
 ].join(",");
 
-const listen = (server: Http.Server, host = "127.0.0.1") =>
-  Effect.callback<void, Error>((resume) => {
-    server.once("error", (error) => resume(Effect.fail(error)));
-    server.listen(0, host, () => resume(Effect.void));
-  });
-
-const close = (server: Http.Server) =>
-  Effect.callback<void>((resume) => {
-    server.close(() => resume(Effect.void));
-  });
-
-const request = (url: string) =>
-  Effect.callback<void, Error>((resume) => {
-    const outgoing = Http.get(url, (response) => {
-      response.resume();
-      response.once("end", () => resume(Effect.void));
-    });
-    outgoing.once("error", (error) => resume(Effect.fail(error)));
-  });
-
-const portOf = (server: Http.Server) => {
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Expected TCP server address");
-  return address.port;
+const config: SlackLoginConfig = {
+  appId: "A-STUB",
+  clientId: "client-stub",
+  authorizeEndpoint: "https://slack.example/authorize",
+  tokenEndpoint: "https://slack.example/token",
+  redirectUri: "http://localhost:39517/oauth/callback",
 };
 
-const freePort = () =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => Http.createServer()).pipe(Effect.tap((server) => listen(server, "localhost"))),
-    (server) => Effect.succeed(portOf(server)),
-    close,
-  );
+type CallbackApp<E> = Effect.Effect<
+  HttpServerResponse.HttpServerResponse,
+  E,
+  HttpServerRequest.HttpServerRequest | Scope.Scope
+>;
 
 const signIn = (tokenBody: unknown) =>
   Effect.gen(function* () {
     const tokenRequests: Array<URLSearchParams> = [];
-    const server = Http.createServer((request, response) => {
-      const chunks: Array<Buffer> = [];
-      request.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-      request.on("end", () => {
-        tokenRequests.push(new URLSearchParams(Buffer.concat(chunks).toString("utf8")));
-        response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify(tokenBody));
-      });
-    });
-    yield* Effect.acquireRelease(listen(server), () => close(server));
-    const callbackPort = yield* freePort();
-    const config: SlackLoginConfig = {
-      appId: "A-STUB",
-      clientId: "client-stub",
-      authorizeEndpoint: "https://slack.example/authorize",
-      tokenEndpoint: `http://127.0.0.1:${portOf(server)}/token`,
-      redirectUri: `http://localhost:${callbackPort}/oauth/callback`,
-    };
+    const tokenEndpoint = HttpClient.make((request) =>
+      Effect.sync(() => {
+        if (request.body._tag === "Uint8Array") {
+          tokenRequests.push(new URLSearchParams(new TextDecoder().decode(request.body.body)));
+        }
+        return HttpClientResponse.fromWeb(request, Response.json(tokenBody));
+      }),
+    );
+    const served = yield* Deferred.make<CallbackApp<never>>();
+    const serve = <E>(app: CallbackApp<E>) => Deferred.succeed(served, Effect.orDie(app)).pipe(Effect.asVoid);
+    const callbackServer = Layer.succeed(
+      HttpServer.HttpServer,
+      HttpServer.make({
+        serve,
+        address: { _tag: "TcpAddress", hostname: "localhost", port: 39517 },
+      }),
+    );
     const opened: Array<URL> = [];
     const browser = Layer.succeed(BrowserOpener, {
       open: (url: string) =>
@@ -96,13 +80,29 @@ const signIn = (tokenBody: unknown) =>
           opened.push(authorize);
           const redirect = authorize.searchParams.get("redirect_uri") ?? "";
           const state = authorize.searchParams.get("state") ?? "";
-          return request(`${redirect}?code=stub-code&state=${encodeURIComponent(state)}`).pipe(Effect.orDie);
+          const callback = new Request(`${redirect}?code=stub-code&state=${encodeURIComponent(state)}`);
+          return Deferred.await(served).pipe(
+            Effect.flatMap((app) =>
+              app.pipe(
+                Effect.provideService(
+                  HttpServerRequest.HttpServerRequest,
+                  HttpServerRequest.fromWeb(callback),
+                ),
+                Effect.scoped,
+              ),
+            ),
+            Effect.asVoid,
+          );
         }),
     });
-    const context = yield* Layer.build(slackLoginLayer(config, browser));
+    const context = yield* Layer.build(
+      slackLoginLayer(config, browser, callbackServer).pipe(
+        Layer.provide(Layer.succeed(HttpClient.HttpClient, tokenEndpoint)),
+      ),
+    );
     const result = yield* Effect.result(Context.get(context, Slack.SlackLogin).login);
-    return { result, config, opened, tokenRequests };
-  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer)));
+    return { result, opened, tokenRequests };
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
 const identity = {
   ok: true,
@@ -115,7 +115,7 @@ const rotatingToken = { access_token: "slack-access", refresh_token: "slack-refr
 describe("Slack browser login", () => {
   it.live("stores the user grant without a client secret", () =>
     Effect.gen(function* () {
-      const { result, config, opened, tokenRequests } = yield* signIn({ ...identity, ...rotatingToken });
+      const { result, opened, tokenRequests } = yield* signIn({ ...identity, ...rotatingToken });
       assert.isTrue(Result.isSuccess(result));
       if (Result.isFailure(result)) return;
       const credential = result.success;
