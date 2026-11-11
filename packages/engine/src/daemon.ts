@@ -424,7 +424,7 @@ const providerTriggerSourcesLayer = <E, R>(
       Effect.map(([tracker, provider, registry, artifacts]) => {
         const sources = [
           makeTrackerTriggerSource("github", tracker, registry.state, artifacts),
-          ...(tracker.triggerSources ?? []),
+          makeTrackerTriggerSource("linear", tracker, registry.state, artifacts),
           ...(provider.triggerSources ?? []),
         ];
         return combineTriggerSources([...sources, makeClockSource(sources)]);
