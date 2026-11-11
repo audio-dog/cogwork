@@ -6,6 +6,7 @@ import {
   type WorkflowAgentInputValue,
   type WorkflowCatalogEntry,
   type WorkflowParameterValue,
+  type WorkflowWorkspaceSource,
   WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
@@ -112,5 +113,12 @@ export const itemWorkspaceOf = (admission: TriggerAdmission) =>
     () => undefined,
   );
 
-export const targetWorkspaceOf = ({ entry, admission, workspace }: TargetContext) =>
-  entry.workspaceSource === "item-else-agent" ? (itemWorkspaceOf(admission) ?? workspace) : workspace;
+const targetWorkspaceFrom = {
+  "item-else-agent": ({ admission, workspace }) => itemWorkspaceOf(admission) ?? workspace,
+  agent: ({ workspace }) => workspace,
+} satisfies Record<WorkflowWorkspaceSource, (context: TargetContext) => string | undefined>;
+
+export const targetWorkspaceOf = (context: TargetContext) =>
+  context.entry.workspaceSource === null
+    ? context.workspace
+    : targetWorkspaceFrom[context.entry.workspaceSource](context);

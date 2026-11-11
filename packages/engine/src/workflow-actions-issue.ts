@@ -217,7 +217,7 @@ const issueEntry = (
   row: IssueActionRow,
   target: TargetProducer,
   execute: ActionExecutor,
-  workspaceSource: WorkflowWorkspaceSource = "agent",
+  workspaceSource: WorkflowWorkspaceSource,
 ): ActionEntry => ({
   row: { ...row, workspaceSource },
   target,
@@ -240,11 +240,13 @@ const issueEntries = (system: IssueTrackerApp) => [
     ),
     newIssueTargetProducer,
     createIssue,
+    "agent",
   ),
   issueEntry(
     issueActionRow(system, "comment-issue", "Comment on an existing issue", ["issue", "comment"]),
     existingIssueTargetProducer,
     commentIssue,
+    "agent",
   ),
   currentIssueEntry(
     issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], ["issue"]),

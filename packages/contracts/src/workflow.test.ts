@@ -724,17 +724,20 @@ describe("Workflow Operation result", () => {
   });
 
   it("builds one strict object that requires a Workspace only when the agent chooses it", () => {
-    const anyItemEntry = {
+    const agentWorkspaceEntry = {
       ...baseCatalog.entries[1],
       key: decodeCatalogKey("github.create-issue"),
       workspaceSource: "agent" as const,
       agentInputs: [],
     };
-    const mixedCatalog = catalogWith({ entries: [...baseCatalog.entries, anyItemEntry] });
+    const mixedCatalog = catalogWith({ entries: [...baseCatalog.entries, agentWorkspaceEntry] });
     const mixedOperation = {
       ...operation,
       transitions: [
-        { ...transition, actions: [...transition.actions, { entry: anyItemEntry.key, parameters: [] }] },
+        {
+          ...transition,
+          actions: [...transition.actions, { entry: agentWorkspaceEntry.key, parameters: [] }],
+        },
       ],
     };
     const resultFields = ["summary", "stuck", "answers", "inputs"];
