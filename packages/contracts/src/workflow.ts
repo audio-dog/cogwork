@@ -553,8 +553,6 @@ const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => 
   );
 };
 
-const actsOnAnyItem = ({ actsOn }: WorkflowCatalogEntry) => actsOn.includes("*");
-
 export const workflowOperationResultSchema = (
   operation: WorkflowOperation,
   catalog: WorkflowCatalog,
@@ -570,11 +568,11 @@ export const workflowOperationResultSchema = (
   const workspaceEntries = operationActionEntries(operation, catalog).filter(
     ({ requiresWorkspace }) => requiresWorkspace,
   );
-  const needsWorkspace = workspaceEntries.length > 0;
+  const elementNeedsWorkspace = workspaceEntries.length > 0;
   const onceNeedsWorkspace = workspaceEntries.some(
-    (entry) => itemWorkspace === undefined || actsOnAnyItem(entry),
+    ({ actsOn }) => itemWorkspace === undefined || actsOn.includes("*"),
   );
-  const element = needsWorkspace
+  const element = elementNeedsWorkspace
     ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
         parseOptions,
       })
