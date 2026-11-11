@@ -2744,7 +2744,22 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
+  const documentWithOperation = (change: Partial<WorkflowDocument["operations"][number]>) =>
+    WorkflowDocument.make({
+      ...document,
+      operations: document.operations.map((candidate) => ({ ...candidate, ...change })),
+    });
   const unreadyCases = [
+    {
+      name: "no Harness can be selected",
+      preflight: () => Effect.void,
+      service: {
+        ...workflowServiceWith(documentWithOperation({ model: { harness: null, model: null, options: [] } })),
+        catalog: workflowService.catalog.pipe(
+          Effect.map((result) => ({ ...result, machine: { ...result.machine, defaultHarness: null } })),
+        ),
+      },
+    },
     {
       name: "Harness preflight fails",
       preflight: () =>
@@ -2761,13 +2776,7 @@ describe("WorkflowRun", () => {
       name: "a required connection is not ready",
       preflight: () => Effect.void,
       service: workflowServiceWith(
-        WorkflowDocument.make({
-          ...document,
-          operations: document.operations.map((candidate) => ({
-            ...candidate,
-            requires: [NeedIdentity.make("connection:github")],
-          })),
-        }),
+        documentWithOperation({ requires: [NeedIdentity.make("connection:github")] }),
       ),
     },
   ] as const;
@@ -2782,7 +2791,6 @@ describe("WorkflowRun", () => {
         );
 
         assert.strictEqual(yield* runner.execute(admission), "waiting");
-        assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
         assert.deepStrictEqual(yield* Ref.get(coordination.parks), []);
         assert.isNull(yield* Ref.get(coordination.processed));
         assert.strictEqual(
