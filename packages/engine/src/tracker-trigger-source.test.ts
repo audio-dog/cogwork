@@ -17,7 +17,7 @@ import * as Stream from "effect/Stream";
 import type { ListedTrackerItem, TrackerComment } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { makeTrackerTriggerSource } from "./tracker-trigger-source";
-import type { TriggerSubscription } from "./trigger-source";
+import { Recheck, type TriggerSubscription } from "./trigger-source";
 import type { WorkflowArtifactStoreService } from "./workflow-artifact-store";
 
 const workspaceId = Schema.decodeSync(WorkspaceId)("github-workspace");
@@ -88,6 +88,7 @@ const tracker = (options: {
   },
   openItemsWithLabel: (_workspace: WorkspaceIssueTrackerBinding, label: string) =>
     Effect.succeed((options.labelled ?? []).filter(({ labels }) => labels.includes(label))),
+  readItem: () => Effect.succeed(null),
   readTriggerProse: () => Effect.succeed({ body: "Body", comments }),
   labelAppliedAt: (_workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) =>
     Effect.succeed(id === firstIssueId ? 1_500 : null),
@@ -206,4 +207,22 @@ describe("Tracker Trigger source", () => {
       });
     },
   );
+
+  it.effect("ends a recheck when the item no longer exists", () => {
+    const source = makeTrackerTriggerSource("github", tracker({}), Effect.succeed(registryState), null);
+    const event = {
+      key: { _tag: "Issue" as const, workspace: workspaceId, id: firstIssueId },
+      revision: "label:needs-triage:1",
+      cause: { _tag: "Unknown" as const },
+      atMillis: 1,
+      entry: issueHasLabelKey,
+      workspace: workspaceId,
+    };
+    return Effect.gen(function* () {
+      const result = yield* source.recheck?.(event, subscription(issueHasLabelKey, "labelled")) ??
+        Effect.die("missing recheck");
+
+      assert.deepStrictEqual(result, Recheck.Ended({ reason: "#1 no longer exists" }));
+    });
+  });
 });

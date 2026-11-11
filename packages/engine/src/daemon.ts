@@ -102,6 +102,7 @@ import * as SessionStore from "./session-store";
 import { make as makeSlackSource, httpClientLayer as slackClientLayer } from "./slack-source";
 import { layer as slackWriteLayer } from "./slack-write";
 import { SourceControlProvider } from "./source-control";
+import { makeTrackerTriggerSource } from "./tracker-trigger-source";
 import {
   controlStoreTriggerObservationStoreLayer,
   TriggerObservation,
@@ -111,7 +112,10 @@ import {
 import { combineTriggerSources, TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { controlStoreLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
-import { controlStoreLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
+import {
+  WorkflowArtifactStore,
+  controlStoreLayer as workflowArtifactStoreLayer,
+} from "./workflow-artifact-store";
 import { WorkflowAttention, layer as workflowAttentionLayer } from "./workflow-attention";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
@@ -407,17 +411,25 @@ export interface HostAdapters<E = never, R = never> {
 }
 
 const providerTriggerSourcesLayer = <E, R>(
-  issueTracker: Layer.Layer<IssueTracker | SourceControlProvider, E, R>,
+  dependencies: Layer.Layer<
+    IssueTracker | SourceControlProvider | WorkspaceRegistry | WorkflowArtifactStore,
+    E,
+    R
+  >,
 ) =>
   Layer.effect(
     TriggerSources,
-    Effect.all([IssueTracker, SourceControlProvider]).pipe(
-      Effect.map(([tracker, provider]) => {
-        const sources = [...(tracker.triggerSources ?? []), ...(provider.triggerSources ?? [])];
+    Effect.all([IssueTracker, SourceControlProvider, WorkspaceRegistry, WorkflowArtifactStore]).pipe(
+      Effect.map(([tracker, provider, registry, artifacts]) => {
+        const sources = [
+          makeTrackerTriggerSource("github", tracker, registry.state, artifacts),
+          ...(tracker.triggerSources ?? []),
+          ...(provider.triggerSources ?? []),
+        ];
         return combineTriggerSources([...sources, makeClockSource(sources)]);
       }),
     ),
-  ).pipe(Layer.provide(issueTracker));
+  ).pipe(Layer.provide(dependencies));
 
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
@@ -449,7 +461,9 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provideMerge(controlStore),
   );
   const issueTracker = issueTrackerAdapters.pipe(Layer.provide(registry));
-  const providerTriggerSources = providerTriggerSourcesLayer(issueTracker);
+  const providerTriggerSources = providerTriggerSourcesLayer(
+    Layer.mergeAll(issueTracker, registry, workflowArtifacts),
+  );
   const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
     Layer.provide(githubClient),
     Layer.provide(registry),

@@ -2,7 +2,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { makeAdapter as makeGitHub } from "./github/adapter";
 import { GitHubClient } from "./github/client";
-import { makeGitHubTrackerTriggerSource } from "./github/tracker-trigger-source";
 import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
@@ -24,6 +23,7 @@ export const route = (
     itemsChangedSince: (workspace, sinceMillis) =>
       forWorkspace(workspace).itemsChangedSince(workspace, sinceMillis),
     openItemsWithLabel: (workspace, label) => forWorkspace(workspace).openItemsWithLabel(workspace, label),
+    readItem: (workspace, id) => forWorkspace(workspace).readItem(workspace, id),
     readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
     readTriggerProse: (workspace, id) => forWorkspace(workspace).readTriggerProse(workspace, id),
     labelAppliedAt: (workspace, id, label) => forWorkspace(workspace).labelAppliedAt(workspace, id, label),
@@ -46,7 +46,6 @@ export const routedLayer = Layer.effect(
     const registry = yield* WorkspaceRegistry;
     const artifacts = yield* WorkflowArtifactStore;
     return route(makeGitHub(githubClient), makeLinear(linearClient), [
-      makeGitHubTrackerTriggerSource(githubClient, registry.state, artifacts),
       makeLinearTrackerTriggerSource(linearClient, registry.state, artifacts),
     ]);
   }),

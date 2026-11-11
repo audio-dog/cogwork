@@ -18,18 +18,41 @@ import {
   providerModifiedSinceGraceMillis,
   providerPollingStream,
   providerSubject,
+  recheckIssue,
+  sourceFailure,
   triggerEntry,
   workspaceOptionReader,
   workspaceSubscriptions,
 } from "./provider-trigger-source";
-import type { TriggerEvent, TriggerSource, TriggerSubscription } from "./trigger-source";
+import { Recheck, type TriggerEvent, type TriggerSource, type TriggerSubscription } from "./trigger-source";
 import type { WorkflowArtifactStoreService } from "./workflow-artifact-store";
 
 type TrackerSystem = "github" | "linear";
 type TrackerReads = Pick<
   IssueTrackerService,
-  "itemsChangedSince" | "openItemsWithLabel" | "readTriggerProse" | "labelAppliedAt" | "listLabels"
+  | "itemsChangedSince"
+  | "openItemsWithLabel"
+  | "readItem"
+  | "readTriggerProse"
+  | "labelAppliedAt"
+  | "listLabels"
 >;
+
+const catalogKey = Schema.decodeSync(WorkflowCatalogKey);
+const issueHasLabelKeyOf = (system: TrackerSystem) => catalogKey(`${system}.issue-has-label`);
+const newCommentKeyOf = (system: TrackerSystem) => catalogKey(`${system}.new-comment-from-person`);
+
+export const trackerTriggerEntries = (system: TrackerSystem) => [
+  triggerEntry(issueHasLabelKeyOf(system), "Issue has label", system, "issue", "condition", [
+    liveParameter("label"),
+  ]),
+  triggerEntry(newCommentKeyOf(system), "New comment from a person", system, "issue", "occurrence", [
+    liveParameter("label"),
+    catchUpParameter,
+  ]),
+];
+
+export const trackerTriggerFilters = (system: TrackerSystem) => [issueNotBlockedFilter(system).entry];
 
 const unknownCause: Cause = { _tag: "Unknown" };
 
@@ -53,8 +76,8 @@ export const makeTrackerTriggerSource = (
   registry: Effect.Effect<RegistryState>,
   artifacts: WorkflowArtifactStoreService | null,
 ): TriggerSource => {
-  const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)(`${system}.issue-has-label`);
-  const newCommentKey = Schema.decodeSync(WorkflowCatalogKey)(`${system}.new-comment-from-person`);
+  const issueHasLabelKey = issueHasLabelKeyOf(system);
+  const newCommentKey = newCommentKeyOf(system);
   const issueFilters = [issueNotBlockedFilter(system)];
 
   const originCause = (workspace: WorkspaceId, id: WorkItemId) =>
@@ -175,23 +198,31 @@ export const makeTrackerTriggerSource = (
     };
   });
 
+  const recheck = Effect.fn("TrackerTriggerSource.recheck")(function* (
+    event: TriggerEvent,
+    subscription: TriggerSubscription,
+  ) {
+    if (event.key._tag !== "Issue") return Recheck.Matches();
+    const { id, workspace } = event.key;
+    const registered = (yield* registry).workspaces.find(({ config }) => config.name === workspace);
+    if (!registered) return Recheck.Matches();
+    const item = yield* issueTracker
+      .readItem(registered, id)
+      .pipe(Effect.mapError((error) => sourceFailure(system, error)));
+    if (item === null) return Recheck.Ended({ reason: `${id} no longer exists` });
+    return recheckIssue(issueFilters, subscription, { id, open: item.open, labels: item.labels, item });
+  });
+
   return {
     id: system,
-    entries: [
-      triggerEntry(issueHasLabelKey, "Issue has label", system, "issue", "condition", [
-        liveParameter("label"),
-      ]),
-      triggerEntry(newCommentKey, "New comment from a person", system, "issue", "occurrence", [
-        liveParameter("label"),
-        catchUpParameter,
-      ]),
-    ],
-    filters: issueFilters.map(({ entry }) => entry),
+    entries: trackerTriggerEntries(system),
+    filters: trackerTriggerFilters(system),
     availability: () => Effect.succeed({ _tag: "Available" }),
     options: [
       { system, readers: { label: workspaceOptionReader(system, registry, issueTracker.listLabels) } },
     ],
     observe: (subscriptions) =>
       providerPollingStream(system, (checkpoint) => read(subscriptions, checkpoint)),
+    recheck,
   };
 };
