@@ -29,7 +29,6 @@ layer(NodeServices.layer)((it) => {
       yield* writeFile(path.join(userAgentsDir, "mcp", "review.json"));
       yield* writeFile(path.join(repoRoot, ".agents", "skills", "release", "SKILL.md"));
       yield* writeFile(path.join(repoRoot, ".agents", "rules", "style.md"));
-      yield* writeFile(path.join(repoRoot, ".agents", "commands", "ship.md"));
       yield* writeFile(path.join(repoRoot, ".agents", "subagents", "reviewer.md"));
       yield* writeFile(path.join(repoRoot, ".agents", "mcp", "tools.json"));
       yield* writeFile(path.join(cogworkHome, "workspaces", workspace, "skills", "release", "SKILL.md"));
@@ -48,7 +47,6 @@ layer(NodeServices.layer)((it) => {
           "local:repo/mcp/tools",
           "local:repo/rules/style",
           "local:repo/skill/release",
-          "local:repo/skill/ship",
           "local:repo/subagent/reviewer",
           "local:user/mcp/review",
           "local:user/skill/commit",

@@ -29,8 +29,8 @@ standard, not a new format. The research in
 ## Decision
 
 1. **Commands become Skills.** The Command contribution kind goes away. A `commands/<name>.md` file
-   in any Authoring tree is read as a Skill named `<name>` that the model cannot start by itself — the `disable-model-invocation: true`
-   of the Claude Code shape. The contribution carries that mark. The Skill reaches a Run through the
+   in any Authoring tree is read as a Skill named `<name>` that the model cannot start by itself —
+   the `disable-model-invocation: true` of the Claude Code shape. The contribution carries that mark. The Skill reaches a Run through the
    same mechanism as every other Skill. The contribution kinds are **MCP server, Skill, Subagent,
    Rules, and Hook**, and the Run Plan has no Commands member.
 2. **Subagent files live in `agents/`** in each Authoring tree — `~/.agents/agents/`,

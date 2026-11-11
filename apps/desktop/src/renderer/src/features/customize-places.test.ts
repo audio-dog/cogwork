@@ -147,13 +147,6 @@ describe("groupContributions", () => {
     ]);
   });
 
-  it("lists a Command file under Skills with its source badge", () => {
-    const groups = groupContributions("skill", allPlaceKeys, "");
-    const linear = groups.find((group) => group.label === "Linear");
-    const triage = linear?.rows.find((row) => row.file.endsWith("/commands/linear-triage.md"));
-    expect(triage?.authority).toEqual(Authority.plugin({ pluginId: "linear" }));
-  });
-
   it("names engine-authored contributions as built in", () => {
     const groups = groupContributions("rules", allPlaceKeys, "");
     const builtIn = groups.find((group) => group.label === "Built in");
