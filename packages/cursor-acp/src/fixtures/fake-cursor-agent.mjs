@@ -56,8 +56,8 @@ const responseContent = (sessionParams, prompt) => {
   });
 };
 
-const requestCommandPermission = (connection, sessionId) =>
-  connection.requestPermission({
+const commandPermissionContent = async (connection, sessionId) => {
+  const { outcome } = await connection.requestPermission({
     sessionId,
     toolCall: {
       toolCallId: "fake-command",
@@ -70,6 +70,8 @@ const requestCommandPermission = (connection, sessionId) =>
       { optionId: "reject-once", name: "Reject once", kind: "reject_once" },
     ],
   });
+  return JSON.stringify(outcome);
+};
 
 class FakeCursorAgent {
   constructor(connection) {
@@ -115,7 +117,7 @@ class FakeCursorAgent {
       if (!refused) throw new Error("cursor/create_plan was not refused with method-not-found");
     }
     const content = process.argv.includes("--request-command-permission")
-      ? JSON.stringify((await requestCommandPermission(this.connection, params.sessionId)).outcome)
+      ? await commandPermissionContent(this.connection, params.sessionId)
       : responseContent(this.sessionParams, params.prompt);
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,

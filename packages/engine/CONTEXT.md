@@ -198,7 +198,7 @@ The authority-neutral fold over claims, attempts, parks, handbacks, source revis
 _Avoid_: Coordination tracker, role write, hand-off explanation, follow-up marker
 
 **Park notice**:
-The one marked comment the Coordination module posts on a parked issue: the park reason and the Attention command that continues the item. It is Workflow output for a person, never a coordination record, so nothing reads it back. The raw failure behind an `exhausted` park stays in Cogwork. A notice that does not post is logged, and the park stands (ADR 0036).
+The one marked comment the Coordination module posts on a parked issue: the park reason and the Attention command that continues the item. It is Workflow output for a person, never a coordination record, so nothing reads it back. The raw failure behind an `exhausted` or `write-failed` park stays in Cogwork. The notice posts on a fiber that the Coordination layer owns, so a park returns before the tracker write ends. A notice that does not post is logged, and the park stands (ADR 0036).
 _Avoid_: Coordination comment (the deleted fixed-pipeline ledger), stuck comment (every park kind gets one)
 
 **Worktree manager**:

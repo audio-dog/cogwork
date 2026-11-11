@@ -27,7 +27,7 @@ deletes that pipeline, and with it the only writer of tracker-side coordination.
   parked item is an issue, the Coordination module also posts one marked comment on it. The comment
   gives the park reason and the Attention command that continues the item. This comment is Workflow
   output for a person, not a coordination record, and the engine never reads it back. The raw failure
-  behind an `exhausted` park stays in Cogwork, because the tracker can be public. A comment that
+  behind an `exhausted` or `write-failed` park stays in Cogwork, because the tracker can be public. A comment that
   does not post does not stop the park.
 - **Restart recovery releases the Claim.** A Run left `running` by a daemon that stopped without
   draining is marked `crashed` at the next boot, its Claim is released, and the item is admitted

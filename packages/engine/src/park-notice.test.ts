@@ -1,5 +1,4 @@
 import {
-  IssueTrackerError,
   type ParkReason,
   WorkItemId,
   type WorkItemRef,
@@ -9,11 +8,11 @@ import {
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Context from "effect/Context";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import { bootControlStoreLayer } from "./control-store";
@@ -28,8 +27,8 @@ interface PostedComment {
   readonly body: string;
 }
 
-class PostedComments extends Context.Service<PostedComments, Ref.Ref<ReadonlyArray<PostedComment>>>()(
-  "@cogwork/engine/park-notice.test/PostedComments",
+class TrackerWrite extends Context.Service<TrackerWrite, Deferred.Deferred<PostedComment>>()(
+  "@cogwork/engine/park-notice.test/TrackerWrite",
 ) {}
 
 const workspace = WorkspaceId.make("cogwork");
@@ -54,77 +53,76 @@ const registry = Layer.succeed(
   }),
 );
 
-const tracker = (accepts: boolean) =>
+const tracker = (write: Effect.Effect<void>) =>
   Layer.effect(
     IssueTracker,
     Effect.gen(function* () {
       const empty = yield* makeEmpty;
-      const posted = yield* PostedComments;
+      const posted = yield* TrackerWrite;
       return {
         ...empty,
         commentIssue: (binding, item, body) =>
-          accepts
-            ? Ref.update(posted, (comments) => [...comments, { workspace: binding.config.name, item, body }])
-            : Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "GitHub is down" })),
+          Deferred.succeed(posted, { workspace: binding.config.name, item, body }).pipe(
+            Effect.andThen(write),
+          ),
       };
     }),
-  ).pipe(Layer.provideMerge(Layer.effect(PostedComments, Ref.make<ReadonlyArray<PostedComment>>([]))));
+  ).pipe(Layer.provideMerge(Layer.effect(TrackerWrite, Deferred.make<PostedComment>())));
 
-const parkAndRead = (reason: ParkReason) =>
+const controlStore = Layer.unwrap(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-park-notice-" });
+    return bootControlStoreLayer(path.join(directory, "control.db"));
+  }),
+);
+
+const environment = (write: Effect.Effect<void>) =>
+  Layer.mergeAll(tracker(write), registry, controlStore).pipe(Layer.provideMerge(NodeServices.layer));
+
+const park = (reason: ParkReason) =>
+  Effect.gen(function* () {
     yield* TestClock.setTime(1);
-    const view = yield* withParkNotices(makeControlStoreCoordination).pipe(
-      Effect.flatMap((coordination) =>
-        coordination
-          .observe(issue, "issue:901", { _tag: "Unknown" })
-          .pipe(Effect.andThen(coordination.park(issue, reason, operation))),
-      ),
-      Effect.provide(bootControlStoreLayer(path.join(directory, "control.db"))),
-    );
-    return { gate: view.gate(operation)._tag, posted: yield* Ref.get(yield* PostedComments) };
+    const coordination = yield* withParkNotices(makeControlStoreCoordination);
+    yield* coordination.observe(issue, "issue:901", { _tag: "Unknown" });
+    const view = yield* coordination.park(issue, reason, operation);
+    return { gate: view.gate(operation)._tag, posted: yield* Deferred.await(yield* TrackerWrite) };
   });
 
 it.effect("posts the park reason and the way to continue on the parked issue", () =>
   Effect.gen(function* () {
-    const { gate, posted } = yield* parkAndRead({
-      _tag: "Stuck",
-      summary: "The gate commands were refused.",
-    });
+    const { gate, posted } = yield* park({ _tag: "Stuck", summary: "The gate commands were refused." });
 
     assert.strictEqual(gate, "Parked");
-    assert.deepStrictEqual(
-      posted.map(({ workspace, item }) => ({ workspace, item })),
-      [{ workspace, item: "#901" }],
-    );
-    assert.include(posted[0]?.body, "The gate commands were refused.");
-    assert.include(posted[0]?.body, "select **Hand back**");
-  }).pipe(Effect.provide(Layer.mergeAll(tracker(true), registry, NodeServices.layer))),
+    assert.deepStrictEqual({ workspace: posted.workspace, item: posted.item }, { workspace, item: "#901" });
+    assert.include(posted.body, "The gate commands were refused.");
+    assert.include(posted.body, "select **Hand back**");
+  }).pipe(Effect.provide(environment(Effect.void))),
 );
 
-it.effect("keeps the park when the issue tracker refuses the notice", () =>
+it.effect("returns the park while the issue tracker write is still open", () =>
   Effect.gen(function* () {
-    const { gate, posted } = yield* parkAndRead({
-      _tag: "Stuck",
-      summary: "The gate commands were refused.",
-    });
+    const { gate } = yield* park({ _tag: "Stuck", summary: "The gate commands were refused." });
 
     assert.strictEqual(gate, "Parked");
-    assert.deepStrictEqual(posted, []);
-  }).pipe(Effect.provide(Layer.mergeAll(tracker(false), registry, NodeServices.layer))),
+  }).pipe(Effect.provide(environment(Effect.never))),
 );
 
-it.effect("keeps the raw failure of an exhausted park off the issue", () =>
-  Effect.gen(function* () {
-    const { posted } = yield* parkAndRead({
-      _tag: "Exhausted",
-      reason: "Cause(HarnessError: spawn /Users/someone/.local/bin/agent ENOENT)",
-    });
+const rawFailure = "fatal: unable to access /Users/someone/.local/bin/agent";
 
-    assert.strictEqual(posted.length, 1);
-    assert.notInclude(posted[0]?.body, "/Users/someone");
-    assert.include(posted[0]?.body, "under **Attention**");
-  }).pipe(Effect.provide(Layer.mergeAll(tracker(true), registry, NodeServices.layer))),
+const parksWithRawFailure: ReadonlyArray<ParkReason> = [
+  { _tag: "Exhausted", reason: `Cause(HarnessError: ${rawFailure})` },
+  { _tag: "WriteFailed", step: "github.open-pull-request", error: rawFailure },
+];
+
+parksWithRawFailure.map((reason) =>
+  it.effect(`keeps the raw failure off the issue for the ${reason._tag} park`, () =>
+    Effect.gen(function* () {
+      const { posted } = yield* park(reason);
+
+      assert.notInclude(posted.body, "/Users/someone");
+      assert.include(posted.body, "under **Attention**");
+    }).pipe(Effect.provide(environment(Effect.void))),
+  ),
 );
