@@ -446,7 +446,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
-    Layer.provide(workflowArtifacts),
   );
   const connections = connectionStoreLayer.pipe(
     Layer.provide(controlStore),
