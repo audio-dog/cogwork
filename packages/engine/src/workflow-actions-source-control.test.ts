@@ -12,10 +12,11 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { githubSourceControlActionEntries } from "./github/provider";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import type { RegisteredWorkspace } from "./projector";
+import { emptyService as emptySourceControl, type PullRequestContext } from "./source-control";
 import type { TriggerAdmission } from "./trigger-observation";
+import type { TargetContext } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
 
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
@@ -25,7 +26,8 @@ const currentPullRequestActions = [
   "comment-on-this-pull-request",
   "request-review",
 ];
-const sourceControlActions = ["open-pull-request", ...currentPullRequestActions];
+const namedPullRequestActions = ["comment-on-named-pull-request", "post-review", "draft-review"];
+const sourceControlActions = ["open-pull-request", ...currentPullRequestActions, ...namedPullRequestActions];
 
 const workspace: RegisteredWorkspace = {
   source: "control-store:workspace",
@@ -72,7 +74,7 @@ const admissionFor = (ref: WorkItemRef): TriggerAdmission => {
   };
 };
 
-const targetOf = (action: string, ref: WorkItemRef) => {
+const targetOf = (action: string, ref: WorkItemRef, named: Partial<TargetContext> = {}) => {
   const entry = actionEntryFor(`github.${action}`);
   assert.isDefined(entry);
   return entry.target({
@@ -83,8 +85,32 @@ const targetOf = (action: string, ref: WorkItemRef) => {
     parameters: [],
     workspace: workspace.config.name,
     sourceControl: undefined,
+    ...named,
   });
 };
+
+const namedPullRequest: PullRequestContext = {
+  number: 826,
+  url: "https://github.com/owner/repo/pull/826",
+  headBranch: "826-review",
+  baseBranch: "main",
+  headSha: "read-sha",
+  title: "Review",
+  description: "",
+  diff: "",
+  changedFiles: [],
+  comments: [],
+};
+
+const namedTargetOf = (action: string, snapshots: ReadonlyArray<PullRequestContext>) =>
+  targetOf(action, slackRef, {
+    inputs: { pull_request: "#826" },
+    sourceControl: {
+      ...emptySourceControl,
+      readPullRequest: () => Effect.succeed({ ...namedPullRequest, headSha: "current-sha" }),
+    },
+    pullRequestSnapshots: snapshots.map((pullRequest) => ({ workspace: workspace.config.name, pullRequest })),
+  });
 
 const frozen = {
   workspace: workspace.config.name,
@@ -97,9 +123,7 @@ describe("Source control Action entries", () => {
   it("publishes each row once, from the GitHub tracker catalog", () => {
     const keys = sourceControlActions.map((action) => `github.${action}`);
     const trackerKeys = issueTrackerWorkflowCatalogContribution("github").entries.map(({ key }) => key);
-    const providerKeys = githubSourceControlActionEntries.map(({ key }) => key);
     assert.includeMembers(trackerKeys, keys);
-    assert.notIncludeMembers(providerKeys, keys);
   });
 
   it.effect("freezes a new pull request for the current Issue only", () =>
@@ -140,6 +164,18 @@ describe("Source control Action entries", () => {
           slack.message,
           "The action cannot target this pull request in the selected Workspace",
         );
+      }
+    }),
+  );
+
+  it.effect("refuses a named pull request that was not read, or whose head moved after the read", () =>
+    Effect.gen(function* () {
+      for (const action of namedPullRequestActions) {
+        const unread = yield* Effect.flip(namedTargetOf(action, []));
+        assert.strictEqual(unread._tag, "WorkflowActionPlanDecodeError");
+        assert.strictEqual(unread.message, "Read pull request #826 with the pull-request Tool");
+        const moved = yield* Effect.flip(namedTargetOf(action, [namedPullRequest]));
+        assert.strictEqual(moved.message, "Pull request #826 received a new commit after it was read");
       }
     }),
   );

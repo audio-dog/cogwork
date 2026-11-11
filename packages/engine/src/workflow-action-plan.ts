@@ -17,7 +17,6 @@ import {
   type WorkflowNodeId,
   type WorkflowOperation,
   type WorkflowParameterValue,
-  type WorkflowReviewComment,
   WorkflowSlackActionArtifact,
   WorkItemRef,
 } from "@cogwork/contracts";
@@ -30,18 +29,14 @@ import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { type SlackPostReceipt, SlackWrite, SlackWriteError } from "./slack-write";
-import {
-  type PullRequestContext,
-  type PullRequestReviewEvent,
-  SourceControlProvider,
-  type SourceControlProviderService,
-} from "./source-control";
+import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import {
   type ActionContext,
   type ActionExecutor,
   decodeFailure,
   invalidTarget,
+  type PullRequestSnapshot,
   parameterValues,
   stringInput,
   type TargetProducer,
@@ -49,13 +44,6 @@ import {
 } from "./workflow-action-entry";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { actionEntryFor, compareActionPhase } from "./workflow-action-registry";
-import {
-  actionOrigin,
-  frozenSourceControlTarget,
-  requirePullRequest,
-  requireSourceControl,
-  sourceControlTargetFields,
-} from "./workflow-actions-source-control";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 import { WorktreeManager } from "./worktree";
@@ -84,10 +72,7 @@ interface BuildInput {
   readonly createdAtMillis: number;
   readonly workflowRevision: number;
   readonly sourceControl?: SourceControlProviderService;
-  readonly pullRequestSnapshots?: ReadonlyArray<{
-    readonly workspace: string;
-    readonly pullRequest: PullRequestContext;
-  }>;
+  readonly pullRequestSnapshots?: ReadonlyArray<PullRequestSnapshot>;
 }
 
 const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
@@ -108,88 +93,6 @@ const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function
     Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
   );
   return createHash("sha256").update(encoded).digest("hex");
-});
-
-const namedPullRequestActions = new Set(["comment-on-named-pull-request", "post-review", "draft-review"]);
-
-interface DiffLineState {
-  inHunk: boolean;
-  newLine: number;
-  readonly lines: Set<number>;
-}
-
-const diffNewSideLines = (patch: string) =>
-  patch.split("\n").reduce<DiffLineState>(
-    (state, line) => {
-      const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
-      if (hunk) {
-        state.inHunk = true;
-        state.newLine = Number(hunk[1]);
-        return state;
-      }
-      if (!state.inHunk || line.startsWith("\\")) return state;
-      if (line.startsWith("-")) return state;
-      state.lines.add(state.newLine);
-      state.newLine += 1;
-      return state;
-    },
-    { inHunk: false, newLine: 0, lines: new Set() },
-  ).lines;
-
-const reviewCommentFailure = (comment: WorkflowReviewComment, pullRequest: PullRequestContext) => {
-  const fileIsChanged = pullRequest.changedFiles.some(({ path }) => path === comment.path);
-  const fileDiff = pullRequest.diff
-    .split(/(?=^diff --git )/m)
-    .find((section) => section.split("\n").includes(`+++ b/${comment.path}`));
-  const lineIsInDiff = fileIsChanged && fileDiff ? diffNewSideLines(fileDiff).has(comment.line) : false;
-  return lineIsInDiff
-    ? null
-    : `Review comment ${comment.path}:${comment.line} is not on the new side of the diff`;
-};
-
-const namedPullRequestTargetFor = Effect.fn("WorkflowActionPlan.namedPullRequestTargetFor")(function* (
-  entry: WorkflowCatalogEntry,
-  selected: ReadonlyArray<RegisteredWorkspace>,
-  inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-  sourceControl: SourceControlProviderService | undefined,
-  workspaceId: string | undefined,
-  snapshots:
-    | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
-    | undefined,
-) {
-  const target = yield* frozenSourceControlTarget(entry, selected, workspaceId);
-  if (target === null) return { _tag: "NoWorkspace" } as const;
-  const reference = typeof inputs.pull_request === "string" ? inputs.pull_request : "";
-  const workspace = selected.find(({ config }) => config.name === target.config.name);
-  if (!workspace) return yield* decodeFailure("The named pull request Workspace is unavailable");
-  if (!sourceControl) return yield* decodeFailure("Source control provider is not configured");
-  const currentPullRequest = yield* sourceControl
-    .readPullRequest(workspace, reference)
-    .pipe(Effect.mapError((error) => WorkflowActionPlanDecodeError.make({ message: error.message })));
-  if (currentPullRequest === null) return yield* decodeFailure(`Pull request ${reference} was not found`);
-  const snapshot = snapshots?.findLast(
-    ({ workspace: snapshotWorkspace, pullRequest }) =>
-      snapshotWorkspace === workspace.config.name && pullRequest.number === currentPullRequest.number,
-  );
-  if (snapshots && !snapshot) {
-    return yield* decodeFailure(`Read pull request ${reference} with the pull-request Tool`);
-  }
-  if (snapshot && snapshot.pullRequest.headSha !== currentPullRequest.headSha) {
-    return yield* decodeFailure(`Pull request ${reference} received a new commit after it was read`);
-  }
-  const pullRequest = snapshot?.pullRequest ?? currentPullRequest;
-  const comments = Array.isArray(inputs.review_comments) ? inputs.review_comments : [];
-  const failure = comments.map((comment) => reviewCommentFailure(comment, pullRequest)).find(Boolean);
-  if (failure) return yield* decodeFailure(failure);
-  return {
-    _tag: "NamedPullRequest",
-    ...sourceControlTargetFields(target),
-    number: pullRequest.number,
-    url: pullRequest.url,
-    headBranch: pullRequest.headBranch,
-    baseBranch: pullRequest.baseBranch,
-    headSha: pullRequest.headSha,
-  } as const;
 });
 
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
@@ -247,18 +150,21 @@ const targetFor = (
   parameters: ReadonlyArray<WorkflowParameterValue>,
   sourceControl: SourceControlProviderService | undefined,
   workspace: string | undefined,
-  snapshots:
-    | ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
-    | undefined,
+  pullRequestSnapshots: ReadonlyArray<PullRequestSnapshot> | undefined,
 ) => {
-  const context = { entry, admission, workspaces, inputs, parameters, workspace, sourceControl };
+  const context = {
+    entry,
+    admission,
+    workspaces,
+    inputs,
+    parameters,
+    workspace,
+    sourceControl,
+    pullRequestSnapshots,
+  };
   const registered = actionEntryFor(entry.key);
   if (registered) return registered.target(context);
-  const name = actionName(entry.key);
-  if (namedPullRequestActions.has(name)) {
-    return namedPullRequestTargetFor(entry, workspaces, inputs, sourceControl, workspace, snapshots);
-  }
-  return targetProducers.get(name)?.(context) ?? cogworkTarget;
+  return targetProducers.get(actionName(entry.key))?.(context) ?? cogworkTarget;
 };
 
 const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
@@ -344,17 +250,6 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
   return WorkflowActionPlan.make({ ...pending, digest });
 });
 
-const reviewCommentsInput = (step: WorkflowActionPlanStep) => {
-  const value = step.inputs.review_comments;
-  return Array.isArray(value) ? value : [];
-};
-
-const reviewEvents: ReadonlyMap<string, PullRequestReviewEvent> = new Map([
-  ["approve", "approve"],
-  ["comment", "comment"],
-  ["request-changes", "request-changes"],
-] as const);
-
 const targetWorkspace = (step: WorkflowActionPlanStep) => {
   const target = step.target;
   if (!WorkflowActionTarget.isAnyOf(["CurrentIssue", "ExistingIssue", "NewIssue"])(target)) return null;
@@ -408,51 +303,6 @@ const slackArtifact = (context: ActionContext, receipt: SlackPostReceipt) =>
   });
 
 const actionExecutors: Record<string, ActionExecutor> = {
-  "comment-on-named-pull-request": Effect.fn("WorkflowActionPlan.commentNamedPullRequest")(function* (
-    context: ActionContext,
-  ) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    return yield* sourceControl.commentNamedPullRequest(
-      workspace,
-      pullRequest,
-      stringInput(context.step, "comment_body"),
-      actionOrigin(context),
-    );
-  }),
-  "post-review": Effect.fn("WorkflowActionPlan.postReview")(function* (context: ActionContext) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    if (context.step.target._tag !== "NamedPullRequest") return yield* invalidTarget(context.step);
-    const event = reviewEvents.get(parameterValues(context.step.parameters, "event").at(0) ?? "");
-    if (!event) return yield* invalidTarget(context.step);
-    return yield* sourceControl.postReview(
-      workspace,
-      pullRequest,
-      event,
-      {
-        body: stringInput(context.step, "review_body"),
-        comments: reviewCommentsInput(context.step),
-        commitId: context.step.target.headSha,
-      },
-      actionOrigin(context),
-    );
-  }),
-  "draft-review": Effect.fn("WorkflowActionPlan.draftReview")(function* (context: ActionContext) {
-    const { workspace, pullRequest } = yield* requirePullRequest(context);
-    const sourceControl = yield* requireSourceControl(context);
-    if (context.step.target._tag !== "NamedPullRequest") return yield* invalidTarget(context.step);
-    return yield* sourceControl.draftReview(
-      workspace,
-      pullRequest,
-      {
-        body: stringInput(context.step, "review_body"),
-        comments: reviewCommentsInput(context.step),
-        commitId: context.step.target.headSha,
-      },
-      actionOrigin(context),
-    );
-  }),
   "send-message": Effect.fn("WorkflowActionPlan.sendSlackMessage")(function* (context: ActionContext) {
     if (!WorkflowActionTarget.guards.SlackChannel(context.step.target)) {
       return yield* slackInvalidTarget(context.step);
