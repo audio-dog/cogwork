@@ -5,7 +5,8 @@ import { sourceControlActionEntries } from "./workflow-actions-source-control";
 
 const actionEntries: ReadonlyMap<string, ActionEntry> = new Map([
   ...Object.entries(cogworkActionEntries),
-  ...[...issueActionEntries, ...sourceControlActionEntries].map((entry) => [entry.row.key, entry] as const),
+  ...issueActionEntries.map((entry) => [entry.row.key, entry] as const),
+  ...sourceControlActionEntries.map((entry) => [entry.row.key, entry] as const),
 ]);
 
 export const actionEntryFor = (key: string) => actionEntries.get(key);

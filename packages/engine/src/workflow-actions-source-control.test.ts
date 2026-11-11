@@ -94,17 +94,12 @@ const frozen = {
 };
 
 describe("Source control Action entries", () => {
-  it("move the four rows from the GitHub provider into the GitHub tracker catalog", () => {
+  it("publishes each row once, from the GitHub tracker catalog", () => {
+    const keys = sourceControlActions.map((action) => `github.${action}`);
+    const trackerKeys = issueTrackerWorkflowCatalogContribution("github").entries.map(({ key }) => key);
     const providerKeys = githubSourceControlActionEntries.map(({ key }) => key);
-    const rows = issueTrackerWorkflowCatalogContribution("github").entries;
-    for (const action of sourceControlActions) {
-      const key = `github.${action}`;
-      assert.strictEqual(
-        rows.find((row) => row.key === key),
-        actionEntryFor(key)?.row,
-      );
-      assert.notInclude(providerKeys, key);
-    }
+    assert.includeMembers(trackerKeys, keys);
+    assert.notIncludeMembers(providerKeys, keys);
   });
 
   it.effect("freezes a new pull request for the current Issue only", () =>
@@ -119,6 +114,10 @@ describe("Source control Action entries", () => {
         fromPullRequest.message,
         "Open a pull request needs an Issue in the selected Workspace",
       );
+      const elsewhere = yield* Effect.flip(
+        targetOf("open-pull-request", { ...issueRef, workspace: otherWorkspace }),
+      );
+      assert.strictEqual(elsewhere.message, "Workspace other does not bind github");
     }),
   );
 
