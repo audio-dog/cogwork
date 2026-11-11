@@ -1,0 +1,64 @@
+packages/engine/src/linear/host.ts
+  s_14c854df24089d::t_ebbc0e879c485a 143-148
+  s_14c854df24089d::t_73ac7aa4b30da3 109-126,132
+  s_6b63a1ad049824::t_ef8823ad5abbe1 149-151
+packages/engine/src/tracker-trigger-source.ts
+  s_14c854df24089d::t_c2bbe1d41358a2 33-38,41-50
+  s_14c854df24089d::t_288425c3ee608d 21-22,27
+  s_14c854df24089d::t_2a2363d32fd7af 201-214
+  s_6b63a1ad049824::t_871d346d06d069 51-56,79-80,215,218-219,226
+packages/engine/src/github/host.ts
+  s_14c854df24089d::t_4017fc9321f716 158-160,182-193,200-204
+  s_6b63a1ad049824::t_d7be698b6344e4 205-207
+packages/engine/src/workflow.test.ts
+  s_14c854df24089d::t_ca877ac66ca364 43
+  s_14c854df24089d::t_cb6bb1a18ac460 171-178
+packages/engine/src/tracker-trigger-source.test.ts
+  s_14c854df24089d::t_970a085a61f108 20
+  s_14c854df24089d::t_35f27a87b09fcf 91
+  s_14c854df24089d::t_3a00991c87e66a 210-227
+packages/engine/src/issue-tracker.ts
+  s_14c854df24089d::t_0ca55237086132 143-144
+packages/engine/src/issue-tracker-router.ts
+  s_14c854df24089d::t_a6ea8cdb5f2da1 26
+packages/engine/src/daemon.ts
+  s_14c854df24089d::t_50d77306d69def 414-418,422-425
+  s_14c854df24089d::t_c09eb97194e275 115
+  s_14c854df24089d::t_c3830a3dc614dd 105
+  s_6b63a1ad049824::t_5503a5e5e575c6 116-118,426-428,432,464-466
+packages/engine/src/trigger-observation.test.ts
+  s_14c854df24089d::t_68f460c5652ab5 73
+  s_14c854df24089d::t_3111e524ede4c2 47
+  s_14c854df24089d::t_eada0077f894d5 1006
+packages/engine/src/github/trigger-source.test.ts
+  s_14c854df24089d::t_0c90badfdc2890 31
+  s_14c854df24089d::t_fae50eaca490f0 25-26,32,34-36,38-41
+  s_14c854df24089d::t_2dceae7760d4c9 112-116
+  s_14c854df24089d::t_a7417a3f9cc3d1 223,304,406,443,473,502,550,593,634,671,730,892
+  s_14c854df24089d::t_7b371eca3c50ec 337-339
+  s_14c854df24089d::t_c8ba3965173f4a 37,181,197,286,323,372,394,431,456,487,532,569,610,648,700,873
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3619a1a382b4baa07845b8a85a2a7e407a647a09",
+  "prompts": {},
+  "sessions": {
+    "s_14c854df24089d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "343dc348-a00f-4db8-bd98-f9bc6c8f48de",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_6b63a1ad049824": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ec903d74-d614-465d-8b92-32d8e8612852",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
