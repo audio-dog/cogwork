@@ -59,7 +59,7 @@ import {
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
-import { PullRequestReadiness, ticketSlug, WorktreeManager } from "./worktree";
+import { ticketSlug, WorktreeManager } from "./worktree";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -221,6 +221,8 @@ const selectedWorkspaceIds = (
     : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
 };
 
+const refusalStatus = { invalid: "failed", declined: "declined" } as const;
+
 const projection = [
   "Harness Adapter",
   "Instructions",
@@ -281,6 +283,11 @@ export const make = Effect.gen(function* () {
     worktrees === null
       ? sourceControlExecutionContext
       : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
+  const pullRequestBuildInput = (runBranch: string | null) => ({
+    ...(sourceControl ? { sourceControl } : {}),
+    ...(worktrees ? { worktrees } : {}),
+    ...(runBranch ? { runBranch } : {}),
+  });
   const decodeIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
   const touchpointGate = Semaphore.makeUnsafe(1);
 
@@ -747,12 +754,12 @@ export const make = Effect.gen(function* () {
           attempt: run.id,
           createdAtMillis: startedAtMillis,
           workflowRevision: record.publishedRevision ?? record.workingRevision,
-          ...(sourceControl ? { sourceControl } : {}),
+          ...pullRequestBuildInput(run.branch),
           pullRequestSnapshots: reviewedPullRequests,
         }),
       ).pipe(
         Effect.matchEffect({
-          onFailure: (error) => refuseResult(admission, key, run, error.message),
+          onFailure: (error) => refuseResult(admission, key, run, error.message, refusalStatus[error.reason]),
           onSuccess: acceptPlans,
         }),
       );
@@ -769,32 +776,13 @@ export const make = Effect.gen(function* () {
         attempt: run.id,
         createdAtMillis: yield* Clock.currentTimeMillis,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
-        ...(sourceControl ? { sourceControl } : {}),
+        ...pullRequestBuildInput(run.branch),
         pullRequestSnapshots: reviewedPullRequests,
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
-      return yield* refuseResult(admission, key, run, actionPlanResult.failure.message);
-    }
-    const openPullRequest = actionPlanResult.success.steps.find(
-      ({ entry, status, target }) =>
-        entry === "github.open-pull-request" && status === "pending" && target._tag === "NewPullRequest",
-    );
-    const openPullRequestTarget = openPullRequest?.target;
-    if (openPullRequestTarget?._tag === "NewPullRequest" && run.branch !== null && worktrees !== null) {
-      const workspace = registryState.workspaces.find(
-        ({ config }) => config.name === openPullRequestTarget.workspace,
-      );
-      if (workspace) {
-        const readiness = yield* worktrees.pullRequestReadiness(
-          workspace,
-          { id: openPullRequestTarget.issue, title: "" },
-          run.branch,
-        );
-        if (PullRequestReadiness.$is("Declined")(readiness)) {
-          return yield* refuseResult(admission, key, run, readiness.reason, "declined");
-        }
-      }
+      const { reason, message } = actionPlanResult.failure;
+      return yield* refuseResult(admission, key, run, message, refusalStatus[reason]);
     }
     const actionPlan = yield* actionPlans.create(actionPlanResult.success);
     const actionPlanEvent: AgUiEvent = {
@@ -988,6 +976,7 @@ export const make = Effect.gen(function* () {
     if (missingInput !== undefined) {
       return yield* failTouchpoint("invalid-edits", `The plan needs input ${missingInput}`);
     }
+    const attemptRun = yield* ledger.getRun(plan.attempt);
     return yield* buildWorkflowActionPlan({
       admission,
       document,
@@ -1003,7 +992,7 @@ export const make = Effect.gen(function* () {
       attempt: plan.attempt,
       createdAtMillis,
       workflowRevision: plan.workflowRevision,
-      ...(sourceControl ? { sourceControl } : {}),
+      ...pullRequestBuildInput(attemptRun?.branch ?? null),
     }).pipe(Effect.mapError((error) => touchpointFailure("invalid-edits", error.message)));
   });
 

@@ -1119,15 +1119,107 @@ describe("Workflow action plan", () => {
     );
   });
 
-  it.effect("retries when pull request readiness changes after the plan is frozen", () => {
-    const reason = "head 811-open-the-pull-request is not ahead of origin/main";
-    const sourceControlLayer = Layer.mock(SourceControlProvider, {
-      workflowCatalogContribution: { entries: [], templates: [] },
-      openWorkflowPullRequest: () => Effect.die("must not open"),
+  it.effect("freezes a new pull request only when the Run branch is ahead", () => {
+    const openOperation = {
+      id: operation,
+      name: "Implement",
+      instructionPackage: null,
+      instruction: "Implement the Issue.",
+      permissionProfile: "full",
+      requires: [],
+      model: { harness: null, model: null, options: [] },
+      forEach: null,
+      questions: [],
+      transitions: [
+        {
+          when: [],
+          actions: [{ entry: decodeEntry("github.open-pull-request"), parameters: [] }],
+          handOff: null,
+        },
+      ],
+      hints: [],
+    } as const;
+    const document = WorkflowDocument.make({
+      name: "Implement",
+      workspaces: { _tag: "Every" },
+      triggers: [],
+      operations: [openOperation],
     });
+    const reason = "head 811-behind is not ahead of origin/main";
     const worktreeLayer = Layer.mock(WorktreeManager, {
-      pullRequestReadiness: () => Effect.succeed(PullRequestReadiness.Declined({ reason })),
+      pullRequestReadiness: (_workspace, _item, headBranch = "") =>
+        Effect.succeed(
+          headBranch === "811-ahead"
+            ? PullRequestReadiness.Ready({ headBranch, baseBranch: "main" })
+            : PullRequestReadiness.Declined({ reason }),
+        ),
     });
+    return Effect.gen(function* () {
+      const worktrees = yield* WorktreeManager;
+      const build = (runBranch: string) =>
+        buildWorkflowActionPlan({
+          admission,
+          document,
+          operation: openOperation,
+          catalog: { entries: [...githubSourceControlActionEntries], instructionPackages: [], harnesses: [] },
+          workspaces: [sourceWorkspace],
+          output: {
+            summary: "Implemented",
+            answers: {},
+            workspace: sourceWorkspace.config.name,
+            inputs: { pr_title: "Open the pull request", pr_body: "Closes #811" },
+          },
+          attempt: decodeRun(`open-${runBranch}`),
+          createdAtMillis: 20,
+          workflowRevision: 1,
+          worktrees,
+          runBranch,
+        });
+
+      const ready = yield* build("811-ahead");
+      const declined = yield* Effect.result(build("811-behind"));
+
+      assert.deepStrictEqual(ready.steps[0]?.target, openPullRequestStep.target);
+      assert.isTrue(Result.isFailure(declined));
+      if (Result.isFailure(declined))
+        assert.deepInclude(declined.failure, { reason: "declined", message: reason });
+    }).pipe(Effect.provide(worktreeLayer));
+  });
+
+  it.effect("opens the pull request from the Run branch without a second readiness check", () => {
+    const sourceControlLayer = Layer.effect(
+      SourceControlProvider,
+      Effect.map(ActionPlanProbe, (probe) => ({
+        ...emptySourceControl,
+        openWorkflowPullRequest: (_workspace, input) =>
+          Ref.update(probe.calls, (calls) => [
+            ...calls,
+            `open:${input.headBranch}->${input.baseBranch}`,
+          ]).pipe(
+            Effect.map(() =>
+              WorkflowActionArtifact.make({
+                kind: "PullRequestOpened",
+                workspace: sourceWorkspace.config.name,
+                issue: decodeItem("#830"),
+                url: "https://github.com/owner/repo/pull/830",
+                origin: input.origin,
+              }),
+            ),
+          ),
+      })),
+    );
+    const worktreeLayer = Layer.unwrap(
+      Effect.map(ActionPlanProbe, (probe) =>
+        Layer.mock(WorktreeManager, {
+          pullRequestReadiness: (_workspace, _item, headBranch = "") =>
+            Ref.update(probe.calls, (calls) => [...calls, "readiness"]).pipe(
+              Effect.map(() => PullRequestReadiness.Ready({ headBranch, baseBranch: "main" })),
+            ),
+          pushBranch: (_workspace, headBranch) =>
+            Ref.update(probe.calls, (calls) => [...calls, `push:${headBranch}`]),
+        }),
+      ),
+    );
     const registryLayer = Layer.succeed(
       WorkspaceRegistry,
       readOnlyRegistry({ ...emptyRegistry, workspaces: [sourceWorkspace] }),
@@ -1151,9 +1243,18 @@ describe("Workflow action plan", () => {
       });
       yield* (yield* WorkflowActionPlanStore).create(initial);
       const result = yield* executeWorkflowActionPlan(initial, admission);
-      assert.deepStrictEqual(result, { _tag: "Retry" });
+      assert.deepStrictEqual(result, { _tag: "Complete", handOff: null });
+      assert.deepStrictEqual(yield* Ref.get((yield* ActionPlanProbe).calls), [
+        "push:811-open-the-pull-request",
+        "open:811-open-the-pull-request->main",
+      ]);
     }).pipe(
-      Effect.provide(Layer.mergeAll(requirements, sourceControlLayer, worktreeLayer, registryLayer)),
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.mergeAll(sourceControlLayer, worktreeLayer).pipe(Layer.provideMerge(requirements)),
+          registryLayer,
+        ),
+      ),
       Effect.scoped,
     );
   });

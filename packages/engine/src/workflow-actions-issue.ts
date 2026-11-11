@@ -102,7 +102,10 @@ const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(
   const rawIssue = issueInput.startsWith(prefix) ? issueInput.slice(prefix.length) : issueInput;
   const issue = yield* Schema.decodeEffect(WorkItemId)(rawIssue).pipe(
     Effect.mapError(() =>
-      WorkflowActionPlanDecodeError.make({ message: `The issue input is invalid: ${issueInput}` }),
+      WorkflowActionPlanDecodeError.make({
+        reason: "invalid",
+        message: `The issue input is invalid: ${issueInput}`,
+      }),
     ),
   );
   return { _tag: "ExistingIssue", ...targetFields(target), issue } as const;

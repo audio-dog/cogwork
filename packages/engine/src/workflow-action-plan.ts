@@ -46,7 +46,7 @@ import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { actionEntryFor, compareActionPhase } from "./workflow-action-registry";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
-import { WorktreeManager } from "./worktree";
+import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 const planPreview = (plan: WorkflowActionPlan) =>
   JSON.stringify({
@@ -72,6 +72,8 @@ interface BuildInput {
   readonly createdAtMillis: number;
   readonly workflowRevision: number;
   readonly sourceControl?: SourceControlProviderService;
+  readonly worktrees?: WorktreeManagerService;
+  readonly runBranch?: string;
   readonly pullRequestSnapshots?: ReadonlyArray<PullRequestSnapshot>;
 }
 
@@ -90,7 +92,9 @@ const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function
   const encoded = yield* Schema.encodeEffect(planJson)(
     WorkflowActionPlan.make({ ...plan, digest: "pending" }),
   ).pipe(
-    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
+    Effect.mapError(() =>
+      WorkflowActionPlanDecodeError.make({ reason: "invalid", message: "Action plan encoding failed" }),
+    ),
   );
   return createHash("sha256").update(encoded).digest("hex");
 });
@@ -101,7 +105,9 @@ const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
 
 const slackTarget = (target: unknown) =>
   decodeSlackTarget(target).pipe(
-    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "The Slack target is invalid" })),
+    Effect.mapError(() =>
+      WorkflowActionPlanDecodeError.make({ reason: "invalid", message: "The Slack target is invalid" }),
+    ),
   );
 
 const slackItemTarget: TargetProducer = ({ admission }) =>
@@ -144,23 +150,22 @@ const targetProducers = new Map<string, TargetProducer>([
 
 const targetFor = (
   entry: WorkflowCatalogEntry,
-  admission: TriggerAdmission,
+  input: BuildInput,
   workspaces: ReadonlyArray<RegisteredWorkspace>,
   inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
   parameters: ReadonlyArray<WorkflowParameterValue>,
-  sourceControl: SourceControlProviderService | undefined,
-  workspace: string | undefined,
-  pullRequestSnapshots: ReadonlyArray<PullRequestSnapshot> | undefined,
 ) => {
   const context = {
     entry,
-    admission,
+    admission: input.admission,
     workspaces,
     inputs,
     parameters,
-    workspace,
-    sourceControl,
-    pullRequestSnapshots,
+    workspace: input.output.workspace,
+    sourceControl: input.sourceControl,
+    worktrees: input.worktrees,
+    runBranch: input.runBranch,
+    pullRequestSnapshots: input.pullRequestSnapshots,
   };
   const registered = actionEntryFor(entry.key);
   if (registered) return registered.target(context);
@@ -204,16 +209,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
       }
       const inputs = yield* inputsFor(entry, input.output);
       const workspaces = selectedWorkspaces(input.document, input.workspaces);
-      const target = yield* targetFor(
-        entry,
-        input.admission,
-        workspaces,
-        inputs,
-        action.parameters,
-        input.sourceControl,
-        input.output.workspace,
-        input.pullRequestSnapshots,
-      );
+      const target = yield* targetFor(entry, input, workspaces, inputs, action.parameters);
       return WorkflowActionPlanStep.make({
         position,
         entry: entry.key,

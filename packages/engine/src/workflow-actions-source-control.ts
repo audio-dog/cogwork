@@ -26,7 +26,7 @@ import {
   type TargetProducer,
   WorkflowActionPlanDecodeError,
 } from "./workflow-action-entry";
-import { PullRequestReadiness } from "./worktree";
+import { baseBranchOf, PullRequestReadiness } from "./worktree";
 
 type FrozenSourceControlTarget = Pick<RegisteredWorkspace, "repository"> & {
   readonly app: SourceControlType;
@@ -81,6 +81,20 @@ const newPullRequestTarget = Effect.fn("WorkflowActionPlan.newPullRequestTarget"
   const item = context.admission.event.key;
   if (item._tag !== "Issue" || item.workspace !== target.config.name) {
     return yield* decodeFailure("Open a pull request needs an Issue in the selected Workspace");
+  }
+  const workspace = context.workspaces.find(({ config }) => config.name === target.config.name);
+  if (!workspace || !context.worktrees || !context.runBranch) {
+    return yield* decodeFailure("Open a pull request needs the Run's branch");
+  }
+  const readiness = yield* context.worktrees
+    .pullRequestReadiness(workspace, { id: item.id, title: "" }, context.runBranch)
+    .pipe(
+      Effect.mapError((error) =>
+        WorkflowActionPlanDecodeError.make({ reason: "invalid", message: error.message }),
+      ),
+    );
+  if (PullRequestReadiness.$is("Declined")(readiness)) {
+    return yield* WorkflowActionPlanDecodeError.make({ reason: "declined", message: readiness.reason });
   }
   return {
     _tag: "NewPullRequest",
@@ -152,7 +166,11 @@ const namedPullRequestTarget = Effect.fn("WorkflowActionPlan.namedPullRequestTar
   if (!sourceControl) return yield* decodeFailure("Source control provider is not configured");
   const currentPullRequest = yield* sourceControl
     .readPullRequest(workspace, reference)
-    .pipe(Effect.mapError((error) => WorkflowActionPlanDecodeError.make({ message: error.message })));
+    .pipe(
+      Effect.mapError((error) =>
+        WorkflowActionPlanDecodeError.make({ reason: "invalid", message: error.message }),
+      ),
+    );
   if (currentPullRequest === null) return yield* decodeFailure(`Pull request ${reference} was not found`);
   const snapshot = snapshots?.findLast(
     ({ workspace: snapshotWorkspace, pullRequest }) =>
@@ -233,19 +251,12 @@ const openPullRequest = Effect.fn("WorkflowActionPlan.openPullRequest")(function
   if (context.step.target._tag !== "NewPullRequest") return yield* invalidTarget(context.step);
   const run = yield* context.ledger.getRun(context.plan.attempt);
   if (run?.branch === null || run?.branch === undefined) return yield* invalidTarget(context.step);
-  const item = { id: context.step.target.issue, title: "" };
-  const readiness = yield* worktrees
-    .pullRequestReadiness(workspace, item, run.branch)
-    .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
-  if (PullRequestReadiness.$is("Declined")(readiness)) {
-    return yield* worktreeError(readiness.reason, true);
-  }
   yield* worktrees
-    .pushBranch(workspace, readiness.headBranch)
+    .pushBranch(workspace, run.branch)
     .pipe(Effect.mapError((error) => worktreeError(error.message, error.retryable)));
   return yield* sourceControl.openWorkflowPullRequest(workspace, {
-    headBranch: readiness.headBranch,
-    baseBranch: readiness.baseBranch,
+    headBranch: run.branch,
+    baseBranch: baseBranchOf(workspace.config.worktrees),
     title: stringInput(context.step, "pr_title"),
     body: stringInput(context.step, "pr_body"),
     origin: actionOrigin(context),
