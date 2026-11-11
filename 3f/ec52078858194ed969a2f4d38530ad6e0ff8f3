@@ -1,0 +1,45 @@
+packages/cursor-acp/src/harness.ts
+  s_55f5b174d3d25e::t_e2b61467291f1c 405-415
+  s_55f5b174d3d25e::t_633b6f6f4bbdd7 39-40
+  s_55f5b174d3d25e::t_0ec416a9e74a04 190-194
+  s_55f5b174d3d25e::t_b5d2d369a17039 13,15,18
+packages/cursor-acp/src/harness.test.ts
+  s_55f5b174d3d25e::t_45a9b66e6d6ffd 10
+  s_55f5b174d3d25e::t_4215fa52f8f466 272,276,281,288-292
+  s_55f5b174d3d25e::t_b39586d20ee845 229
+  s_55f5b174d3d25e::t_9bc3984ae2ed1a 214-228
+  s_55f5b174d3d25e::t_1ea4dae0b8ffe0 267-268,270-271,273-275,277-280,282-287,293-297
+  s_55f5b174d3d25e::t_cdd001ab2e7eac 269
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_55f5b174d3d25e::t_16cea5285d69e5 16
+  s_55f5b174d3d25e::t_1286ef9bc3a14d 1,5-7
+  s_7508bbaae2cd30::t_de7f114d2fab30 8
+packages/cursor-acp/package.json
+  s_55f5b174d3d25e::t_d58852c7dd5278 28
+pnpm-lock.yaml
+  s_55f5b174d3d25e::t_0dd23b8b7ce924 720-722
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3fec52078858194ed969a2f4d38530ad6e0ff8f3",
+  "prompts": {},
+  "sessions": {
+    "s_55f5b174d3d25e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8b9ebe4a-4aba-436b-82a3-4d438211b221",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7508bbaae2cd30": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6846209f-8dea-4bc6-a984-081d49313f49",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
