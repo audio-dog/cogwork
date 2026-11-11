@@ -1,0 +1,29 @@
+apps/cli/src/slack-login.test.ts
+  s_19618702c92307::t_1d784f9adb6694 5,10-15
+  s_19618702c92307::t_be8c246f52ca83 41-46,50,52-53,58-65,68-70,72-74,83-92,101
+  s_19618702c92307::t_9e22d3abc05b0e 49,51
+  s_19618702c92307::t_48023cae4705b3 66-67,71
+  s_19618702c92307::t_71020b7c570912 95,98-99,102
+  s_19618702c92307::t_c3aabd2be3f836 93-94,100,104-105,118
+apps/cli/src/slack-login.ts
+  s_19618702c92307::t_9eaec76358ecd8 15-16
+  s_19618702c92307::t_8dffb08bcfe0b4 210
+  s_19618702c92307::t_6a142911a81f9b 299,308
+  s_19618702c92307::t_46f19cfa65a6e3 186-196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7cea01a4cf5dac39c20db06aa9c45d7f47474a70",
+  "prompts": {},
+  "sessions": {
+    "s_19618702c92307": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a5d1aa6b-067e-435f-a6e0-972087c0d754",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
