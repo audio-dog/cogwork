@@ -266,7 +266,7 @@ export const workflowActionArtifacts = sqliteTable(
   },
   (table) => [
     index("workflow_action_artifacts_lineage").on(table.root),
-    uniqueIndex("workflow_action_artifacts_issue").on(table.workspace, table.issue),
+    index("workflow_action_artifacts_workspace_issue").on(table.workspace, table.issue),
     check("workflow_action_artifacts_root", sql`length(trim(${table.root})) > 0`),
     check("workflow_action_artifacts_write_key", sql`length(trim(${table.writeKey})) > 0`),
     check("workflow_action_artifacts_json", sql`json_valid(${table.artifact})`),

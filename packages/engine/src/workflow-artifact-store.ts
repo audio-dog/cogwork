@@ -32,6 +32,12 @@ export class WorkflowArtifactStore extends Context.Service<
 >()("@cogwork/engine/workflow-artifact-store/WorkflowArtifactStore") {}
 
 const artifactKey = (artifact: WorkflowActionArtifact) => artifact.origin.writeKey;
+const creatingKinds: ReadonlySet<WorkflowActionArtifact["kind"]> = new Set([
+  "IssueCreated",
+  "PullRequestOpened",
+]);
+const creatingOrigin = (itemArtifacts: ReadonlyArray<WorkflowActionArtifact>) =>
+  itemArtifacts.find(({ kind }) => creatingKinds.has(kind))?.origin ?? null;
 const snapshot = (artifact: WorkflowActionArtifact) =>
   Schema.encodeEffect(WorkflowActionArtifact)(artifact).pipe(
     Effect.flatMap(Schema.decodeUnknownEffect(WorkflowActionArtifact)),
@@ -60,11 +66,12 @@ export const makeMemory = Effect.gen(function* () {
       ),
     origin: (workspace, issue) =>
       Ref.get(artifacts).pipe(
-        Effect.map(
-          (current) =>
-            [...current.values()].find(
+        Effect.map((current) =>
+          creatingOrigin(
+            [...current.values()].filter(
               (artifact) => artifact.workspace === workspace && artifact.issue === issue,
-            )?.origin ?? null,
+            ),
+          ),
         ),
       ),
   } satisfies WorkflowArtifactStoreService;
@@ -121,11 +128,8 @@ export const makeControlStore = Effect.gen(function* () {
       read(sql<StoredArtifact>`
         SELECT artifact FROM workflow_action_artifacts
         WHERE workspace = ${workspace} AND issue = ${issue}
-        LIMIT 1
-      `).pipe(
-        Effect.map((artifacts) => artifacts.at(0)?.origin ?? null),
-        Effect.mapError(failure("read Workflow artifact origin")),
-      ),
+        ORDER BY write_key
+      `).pipe(Effect.map(creatingOrigin), Effect.mapError(failure("read Workflow artifact origin"))),
   } satisfies WorkflowArtifactStoreService;
 });
 

@@ -130,8 +130,8 @@ const expectedSchemaObjects = [
   { type: "index", name: "run_events_at" },
   { type: "index", name: "runs_started_at" },
   { type: "index", name: "trigger_admissions_item_revision_workflow_trigger" },
-  { type: "index", name: "workflow_action_artifacts_issue" },
   { type: "index", name: "workflow_action_artifacts_lineage" },
+  { type: "index", name: "workflow_action_artifacts_workspace_issue" },
   { type: "index", name: "workflow_action_plans_pending" },
   { type: "table", name: "connections" },
   { type: "table", name: "contribution_settings" },
@@ -1083,6 +1083,33 @@ layer(NodeServices.layer)((it) => {
       }),
     );
   });
+
+  it.effect("drops the one-artifact-per-item index in place and keeps the stored artifacts", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { dir, storePath } = yield* temporaryStore();
+      yield* pokeConvergedStore(
+        storePath,
+        `DROP INDEX workflow_action_artifacts_workspace_issue;
+         CREATE UNIQUE INDEX workflow_action_artifacts_issue ON workflow_action_artifacts (workspace, issue);
+         INSERT INTO workflow_action_artifacts (root, write_key, workspace, issue, artifact)
+         VALUES ('issue:repo:%23903', 'open', 'repo', '#943', '{}');`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      yield* poke(
+        storePath,
+        `INSERT INTO workflow_action_artifacts (root, write_key, workspace, issue, artifact)
+         VALUES ('issue:repo:%23943', 'push', 'repo', '#943', '{}');`,
+      );
+
+      assert.strictEqual(controlStoreBackups(yield* fs.readDirectory(dir)).length, 0);
+      assert.deepStrictEqual(
+        yield* query(storePath, "SELECT write_key FROM workflow_action_artifacts ORDER BY write_key"),
+        [{ write_key: "open" }, { write_key: "push" }],
+      );
+    }),
+  );
 
   it.effect("restores a missing index without replacing the store", () =>
     Effect.gen(function* () {
