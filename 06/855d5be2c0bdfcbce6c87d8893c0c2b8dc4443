@@ -1,0 +1,39 @@
+packages/engine/src/external-harness-runtime.ts
+  s_ca8370611ed09a::t_05632077bdd706 677
+  s_ca8370611ed09a::t_a242be128cab2b 728-731,733
+  s_ca8370611ed09a::t_db28b45c2d51cd 487-492,494
+  s_ca8370611ed09a::t_8c5b70d6d4b6b2 694
+  s_ca8370611ed09a::t_6c342d009323e8 150
+  s_ca8370611ed09a::t_ad66b8faa738ed 66
+  s_ca8370611ed09a::t_a3be57fd2466cb 493
+packages/engine/src/run-plan-skill-source.test.ts
+  s_ca8370611ed09a::t_0c6dedcd7885ed 1-49
+packages/engine/src/provider-runner.test.ts
+  s_ca8370611ed09a::t_b0377d4c1679f5 375-397
+packages/engine/src/external-harness-runtime.test.ts
+  s_ca8370611ed09a::t_df249e34f188b7 544,547-553,566-567
+  s_ca8370611ed09a::t_a97cc949a58af3 529-543,545-546,554-565,568-573
+packages/engine/src/run-plan-skill-source.ts
+  s_ca8370611ed09a::t_fe0d81b938e107 1-14,16,21-31
+  s_ca8370611ed09a::t_76d8eea8756152 15,17-20
+packages/engine/src/provider-runner.ts
+  s_ca8370611ed09a::t_193f6c13b3942e 237-241
+  s_ca8370611ed09a::t_99be6a809e4633 154
+  s_ca8370611ed09a::t_29220f73986844 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "06855d5be2c0bdfcbce6c87d8893c0c2b8dc4443",
+  "prompts": {},
+  "sessions": {
+    "s_ca8370611ed09a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "84ed2c88-ee06-4e77-b588-35e6507b8aa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
