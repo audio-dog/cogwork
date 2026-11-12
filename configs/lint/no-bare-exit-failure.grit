@@ -1,0 +1,13 @@
+language js(typescript, jsx)
+
+// docs/agent-patterns/test-value.md: a negative test asserts the reason for the failure, so a
+// rejection from a different guard cannot make it pass. A lone Exit.isFailure assertion only says
+// that something failed. Scoped to test files by a biome.json override.
+
+or {
+  `assert.isTrue(Exit.isFailure($exit))`,
+  `assert.ok(Exit.isFailure($exit))`,
+  `expect(Exit.isFailure($exit)).toBe(true)`
+} as $call where {
+  register_diagnostic(span=$call, message="Rule: do not assert only that an Exit failed. Why: a failure from a different guard also passes, so the test does not prove the reason (docs/agent-patterns/test-value.md). Fix: assert the reason with the failure, for example Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause), the failure's _tag, or the expected text in Cause.pretty(exit.cause).", severity="error")
+}

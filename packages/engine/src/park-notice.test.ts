@@ -10,16 +10,14 @@ import { assert, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
-import { bootControlStoreLayer } from "./control-store";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import { IssueTracker, makeEmpty } from "./issue-tracker";
 import { withParkNotices } from "./park-notice";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { temporaryControlStoreLayer } from "./testing/temporary-control-store";
 
 interface PostedComment {
   readonly workspace: string;
@@ -69,17 +67,10 @@ const tracker = (write: Effect.Effect<void>) =>
     }),
   ).pipe(Layer.provideMerge(Layer.effect(TrackerWrite, Deferred.make<PostedComment>())));
 
-const controlStore = Layer.unwrap(
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-park-notice-" });
-    return bootControlStoreLayer(path.join(directory, "control.db"));
-  }),
-);
-
 const environment = (write: Effect.Effect<void>) =>
-  Layer.mergeAll(tracker(write), registry, controlStore).pipe(Layer.provideMerge(NodeServices.layer));
+  Layer.mergeAll(tracker(write), registry, temporaryControlStoreLayer).pipe(
+    Layer.provideMerge(NodeServices.layer),
+  );
 
 const park = (reason: ParkReason) =>
   Effect.gen(function* () {

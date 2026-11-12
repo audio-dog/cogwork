@@ -10,6 +10,7 @@ import {
   Layer,
   Logger,
   ManagedRuntime,
+  Option,
   PlatformError,
   Sink,
   Stream,
@@ -249,9 +250,7 @@ describe("EngineSupervisor", () => {
         await runtime.dispose();
         const exit = await starting;
 
-        expect(Exit.isFailure(exit)).toBe(true);
-        if (Exit.isSuccess(exit)) return;
-        expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
+        expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(true);
       },
     );
   });
@@ -467,7 +466,10 @@ describe("EngineSupervisor", () => {
         }),
       );
 
-      expect(Exit.isFailure(exit)).toBe(true);
+      const failure = Exit.isFailure(exit)
+        ? Option.getOrUndefined(Cause.findErrorOption(exit.cause))
+        : undefined;
+      expect(failure?.cause).toBe("Profile request stream closed");
     });
   });
 

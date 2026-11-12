@@ -22,8 +22,10 @@ import {
   workflowOperationResultJsonSchema,
   workflowOperationResultSchema,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -44,6 +46,7 @@ import { defaultRunBudget } from "./provider-runner";
 import { makePullRequestTool } from "./pull-request-tool";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
+import { subagentMembers } from "./run-plan";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SlackWrite } from "./slack-write";
@@ -212,6 +215,17 @@ interface AdmissionExecutionState {
   readonly outcome: WorkflowRunOutcome;
 }
 
+type ClaimState = Data.TaggedEnum<{
+  Idle: Record<never, never>;
+  Claimed: { readonly key: ReturnType<typeof operationKeyOf>; readonly run: RunId | null };
+  Attempted: { readonly run: RunId | null; readonly status: "succeeded" | "failed" };
+}>;
+const ClaimState = Data.taggedEnum<ClaimState>();
+type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
+
+const ownRunOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
+  admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
+
 const selectedWorkspaceIds = (
   document: Parameters<typeof buildWorkflowActionPlan>[0]["document"],
   workspaces: ReadonlyArray<RegisteredWorkspace>,
@@ -327,8 +341,50 @@ export const make = Effect.gen(function* () {
       ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
     );
 
-  const settlePendingAttempt = (admission: TriggerAdmission, attempt: RunId, status: RunRecord["status"]) =>
-    admission.event.key._tag === "FanOutChild" ? Effect.void : settle(attempt, status);
+  const settleRun = (attempt: RunId | null, status: RunRecord["status"]) =>
+    attempt === null ? Effect.void : settle(attempt, status);
+
+  const settleClaimed = Effect.fn("WorkflowRun.settleClaimed")(function* (
+    claimed: Ref.Ref<ClaimState>,
+    status: RunRecord["status"],
+  ) {
+    const settlement = ClaimState.$match(yield* Ref.get(claimed), {
+      Idle: () => ({ run: null, next: ClaimState.Idle() }),
+      Claimed: ({ key, run }) => ({
+        run,
+        next: status === "interrupted" ? ClaimState.Claimed({ key, run: null }) : ClaimState.Idle(),
+      }),
+      Attempted: ({ run }) => ({ run, next: ClaimState.Idle() }),
+    });
+    yield* settleRun(settlement.run, status);
+    yield* Ref.set(claimed, settlement.next);
+  });
+
+  const recordClaimedAttempt = Effect.fn("WorkflowRun.recordClaimedAttempt")(function* (
+    admission: TriggerAdmission,
+    claimed: Ref.Ref<ClaimState>,
+    work: ClaimedWork,
+    attempt: { readonly outcome: "succeeded" } | { readonly outcome: "failed"; readonly reason: string },
+  ) {
+    const view = yield* coordination.recordAttempt(admission.event.key, {
+      ...attempt,
+      operation: work.key,
+      lineage: admission.lineage,
+    });
+    yield* Ref.set(claimed, ClaimState.Attempted({ run: work.run, status: attempt.outcome }));
+    return view;
+  });
+
+  const claimItem = (admission: TriggerAdmission, claimed: Ref.Ref<ClaimState>, work: ClaimedWork) =>
+    Effect.acquireRelease(
+      coordination
+        .claim(admission.event.key, { operation: work.key, lineage: admission.lineage })
+        .pipe(Effect.tap(() => Ref.set(claimed, work))),
+      (activeClaim) =>
+        coordination
+          .release(admission.event.key, activeClaim)
+          .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
+    );
 
   const closeRevision = (admission: TriggerAdmission) =>
     coordination.markProcessed(admission.event.key, admission.event.revision);
@@ -378,39 +434,59 @@ export const make = Effect.gen(function* () {
         Effect.map(() => "skipped" as const),
       );
 
+  const failAttempt = Effect.fn("WorkflowRun.failAttempt")(function* (
+    admission: TriggerAdmission,
+    claimed: Ref.Ref<ClaimState>,
+    work: ClaimedWork,
+    reason: string,
+    status: "failed" | "declined" = "failed",
+  ) {
+    const view = yield* recordClaimedAttempt(admission, claimed, work, { outcome: "failed", reason });
+    const exhausted = view.counters(work.key).exhausted;
+    yield* settleClaimed(claimed, exhausted ? "exhausted" : status);
+    if (!exhausted) return "retry" as const;
+    yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, work.key);
+    if (work.run !== null) yield* observationStore.putAll([parkedAdmission(admission, work.run)]);
+    return "completed" as const;
+  });
+
   const refuseResult = Effect.fn("WorkflowRun.refuseResult")(function* (
     admission: TriggerAdmission,
-    key: ReturnType<typeof operationKeyOf>,
-    run: RunRecord,
+    claimed: Ref.Ref<ClaimState>,
+    work: ClaimedWork,
     issues: string,
     status: "failed" | "declined" = "failed",
   ) {
     yield* Ref.update(decodeIssues, (current) => new Map(current).set(keyOf(admission.event.key), issues));
-    const view = yield* coordination.recordAttempt(admission.event.key, {
-      operation: key,
-      outcome: "failed",
-      lineage: admission.lineage,
-      reason: issues,
-    });
-    const exhausted = view.counters(key).exhausted;
-    yield* settle(run.id, exhausted ? "exhausted" : status);
-    if (!exhausted) return "retry" as const;
-    yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
-    yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
-    return "completed" as const;
+    return yield* failAttempt(admission, claimed, work, issues, status);
   });
 
   const refusePlan = (
     admission: TriggerAdmission,
-    key: ReturnType<typeof operationKeyOf>,
-    run: RunRecord,
+    claimed: Ref.Ref<ClaimState>,
+    work: ClaimedWork,
     error: WorkflowActionPlanDecodeError,
   ) =>
     error.reason === "unavailable"
-      ? settle(run.id, "failed").pipe(Effect.map(() => "retry" as const))
-      : refuseResult(admission, key, run, error.message, refusalStatus[error.reason]);
+      ? settleClaimed(claimed, "failed").pipe(Effect.map(() => "retry" as const))
+      : refuseResult(admission, claimed, work, error.message, refusalStatus[error.reason]);
 
-  const executeRaw = Effect.fn("WorkflowRun.execute")(function* (admission: TriggerAdmission) {
+  const recoverClaimed = Effect.fn("WorkflowRun.recoverClaimed")(function* <E>(
+    admission: TriggerAdmission,
+    claimed: Ref.Ref<ClaimState>,
+    cause: Cause.Cause<E>,
+  ) {
+    return yield* ClaimState.$match(yield* Ref.get(claimed), {
+      Idle: () => Effect.failCause(cause),
+      Claimed: (work) => failAttempt(admission, claimed, work, String(cause)),
+      Attempted: ({ status }) => settleClaimed(claimed, status).pipe(Effect.andThen(Effect.failCause(cause))),
+    });
+  });
+
+  const executeRaw = Effect.fn("WorkflowRun.execute")(function* (
+    admission: TriggerAdmission,
+    claimed: Ref.Ref<ClaimState>,
+  ) {
     const pendingPlan = yield* actionPlans.pending(
       keyOf(admission.event.key),
       admission.subscription.workflow,
@@ -421,47 +497,39 @@ export const make = Effect.gen(function* () {
         ? pendingPlan.operation
         : admission.subscription.operation;
     if (stalePlan) {
-      yield* settlePendingAttempt(admission, pendingPlan.attempt, "interrupted");
+      yield* settleRun(ownRunOf(admission, pendingPlan), "interrupted");
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
-    const pendingKey =
-      pendingPlan !== null && !stalePlan ? operationKeyOf(admission, pendingPlan.operation) : null;
-    const pendingClaim =
-      pendingKey === null
-        ? null
-        : yield* Effect.acquireRelease(
-            coordination.claim(admission.event.key, {
-              operation: pendingKey,
-              lineage: admission.lineage,
-            }),
-            (activeClaim) =>
-              coordination
-                .release(admission.event.key, activeClaim)
-                .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
-          );
-    if (pendingPlan !== null && pendingKey !== null) {
-      if (yield* parkCappedLineage(admission, pendingKey)) return "completed" as const;
-      const execution = yield* executeWorkflowActionPlan(pendingPlan, admission);
+    const resumesPendingPlan = pendingPlan !== null && !stalePlan;
+    const resumed = resumesPendingPlan
+      ? {
+          plan: pendingPlan,
+          work: ClaimState.Claimed({
+            key: operationKeyOf(admission, pendingPlan.operation),
+            run: ownRunOf(admission, pendingPlan),
+          }),
+        }
+      : null;
+    const pendingClaim = resumed === null ? null : yield* claimItem(admission, claimed, resumed.work);
+    if (resumed !== null) {
+      if (yield* parkCappedLineage(admission, resumed.work.key)) return "completed" as const;
+      const execution = yield* executeWorkflowActionPlan(resumed.plan, admission);
       if (execution._tag === "Replan") {
-        yield* settlePendingAttempt(admission, pendingPlan.attempt, "interrupted");
+        yield* settleClaimed(claimed, "interrupted");
       }
       if (execution._tag === "Retry" || execution._tag === "Parked") {
-        yield* settlePendingAttempt(admission, pendingPlan.attempt, "failed");
+        yield* settleClaimed(claimed, "failed");
         return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
       }
       if (execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou") {
-        yield* settlePendingAttempt(admission, pendingPlan.attempt, "succeeded");
+        yield* settleClaimed(claimed, "succeeded");
         return "completed" as const;
       }
       if (execution._tag === "Complete") {
-        yield* coordination.recordAttempt(admission.event.key, {
-          operation: pendingKey,
-          outcome: "succeeded",
-          lineage: admission.lineage,
-        });
-        yield* settlePendingAttempt(admission, pendingPlan.attempt, "succeeded");
+        yield* recordClaimedAttempt(admission, claimed, resumed.work, { outcome: "succeeded" });
+        yield* settleClaimed(claimed, "succeeded");
         if (execution.handOff !== null) {
-          return handOffAdmission(admission, execution.handOff, pendingPlan.attempt);
+          return handOffAdmission(admission, execution.handOff, resumed.plan.attempt);
         }
         yield* complete(admission);
         return "completed" as const;
@@ -514,14 +582,7 @@ export const make = Effect.gen(function* () {
     const projectsTools = harness.projectedMembers(selectedHarness).includes("Tools");
 
     const claim =
-      pendingClaim ??
-      (yield* Effect.acquireRelease(
-        coordination.claim(admission.event.key, { operation: key, lineage: admission.lineage }),
-        (activeClaim) =>
-          coordination
-            .release(admission.event.key, activeClaim)
-            .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
-      ));
+      pendingClaim ?? (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null })));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(randomUUID());
@@ -535,7 +596,7 @@ export const make = Effect.gen(function* () {
         : null;
     const parkedAttempt = admission.lineage.parent === null ? null : RunId.make(admission.lineage.parent);
     const resumeReaders = [
-      pendingPlan !== null && !stalePlan ? () => ledger.getRun(pendingPlan.attempt) : null,
+      resumed === null ? null : () => ledger.getRun(resumed.plan.attempt),
       handback !== null && parkedAttempt !== null ? () => ledger.getRun(parkedAttempt) : null,
     ];
     const resumedRun = yield* resumeReaders.find((read) => read !== null)?.() ?? Effect.succeed(null);
@@ -579,6 +640,7 @@ export const make = Effect.gen(function* () {
               ),
             ].join("\n"),
           };
+    const subagents = yield* subagentMembers(workspace?.contributions ?? [], operation.requires);
     const plan = RunPlan.make({
       id,
       operation: operation.id,
@@ -613,7 +675,7 @@ export const make = Effect.gen(function* () {
         : [],
       skills: [],
       mcp: [],
-      subagents: [],
+      subagents,
       hooks: [],
       middleware: [...harness.planMiddleware(selectedHarness)],
       structuredOutput: workflowOperationResultJsonSchema(
@@ -659,7 +721,11 @@ export const make = Effect.gen(function* () {
       startedAtMillis,
       endedAtMillis: null,
     };
-    yield* ledger.acceptRun(run, plan);
+    const accepted = ClaimState.Claimed({ key, run: id });
+    yield* Ref.set(claimed, accepted).pipe(
+      Effect.andThen(ledger.acceptRun(run, plan)),
+      Effect.uninterruptible,
+    );
 
     const pullRequestSnapshots = yield* Ref.make<
       ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
@@ -685,28 +751,14 @@ export const make = Effect.gen(function* () {
       Effect.exit,
     );
     if (Exit.isFailure(eventsExit)) {
-      const reason = String(eventsExit.cause);
       yield* recorder.record(run, failedTerminal);
-      const view = yield* coordination.recordAttempt(admission.event.key, {
-        operation: key,
-        outcome: "failed",
-        lineage: admission.lineage,
-        reason,
-      });
-      const exhausted = view.counters(key).exhausted;
-      yield* settle(run.id, exhausted ? "exhausted" : "failed");
-      if (exhausted) {
-        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
-        yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
-      }
-      return exhausted ? ("completed" as const) : ("retry" as const);
+      return yield* failAttempt(admission, claimed, accepted, String(eventsExit.cause));
     }
 
     const output = Option.getOrUndefined(eventsExit.value);
     const decoded = Schema.decodeUnknownExit(resultSchema)(output?.value.object);
     if (Exit.isFailure(decoded)) {
-      const issues = String(decoded.cause);
-      return yield* refuseResult(admission, key, run, issues);
+      return yield* refuseResult(admission, claimed, accepted, String(decoded.cause));
     }
 
     yield* Ref.update(decodeIssues, (current) => {
@@ -715,15 +767,13 @@ export const make = Effect.gen(function* () {
       return next;
     });
     if (decoded.value.stuck) {
-      yield* coordination.recordAttempt(admission.event.key, {
-        operation: key,
+      yield* recordClaimedAttempt(admission, claimed, accepted, {
         outcome: "failed",
-        lineage: admission.lineage,
         reason: decoded.value.summary,
       });
       yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary }, key);
       yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
-      yield* settle(run.id, "failed");
+      yield* settleClaimed(claimed, "failed");
       return "completed" as const;
     }
 
@@ -744,14 +794,8 @@ export const make = Effect.gen(function* () {
               { discard: true },
             ),
           ),
-          Effect.andThen(
-            coordination.recordAttempt(admission.event.key, {
-              operation: key,
-              outcome: "succeeded",
-              lineage: admission.lineage,
-            }),
-          ),
-          Effect.andThen(settle(run.id, "succeeded")),
+          Effect.andThen(recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" })),
+          Effect.andThen(settleClaimed(claimed, "succeeded")),
           Effect.andThen(
             observationStore.fanOut(
               admission,
@@ -777,7 +821,7 @@ export const make = Effect.gen(function* () {
         }),
       ).pipe(
         Effect.matchEffect({
-          onFailure: (error) => refusePlan(admission, key, run, error),
+          onFailure: (error) => refusePlan(admission, claimed, accepted, error),
           onSuccess: acceptPlans,
         }),
       );
@@ -799,7 +843,7 @@ export const make = Effect.gen(function* () {
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
-      return yield* refusePlan(admission, key, run, actionPlanResult.failure);
+      return yield* refusePlan(admission, claimed, accepted, actionPlanResult.failure);
     }
     const actionPlan = yield* actionPlans.create(actionPlanResult.success);
     const actionPlanEvent: AgUiEvent = {
@@ -810,26 +854,37 @@ export const make = Effect.gen(function* () {
     yield* recorder.record(run, actionPlanEvent);
     const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
     if (execution._tag === "Replan") {
-      yield* settle(run.id, "interrupted");
+      yield* settleClaimed(claimed, "interrupted");
       return admission;
     }
     if (execution._tag !== "Complete") {
       const status =
         execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou" ? "succeeded" : "failed";
-      yield* settle(run.id, status);
+      yield* settleClaimed(claimed, status);
       return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
     }
-    yield* coordination.recordAttempt(admission.event.key, {
-      operation: key,
-      outcome: "succeeded",
-      lineage: admission.lineage,
-    });
-    yield* settle(run.id, "succeeded");
+    yield* recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" });
+    yield* settleClaimed(claimed, "succeeded");
     if (execution.handOff !== null) {
       return handOffAdmission(admission, execution.handOff, run.id);
     }
     yield* complete(admission);
     return "completed" as const;
+  });
+
+  const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (admission: TriggerAdmission) {
+    const claimed = yield* Ref.make<ClaimState>(ClaimState.Idle());
+    return yield* executeRaw(admission, claimed).pipe(
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) => recoverClaimed(admission, claimed, cause),
+      ),
+      Effect.onInterrupt(() =>
+        Effect.flatMap(Ref.get(claimed), (state) =>
+          settleClaimed(claimed, ClaimState.$is("Attempted")(state) ? state.status : "interrupted"),
+        ),
+      ),
+    );
   });
 
   const executeAdmission = (admission: TriggerAdmission) =>
@@ -850,7 +905,7 @@ export const make = Effect.gen(function* () {
           (): AdmissionExecutionState => ({ current, outcome: "completed" }),
           (state) => {
             if (state.current === null) return Effect.succeed(state);
-            return executeRaw(state.current).pipe(
+            return executeToOutcome(state.current).pipe(
               Effect.scoped,
               Effect.flatMap((next) => {
                 if (typeof next === "string") {
