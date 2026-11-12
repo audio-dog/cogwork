@@ -730,6 +730,15 @@ const testProgram = (
     return { runner, coordination, notifications, observationStore };
   });
 
+const previousResultIssues = Effect.fn("WorkflowRunTest.previousResultIssues")(function* () {
+  const ledger = yield* RunLedger;
+  const plans = yield* Effect.forEach(yield* ledger.listRuns(10), ({ id }) => ledger.getRunPlan(id));
+  return plans
+    .flatMap((plan) => plan?.operatingInstructions.resources ?? [])
+    .filter(({ source }) => source === "previous-result-issues")
+    .map(({ content }) => content);
+});
+
 const exerciseFanOut = Effect.fn("WorkflowRunTest.exerciseFanOut")(function* (
   summaries: ReadonlyArray<string>,
 ) {
@@ -1773,42 +1782,41 @@ describe("WorkflowRun", () => {
       Layer.mock(WorktreeManager, worktreeService),
     );
 
+    const result = {
+      summary: "Open it",
+      stuck: false,
+      answers: {},
+      inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
+    };
+    const personText = `The engine did not open the pull request: ${reason}.`;
+    const agentText = `The engine did not open a pull request from your previous result: ${reason}. Correct the branch before you return the result.`;
+
     return Effect.gen(function* () {
       const { runner, coordination } = yield* testProgram(
-        [
-          {
-            summary: "Open it",
-            stuck: false,
-            answers: {},
-            inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
-          },
-          {
-            summary: "Open it",
-            stuck: false,
-            answers: {},
-            inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
-          },
-        ],
+        [result, result, result],
         { registry: { ...emptyRegistry, workspaces: [workspace] } },
         service,
       );
 
       assert.strictEqual(yield* runner.execute(issueAdmission), "retry");
       assert.strictEqual(yield* runner.execute(issueAdmission), "retry");
+      assert.strictEqual(yield* runner.execute(issueAdmission), "completed");
       const ledger = yield* RunLedger;
       const runs = yield* ledger.listRuns(10);
-      const plans = yield* Effect.forEach(runs, ({ id }) => ledger.getRunPlan(id));
       const attempts = yield* Ref.get(coordination.attempts);
       assert.deepStrictEqual(
-        { statuses: runs.map(({ status }) => status), reasons: attempts.map(({ reason }) => reason) },
-        { statuses: ["declined", "declined"], reasons: [reason, reason] },
-      );
-      assert.isTrue(
-        plans.some((plan) =>
-          plan?.operatingInstructions.resources.some(
-            ({ source, content }) => source === "previous-result-issues" && content.includes(reason),
-          ),
-        ),
+        {
+          statuses: runs.map(({ status }) => status).toSorted(),
+          reasons: attempts.map(({ reason }) => reason),
+          park: (yield* Ref.get(coordination.parks)).at(-1)?.reason,
+          nextRunIssues: yield* previousResultIssues(),
+        },
+        {
+          statuses: ["declined", "declined", "exhausted"],
+          reasons: [personText, personText, personText],
+          park: { _tag: "Exhausted", reason: personText },
+          nextRunIssues: [agentText, agentText],
+        },
       );
       assert.isNull(
         yield* (yield* WorkflowActionPlanStore).pending(keyOf(issueAdmission.event.key), workflow),
@@ -2711,24 +2719,88 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("parks the item after three invalid results", () =>
-    Effect.gen(function* () {
-      const { runner, coordination } = yield* testProgram([{}, {}, {}]);
-      yield* runner.execute(admission);
-      yield* runner.execute(admission);
-      yield* runner.execute(admission);
+  const refusedResults = [
+    {
+      name: "a result that does not match the schema",
+      results: Array.from({ length: 3 }, () => ({
+        summary: "Done",
+        stuck: false,
+        answers: { done: "maybe" },
+        "x\n- y": 1,
+      })),
+      behavior: {},
+      agentText: [
+        "Your previous result did not match the result schema. Correct each issue below, then return the complete result again.",
+        '- ["x\\n- y"]: Expected no excess property',
+        '- answers.done: Expected "yes"',
+        "- inputs: Missing key",
+      ].join("\n"),
+      personText:
+        'The agent\'s result did not match the Operation\'s result schema (["x\\n- y"]: Expected no excess property; answers.done: Expected "yes"; inputs: Missing key).',
+    },
+    {
+      name: "a result the action plan refuses",
+      results: Array.from({ length: 3 }, () => ({
+        summary: "No message",
+        stuck: false,
+        answers: { done: "yes" },
+        inputs: { notification: "   " },
+      })),
+      behavior: {},
+      agentText:
+        "The engine could not build an action plan from your previous result: Action cogwork.notify needs non-empty input notification. Change the result so that the engine can act on it.",
+      personText:
+        "The engine could not act on the agent's result: Action cogwork.notify needs non-empty input notification.",
+    },
+    {
+      name: "a Harness stream that fails",
+      results: [],
+      behavior: {
+        run: () =>
+          Stream.fail(
+            new HarnessError({ reason: "turn", retryable: true, message: "The model connection closed" }),
+          ),
+      },
+      agentText:
+        "Your previous Run stopped before it returned a result. Return the result before the Run ends.",
+      personText: "The Harness stopped before the agent returned a result: The model connection closed.",
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: string;
+    readonly results: ReadonlyArray<unknown>;
+    readonly behavior: HarnessBehavior;
+    readonly agentText: string;
+    readonly personText: string;
+  }>;
 
-      assert.lengthOf(yield* Ref.get(coordination.attempts), 3);
-      assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Exhausted");
-      assert.isNull(yield* Ref.get(coordination.processed));
-      const ledger = yield* RunLedger;
-      const plans = yield* Effect.forEach(yield* ledger.listRuns(10), ({ id }) => ledger.getRunPlan(id));
-      assert.isTrue(
-        plans.some((plan) =>
-          plan?.operatingInstructions.resources.some(({ source }) => source === "previous-result-issues"),
-        ),
-      );
-    }).pipe(Effect.provide(requirements), Effect.scoped),
+  refusedResults.map(({ name, results, behavior, agentText, personText }) =>
+    it.effect(`parks the item after three refusals of ${name}`, () =>
+      Effect.gen(function* () {
+        const { runner, coordination } = yield* testProgram(results, behavior);
+        const outcomes = [
+          yield* runner.execute(admission),
+          yield* runner.execute(admission),
+          yield* runner.execute(admission),
+        ];
+
+        assert.deepStrictEqual(
+          {
+            outcomes,
+            attempts: (yield* Ref.get(coordination.attempts)).map(({ reason }) => reason),
+            park: (yield* Ref.get(coordination.parks)).at(-1)?.reason,
+            processed: yield* Ref.get(coordination.processed),
+            nextRunIssues: yield* previousResultIssues(),
+          },
+          {
+            outcomes: ["retry", "retry", "completed"],
+            attempts: [personText, personText, personText],
+            park: { _tag: "Exhausted", reason: personText },
+            processed: null,
+            nextRunIssues: [agentText, agentText],
+          },
+        );
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+    ),
   );
 
   it.effect("parks a stuck result without blocking a sibling Workflow", () =>
@@ -2783,7 +2855,7 @@ describe("WorkflowRun", () => {
   it.effect("records a failed terminal event when a Workflow Run times out", () =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();
-      const { runner } = yield* testProgram([], {
+      const { runner, coordination } = yield* testProgram([], {
         run: () =>
           Stream.fromEffect(Deferred.succeed(started, undefined)).pipe(Stream.flatMap(() => Stream.never)),
       });
@@ -2802,6 +2874,10 @@ describe("WorkflowRun", () => {
       assert.deepInclude(
         activities.map(({ event }) => event),
         { type: "RUN_FINISHED", finishReason: "failed" },
+      );
+      assert.deepStrictEqual(
+        (yield* Ref.get(coordination.attempts)).map(({ reason }) => reason),
+        ["The Harness stopped before the agent returned a result: the Run used all of its time budget."],
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
