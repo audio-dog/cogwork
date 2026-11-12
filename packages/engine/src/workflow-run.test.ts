@@ -7,8 +7,10 @@ import {
   keyOf,
   LineageId,
   localOwnerId,
+  NeedIdentity,
   type ParkReason,
   ParkRecord,
+  type PluginContribution,
   Principal,
   RunId,
   SessionId,
@@ -60,6 +62,7 @@ import {
   makeEmpty as makeEmptyIssueTracker,
 } from "./issue-tracker";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry } from "./registry";
@@ -550,6 +553,7 @@ interface HarnessBehavior {
   readonly observationStore?: (service: TriggerObservationStoreService) => TriggerObservationStoreService;
   readonly issueTracker?: IssueTrackerService;
   readonly registry?: RegistryState;
+  readonly pluginContributions?: ReadonlyArray<PluginContribution>;
   readonly sourceControl?: SourceControlProviderService;
   readonly recheck?: Recheck;
 }
@@ -652,6 +656,12 @@ const testProgram = (
       ),
       Effect.provideService(TriggerObservationStore, observationStore),
       Effect.provideService(Harness, harness),
+      Effect.provideService(PluginManager, {
+        overview: Effect.die("unused"),
+        install: () => Effect.die("unused"),
+        uninstall: () => Effect.die("unused"),
+        contributions: () => Effect.succeed(behavior.pluginContributions ?? []),
+      }),
       Effect.provideService(IssueTracker, issueTracker),
       Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
@@ -1489,6 +1499,116 @@ describe("WorkflowRun", () => {
           reason: "selected harness does not project Tools",
         },
       );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  const releaseNeed = Schema.decodeSync(NeedIdentity)("local:repo/skill/release");
+  const skillProgram = Effect.fn("WorkflowRunTest.skillProgram")(function* (
+    projectedMembers: HarnessRunner["projectedMembers"],
+  ) {
+    const skillWorkspace: RegisteredWorkspace = {
+      source: "test",
+      repository: "owner/repo",
+      contributions: [
+        {
+          id: releaseNeed,
+          authority: "local:repo",
+          kind: "skill",
+          localName: "release",
+          file: "/repo/.agents/skills/release/SKILL.md",
+        },
+        {
+          id: "local:user/skill/release",
+          authority: "local:user",
+          kind: "skill",
+          localName: "release",
+          file: "/home/.agents/skills/release/SKILL.md",
+        },
+        {
+          id: "local:repo/rules/style",
+          authority: "local:repo",
+          kind: "rules",
+          localName: "style",
+          file: "/repo/.agents/rules/style.md",
+        },
+      ],
+      config: yield* Schema.decodeEffect(WorkspaceConfig)({
+        name: "repo",
+        checkoutPath: "/repo",
+        issueTracker: { type: "github" },
+      }),
+    };
+    const requiredDocument = WorkflowDocument.make({
+      ...document,
+      operations: document.operations.map((candidate) => ({ ...candidate, requires: [releaseNeed] })),
+    });
+    const { runner, coordination } = yield* testProgram(
+      [{ summary: "Done", stuck: false, answers: { done: "yes" }, inputs: { notification: "Done" } }],
+      {
+        projectedMembers,
+        registry: { ...emptyRegistry, workspaces: [skillWorkspace] },
+        pluginContributions: [
+          {
+            id: "plugin:linear/skill/triage-notes",
+            authority: "plugin:linear",
+            kind: "skill",
+            localName: "triage-notes",
+            summary: "Triage notes",
+            file: "/plugins/linear/skills/triage-notes/SKILL.md",
+            load: { _tag: "Loaded" },
+          },
+        ],
+      },
+      {
+        ...workflowServiceWith(requiredDocument),
+        catalog: workflowService.catalog.pipe(
+          Effect.map((result) => ({ ...result, machine: { ...result.machine, readyNeeds: [releaseNeed] } })),
+        ),
+      },
+    );
+    yield* runner.execute({
+      ...admission,
+      event: { ...admission.event, workspace: decodeWorkspace("repo") },
+    });
+    const [run] = yield* (yield* RunLedger).listRuns(1);
+    const plan = run ? yield* (yield* RunLedger).getRunPlan(run.id) : null;
+    return { plan, parks: yield* Ref.get(coordination.parks) };
+  });
+
+  it.effect(
+    "admits a required Skill and Plugin Skills into the Run Plan of a Harness that projects Skills",
+    () =>
+      Effect.gen(function* () {
+        const { plan } = yield* skillProgram(["Tools", "Skills"]);
+
+        assert.deepStrictEqual(
+          plan?.skills.map(({ identity, name, source }) => ({ identity, name, source })),
+          [
+            { identity: releaseNeed, name: "release", source: "/repo/.agents/skills/release/SKILL.md" },
+            {
+              identity: "plugin:linear/skill/triage-notes",
+              name: "triage-notes",
+              source: "/plugins/linear/skills/triage-notes/SKILL.md",
+            },
+          ],
+        );
+        assert.deepStrictEqual(
+          { ...plan?.provenance.projection.find(({ member }) => member === "Skills") },
+          { member: "Skills", disposition: "projected" },
+        );
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("rejects the Run Plan when the Harness cannot supply a required Skill", () =>
+    Effect.gen(function* () {
+      const { plan, parks } = yield* skillProgram(["Tools"]);
+
+      assert.isNull(plan);
+      assert.deepStrictEqual(parks.at(-1)?.reason, {
+        _tag: "PlanRejected",
+        reason: `${harnessName} does not project Skills, so it cannot supply the required Skill ${releaseNeed}`,
+        entry: admission.event.entry,
+      });
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

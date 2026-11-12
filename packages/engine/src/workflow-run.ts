@@ -7,9 +7,11 @@ import {
   keyOf,
   LineageId,
   matchWorkflowTransitions,
+  PluginContributionLoad,
   Principal,
   RunId,
   RunPlan,
+  type RunPlanMember,
   type RunRecord,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
@@ -39,6 +41,7 @@ import { Coordination, maxLineageHops } from "./coordination";
 import { Harness, type HarnessRunnerEnv } from "./harness";
 import { makeIssueSearchTool } from "./issue-search-tool";
 import { IssueTracker, IssueTrackerError } from "./issue-tracker";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { makePullRequestTool } from "./pull-request-tool";
@@ -234,19 +237,20 @@ const projection = [
   "Provenance",
 ].map((member) => ({ member, disposition: "projected" as const }));
 
-const toolsDisposition = (projected: boolean) =>
-  projected
-    ? { member: "Tools", disposition: "projected" as const }
+const memberDisposition = (projectedMembers: ReadonlyArray<RunPlanMember>, member: "Tools" | "Skills") =>
+  projectedMembers.includes(member)
+    ? { member, disposition: "projected" as const }
     : {
-        member: "Tools",
+        member,
         disposition: "not-projected" as const,
-        reason: "selected harness does not project Tools",
+        reason: `selected harness does not project ${member}`,
       };
 
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
   const coordination = yield* Coordination;
   const harness = yield* Harness;
+  const plugins = yield* PluginManager;
   const sessions = yield* SessionStore;
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
@@ -283,6 +287,24 @@ export const make = Effect.gen(function* () {
       ? sourceControlExecutionContext
       : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
   const decodeIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+
+  const admittedSkills = Effect.fn("WorkflowRun.admittedSkills")(function* (
+    workspace: RegisteredWorkspace | null,
+  ) {
+    if (workspace === null) return [];
+    const fromPlugins = yield* plugins.contributions(workspace.config.name).pipe(
+      Effect.map((contributions) =>
+        contributions.filter(({ load }) => PluginContributionLoad.guards.Loaded(load)),
+      ),
+      Effect.orElseSucceed(() => []),
+    );
+    const contributions = [...workspace.contributions, ...fromPlugins].filter(({ kind }) => kind === "skill");
+    return contributions
+      .filter(
+        (skill, index) => contributions.findIndex(({ localName }) => localName === skill.localName) === index,
+      )
+      .map(({ id, localName, file }) => ({ identity: id, name: localName, source: file }));
+  });
   const touchpointGate = Semaphore.makeUnsafe(1);
 
   const prepareCheckout = Effect.fn("WorkflowRun.prepareCheckout")(function* (
@@ -494,7 +516,18 @@ export const make = Effect.gen(function* () {
       harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
     );
     if (Result.isFailure(preflight)) return yield* decline(admission);
-    const projectsTools = harness.projectedMembers(selectedHarness).includes("Tools");
+    const projectedMembers = harness.projectedMembers(selectedHarness);
+    const projectsTools = projectedMembers.includes("Tools");
+    const skills = yield* admittedSkills(workspace);
+    const unsuppliedSkill = projectedMembers.includes("Skills")
+      ? undefined
+      : skills.find(({ identity }) => operation.requires.some((need) => need === identity));
+    if (unsuppliedSkill) {
+      return yield* rejectPlan(
+        admission,
+        `${selectedHarness} does not project Skills, so it cannot supply the required Skill ${unsuppliedSkill.identity}`,
+      );
+    }
 
     const claim =
       pendingClaim ??
@@ -594,7 +627,7 @@ export const make = Effect.gen(function* () {
             ...(pullRequestToolEnabled ? ["pull-request" as const] : []),
           ]
         : [],
-      skills: [],
+      skills,
       mcp: [],
       subagents: [],
       hooks: [],
@@ -623,7 +656,11 @@ export const make = Effect.gen(function* () {
         resolution: [],
         stamps: [],
         projectedNames: [],
-        projection: [...projection, toolsDisposition(projectsTools)],
+        projection: [
+          ...projection,
+          memberDisposition(projectedMembers, "Tools"),
+          memberDisposition(projectedMembers, "Skills"),
+        ],
         observation,
       },
     });
