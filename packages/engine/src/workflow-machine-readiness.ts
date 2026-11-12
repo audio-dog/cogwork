@@ -83,7 +83,6 @@ const satisfiesNeedByKind = {
   "mcp-server": mcpServerSwitchedOn,
   skill: () => true,
   subagent: () => true,
-  command: () => true,
   rules: () => false,
 } satisfies Record<FileContributionKind, (input: NeedInput) => boolean>;
 

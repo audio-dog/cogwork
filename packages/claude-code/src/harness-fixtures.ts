@@ -262,7 +262,6 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       skills: [],
       mcp,
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput: outputSchema,

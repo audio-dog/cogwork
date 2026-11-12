@@ -130,7 +130,6 @@ const runPlan = (id: string, message = "Triage #7") =>
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,

@@ -93,7 +93,6 @@ const runPlan = (id: string) =>
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,

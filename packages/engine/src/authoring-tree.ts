@@ -32,7 +32,6 @@ interface FlatKindSpec {
 const flatKinds: ReadonlyArray<FlatKindSpec> = [
   { kind: "mcp-server", directory: "mcp", extension: ".json" },
   { kind: "rules", directory: "rules", extension: ".md" },
-  { kind: "command", directory: "commands", extension: ".md" },
   { kind: "subagent", directory: "subagents", extension: ".md" },
 ];
 

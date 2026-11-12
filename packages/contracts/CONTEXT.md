@@ -94,7 +94,7 @@ Where a setting lives, and — for the three that hold contributions — where t
 | A **contribution**'s on / off — MCP server | Settings profile · Private workspace overlay |
 | An **Operation setting** | Settings profile · Private workspace overlay — plus Runtime host for `harness` only |
 
-**Skill, Rules, Command and Subagent have no setting**: their Authoring tree is their enablement — see *Authoring tree*, and ADR 0018. Hook's row is deferred with the kind itself. A **Connection** is not on this axis at all: it has no Scope (ADR 0017).
+**Skill, Rules and Subagent have no setting**: their Authoring tree is their enablement — see *Authoring tree*, and ADR 0018. Hook's row is deferred with the kind itself. A **Connection** is not on this axis at all: it has no Scope (ADR 0017).
 The Runtime host holds machine facts — checkout paths, installed harnesses, credential storage location — not contributions, so it is the one Scope with no Authoring tree. The Workspace input is excluded from Operation settings because a repository you cloned must not choose the model you pay for, and from switching an MCP server on because it must not start a process on your machine — it may still *ship* the file, and `register` is the trust act that admits it. The excluded cells are empty by decision, not by omission.
 There is **no collective noun** over either family; say `contribution` or `Operation setting`. Every candidate umbrella collided with a term already in this glossary.
 _Avoid_: Authority, level, tier, target (an invented axis name — say default / Workflow / Operation)
@@ -108,7 +108,7 @@ _Avoid_: Merge (only one of the operators), precedence (only one axis of three),
 **Plugin**:
 A first-party install-and-setup bundle. Its manifest **points at files** rather than inlining definitions, and declares which Connections it requires. **At most one first-party Plugin may require a given Connection**, so "the Plugin that requires Linear" names exactly one bundle and is derivable from that declaration alone — no field states the relation anywhere. `version` is optional — a Plugin is identified by its declared version or, absent one, by content revision. Each contribution has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
 A Plugin is **a collection of contributions and nothing more**: it contributes no behaviour of its own, so **there is no human-written Plugin on / off**. A Plugin's files are on disk or they are not, and `install` and `uninstall` are how a person writes that — the same rule as an **Authoring tree**, where authoring or deleting a file writes it. Where a Plugin-level "off" ever appears it is Engine-observed status, never a setting.
-**Every Plugin ships with Cogwork.** Nothing is fetched and nothing third-party can be added, so uninstall is always reversible, offline. After an install a Plugin's **MCP server** is on, because installing is itself the trust act; its Skills, Rules, Commands and Subagents are on disk and therefore active, and have no setting at all. An app update is the only thing that changes a Plugin's files, and it lands at load with nothing to stage, accept or decline. See ADR 0014.
+**Every Plugin ships with Cogwork.** Nothing is fetched and nothing third-party can be added, so uninstall is always reversible, offline. After an install a Plugin's **MCP server** is on, because installing is itself the trust act; its Skills, Rules and Subagents are on disk and therefore active, and have no setting at all. An app update is the only thing that changes a Plugin's files, and it lands at load with nothing to stage, accept or decline. See ADR 0014.
 _Avoid_: Capability (retired — there is no umbrella noun), component, marketplace listing, Plugin enablement
 
 **Install record**:
@@ -128,7 +128,7 @@ The surface that owns Plugin **membership** — install and uninstall, the whole
 _Avoid_: Marketplace, Customize, Plugin store; `pin` (retired — no harness exposes version pinning to a person); *stage*, *accept* and *decline* an update, and *refresh the catalog* (all four retired — nothing is fetched, so an app update is the only thing that changes a Plugin); and the lowercase plural *plugins*, which means the bundles
 
 **Customize**:
-The surface that owns **contribution settings** — an MCP server's on / off — and that renders every other contribution read-only. The kind is the view and the authority is a badge on the row — and for a `local:` row that badge *is* the Authoring tree, so it is shown once, not twice. Since ADR 0018 removed the setting from Skill, Rules, Command and Subagent, their rows show what exists and which tree it came from, and carry no toggle. An MCP server keeps its toggle, and a `local:repo` one is the offer-versus-enable row ADR 0013 owes: *this repository offers this. It is off. You can turn it on.* The MCP server view groups by the Engine's conclusion — **Needs Attention** and **Ready** — never by the person's choice: a server switched off greys out and takes a *Disabled* pill in place, so it is switched back on where it was left. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
+The surface that owns **contribution settings** — an MCP server's on / off — and that renders every other contribution read-only. The kind is the view and the authority is a badge on the row — and for a `local:` row that badge *is* the Authoring tree, so it is shown once, not twice. Since ADR 0018 removed the setting from Skill, Rules and Subagent, their rows show what exists and which tree it came from, and carry no toggle. An MCP server keeps its toggle, and a `local:repo` one is the offer-versus-enable row ADR 0013 owes: *this repository offers this. It is off. You can turn it on.* The MCP server view groups by the Engine's conclusion — **Needs Attention** and **Ready** — never by the person's choice: a server switched off greys out and takes a *Disabled* pill in place, so it is switched back on where it was left. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
 _Avoid_: Plugins, Settings, preferences
 
 **Connections**:
@@ -141,8 +141,8 @@ The surface that owns what the daemon operates over and under on this machine: r
 _Avoid_: Settings (already on Customize's _Avoid_ line), Engine (the machinery being managed, not a pane), Daemon, Workspace (the singular is the registered repo, not the surface), machine config
 
 **Contribution kind**:
-One of the six types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Command, Hook**. The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
-Only the kinds that **execute or connect** carry a setting. **MCP server** has one — on or off, written as a default and nowhere else. **Skill, Rules, Command and Subagent** have none at all: they exist or they do not, and the Authoring tree a file sits in says everything an on / off could say (ADR 0018). **Hook** is deferred — it stays a named kind with its setting question open, because no cross-harness projection has been designed. Everything else about a contribution lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
+One of the five types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Hook**. Command is not a kind, and Cogwork does not read `commands/` files (ADR 0037). The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
+Only the kinds that **execute or connect** carry a setting. **MCP server** has one — on or off, written as a default and nowhere else. **Skill, Rules and Subagent** have none at all: they exist or they do not, and the Authoring tree a file sits in says everything an on / off could say (ADR 0018). **Hook** is deferred — it stays a named kind with its setting question open, because no cross-harness projection has been designed. Everything else about a contribution lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
 _Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed), per-Operation enablement (say binding)
 
 **Connection**:
@@ -157,11 +157,11 @@ _Avoid_: Readiness (unqualified), MCP server readiness, established (one of its 
 
 **Tool**:
 A typed function an agent may call during a Run. A Tool may be engine-owned, provider-native, or exposed by an MCP server, but its source remains explicit.
-_Avoid_: MCP server (one server may expose many Tools), Command
+_Avoid_: MCP server (one server may expose many Tools)
 
 **Skill**:
 A discoverable package of instructions and supporting resources an agent may use during a Run. It remains distinct from mandatory Operating Instructions.
-_Avoid_: Operating-instructions package, MCP server, Plugin
+_Avoid_: Operating-instructions package, MCP server, Plugin, Command (retired — ADR 0037)
 
 **MCP server**:
 One configured Model Context Protocol server instance made available to a Run so its Tools, resources, and prompts can be used, identified by a Cogwork-owned `McpServerId`. It retains the verified MCP Registry name/version as provenance when available; runtime `serverInfo` is observed metadata, never the configured identity.
@@ -170,10 +170,6 @@ _Avoid_: MCP skill, Tool, Connection, Plugin
 **MCP server readiness**:
 The Engine-owned conclusion that a configured MCP server is enabled, launchable or reachable, authenticated, protocol-compatible, exposes the expected MCP features, and can be projected by the selected Harness. Its *authenticated* input is **Connection readiness** when the server requires a Connection. Required servers must be ready before a Run Plan is accepted; clients use the same result and reason to show Operation availability.
 _Avoid_: Installed, runtime `serverInfo`, UI-only validation
-
-**Command**:
-A user-invocable prompt template, in the Claude Code sense — identity, description, argument contract, and a template body, and nothing else. Harness, model options, and tool restrictions are deliberately omitted: a Command has no runtime to carry them into until interactive sessions land. Not a shell entry point.
-_Avoid_: Script (retired), Tool, Operation, shell command
 
 **Rules**:
 Reusable advisory guidance contributed at any scope, authored as markdown with frontmatter carrying glob-based path scoping and an always-apply flag. A contribution kind that is *not* a Run Plan member — Rules resolve into Instructions.
@@ -187,7 +183,7 @@ _Avoid_: Hook, Operating Instructions, contribution kind
 
 **Hook**:
 A Harness-native lifecycle extension projected only when the selected Harness supports it. A Hook does not become Middleware merely because both react to lifecycle events.
-_Avoid_: Middleware, Command
+_Avoid_: Middleware
 
 **Subagent**:
 A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool.
@@ -302,7 +298,7 @@ The person's default Harness, model, and model options for every Operation, held
 _Avoid_: Playbook, operation definition, run plan, target (say default / Workflow / Operation)
 
 **Question**:
-What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action needs a Workspace — the Workspace the element is about.
+What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action takes its Workspace from the agent — the Workspace the element is about. Each Action entry's Workspace source decides this: an `item-else-agent` action takes the Workspace of an issue or pull request item from the item, and takes it from the agent only when the item has no Workspace; an `agent` action always takes it from the agent.
 _Avoid_: Outcome (overloaded — say answer, or Operation result for the whole value), route condition, enum, disposition
 
 **Agent input**:
@@ -370,7 +366,6 @@ Trigger event → Work item → selected Operation + Work Context
       ├── Skills
       ├── MCP
       ├── Subagents
-      ├── Commands
       ├── Hooks
       ├── Middleware
       ├── Sandbox (Workspace, Policy)
@@ -470,7 +465,7 @@ _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id`
 ### Runs
 
 **Run plan**:
-The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Messages, Work Context, Tools, Skills, MCP, Subagents, Commands, Hooks, Middleware, Sandbox (optional Workspace and Policy), Structured Output, Persistence, Connections, and Provenance. Messages contain the resolved user turn. Instructions stay separate. Work Context freezes the admitting snapshot's coordination facts and the work item's prose — its body and comment thread, read through the issue-tracker port at admission — beside the work-item reference (ADR 0030).
+The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Messages, Work Context, Tools, Skills, MCP, Subagents, Hooks, Middleware, Sandbox (optional Workspace and Policy), Structured Output, Persistence, Connections, and Provenance. Messages contain the resolved user turn. Instructions stay separate. Work Context freezes the admitting snapshot's coordination facts and the work item's prose — its body and comment thread, read through the issue-tracker port at admission — beside the work-item reference (ADR 0030).
 Run Plan members are **not** the same list as contribution kinds. Rules is a kind but not a member — it resolves into Instructions. Tools, Connections, and Middleware are members but never contributions.
 Every plan carries a mandatory **provenance stamp**: a Plugin item's declared version where it has one, a content revision where it does not. No contribution carries its own version — no platform in the field versions the capabilities inside a bundle. The plan is accepted before dispatch and never changed by runtime observations.
 _Avoid_: Run manifest, resolved stage, harness request, operation settings
@@ -586,7 +581,7 @@ The projection of an accepted Run Plan handed to one Harness: checkout path, wor
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action needs one, a Workspace. A result that does not decode is a retryable failed attempt, and the next attempt sees the decode issues.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action takes its Workspace from the agent (see **Question**), a Workspace. A result that does not decode is a retryable failed attempt, and the next attempt sees the decode issues.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:

@@ -424,7 +424,7 @@ const providerTriggerSourcesLayer = <E, R>(
       Effect.map(([tracker, provider, registry, artifacts]) => {
         const sources = [
           makeTrackerTriggerSource("github", tracker, registry.state, artifacts),
-          ...(tracker.triggerSources ?? []),
+          makeTrackerTriggerSource("linear", tracker, registry.state, artifacts),
           ...(provider.triggerSources ?? []),
         ];
         return combineTriggerSources([...sources, makeClockSource(sources)]);
@@ -446,7 +446,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
-    Layer.provide(workflowArtifacts),
   );
   const connections = connectionStoreLayer.pipe(
     Layer.provide(controlStore),

@@ -51,7 +51,7 @@ import { type PullRequestContext, SourceControlProvider } from "./source-control
 import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } from "./trigger-observation";
 import { Recheck } from "./trigger-source";
 import { Workflows } from "./workflow";
-import type { WorkflowActionPlanDecodeError } from "./workflow-action-entry";
+import { itemWorkspaceOf, type WorkflowActionPlanDecodeError } from "./workflow-action-entry";
 import {
   buildWorkflowActionPlan,
   executeWorkflowActionPlan,
@@ -489,6 +489,13 @@ export const make = Effect.gen(function* () {
     const workspace =
       registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
+    const itemWorkspace = itemWorkspaceOf(admission);
+    const resultSchema = workflowOperationResultSchema(
+      operation,
+      catalogResult.catalog,
+      outputWorkspaces,
+      itemWorkspace,
+    );
     const issueSearchEnabled = needsIssueSearch(operation, catalogResult.catalog);
     const pullRequestToolEnabled = needsPullRequestTool(operation, catalogResult.catalog);
     const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
@@ -607,12 +614,14 @@ export const make = Effect.gen(function* () {
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: [...harness.planMiddleware(selectedHarness)],
-      structuredOutput: workflowOperationResultJsonSchema(operation, catalogResult.catalog, outputWorkspaces)[
-        "~standard"
-      ].jsonSchema.input({ target: "draft-2020-12" }),
+      structuredOutput: workflowOperationResultJsonSchema(
+        operation,
+        catalogResult.catalog,
+        outputWorkspaces,
+        itemWorkspace,
+      )["~standard"].jsonSchema.input({ target: "draft-2020-12" }),
       connections: [],
       workContext: {
         reference: { workItem: item, url: admission.event.subject?.url ?? null },
@@ -694,9 +703,7 @@ export const make = Effect.gen(function* () {
     }
 
     const output = Option.getOrUndefined(eventsExit.value);
-    const decoded = Schema.decodeUnknownExit(
-      workflowOperationResultSchema(operation, catalogResult.catalog, outputWorkspaces),
-    )(output?.value.object);
+    const decoded = Schema.decodeUnknownExit(resultSchema)(output?.value.object);
     if (Exit.isFailure(decoded)) {
       const issues = String(decoded.cause);
       return yield* refuseResult(admission, key, run, issues);

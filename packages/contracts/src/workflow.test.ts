@@ -91,6 +91,7 @@ const baseCatalog = decodeCatalog({
       itemKind: "issue",
       actsOn: [],
       requiresWorkspace: true,
+      workspaceSource: null,
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],
@@ -106,6 +107,7 @@ const baseCatalog = decodeCatalog({
       itemKind: null,
       actsOn: ["issue"],
       requiresWorkspace: true,
+      workspaceSource: "item-else-agent",
       permissionProfile: "full",
       agentInputs: ["comment"],
       emits: [],
@@ -147,6 +149,7 @@ const filterEntry = (system: string, itemKind: string) => ({
   itemKind,
   actsOn: [],
   requiresWorkspace: true,
+  workspaceSource: null,
   permissionProfile: "read-only",
   agentInputs: [],
   emits: [],
@@ -720,14 +723,46 @@ describe("Workflow Operation result", () => {
     );
   });
 
-  it("builds one strict object with required fields", () => {
-    const json = workflowOperationResultJsonSchema(operation, baseCatalog, [cogworkWorkspace])[
-      "~standard"
-    ].jsonSchema.input({ target: "draft-2020-12" });
+  it("builds one strict object that requires a Workspace only when the agent chooses it", () => {
+    const agentWorkspaceEntry = {
+      ...baseCatalog.entries[1],
+      key: decodeCatalogKey("github.create-issue"),
+      workspaceSource: "agent" as const,
+      agentInputs: [],
+    };
+    const mixedCatalog = catalogWith({ entries: [...baseCatalog.entries, agentWorkspaceEntry] });
+    const mixedOperation = {
+      ...operation,
+      transitions: [
+        {
+          ...transition,
+          actions: [...transition.actions, { entry: agentWorkspaceEntry.key, parameters: [] }],
+        },
+      ],
+    };
+    const resultFields = ["summary", "stuck", "answers", "inputs"];
+    const cases = [
+      { operation, catalog: baseCatalog, itemWorkspace: undefined, required: [...resultFields, "workspace"] },
+      { operation, catalog: baseCatalog, itemWorkspace: cogworkWorkspace, required: resultFields },
+      {
+        operation: mixedOperation,
+        catalog: mixedCatalog,
+        itemWorkspace: cogworkWorkspace,
+        required: [...resultFields, "workspace"],
+      },
+    ];
 
-    assert.strictEqual(json.type, "object");
-    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs", "workspace"]);
-    assert.strictEqual(json.additionalProperties, false);
+    cases.forEach((row) => {
+      const json = workflowOperationResultJsonSchema(
+        row.operation,
+        row.catalog,
+        [cogworkWorkspace],
+        row.itemWorkspace,
+      )["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+      assert.strictEqual(json.type, "object");
+      assert.deepStrictEqual(json.required, row.required);
+      assert.strictEqual(json.additionalProperties, false);
+    });
   });
 
   it("builds review comments as one required list shape", () => {

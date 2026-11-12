@@ -34,7 +34,7 @@ anything one changes the other cannot see.
 One local-first system, shared by the desktop app and the CLI, with four ideas at its core:
 
 1. **Files you author are contributions; presence is enablement.** You write Skills, Rules,
-   Commands, and Subagents as files in one of three fixed **Authoring trees** — your user tree, a
+   and Subagents as files in one of three fixed **Authoring trees** — your user tree, a
    repository's committed tree, or a per-workspace private tree. Cogwork scans the trees; a file
    that exists is active. Only the kinds that execute or connect keep a switch, and only you can
    flip it — a repository may offer, never enable.
@@ -181,8 +181,8 @@ playbook skill, lifecycle stage, run manifest.
 ### Two lists, no umbrella (ADR [0011](../adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md), [#132](https://github.com/taylorfsteele/cogwork/issues/132))
 
 **Contribution kinds** — what a person authors as a file and Customize shows as a row: **MCP
-server, Skill, Subagent, Rules, Command, Hook.** **Run Plan members** — what the Engine resolves
-and hands a Harness: Harness Adapter, Instructions, Tools, Skills, MCP, Subagents, Commands, Hooks,
+server, Skill, Subagent, Rules, Hook.** **Run Plan members** — what the Engine resolves
+and hands a Harness: Harness Adapter, Instructions, Tools, Skills, MCP, Subagents, Hooks,
 Middleware, Sandbox (Workspace, Policy), Structured Output, Persistence, Connections, Messages,
 Provenance. The lists differ deliberately: Rules is a kind that resolves into Instructions; Tools,
 Connections, and Middleware are members never contributed. **"Capability" is retired**; name the
@@ -248,7 +248,7 @@ install, no manifest, no record. `~/.agents/` is shared with the harnesses on pu
 Cursor already read `~/.agents/skills`), so a Skill there serves Runs and interactive sessions
 alike. The trees are fixed; the only thing a person points cogwork at is a workspace.
 
-**Presence is enablement for the four non-executing kinds.** Skill, Rules, Command, and Subagent
+**Presence is enablement for the three non-executing kinds.** Skill, Rules, and Subagent
 have no setting: they exist or they do not. MCP server keeps its switch and its scope set; **Hook
 is deferred whole** (a named kind; no cross-harness projection designed; no Customize row; no Scope
 set). Registering a workspace is the trust act that admits its repository's files — taken
@@ -355,8 +355,8 @@ contribution serves an Operation Definition's declared need. **No mechanism narr
 per Operation** — lazy tool discovery is the answer to context cost, not narrowing. **Every
 declared need is required**; there is no optional need. **A need is a named slot carrying a kind**:
 an Operation Definition never names a concrete `<authority>/<kind>/<localName>` — Operation
-Settings bind one to the slot. Six kinds are bindable as needs: MCP server, Skill, Subagent,
-Command, Hook, Connection. `unsatisfiable` has three reasons: unbound, bound but not available,
+Settings bind one to the slot. Five kinds are bindable as needs: MCP server, Skill, Subagent,
+Hook, Connection. `unsatisfiable` has three reasons: unbound, bound but not available,
 bound but not ready.
 
 **Refusal and rejection are two shapes.** A refusal constrains a value, names its source, and the
@@ -584,8 +584,7 @@ Ruled out by the map's destination; return only as fresh efforts if the destinat
   #205 struck: the catalog fetch, digests, status sets, staged updates. Do not restore any of it on
   the argument that third-party install may arrive one day.
 - **Remote execution hosts and hosted Connection execution.**
-- **Interactive sessions**, and with them any machinery for a required Command (the kind stays in
-  the need list; nothing is built).
+- **Interactive sessions.**
 - **Non-coding Workflow execution**, and contribution needs for non-coding Workflows beyond the
   Granola-to-ticket example.
 - **Hook's setting and cross-harness projection** — the kind exists; everything else is deferred.
