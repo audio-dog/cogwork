@@ -1,0 +1,51 @@
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_19f7dcf3d912d3::t_e3972f865bdf9f 90,139
+docs/adr/0028-subagent-model-choice-is-a-named-level-not-a-pinned-model.md
+  s_19f7dcf3d912d3::t_af53a8874a6ffa 6-13
+packages/contracts/CONTEXT.md
+  s_19f7dcf3d912d3::t_1fbbca015c258e 189
+packages/contracts/src/run-plan.ts
+  s_ca8370611ed09a::t_9b0c7d43b228e5 59-79,227
+packages/engine/package.json
+  s_19f7dcf3d912d3::t_18ef14fa798f12 29-30
+packages/engine/src/authoring-tree.test.ts
+  s_ca8370611ed09a::t_074b61aa008956 32-35,50,57
+packages/engine/src/authoring-tree.ts
+  s_ca8370611ed09a::t_bf9289ead0d0b2 35
+packages/engine/src/run-plan.test.ts
+  s_19f7dcf3d912d3::t_03f3ffb86b18b1 1-84
+packages/engine/src/run-plan.ts
+  s_19f7dcf3d912d3::t_a8bb981c12c8df 1-11,22-69
+packages/engine/src/subagent-file.test.ts
+  s_19f7dcf3d912d3::t_fe240b266818bf 1-84
+packages/engine/src/subagent-file.ts
+  s_19f7dcf3d912d3::t_7cd9fa32002b9b 1-95
+packages/engine/src/workflow-run.ts
+  s_ca8370611ed09a::t_34a5221ae52797 47,566,601
+pnpm-lock.yaml
+  s_19f7dcf3d912d3::t_65db9c2b2668ca 786-788,10558
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "75a4265d0bbf1d5d3e3dff95e0d865ec86bc1cfb",
+  "prompts": {},
+  "sessions": {
+    "s_19f7dcf3d912d3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f24b6544-1091-4ef8-8f02-7a37e19c57b7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ca8370611ed09a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "84ed2c88-ee06-4e77-b588-35e6507b8aa6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
