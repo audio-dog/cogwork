@@ -4,6 +4,7 @@ import {
   agUiIsStructuredOutputComplete,
   BranchName,
   defaultPriority,
+  type HarnessName,
   keyOf,
   LineageId,
   matchWorkflowTransitions,
@@ -11,6 +12,7 @@ import {
   RunId,
   RunPlan,
   type RunRecord,
+  sessionResumable,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
   type WorkflowAgentInputValue,
@@ -47,6 +49,7 @@ import {
   RefusedResult,
   refusalForAgent,
   refusalForPerson,
+  refusalResumesSession,
 } from "./operation-result";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
@@ -230,6 +233,23 @@ type ClaimState = Data.TaggedEnum<{
 const ClaimState = Data.taggedEnum<ClaimState>();
 type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
 
+interface PriorRefusal {
+  readonly agentText: string;
+  readonly key: ClaimedWork["key"];
+  readonly resumableRun: RunId | null;
+}
+
+const sameOperation = (left: ClaimedWork["key"], right: ClaimedWork["key"]) =>
+  left.workflow === right.workflow && left.operation === right.operation;
+
+const resendOf = (prior: PriorRefusal | null, key: ClaimedWork["key"]) =>
+  prior?.resumableRun && sameOperation(prior.key, key)
+    ? {
+        run: prior.resumableRun,
+        request: `${prior.agentText}\n\nDo no other work unless an issue above needs it.`,
+      }
+    : null;
+
 const ownRunOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
   admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
 
@@ -303,7 +323,7 @@ export const make = Effect.gen(function* () {
     worktrees === null
       ? sourceControlExecutionContext
       : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
-  const previousResultIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+  const previousRefusals = yield* Ref.make<ReadonlyMap<string, PriorRefusal>>(new Map());
   const touchpointGate = Semaphore.makeUnsafe(1);
 
   const prepareCheckout = Effect.fn("WorkflowRun.prepareCheckout")(function* (
@@ -457,10 +477,22 @@ export const make = Effect.gen(function* () {
     refusal: RefusedResult,
     status: "failed" | "declined" = "failed",
   ) {
-    yield* Ref.update(previousResultIssues, (current) =>
-      new Map(current).set(keyOf(admission.event.key), refusalForAgent(refusal)),
-    );
+    const prior: PriorRefusal = {
+      agentText: refusalForAgent(refusal),
+      key: work.key,
+      resumableRun: refusalResumesSession(refusal) ? work.run : null,
+    };
+    yield* Ref.update(previousRefusals, (current) => new Map(current).set(keyOf(admission.event.key), prior));
     return yield* failAttempt(admission, claimed, work, refusalForPerson(refusal), status);
+  });
+
+  const resumableSessionOf = Effect.fn("WorkflowRun.resumableSessionOf")(function* (
+    attempt: RunId,
+    selectedHarness: HarnessName,
+  ) {
+    const sessionId = (yield* ledger.getRun(attempt))?.session ?? null;
+    const session = sessionId === null ? null : yield* ledger.getSession(sessionId);
+    return session?.harness === selectedHarness && sessionResumable(session) ? session.id : null;
   });
 
   const recoverClaimed = Effect.fn("WorkflowRun.recoverClaimed")(function* <E>(
@@ -587,19 +619,33 @@ export const make = Effect.gen(function* () {
         ? coordinationView.handback
         : null;
     const parkedAttempt = admission.lineage.parent === null ? null : RunId.make(admission.lineage.parent);
+    const handbackNote = handback?.note?.trim();
+    const workRequest = handbackNote
+      ? `Run Workflow Operation: ${operation.name}\n\nPerson's note: ${handbackNote}`
+      : `Run Workflow Operation: ${operation.name}`;
+    const priorRefusal = (yield* Ref.get(previousRefusals)).get(keyOf(admission.event.key)) ?? null;
+    const resend = resendOf(priorRefusal, key);
+    const runResume = (attempt: RunId) =>
+      Effect.map(ledger.getRun(attempt), (run) => ({ session: run?.session ?? null, request: workRequest }));
     const resumeReaders = [
-      resumed === null ? null : () => ledger.getRun(resumed.plan.attempt),
-      handback !== null && parkedAttempt !== null ? () => ledger.getRun(parkedAttempt) : null,
+      resumed === null ? null : () => runResume(resumed.plan.attempt),
+      handback !== null && parkedAttempt !== null ? () => runResume(parkedAttempt) : null,
+      resend === null
+        ? null
+        : () =>
+            Effect.map(resumableSessionOf(resend.run, selectedHarness), (session) => ({
+              session,
+              request: session === null ? workRequest : resend.request,
+            })),
     ];
-    const resumedRun = yield* resumeReaders.find((read) => read !== null)?.() ?? Effect.succeed(null);
+    const resumption = yield* resumeReaders.find((read) => read !== null)?.() ??
+      Effect.succeed({ session: null, request: workRequest });
     const session =
-      resumedRun?.session ??
+      resumption.session ??
       (yield* sessions.mint(
         { workspace: runWorkspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
         harness.sessionKind,
       ));
-    const handbackNote = handback?.note?.trim();
-    const priorIssues = (yield* Ref.get(previousResultIssues)).get(keyOf(admission.event.key)) ?? null;
     const assembled = yield* contextAssembler.assemble({
       runId: id,
       workspace: runWorkspace,
@@ -648,17 +694,12 @@ export const make = Effect.gen(function* () {
         path: assembled.operatingInstructionsPath,
         resources: [
           ...assembled.operatingInstructionResources,
-          ...(priorIssues === null ? [] : [{ source: "previous-result-issues", content: priorIssues }]),
+          ...(priorRefusal === null
+            ? []
+            : [{ source: "previous-result-issues", content: priorRefusal.agentText }]),
         ],
       },
-      messages: [
-        {
-          role: "user",
-          content: handbackNote
-            ? `Run Workflow Operation: ${operation.name}\n\nPerson's note: ${handbackNote}`
-            : `Run Workflow Operation: ${operation.name}`,
-        },
-      ],
+      messages: [{ role: "user", content: resumption.request }],
       tools: projectsTools
         ? [
             ...(issueSearchEnabled ? ["issue-search" as const] : []),
@@ -754,7 +795,7 @@ export const make = Effect.gen(function* () {
     });
     if (Result.isFailure(decoded)) return yield* refuseResult(admission, claimed, accepted, decoded.failure);
 
-    yield* Ref.update(previousResultIssues, (current) => {
+    yield* Ref.update(previousRefusals, (current) => {
       const next = new Map(current);
       next.delete(keyOf(admission.event.key));
       return next;
