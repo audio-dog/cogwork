@@ -2,6 +2,7 @@ import { ModelLevel, TrimmedNonEmptyString } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import * as SchemaIssue from "effect/SchemaIssue";
 import { parse, YAMLParseError } from "yaml";
 
 class SubagentFileError extends Data.TaggedError("SubagentFileError")<{
@@ -37,7 +38,7 @@ const rejections: ReadonlyArray<{
       `name "${frontmatter.name}" does not match the file name "${localName}"`,
   },
   {
-    rejects: ({ frontmatter }) => "model" in frontmatter && !inheritsModel(frontmatter.model),
+    rejects: ({ frontmatter }) => !inheritsModel(frontmatter.model),
     reason: ({ frontmatter }) =>
       `model ${JSON.stringify(frontmatter.model)} is a vendor model, not a Model level; write metadata.model-level (light, standard, or deep)`,
   },
@@ -47,17 +48,24 @@ const rejections: ReadonlyArray<{
   },
 ];
 
-const inheritsModel = (model: string | null | undefined) => model === null || model === "inherit";
+const inheritsModel = (model: string | null | undefined) => (model ?? "inherit") === "inherit";
 
-const yamlProblem = (error: unknown) => {
-  if (!(error instanceof YAMLParseError)) return "the frontmatter is not valid YAML";
+const yamlPosition = (error: YAMLParseError) => {
   const line = error.linePos?.[0].line;
-  return line === undefined
-    ? `the frontmatter is not valid YAML (${error.code})`
-    : `the frontmatter is not valid YAML (${error.code} at line ${line})`;
+  return line === undefined ? error.code : `${error.code} at line ${line}`;
 };
 
-const singleLine = (message: string) => message.replace(/\s+/g, " ").trim();
+const yamlProblem = (error: unknown) =>
+  error instanceof YAMLParseError
+    ? `the frontmatter is not valid YAML (${yamlPosition(error)})`
+    : "the frontmatter is not valid YAML";
+
+const issuePaths = SchemaIssue.makeFormatterStandardSchemaV1({ leafHook: () => "", checkHook: () => "" });
+
+const failedFields = (issue: SchemaIssue.Issue) => {
+  const fields = issuePaths(issue).issues.map(({ path }) => (path?.length ? path.join(".") : "(root)"));
+  return [...new Set(fields)].join(", ");
+};
 
 const toolList = (tools: SubagentFrontmatter["tools"]) =>
   typeof tools === "string"
@@ -81,7 +89,7 @@ export const decodeSubagentFile = Effect.fn("SubagentFile.decode")(function* (
     catch: (error) => rejected(yamlProblem(error)),
   });
   const frontmatter = yield* decodeFrontmatter(raw).pipe(
-    Effect.mapError((error) => rejected(`the frontmatter does not decode: ${singleLine(error.message)}`)),
+    Effect.mapError(({ issue }) => rejected(`the frontmatter does not decode at ${failedFields(issue)}`)),
   );
   const file = { localName, frontmatter, prompt: body.trim() };
   const rejection = rejections.find(({ rejects }) => rejects(file));

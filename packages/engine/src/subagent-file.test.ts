@@ -45,7 +45,7 @@ describe("decodeSubagentFile", () => {
     {
       case: "a missing description",
       text: file("name: griller"),
-      reason: /description/,
+      reason: /^the frontmatter does not decode at description$/,
     },
     {
       case: "a name that does not match the file name",
@@ -55,7 +55,7 @@ describe("decodeSubagentFile", () => {
     {
       case: "an unknown Model level",
       text: file("name: griller\ndescription: Interviews.\nmetadata:\n  model-level: heavy"),
-      reason: /model-level/,
+      reason: /^the frontmatter does not decode at metadata\.model-level$/,
     },
     {
       case: "frontmatter that is not valid YAML",
@@ -68,9 +68,14 @@ describe("decodeSubagentFile", () => {
       reason: /model "sonnet" is a vendor model, not a Model level/,
     },
     {
-      case: "a model that refers to itself",
+      case: "a cyclic model alias, without a crash",
       text: file("name: griller\ndescription: Interviews.\nmodel: &a [*a]"),
-      reason: /^the frontmatter does not decode: /,
+      reason: /^the frontmatter does not decode at model$/,
+    },
+    {
+      case: "a description built from aliases, without its value in the reason",
+      text: file("name: griller\nshared: &a [one, two, three]\ndescription: [*a, *a, *a]"),
+      reason: /^the frontmatter does not decode at description$/,
     },
   ])("rejects $case with the reason", ({ text, reason }) =>
     Effect.gen(function* () {

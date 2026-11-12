@@ -59,7 +59,7 @@ layer(NodeServices.layer)((it) => {
         members.map((member) =>
           RunPlanSubagent.guards.Available(member)
             ? { ...member }
-            : { _tag: member._tag, identity: member.identity, reason: member.reason.length > 0 },
+            : { _tag: member._tag, identity: member.identity, reason: member.reason },
         ),
         [
           {
@@ -72,9 +72,21 @@ layer(NodeServices.layer)((it) => {
             modelLevel: "deep",
             prompt: "Grill.",
           },
-          { _tag: "Unavailable", identity: "local:user/subagent/broken", reason: true },
-          { _tag: "Unavailable", identity: "plugin:gh-review/subagent/reviewer", reason: true },
-          { _tag: "Unavailable", identity: "local:user/subagent/escaped", reason: true },
+          {
+            _tag: "Unavailable",
+            identity: "local:user/subagent/broken",
+            reason: "the frontmatter is not valid YAML (BAD_INDENT at line 2)",
+          },
+          {
+            _tag: "Unavailable",
+            identity: "plugin:gh-review/subagent/reviewer",
+            reason: "no Subagent file in this Run's Workspace has this identity",
+          },
+          {
+            _tag: "Unavailable",
+            identity: "local:user/subagent/escaped",
+            reason: "the file changed to a link after the scan",
+          },
         ],
       );
       const encoded = yield* Schema.encodeEffect(RunPlanSubagents)(members);
