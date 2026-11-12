@@ -1,0 +1,19 @@
+.cursor/skills/.gitignore
+  s_e509cfb4655808::t_d0a933d2f47212 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d5280c478647a06934ce86a2575eccca7ff0d510",
+  "prompts": {},
+  "sessions": {
+    "s_e509cfb4655808": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "15b7ac82-31bb-405c-9a1c-c7531add7197",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
