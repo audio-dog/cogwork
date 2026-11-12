@@ -446,6 +446,7 @@ const entry = (key: typeof generatedKey, name: string) =>
     itemKind: "granola-note",
     actsOn: [],
     requiresWorkspace: false,
+    workspaceSource: null,
     permissionProfile: "read-only",
     agentInputs: [],
     emits: [],

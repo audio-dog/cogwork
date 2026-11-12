@@ -121,7 +121,6 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
       skills: [],
       mcp,
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput,

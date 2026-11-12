@@ -1,4 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Cause from "effect/Cause";
+import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import { HarnessName, WorkspaceId } from "./base-schemas";
 import {
@@ -91,6 +93,7 @@ const baseCatalog = decodeCatalog({
       itemKind: "issue",
       actsOn: [],
       requiresWorkspace: true,
+      workspaceSource: null,
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],
@@ -106,6 +109,7 @@ const baseCatalog = decodeCatalog({
       itemKind: null,
       actsOn: ["issue"],
       requiresWorkspace: true,
+      workspaceSource: "item-else-agent",
       permissionProfile: "full",
       agentInputs: ["comment"],
       emits: [],
@@ -147,6 +151,7 @@ const filterEntry = (system: string, itemKind: string) => ({
   itemKind,
   actsOn: [],
   requiresWorkspace: true,
+  workspaceSource: null,
   permissionProfile: "read-only",
   agentInputs: [],
   emits: [],
@@ -720,14 +725,90 @@ describe("Workflow Operation result", () => {
     );
   });
 
-  it("builds one strict object with required fields", () => {
-    const json = workflowOperationResultJsonSchema(operation, baseCatalog, [cogworkWorkspace])[
-      "~standard"
-    ].jsonSchema.input({ target: "draft-2020-12" });
+  it("builds one strict object that requires a Workspace only when the agent chooses it", () => {
+    const agentWorkspaceEntry = {
+      ...baseCatalog.entries[1],
+      key: decodeCatalogKey("github.create-issue"),
+      workspaceSource: "agent" as const,
+      agentInputs: [],
+    };
+    const mixedCatalog = catalogWith({ entries: [...baseCatalog.entries, agentWorkspaceEntry] });
+    const mixedOperation = {
+      ...operation,
+      transitions: [
+        {
+          ...transition,
+          actions: [...transition.actions, { entry: agentWorkspaceEntry.key, parameters: [] }],
+        },
+      ],
+    };
+    const resultFields = ["summary", "stuck", "answers", "inputs"];
+    const cases = [
+      { operation, catalog: baseCatalog, itemWorkspace: undefined, required: [...resultFields, "workspace"] },
+      { operation, catalog: baseCatalog, itemWorkspace: cogworkWorkspace, required: resultFields },
+      {
+        operation: mixedOperation,
+        catalog: mixedCatalog,
+        itemWorkspace: cogworkWorkspace,
+        required: [...resultFields, "workspace"],
+      },
+    ];
 
-    assert.strictEqual(json.type, "object");
-    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs", "workspace"]);
-    assert.strictEqual(json.additionalProperties, false);
+    cases.forEach((row) => {
+      const json = workflowOperationResultJsonSchema(
+        row.operation,
+        row.catalog,
+        [cogworkWorkspace],
+        row.itemWorkspace,
+      )["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+      assert.strictEqual(json.type, "object");
+      assert.deepStrictEqual(json.required, row.required);
+      assert.strictEqual(json.additionalProperties, false);
+    });
+  });
+
+  describe("for an Operation with no questions and no agent inputs", () => {
+    const noInputsEntry = { ...baseCatalog.entries[1], agentInputs: [] };
+    const noInputsCatalog = catalogWith({ entries: [noInputsEntry] });
+    const noQuestionsOperation = { ...operation, questions: [] };
+    const emptyResult = { summary: "Commented", stuck: false, answers: {}, inputs: {} };
+    const decodeEmpty = Schema.decodeUnknownExit(
+      workflowOperationResultSchema(
+        noQuestionsOperation,
+        noInputsCatalog,
+        [cogworkWorkspace],
+        cogworkWorkspace,
+      ),
+    );
+    const refusal = (result: unknown) => {
+      const exit = decodeEmpty(result);
+      return Exit.isFailure(exit) ? Cause.pretty(exit.cause) : "decoded";
+    };
+
+    it("decodes empty answers and inputs and refuses any key in them", () => {
+      assert.isTrue(Exit.isSuccess(decodeEmpty(emptyResult)));
+      assert.include(refusal({ ...emptyResult, answers: { decision: "yes" } }), 'at ["answers"]["decision"]');
+      assert.include(
+        refusal({ ...emptyResult, inputs: { comment: "Proceed." } }),
+        'at ["inputs"]["comment"]',
+      );
+    });
+
+    it("builds answers and inputs as strict empty objects", () => {
+      const properties = jsonMember(
+        workflowOperationResultJsonSchema(
+          noQuestionsOperation,
+          noInputsCatalog,
+          [cogworkWorkspace],
+          cogworkWorkspace,
+        )["~standard"].jsonSchema.input({ target: "draft-2020-12" }),
+        "properties",
+      );
+      const strictEmptyObject = { type: "object", additionalProperties: false };
+
+      assert.deepStrictEqual(jsonMember(properties, "answers"), strictEmptyObject);
+      assert.deepStrictEqual(jsonMember(properties, "inputs"), strictEmptyObject);
+    });
   });
 
   it("builds review comments as one required list shape", () => {

@@ -3,6 +3,14 @@
 - **Status:** accepted
 - **Date:** 2026-09-23
 
+> **Amendment (2026-11-11).** The Run Plan's Subagents member now carries the level. Cogwork scans
+> `agents/*.md` in each Authoring tree and decodes each file. A Subagent that an Operation requires
+> becomes a member with its description, its tools, its Model level, and its prompt. A file with no
+> `metadata.model-level` gets `standard`. A file that does not decode stays in the member with its
+> reason. A vendor `model` value, such as `model: sonnet`, is one of those reasons: it is never read
+> as a level. No Harness adapter projects Subagents yet, so the authoring-time mapping in the sync
+> toolkit stays until one does.
+
 ## Context
 
 Every reviewer-role spawn on the codex Harness failed with an unsupported-model error — a recurring

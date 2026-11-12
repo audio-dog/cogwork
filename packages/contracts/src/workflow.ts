@@ -484,6 +484,9 @@ export const WorkflowCatalogParameter = Schema.Struct({
 });
 export type WorkflowCatalogParameter = typeof WorkflowCatalogParameter.Type;
 
+export const WorkflowWorkspaceSource = Schema.Literals(["item-else-agent", "agent"]);
+export type WorkflowWorkspaceSource = typeof WorkflowWorkspaceSource.Type;
+
 export const WorkflowCatalogEntry = Schema.Struct({
   key: WorkflowCatalogKey,
   name: TrimmedNonEmptyString,
@@ -495,6 +498,7 @@ export const WorkflowCatalogEntry = Schema.Struct({
   itemKind: Schema.NullOr(TrimmedNonEmptyString),
   actsOn: Schema.Array(TrimmedNonEmptyString),
   requiresWorkspace: Schema.Boolean,
+  workspaceSource: Schema.NullOr(WorkflowWorkspaceSource),
   permissionProfile: RunPlanPolicyProfile,
   agentInputs: Schema.Array(TrimmedNonEmptyString),
   emits: Schema.Array(WorkflowCatalogKey),
@@ -529,6 +533,9 @@ const unique = <A>(values: ReadonlyArray<A>) => [...new Set(values)];
 const objectFields = <A extends Schema.Top>(entries: ReadonlyArray<readonly [string, A]>) =>
   Object.fromEntries(entries);
 
+const structOrEmpty = <A extends Schema.Top>(fields: Readonly<Record<string, A>>) =>
+  Object.keys(fields).length === 0 ? Schema.Record(Schema.String, Schema.Never) : Schema.Struct(fields);
+
 const answerFields = (operation: WorkflowOperation) =>
   objectFields(
     operation.questions.map(
@@ -553,26 +560,35 @@ const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => 
   );
 };
 
+const agentChoosesWorkspaceFrom = {
+  "item-else-agent": (itemWorkspace) => itemWorkspace === undefined,
+  agent: () => true,
+} satisfies Record<WorkflowWorkspaceSource, (itemWorkspace: WorkspaceId | undefined) => boolean>;
+
 export const workflowOperationResultSchema = (
   operation: WorkflowOperation,
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
+  itemWorkspace?: WorkspaceId,
 ) => {
   const elementFields = {
     summary: TrimmedNonEmptyString,
-    answers: Schema.Struct(answerFields(operation)),
-    inputs: Schema.Struct(inputFields(operation, catalog)),
+    answers: structOrEmpty(answerFields(operation)),
+    inputs: structOrEmpty(inputFields(operation, catalog)),
   };
   const parseOptions = { onExcessProperty: "error" } as const;
-  const needsWorkspace = operationActionEntries(operation, catalog).some(
-    ({ requiresWorkspace }) => requiresWorkspace,
-  );
-  const element = needsWorkspace
+  const entries = operationActionEntries(operation, catalog);
+  const agentChoosesWorkspace = (workspace: WorkspaceId | undefined) =>
+    entries.some(
+      ({ workspaceSource }) =>
+        workspaceSource !== null && agentChoosesWorkspaceFrom[workspaceSource](workspace),
+    );
+  const element = agentChoosesWorkspace(undefined)
     ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
         parseOptions,
       })
     : Schema.Struct(elementFields).annotate({ parseOptions });
-  const once = needsWorkspace
+  const once = agentChoosesWorkspace(itemWorkspace)
     ? Schema.Struct({
         summary: TrimmedNonEmptyString,
         stuck: Schema.Boolean,
@@ -599,9 +615,10 @@ export const workflowOperationResultJsonSchema = (
   operation: WorkflowOperation,
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
+  itemWorkspace?: WorkspaceId,
 ) =>
   Schema.toStandardJSONSchemaV1(
-    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces)),
+    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces, itemWorkspace)),
   );
 
 export const matchWorkflowTransitions = (

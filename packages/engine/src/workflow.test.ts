@@ -37,7 +37,6 @@ import { githubPullRequestEntries } from "./github/pull-request-trigger-source";
 import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
-import { linearTrackerEntries, linearTrackerFilters } from "./linear/tracker-trigger-source";
 import { slackEntries } from "./slack-source";
 import { slackActionEntries } from "./slack-write";
 import { trackerTriggerEntries, trackerTriggerFilters } from "./tracker-trigger-source";
@@ -76,6 +75,7 @@ const triggerContribution: WorkflowCatalogContribution = {
       itemKind: "issue",
       actsOn: [],
       requiresWorkspace: false,
+      workspaceSource: null,
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],
@@ -176,7 +176,7 @@ const catalogLayer = Layer.succeed(WorkflowCatalogContributions, [
     ],
     templates: [],
   },
-  { entries: [...linearTrackerEntries, ...linearTrackerFilters], templates: [] },
+  { entries: [...trackerTriggerEntries("linear"), ...trackerTriggerFilters("linear")], templates: [] },
   triggerContribution,
   granolaWorkflowCatalogContribution,
   githubReviewContribution,
@@ -971,8 +971,7 @@ layer(NodeServices.layer)((it) => {
       yield* withWorkflows(storePath, ({ delete: deleteWorkflow }) => deleteWorkflow({ id: created.id }));
       const missing = yield* Effect.exit(withWorkflows(storePath, ({ get }) => get({ id: created.id })));
 
-      assert.isTrue(Exit.isFailure(missing));
-      if (!Exit.isFailure(missing)) return;
+      if (Exit.isSuccess(missing)) return assert.fail("expected the deleted Workflow to be missing");
       const failure = Option.getOrNull(Cause.findErrorOption(missing.cause));
       assert.isTrue(Schema.is(WorkflowNotFound)(failure));
     }),

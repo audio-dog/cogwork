@@ -57,7 +57,7 @@ export interface WorkflowHarnesses {
   readonly controlStore: ControlStore | null;
 }
 
-export const NeedKind = ["mcp-server", "skill", "subagent", "command", "hook", "connection"] as const;
+export const NeedKind = ["mcp-server", "skill", "subagent", "hook", "connection"] as const;
 export type NeedKind = (typeof NeedKind)[number];
 
 /** Something an Operation can require, by the concrete identity the engine checks. */

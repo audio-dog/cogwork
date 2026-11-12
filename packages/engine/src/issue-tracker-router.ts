@@ -5,20 +5,12 @@ import { GitHubClient } from "./github/client";
 import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
-import { makeLinearTrackerTriggerSource } from "./linear/tracker-trigger-source";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
-import { WorkspaceRegistry } from "./registry";
-import { WorkflowArtifactStore } from "./workflow-artifact-store";
 
-export const route = (
-  github: IssueTrackerService,
-  linear: IssueTrackerService,
-  triggerSources: NonNullable<IssueTrackerService["triggerSources"]> = [],
-): IssueTrackerService => {
+export const route = (github: IssueTrackerService, linear: IssueTrackerService): IssueTrackerService => {
   const forWorkspace = (workspace: WorkspaceIssueTrackerBinding) =>
     workspace.config.issueTracker.type === "linear" ? linear : github;
   return {
-    triggerSources,
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
     itemsChangedSince: (workspace, sinceMillis) =>
       forWorkspace(workspace).itemsChangedSince(workspace, sinceMillis),
@@ -43,10 +35,6 @@ export const routedLayer = Layer.effect(
   Effect.gen(function* () {
     const githubClient = yield* GitHubClient;
     const linearClient = yield* LinearClient;
-    const registry = yield* WorkspaceRegistry;
-    const artifacts = yield* WorkflowArtifactStore;
-    return route(makeGitHub(githubClient), makeLinear(linearClient), [
-      makeLinearTrackerTriggerSource(linearClient, registry.state, artifacts),
-    ]);
+    return route(makeGitHub(githubClient), makeLinear(linearClient));
   }),
 );
