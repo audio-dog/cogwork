@@ -249,6 +249,7 @@ const resendOf = (prior: PriorRefusal | null, key: ClaimedWork["key"]) =>
         request: `${prior.agentText}\n\nDo no other work unless an issue above needs it.`,
       }
     : null;
+type Resend = NonNullable<ReturnType<typeof resendOf>>;
 
 const ownRunOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
   admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
@@ -486,14 +487,24 @@ export const make = Effect.gen(function* () {
     return yield* failAttempt(admission, claimed, work, refusalForPerson(refusal), status);
   });
 
-  const resumableSessionOf = Effect.fn("WorkflowRun.resumableSessionOf")(function* (
-    attempt: RunId,
+  const resendResumption = Effect.fn("WorkflowRun.resendResumption")(function* (
+    resend: Resend,
     selectedHarness: HarnessName,
+    workRequest: string,
   ) {
-    const sessionId = (yield* ledger.getRun(attempt))?.session ?? null;
+    const sessionId = (yield* ledger.getRun(resend.run))?.session ?? null;
     const session = sessionId === null ? null : yield* ledger.getSession(sessionId);
-    return session?.harness === selectedHarness && sessionResumable(session) ? session.id : null;
+    const resumable = session?.harness === selectedHarness && sessionResumable(session);
+    if (!resumable) return { session: null, request: workRequest };
+    return { session: session.id, request: resend.request };
   });
+
+  const takePriorRefusal = (itemKey: string) =>
+    Ref.modify(previousRefusals, (current) => {
+      const prior = current.get(itemKey) ?? null;
+      if (prior === null) return [prior, current];
+      return [prior, new Map(current).set(itemKey, { ...prior, resumableRun: null })];
+    });
 
   const recoverClaimed = Effect.fn("WorkflowRun.recoverClaimed")(function* <E>(
     admission: TriggerAdmission,
@@ -623,20 +634,14 @@ export const make = Effect.gen(function* () {
     const workRequest = handbackNote
       ? `Run Workflow Operation: ${operation.name}\n\nPerson's note: ${handbackNote}`
       : `Run Workflow Operation: ${operation.name}`;
-    const priorRefusal = (yield* Ref.get(previousRefusals)).get(keyOf(admission.event.key)) ?? null;
+    const priorRefusal = yield* takePriorRefusal(keyOf(admission.event.key));
     const resend = resendOf(priorRefusal, key);
-    const runResume = (attempt: RunId) =>
+    const runResumption = (attempt: RunId) =>
       Effect.map(ledger.getRun(attempt), (run) => ({ session: run?.session ?? null, request: workRequest }));
     const resumeReaders = [
-      resumed === null ? null : () => runResume(resumed.plan.attempt),
-      handback !== null && parkedAttempt !== null ? () => runResume(parkedAttempt) : null,
-      resend === null
-        ? null
-        : () =>
-            Effect.map(resumableSessionOf(resend.run, selectedHarness), (session) => ({
-              session,
-              request: session === null ? workRequest : resend.request,
-            })),
+      resumed === null ? null : () => runResumption(resumed.plan.attempt),
+      handback !== null && parkedAttempt !== null ? () => runResumption(parkedAttempt) : null,
+      resend === null ? null : () => resendResumption(resend, selectedHarness, workRequest),
     ];
     const resumption = yield* resumeReaders.find((read) => read !== null)?.() ??
       Effect.succeed({ session: null, request: workRequest });
