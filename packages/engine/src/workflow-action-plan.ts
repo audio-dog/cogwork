@@ -8,6 +8,7 @@ import {
   WorkflowActionArtifact,
   WorkflowActionOrigin,
   WorkflowActionPlan,
+  type WorkflowActionPlanArtifact,
   WorkflowActionPlanStep,
   WorkflowActionTarget,
   type WorkflowAgentInputValue,
@@ -387,6 +388,8 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   const registeredWorkspaces = registry === null ? [] : (yield* registry.state).workspaces;
   const slack = yield* SlackWrite;
   const observationStore = yield* TriggerObservationStore;
+  const recordArtifact = (artifact: WorkflowActionPlanArtifact | null) =>
+    Schema.is(WorkflowActionArtifact)(artifact) ? artifacts.record(artifact) : Effect.void;
   const coordinationView = yield* coordination.read(admission.event.key);
   const handbackAfterPlan = coordinationView.barrierAtMillis > initial.createdAtMillis;
   const hasFreshHandback =
@@ -498,13 +501,12 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
           coordination,
           observationStore,
         };
-        const result = yield* Effect.result(executor(context));
+        const result = yield* Effect.result(executor(context).pipe(Effect.tap(recordArtifact)));
         if (result._tag === "Success") {
           const plan = replaceStep(executingPlan, executingStep, {
             status: "completed",
             artifact: result.success,
           });
-          if (Schema.is(WorkflowActionArtifact)(result.success)) yield* artifacts.record(result.success);
           yield* store.save(plan);
           return initialExecutionState(plan);
         }
