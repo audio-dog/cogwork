@@ -1,7 +1,5 @@
-import { LifecycleStage } from "@cogwork/contracts";
-import { Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
+import { Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
-import { CLAUDE_CODE_MODELS } from "@tanstack/ai-claude-code";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -18,7 +16,6 @@ import {
   companionRunner,
   createTestSandbox,
   destroyTestSandbox,
-  fakeClaudeExecutable,
   harnessLayer,
   hostAuthentication,
   makeLiveHarness,
@@ -26,14 +23,14 @@ import {
   NativeSandboxSettings,
   name,
   resumedSession,
-  runnerWithoutRuntimeCatalog,
   sessionHandles,
   sessionStore,
   structuredObjects,
   testProcessDeadline,
 } from "./harness-fixtures";
+import { claudeModelCatalog } from "./models.generated";
 
-describe("Claude Code host Harness", () => {
+describe("Claude Code host Harness", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("registers an explicit Claude authentication binding", () =>
       Effect.sync(() => {
@@ -65,47 +62,57 @@ describe("Claude Code host Harness", () => {
       }),
     );
 
-    it.effect("prefers TanStack runtime model metadata and exposes no unsupported effort", () =>
-      Effect.gen(function* () {
-        const harness = Harness.make([claudeCodeRunner({ name, authentication: hostAuthentication })]);
-        const catalog = yield* harness.catalog(name);
+    it("reads the managed catalog without starting Claude", () => {
+      const harness = Harness.make([
+        claudeCodeRunner({
+          name,
+          authentication: hostAuthentication,
+          claudeExecutable: "missing-claude-code-catalog-probe",
+        }),
+      ]);
+      const catalog = harness.catalogs.get(name);
 
-        assert.deepStrictEqual(
-          catalog.models.map(({ value }) => value),
-          [...CLAUDE_CODE_MODELS],
-        );
-        assert.deepStrictEqual(catalog.provenance, {
-          source: "tanstack-runtime",
-          packageVersion: "0.6.4",
-        });
-        assert.isUndefined(catalog.efforts);
+      assert.isNotNull(catalog);
+      if (!catalog) return;
+      assert.deepStrictEqual(
+        catalog.models.map(({ value }) => value),
+        claudeModelCatalog.models.map(({ value }) => value),
+      );
+      assert.deepStrictEqual(catalog.provenance, { source: "managed" });
+      assert.strictEqual(catalog.generatedAgainst, claudeModelCatalog.generatedAgainst);
+      assert.deepStrictEqual(catalog.rawModelIds, claudeModelCatalog.rawModelIds);
+    });
+
+    it.effect("dispatches catalog defaults and selected effort in Claude native form", () =>
+      Effect.gen(function* () {
+        const defaults = yield* makeLiveHarness();
+        const defaultEvents = yield* defaults.harness
+          .run(makeRequest(defaults.handle.id))
+          .pipe(Stream.runCollect);
+        const defaultCapture = yield* captureFrom(defaultEvents);
+        const selected = yield* makeLiveHarness();
+        const selectedEvents = yield* selected.harness
+          .run(makeRequest(selected.handle.id, { model: "opus", effort: "xhigh" }))
+          .pipe(Stream.runCollect);
+        const selectedCapture = yield* captureFrom(selectedEvents);
+        const argumentAfter = (args: ReadonlyArray<string>, flag: string) => args.at(args.indexOf(flag) + 1);
+
+        assert.strictEqual(argumentAfter(defaultCapture.args, "--model"), "sonnet");
+        assert.strictEqual(argumentAfter(defaultCapture.args, "--effort"), "high");
+        assert.strictEqual(argumentAfter(selectedCapture.args, "--model"), "opus");
+        assert.strictEqual(argumentAfter(selectedCapture.args, "--effort"), "xhigh");
       }),
     );
 
-    it.effect("falls through native Claude discovery to the versioned fallback with provenance", () =>
+    it.effect("rejects unsupported model options without retrying", () =>
       Effect.gen(function* () {
-        const nativeRunner = runnerWithoutRuntimeCatalog(fakeClaudeExecutable());
-        const fallbackRunner = runnerWithoutRuntimeCatalog(fakeClaudeExecutable(" --empty-models"));
-        const native = yield* Harness.make([nativeRunner]).catalog(name);
-        const fallback = yield* Harness.make([fallbackRunner]).catalog(name);
+        const { handle, harness } = yield* makeLiveHarness();
+        const error = yield* harness
+          .run(makeRequest(handle.id, { model: "haiku", effort: "high" }))
+          .pipe(Stream.runDrain, Effect.flip);
 
-        assert.deepStrictEqual(
-          native.models.map(({ value }) => value),
-          ["fable", "opus", "sonnet", "claude-fable-5"],
-        );
-        assert.deepStrictEqual(native.provenance, {
-          source: "native-discovery",
-          runtimeHost: "local-process",
-          harnessVersion: "2.1.238 (Claude Code)",
-        });
-        assert.deepStrictEqual(
-          fallback.models.map(({ value }) => value),
-          ["sonnet", "opus", "haiku"],
-        );
-        assert.deepStrictEqual(fallback.provenance, {
-          source: "cogwork-fallback",
-          fallbackVersion: "claude-code-1",
-        });
+        assert.strictEqual(error.reason, "stale-selection");
+        assert.isFalse(error.retryable);
       }),
     );
 
@@ -155,28 +162,40 @@ describe("Claude Code host Harness", () => {
       "projects every Operation into a non-interactive native Sandbox posture",
       () =>
         Effect.gen(function* () {
-          const captures = yield* Effect.forEach(LifecycleStage.literals, captureOperation);
+          const captures = yield* Effect.forEach(["read-only", "full"] as const, (profile) =>
+            captureOperation("operate", profile),
+          );
+          yield* Effect.forEach(
+            captures,
+            ([profile, capture]) =>
+              Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings).pipe(
+                Effect.tap((settings) =>
+                  Effect.sync(() => {
+                    const readOnly = profile === "read-only";
+                    const disallowed = capturedDisallowedTools(capture);
 
-          for (const [operation, capture] of captures) {
-            const settings = yield* Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings);
-            const readOnly = OperationPolicy.operationPolicyProfile(operation) === "read-only";
-            const disallowed = capturedDisallowedTools(capture);
-
-            assert.deepStrictEqual(settings.sandbox, {
-              enabled: true,
-              failIfUnavailable: true,
-              allowUnsandboxedCommands: false,
-              autoAllowBashIfSandboxed: !readOnly,
-            });
-            assert.strictEqual(capture.settingSources, "");
-            assert.strictEqual(capture.permissionMode, readOnly ? "acceptEdits" : "bypassPermissions");
-            assert.deepStrictEqual(
-              disallowed,
-              readOnly
-                ? ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]
-                : ["Write", "Edit", "MultiEdit", "NotebookEdit"],
-            );
-          }
+                    assert.deepStrictEqual(settings.sandbox, {
+                      enabled: true,
+                      failIfUnavailable: true,
+                      allowUnsandboxedCommands: false,
+                      autoAllowBashIfSandboxed: !readOnly,
+                    });
+                    assert.strictEqual(capture.settingSources, "");
+                    assert.strictEqual(
+                      capture.permissionMode,
+                      readOnly ? "acceptEdits" : "bypassPermissions",
+                    );
+                    assert.deepStrictEqual(
+                      disallowed,
+                      readOnly
+                        ? ["Bash", "Write", "Edit", "MultiEdit", "NotebookEdit"]
+                        : ["Write", "Edit", "MultiEdit", "NotebookEdit"],
+                    );
+                  }),
+                ),
+              ),
+            { discard: true },
+          );
         }),
       10_000,
     );

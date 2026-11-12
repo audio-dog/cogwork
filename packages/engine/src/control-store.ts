@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import {
   type Connection,
   type ConnectionId,
@@ -16,18 +17,16 @@ import {
   defaultDaemonLimits,
   HarnessEnablement,
   type HarnessName,
-  LifecycleStage,
   type OperationSettingCell,
+  OperationSettingName,
   type OperationSettingRow,
   OperationSettingRow as OperationSettingRowSchema,
   OperationSettingScope,
   OperationSettingUpdate,
   type PluginInstall,
   PluginInstall as PluginInstallSchema,
-  SettingLevel,
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
-
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as DrizzleSqlite from "drizzle-kit/payload/sqlite";
 import * as Cause from "effect/Cause";
@@ -64,8 +63,8 @@ type ControlStoreMutators<Picture> = {
     harness: HarnessName,
     enabled: boolean,
   ) => Effect.Effect<Picture, ControlStoreFailure>;
-  readonly updateOperationSetting: (
-    update: OperationSettingUpdate,
+  readonly updateOperationSettings: (
+    updates: ReadonlyArray<OperationSettingUpdate>,
   ) => Effect.Effect<Picture, ControlStoreFailure>;
   readonly installPlugin: (
     record: PluginInstall,
@@ -121,12 +120,24 @@ type SqliteJournalMode = {
   readonly journal_mode: string;
 };
 
+type AutoVacuumMode = {
+  readonly auto_vacuum: number;
+};
+
+type FreelistPageCount = {
+  readonly freelist_count: number;
+};
+
+const PageCount = Schema.Struct({ page_count: Schema.Finite });
+
 const walBackupFailure = (error: unknown) =>
   new ControlStoreBootError({
     message: `Control store WAL preparation failed: ${messageOf(error)}`,
   });
 
 const maximumRunEventAge = Duration.days(30);
+const maximumRunEventBytes = 256 * 1024 * 1024;
+const maximumIncrementalVacuumPages = 4096;
 const schemaPreflightLockOptions = {
   realpath: false,
   retries: {
@@ -147,6 +158,44 @@ const additiveSchemaStatementPatterns = [
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+const databaseFileFailure = (operation: string) => (error: unknown) =>
+  new ControlStoreBootError({
+    message: `Control store database ${operation} failed: ${messageOf(error)}`,
+  });
+
+const withDatabaseFile = <A>(storePath: string, operation: string, use: (database: DatabaseSync) => A) =>
+  Effect.acquireUseRelease(
+    Effect.try({
+      try: () => new DatabaseSync(storePath),
+      catch: databaseFileFailure("open"),
+    }),
+    (database) =>
+      Effect.try({
+        try: () => use(database),
+        catch: databaseFileFailure(operation),
+      }),
+    (database) =>
+      Effect.try({
+        try: () => database.close(),
+        catch: databaseFileFailure("close"),
+      }),
+  );
+
+const runDatabasePragma = Effect.fn("ControlStore.runDatabasePragma")(
+  (storePath: string, statement: string) =>
+    withDatabaseFile(storePath, "pragma", (database) => database.exec(statement)),
+);
+
+const initializeStoreFile = Effect.fn("ControlStore.initializeStoreFile")((storePath: string) =>
+  withDatabaseFile(storePath, "initialize", (database) => {
+    const { page_count: pageCount } = Schema.decodeUnknownSync(PageCount)(
+      database.prepare("PRAGMA page_count;").get(),
+    );
+    if (pageCount > 0) return;
+    database.exec("PRAGMA auto_vacuum=INCREMENTAL;");
+  }),
+);
+
 const schemaDiffError = (error: unknown) => {
   const message = messageOf(error);
   if (/resolver\([^)]*\) was called without a HintsHandler/.test(message))
@@ -161,6 +210,14 @@ const classifySchemaStatement = (statement: string) =>
       : "destructive",
     statement,
   }) satisfies ControlStoreSchemaChange;
+
+// SQLite rejects ADD COLUMN ... NOT NULL without a default even on an empty table, so the table is
+// dropped and recreated from the schema; its rows are discarded, as ADR 0015 permits before release.
+const tableGainingRequiredColumn = (statement: string) => {
+  const table = /^ALTER\s+TABLE\s+`([^`]+)`\s+ADD\s/i.exec(statement.trim())?.[1];
+  if (table === undefined || !/\bNOT\s+NULL\b/i.test(statement) || /\bDEFAULT\b/i.test(statement)) return [];
+  return [table];
+};
 
 const isForeignKeysPragma = (statement: string) => /^PRAGMA\s+foreign_keys\s*=/i.test(statement.trim());
 
@@ -185,9 +242,6 @@ const setDaemonLimitFailure = (error: unknown) =>
 
 const StoredOperationSettingRow = Schema.Struct({
   setting: Schema.String,
-  level: Schema.Literals(["default", "workflow", "operation"]),
-  workflow: Schema.String,
-  operation: Schema.String,
   scope: Schema.Literals(["settings-profile", "runtime-host", "private-workspace-overlay"]),
   workspace: Schema.String,
   value: Schema.String,
@@ -286,12 +340,6 @@ const readConnections = Effect.fn("ControlStore.readConnections")(function* (sql
   return yield* Effect.forEach(rows, (row) => decodeConnection(row));
 });
 
-const levelOf = (row: StoredOperationSettingRow) => {
-  if (row.level === "default") return { _tag: "Default" };
-  if (row.level === "workflow") return { _tag: "Workflow", workflow: row.workflow };
-  return { _tag: "Operation", workflow: row.workflow, operation: row.operation };
-};
-
 const scopeOf = (row: StoredOperationSettingRow) => {
   if (row.scope === "settings-profile") return { _tag: "SettingsProfile" };
   if (row.scope === "runtime-host") return { _tag: "RuntimeHost" };
@@ -301,9 +349,8 @@ const scopeOf = (row: StoredOperationSettingRow) => {
 const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOperationSettingRow")(function* (
   row: StoredOperationSettingRow,
 ) {
-  if (row.level === "operation" && !Schema.is(LifecycleStage)(row.operation)) {
-    yield* Effect.logWarning("ignored stored Operation setting for unknown Operation", {
-      operation: row.operation,
+  if (!Schema.is(OperationSettingName)(row.setting)) {
+    yield* Effect.logWarning("ignored stored retired or unknown Operation setting", {
       setting: row.setting,
     });
     return null;
@@ -311,7 +358,7 @@ const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOper
   const value = yield* decodeJson(row.value);
   return yield* decodeOperationSettingRow({
     setting: row.setting,
-    level: levelOf(row),
+    level: { _tag: "Default" },
     scope: scopeOf(row),
     value,
   });
@@ -320,9 +367,9 @@ const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOper
 const readOperationSettings = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     const stored = yield* sql<StoredOperationSettingRow>`
-      SELECT setting, level, workflow, operation, scope, workspace, value
+      SELECT setting, scope, workspace, value
       FROM operation_settings
-      ORDER BY setting, level, workflow, operation, scope, workspace
+      ORDER BY setting, scope, workspace
     `;
     const rows = yield* decodeStoredOperationSettingRows(stored);
     return yield* Effect.forEach(rows, decodeStoredOperationSettingRow).pipe(
@@ -432,13 +479,6 @@ const clearContributionSetting = Effect.fn("ControlStore.clearContributionSettin
   `;
 });
 
-const storedLevel = (level: OperationSettingCell["level"]) =>
-  SettingLevel.match(level, {
-    Default: () => ({ level: "default", workflow: "", operation: "" }),
-    Workflow: ({ workflow }) => ({ level: "workflow", workflow, operation: "" }),
-    Operation: ({ workflow, operation }) => ({ level: "operation", workflow, operation }),
-  });
-
 const storedScope = (scope: OperationSettingCell["scope"]) =>
   OperationSettingScope.match(scope, {
     SettingsProfile: () => ({ scope: "settings-profile", workspace: "" }),
@@ -451,7 +491,6 @@ const storedScope = (scope: OperationSettingCell["scope"]) =>
 
 const storedCell = (cell: OperationSettingCell) => ({
   setting: cell.setting,
-  ...storedLevel(cell.level),
   ...storedScope(cell.scope),
 });
 
@@ -462,9 +501,9 @@ const setOperationSetting = Effect.fn("ControlStore.setOperationSetting")(functi
   const cell = storedCell(row);
   const value = yield* encodeJson(row.value);
   yield* sql`
-    INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
-    VALUES (${cell.setting}, ${cell.level}, ${cell.workflow}, ${cell.operation}, ${cell.scope}, ${cell.workspace}, ${value})
-    ON CONFLICT (setting, level, workflow, operation, scope, workspace)
+    INSERT INTO operation_settings (setting, scope, workspace, value)
+    VALUES (${cell.setting}, ${cell.scope}, ${cell.workspace}, ${value})
+    ON CONFLICT (setting, scope, workspace)
     DO UPDATE SET value = excluded.value
   `;
 });
@@ -477,9 +516,6 @@ const clearOperationSetting = Effect.fn("ControlStore.clearOperationSetting")(fu
   yield* sql`
     DELETE FROM operation_settings
     WHERE setting = ${stored.setting}
-      AND level = ${stored.level}
-      AND workflow = ${stored.workflow}
-      AND operation = ${stored.operation}
       AND scope = ${stored.scope}
       AND workspace = ${stored.workspace}
   `;
@@ -620,15 +656,20 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       }),
     );
   });
-  const updateOperationSetting = Effect.fn("ControlStore.updateOperationSetting")(function* (
-    update: OperationSettingUpdate,
+  const updateOperationSettings = Effect.fn("ControlStore.updateOperationSettings")(function* (
+    updates: ReadonlyArray<OperationSettingUpdate>,
   ) {
     return yield* sql.withTransaction(
       Effect.gen(function* () {
-        yield* OperationSettingUpdate.match(update, {
-          Set: ({ row }) => setOperationSetting(sql, row),
-          Clear: ({ cell }) => clearOperationSetting(sql, cell),
-        });
+        yield* Effect.forEach(
+          updates,
+          (update) =>
+            OperationSettingUpdate.match(update, {
+              Set: ({ row }) => setOperationSetting(sql, row),
+              Clear: ({ cell }) => clearOperationSetting(sql, cell),
+            }),
+          { discard: true },
+        );
         return yield* readPicture(sql);
       }),
     );
@@ -694,8 +735,8 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
       removeConnection(connectionId).pipe(Effect.mapError(storeFailure("remove Connection"))),
     setHarnessEnabled: (harness: HarnessName, enabled: boolean) =>
       setHarnessEnabled(harness, enabled).pipe(Effect.mapError(storeFailure("set Harness enablement"))),
-    updateOperationSetting: (update: OperationSettingUpdate) =>
-      updateOperationSetting(update).pipe(Effect.mapError(storeFailure("update Operation setting"))),
+    updateOperationSettings: (updates: ReadonlyArray<OperationSettingUpdate>) =>
+      updateOperationSettings(updates).pipe(Effect.mapError(storeFailure("update Operation settings"))),
     installPlugin: (
       record: PluginInstall,
       contributionIds: ReadonlyArray<string>,
@@ -749,12 +790,18 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
   const statements = yield* schemaStatements;
   if (statements.length === 0) return;
   const changes = statements.map(classifySchemaStatement);
-  const transactionStatements = statements.filter((statement) => !isForeignKeysPragma(statement));
+  const resetTables = [...new Set(statements.flatMap(tableGainingRequiredColumn))];
   const transaction = sql.withTransaction(
     Effect.gen(function* () {
-      yield* Effect.forEach(transactionStatements, (statement) => sql.unsafe(statement), {
+      yield* Effect.forEach(resetTables, (table) => sql.unsafe(`DROP TABLE \`${table}\`;`), {
         discard: true,
       });
+      const pending = resetTables.length === 0 ? statements : yield* schemaStatements;
+      yield* Effect.forEach(
+        pending.filter((statement) => !isForeignKeysPragma(statement)),
+        (statement) => sql.unsafe(statement),
+        { discard: true },
+      );
       const remaining = yield* schemaStatements;
       if (remaining.length === 0) return;
       return yield* new ControlStoreBootError({
@@ -763,6 +810,11 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
     }),
   );
   yield* Effect.logInfo("converging Control store schema", { changes });
+  if (resetTables.length > 0) {
+    yield* Effect.logWarning("recreating Control store tables that gained a required column", {
+      tables: resetTables,
+    });
+  }
   if (!statements.some(disablesForeignKeys)) return yield* transaction;
   return yield* Effect.acquireUseRelease(
     sql.unsafe("PRAGMA foreign_keys=OFF;"),
@@ -771,18 +823,65 @@ const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
   );
 });
 
-const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* () {
+export const retainRunEvents = Effect.fn("ControlStore.retainRunEvents")(function* (
+  storePath: string,
+  byteBudget = maximumRunEventBytes,
+  vacuumPageBudget = maximumIncrementalVacuumPages,
+) {
   const sql = yield* SqlClient.SqlClient;
   const now = yield* Clock.currentTimeMillis;
-  yield* sql`DELETE FROM run_events WHERE at < ${now - Duration.toMillis(maximumRunEventAge)}`;
-  yield* sql`
-    UPDATE runs
-    SET event_count = (
-      SELECT count(*)
-      FROM run_events
-      WHERE run_events.run_id = runs.id
-    )
-  `;
+  const cutoff = now - Duration.toMillis(maximumRunEventAge);
+  yield* sql.withTransaction(
+    Effect.gen(function* () {
+      yield* sql`
+        WITH eligible_runs AS (
+          SELECT
+            runs.id,
+            runs.started_at,
+            runs.ended_at,
+            sum(length(cast(run_events.data AS blob))) AS event_bytes
+          FROM runs
+          INNER JOIN sessions
+            ON sessions.id = runs.session
+            AND sessions.kind = 'opaque-handle'
+          INNER JOIN run_events ON run_events.run_id = runs.id
+          WHERE runs.status IN ('succeeded', 'declined', 'failed', 'exhausted', 'interrupted', 'crashed')
+            AND runs.ended_at IS NOT NULL
+          GROUP BY runs.id, runs.started_at, runs.ended_at
+        ),
+        size_candidates AS (
+          SELECT
+            id,
+            sum(event_bytes) OVER (
+              ORDER BY ended_at DESC, started_at DESC, id DESC
+              ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            ) AS newest_bytes
+          FROM eligible_runs
+          WHERE ended_at >= ${cutoff}
+        ),
+        prunable_runs AS (
+          SELECT id FROM eligible_runs WHERE ended_at < ${cutoff}
+          UNION
+          SELECT id FROM size_candidates WHERE newest_bytes > ${byteBudget}
+        )
+        UPDATE runs
+        SET event_count = 0, events_pruned_at = ${now}
+        WHERE id IN (SELECT id FROM prunable_runs)
+      `;
+      yield* sql`
+        DELETE FROM run_events
+        WHERE run_id IN (
+          SELECT id FROM runs WHERE events_pruned_at = ${now}
+        )
+      `;
+    }),
+  );
+  const [autoVacuum] = yield* sql.unsafe<AutoVacuumMode>("PRAGMA auto_vacuum;");
+  if (autoVacuum?.auto_vacuum !== 2) return;
+  const [freelist] = yield* sql.unsafe<FreelistPageCount>("PRAGMA freelist_count;");
+  if ((freelist?.freelist_count ?? 0) === 0) return;
+  yield* sql.unsafe("PRAGMA wal_checkpoint(TRUNCATE);");
+  yield* runDatabasePragma(storePath, `PRAGMA incremental_vacuum(${vacuumPageBudget});`);
 });
 
 const seedDaemonLimits = Effect.fn("ControlStore.seedDaemonLimits")(function* () {
@@ -809,7 +908,7 @@ const boot = Effect.fn("ControlStore.boot")(function* (storePath: string) {
   yield* fs.chmod(storePath, 0o600);
   yield* convergeSchema(controlStoreSchemaStatements());
   yield* seedDaemonLimits();
-  yield* retainRunEvents();
+  yield* retainRunEvents(storePath);
 });
 
 // The directory has to exist, and be private, before the client opens the file inside it. `mode`
@@ -824,7 +923,10 @@ const prepareStoreDirectory = Effect.fn("ControlStore.prepareStoreDirectory")(fu
 export const controlStoreClientLayer = (storePath: string, options: ControlStoreClientOptions = {}) =>
   Layer.unwrap(
     Effect.map(prepareStoreDirectory(storePath), () =>
-      SqliteClient.layer({ filename: storePath, ...options }),
+      SqliteClient.layer({
+        filename: storePath,
+        ...(options.busyTimeout === undefined ? {} : { busyTimeout: options.busyTimeout }),
+      }),
     ),
   );
 
@@ -937,17 +1039,21 @@ const prepareSchemaFallback = Effect.fn("ControlStore.prepareSchemaFallback")(
   (storePath: string, options: ControlStoreClientOptions) =>
     withSchemaPreflightLock(
       storePath,
-      Effect.scoped(
-        controlStoreSchemaStatements().pipe(
-          Effect.map(() => false),
-          Effect.catchTag("RenameShapedControlStoreDiff", () =>
-            prepareStoreForRenameBackup().pipe(Effect.map(() => true)),
+      Effect.andThen(
+        initializeStoreFile(storePath),
+        Effect.scoped(
+          controlStoreSchemaStatements().pipe(
+            Effect.map(() => false),
+            Effect.catchTag("RenameShapedControlStoreDiff", () =>
+              prepareStoreForRenameBackup().pipe(Effect.map(() => true)),
+            ),
+            Effect.provide(controlStoreClientLayer(storePath, options)),
           ),
-          Effect.provide(controlStoreClientLayer(storePath, options)),
+        ).pipe(
+          Effect.flatMap((requiresBackup) => backupRenameShapedStoreIfRequired(storePath, requiresBackup)),
+          Effect.andThen(initializeStoreFile(storePath)),
+          Effect.as<ControlStoreBootError | null>(null),
         ),
-      ).pipe(
-        Effect.flatMap((requiresBackup) => backupRenameShapedStoreIfRequired(storePath, requiresBackup)),
-        Effect.as<ControlStoreBootError | null>(null),
       ),
     ).pipe(Effect.catchCause(recoverSchemaPreflightFailure)),
 );
@@ -964,7 +1070,7 @@ const unavailable = (message: string): ControlStoreService => {
     revokeConnection: () => Effect.fail(failure),
     removeConnection: () => Effect.fail(failure),
     setHarnessEnabled: () => Effect.fail(failure),
-    updateOperationSetting: () => Effect.fail(failure),
+    updateOperationSettings: () => Effect.fail(failure),
     installPlugin: () => Effect.fail(failure),
     uninstallPlugin: () => Effect.fail(failure),
     updateContributionSetting: () => Effect.fail(failure),
@@ -996,8 +1102,9 @@ export const bootControlStoreLayer = (storePath: string, options: ControlStoreCl
   Layer.unwrap(
     Effect.map(prepareSchemaFallback(storePath, options), (preflightError) => {
       const client = controlStoreClientLayer(storePath, options);
-      return Layer.effect(ControlStore, bootControlStore(storePath, preflightError)).pipe(
-        Layer.provideMerge(client),
+      return Layer.merge(
+        Layer.effect(ControlStore, bootControlStore(storePath, preflightError)).pipe(Layer.provide(client)),
+        client,
       );
     }),
   );

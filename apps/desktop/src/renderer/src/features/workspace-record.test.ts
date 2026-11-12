@@ -37,9 +37,7 @@ const registered = (name: string, displayName?: string) =>
           issueTracker: { type: "github" },
           linearHistory: false,
         },
-        poll: { status: "ok" },
         contributions: [],
-        availability: [],
       },
     }),
   );
@@ -90,7 +88,6 @@ describe("workspace record draft", () => {
           connectionId: "linear/acme",
           teams: ["ENG"],
           organization: "acme",
-          roleLabels: { "ready-for-agent": "agent-ready" },
         },
         sourceControl: {
           type: "github",
@@ -106,7 +103,6 @@ describe("workspace record draft", () => {
         concurrency: 3,
         mcpSkills: [],
       },
-      poll: { status: "ok" },
       contributions: [],
     });
 

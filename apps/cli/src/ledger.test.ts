@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import {
+  BranchName,
   HarnessName,
   RunId,
   RunPlan,
@@ -7,6 +8,7 @@ import {
   type Session,
   SessionId,
   sessionHandle,
+  WorkflowId,
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
@@ -33,6 +35,28 @@ class TestStorePath extends Context.Service<TestStorePath, string>()(
   "@cogwork/cli/ledger.test/TestStorePath",
 ) {}
 
+interface LedgerLogProbeService {
+  readonly capture: (entry: unknown) => void;
+  readonly entries: Effect.Effect<ReadonlyArray<unknown>>;
+}
+
+class LedgerLogProbe extends Context.Service<LedgerLogProbe, LedgerLogProbeService>()(
+  "@cogwork/cli/ledger.test/LedgerLogProbe",
+) {
+  static readonly layer = Layer.sync(LedgerLogProbe, () => {
+    const entries = MutableRef.make<ReadonlyArray<unknown>>([]);
+    return {
+      capture: (entry) => MutableRef.update(entries, (current) => [...current, entry]),
+      entries: Effect.sync(() => MutableRef.get(entries)),
+    };
+  });
+  static readonly captureLayer = Logger.layer([
+    Effect.map(LedgerLogProbe, (probe) =>
+      Logger.make<unknown, void>(({ message }) => probe.capture(message)),
+    ),
+  ]).pipe(Layer.provideMerge(LedgerLogProbe.layer));
+}
+
 const bootedLedgerLayer = (storePath: string) =>
   ledgerLayer.pipe(Layer.provideMerge(bootControlStoreLayer(storePath, { busyTimeout: "25 millis" })));
 
@@ -41,7 +65,7 @@ const runRow = (run: RunRecord) =>
     run.id,
     run.workspace,
     run.workItem,
-    run.stage,
+    run.operation,
     run.harness,
     run.branch,
     run.session,
@@ -61,7 +85,7 @@ const insertRunsBulk = (storePath: string, records: ReadonlyArray<RunRecord>) =>
         sqlite.exec("BEGIN");
         const insert = sqlite.prepare(`
           INSERT INTO runs (
-            id, workspace, work_item, stage, harness, branch, session,
+            id, workspace, work_item, operation, harness, branch, session,
             input_tokens, output_tokens, total_tokens, status, started_at, ended_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
@@ -74,6 +98,7 @@ const insertRunsBulk = (storePath: string, records: ReadonlyArray<RunRecord>) =>
   );
 
 const runId = Schema.decodeSync(RunId);
+const branchName = Schema.decodeSync(BranchName);
 const workspace = Schema.decodeSync(WorkspaceId)("gh");
 const otherWorkspace = Schema.decodeSync(WorkspaceId)("other");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
@@ -82,6 +107,7 @@ const resolveItem = Schema.decodeSync(WorkItemId)("#202");
 const bareResolveItem = Schema.decodeSync(WorkItemId)("202");
 const resolveOther = Schema.decodeSync(WorkItemId)("#303");
 const missingResolveItem = Schema.decodeSync(WorkItemId)("#404");
+const triageWorkflow = Schema.decodeSync(WorkflowId)("triage-workflow");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const replacementSession = Schema.decodeSync(SessionId)("sess-replaced");
 const midSession = Schema.decodeSync(SessionId)("sess-mid");
@@ -93,7 +119,7 @@ const runPlan = (id: string, message = "Triage #7") =>
   Schema.decodeSync(RunPlan)({
     id: runId(id),
     operation: "triage",
-    harness: { name: harness, model: null, effort: null, profile: "read-only" },
+    harness: { name: harness, model: null, options: {}, profile: "read-only" },
     instructions: [],
     operatingInstructions: {
       name: "triage-agent",
@@ -104,7 +130,6 @@ const runPlan = (id: string, message = "Triage #7") =>
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,
@@ -112,13 +137,12 @@ const runPlan = (id: string, message = "Triage #7") =>
     messages: [{ role: "user", content: message }],
     workContext: {
       reference: { workItem, url: "https://example.test/issues/7" },
+      prose: { body: "", comments: [] },
       facts: {
-        roles: ["needs-triage"],
         assignees: [],
         openBlockers: 0,
         claim: null,
         priority: "medium",
-        pr: null,
       },
       observation: { generation: 3, observedAtMillis: 1000 },
     },
@@ -137,7 +161,7 @@ const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecor
   id: runId(id),
   workspace,
   workItem,
-  stage: "triage",
+  operation: "triage",
   harness,
   branch: null,
   session: null,
@@ -165,7 +189,11 @@ describe("sqlite RunLedger", () => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-" });
       const storePath = path.join(dir, "control.db");
-      return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
+      return Layer.mergeAll(
+        bootedLedgerLayer(storePath),
+        Layer.succeed(TestStorePath, storePath),
+        LedgerLogProbe.captureLayer,
+      );
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
     it.effect("persists one immutable Plan when accepting a Run", () =>
@@ -181,6 +209,34 @@ describe("sqlite RunLedger", () => {
         assert.strictEqual(error._tag, "RunLedgerError");
         assert.isFalse(error.retryable);
         assert.deepStrictEqual(yield* ledger.getRunPlan(accepted.id), accepted);
+      }),
+    );
+
+    it.effect("logs successful Run persistence transitions once", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const logs = yield* LedgerLogProbe;
+        const before = (yield* logs.entries).length;
+        const id = runId("logged-sqlite-transitions");
+        yield* ledger.acceptRun(record(id, 1000), runPlan(id));
+        yield* ledger.appendEvent(id, {
+          seq: 0,
+          type: "RUN_STARTED",
+          name: null,
+          data: "{}",
+          atMillis: 1001,
+        });
+        yield* ledger.updateRun(id, {
+          status: "succeeded",
+          usage: null,
+          endedAtMillis: 2000,
+        });
+
+        assert.deepStrictEqual((yield* logs.entries).slice(before), [
+          ["accepted Run", { harness: "cursor", branch: null }],
+          ["appended Run event", { seq: 0 }],
+          ["settled Run", { status: "succeeded" }],
+        ]);
       }),
     );
 
@@ -201,7 +257,7 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect("persists a run, its events, and reports a summary with event count", () =>
+    it.effect("persists a run and reports its event count and history state", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
         const id = runId("happy-1");
@@ -236,6 +292,7 @@ describe("sqlite RunLedger", () => {
         const summary = summaries.find((row) => row.id === id);
         assert.isDefined(summary);
         assert.strictEqual(storedSummary?.eventCount, 2);
+        assert.isNull(storedSummary?.eventsPrunedAtMillis);
         assert.strictEqual(summary?.status, "succeeded");
         assert.strictEqual(summary?.eventCount, 2);
         assert.strictEqual(summary?.session, "sess-replaced");
@@ -254,6 +311,15 @@ describe("sqlite RunLedger", () => {
           events.map((event) => event.type),
           ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
         );
+
+        const storePath = yield* TestStorePath;
+        yield* Effect.acquireUseRelease(
+          Effect.sync(() => new DatabaseSync(storePath)),
+          (sqlite) =>
+            Effect.sync(() => sqlite.prepare("UPDATE runs SET events_pruned_at = 3000 WHERE id = ?").run(id)),
+          (sqlite) => Effect.sync(() => sqlite.close()),
+        );
+        assert.strictEqual((yield* ledger.getRunSummary(id))?.eventsPrunedAtMillis, 3000);
       }),
     );
 
@@ -282,24 +348,6 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
-    it.effect("persists a held claim disposition", () =>
-      Effect.gen(function* () {
-        const ledger = yield* RunLedger.CoreRunLedger;
-        const id = runId("held-claim");
-        yield* ledger.insertRun(record(id, 1000));
-        yield* ledger.updateRun(id, {
-          status: "failed",
-          usage: null,
-          endedAtMillis: 2000,
-          claimDisposition: "hold",
-        });
-
-        const stored = yield* ledger.getRun(id);
-
-        assert.strictEqual(stored?.claimDisposition, "hold");
-      }),
-    );
-
     it.effect("warns with the operation and row id before ignoring corrupt stored values", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
@@ -310,7 +358,7 @@ describe("sqlite RunLedger", () => {
         yield* ledger.insertRun(record(run, 1000));
         yield* ledger.acceptRun(record(plan, 2000), runPlan(plan));
         yield* ledger.insertRun(
-          record(sessionReference, 3000, { branch: "corrupt-session-branch", session }),
+          record(sessionReference, 3000, { branch: branchName("corrupt-session-branch"), session }),
         );
         yield* Effect.acquireUseRelease(
           Effect.sync(() => new DatabaseSync(storePath)),
@@ -330,7 +378,7 @@ describe("sqlite RunLedger", () => {
         const [storedRun, storedPlan, storedSession] = yield* Effect.all([
           ledger.getRun(run),
           ledger.getRunPlan(plan),
-          ledger.sessionForBranch(workspace, "corrupt-session-branch"),
+          ledger.sessionForBranch(workspace, branchName("corrupt-session-branch")),
         ]).pipe(Effect.withLogger(logger));
         assert.isNull(storedRun);
         assert.isNull(storedPlan);
@@ -391,26 +439,26 @@ describe("sqlite RunLedger", () => {
     it.effect("returns the most recent resumable run's session for a branch", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
-        const sessionByBranch = (workspace: WorkspaceId, branch: string) =>
+        const sessionByBranch = (workspace: WorkspaceId, branch: BranchName) =>
           Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
         yield* ledger.insertSession(sessionRecord());
-        yield* ledger.insertRun(record("branch-1", 1000, { branch: "7-fix-export", session }));
-        yield* ledger.insertRun(record("branch-2", 3000, { branch: "9-other" }));
+        yield* ledger.insertRun(record("branch-1", 1000, { branch: branchName("7-fix-export"), session }));
+        yield* ledger.insertRun(record("branch-2", 3000, { branch: branchName("9-other") }));
         yield* ledger.updateRun(runId("branch-1"), {
           status: "succeeded",
           usage: null,
           endedAtMillis: 1500,
         });
-        assert.strictEqual(yield* sessionByBranch(workspace, "7-fix-export"), "sess-abc");
-        assert.isNull(yield* sessionByBranch(workspace, "9-other"));
-        assert.isNull(yield* sessionByBranch(otherWorkspace, "7-fix-export"));
+        assert.strictEqual(yield* sessionByBranch(workspace, branchName("7-fix-export")), "sess-abc");
+        assert.isNull(yield* sessionByBranch(workspace, branchName("9-other")));
+        assert.isNull(yield* sessionByBranch(otherWorkspace, branchName("7-fix-export")));
       }),
     );
 
     it.effect("breaks equal branch-run timestamps by insertion order", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
-        const branch = "16-timestamp-tie";
+        const branch = branchName("16-timestamp-tie");
         yield* ledger.insertSession(sessionRecord());
         yield* ledger.insertSession(sessionRecord({ id: replacementSession, handle: "cursor-replaced" }));
         yield* ledger.insertRun(record("tie-earlier", 1000, { branch, session }));
@@ -431,8 +479,9 @@ describe("sqlite RunLedger", () => {
           harness,
           createdAtMillis: 0,
         });
-        yield* ledger.insertRun(record("owned-branch", 1000, { branch: "15-owned", session: ownedSession }));
-        const run = yield* ledger.latestRunByBranch(workspace, "15-owned");
+        const branch = branchName("15-owned");
+        yield* ledger.insertRun(record("owned-branch", 1000, { branch, session: ownedSession }));
+        const run = yield* ledger.latestRunByBranch(workspace, branch);
         assert.strictEqual(run?.session, ownedSession);
         assert.isNull(sessionHandle(yield* ledger.getSession(ownedSession)));
       }),
@@ -508,18 +557,15 @@ describe("sqlite RunLedger", () => {
     it.effect("does not offer a crashed run's session for resume", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
-        const sessionByBranch = (branch: string) =>
+        const sessionByBranch = (branch: BranchName) =>
           Effect.map(ledger.latestRunByBranch(workspace, branch), (run) => run?.session ?? null);
+        const branch = branchName("13-crash");
         yield* ledger.insertSession(sessionRecord());
-        yield* ledger.insertRun(
-          record("crashed-branch", 5000, { branch: "13-crash", session, status: "crashed" }),
-        );
-        assert.isNull(yield* sessionByBranch("13-crash"));
+        yield* ledger.insertRun(record("crashed-branch", 5000, { branch, session, status: "crashed" }));
+        assert.isNull(yield* sessionByBranch(branch));
 
-        yield* ledger.insertRun(
-          record("crashed-earlier", 1000, { branch: "13-crash", session, status: "failed" }),
-        );
-        assert.strictEqual(yield* sessionByBranch("13-crash"), "sess-abc");
+        yield* ledger.insertRun(record("crashed-earlier", 1000, { branch, session, status: "failed" }));
+        assert.strictEqual(yield* sessionByBranch(branch), "sess-abc");
       }),
     );
 
@@ -528,9 +574,10 @@ describe("sqlite RunLedger", () => {
         const ledger = yield* RunLedger.CoreRunLedger;
         const id = runId("in-flight");
         yield* ledger.insertSession(sessionRecord({ id: midSession, handle: null }));
-        yield* ledger.insertRun(record("in-flight", 7000, { branch: "11-mid-run", session: midSession }));
+        const branch = branchName("11-mid-run");
+        yield* ledger.insertRun(record("in-flight", 7000, { branch, session: midSession }));
 
-        assert.isNull(yield* ledger.latestRunByBranch(workspace, "11-mid-run"));
+        assert.isNull(yield* ledger.latestRunByBranch(workspace, branch));
 
         yield* ledger.recordSessionHandle(midSession, "cursor-mid");
         assert.strictEqual(sessionHandle(yield* ledger.getSession(midSession)), "cursor-mid");
@@ -540,7 +587,7 @@ describe("sqlite RunLedger", () => {
         assert.strictEqual(inFlight?.status, "running");
         assert.isNull(inFlight?.endedAtMillis);
 
-        const byBranch = yield* ledger.latestRunByBranch(workspace, "11-mid-run");
+        const byBranch = yield* ledger.latestRunByBranch(workspace, branch);
         assert.strictEqual(byBranch?.id, id);
       }),
     );
@@ -549,8 +596,9 @@ describe("sqlite RunLedger", () => {
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
         yield* ledger.insertSession(sessionRecord({ id: foldSession }));
-        yield* ledger.insertRun(record("sess-first", 8000, { branch: "22-two-runs", session: foldSession }));
-        yield* ledger.insertRun(record("sess-second", 9000, { branch: "22-two-runs", session: foldSession }));
+        const branch = branchName("22-two-runs");
+        yield* ledger.insertRun(record("sess-first", 8000, { branch, session: foldSession }));
+        yield* ledger.insertRun(record("sess-second", 9000, { branch, session: foldSession }));
         yield* ledger.appendEvent(runId("sess-second"), {
           seq: 0,
           type: "TEXT_MESSAGE_CONTENT",
@@ -566,7 +614,7 @@ describe("sqlite RunLedger", () => {
           atMillis: 8100,
         });
 
-        assert.strictEqual(yield* ledger.sessionForBranch(workspace, "22-two-runs"), foldSession);
+        assert.strictEqual(yield* ledger.sessionForBranch(workspace, branch), foldSession);
         const events = yield* ledger.sessionEvents(foldSession);
         assert.deepStrictEqual(
           events.map((event) => event.type),
@@ -590,6 +638,23 @@ describe("sqlite RunLedger", () => {
         const summary = summaries.find((row) => row.id === id);
         assert.isDefined(summary);
         assert.deepStrictEqual(summary?.usage, { inputTokens: 5 });
+      }),
+    );
+
+    it.effect("round-trips a Run's subject and Workflow and keeps them absent when none was given", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const subject = { title: "Fix login", url: "https://github.com/acme/web/issues/7" };
+        yield* ledger.insertRun({ ...record("subject-titled", 9200), subject, workflow: triageWorkflow });
+        yield* ledger.insertRun(record("subject-absent", 9300));
+
+        const summaries = yield* ledger.listRuns(10);
+        const titled = summaries.find((row) => row.id === runId("subject-titled"));
+        const absent = summaries.find((row) => row.id === runId("subject-absent")) ?? {};
+        assert.deepStrictEqual(titled?.subject, subject);
+        assert.strictEqual(titled?.workflow, triageWorkflow);
+        assert.isFalse("subject" in absent);
+        assert.isFalse("workflow" in absent);
       }),
     );
 
@@ -763,7 +828,17 @@ describe("sqlite RunLedger against a broken store", () => {
       const path = yield* Path.Path;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-ledger-broken-" });
       const storePath = path.join(dir, "control.db");
-      return Layer.merge(bootedLedgerLayer(storePath), Layer.succeed(TestStorePath, storePath));
+      const core = bootedLedgerLayer(storePath);
+      const published = RunLedger.publishingLayer.pipe(
+        Layer.provide(core),
+        Layer.provide(DaemonEventBus.layer),
+      );
+      return Layer.mergeAll(
+        core,
+        published,
+        Layer.succeed(TestStorePath, storePath),
+        LedgerLogProbe.captureLayer,
+      );
     }).pipe(Layer.unwrap, Layer.provide(NodeServices.layer)),
   )((it) => {
     it.effect("fails when the event head cannot be read", () =>
@@ -804,10 +879,12 @@ describe("sqlite RunLedger against a broken store", () => {
       }),
     );
 
-    it.effect("completes a write whose table is gone", () =>
+    it.effect("does not log transitions for writes whose tables are gone", () =>
       Effect.gen(function* () {
-        const ledger = yield* RunLedger.CoreRunLedger;
+        const ledger = yield* RunLedger.RunLedger;
+        const logs = yield* LedgerLogProbe;
         yield* dropTables(yield* TestStorePath);
+        const before = (yield* logs.entries).length;
 
         yield* ledger.insertRun(record("broken-1", 1000));
         yield* ledger.appendEvent(runId("broken-1"), {
@@ -817,6 +894,20 @@ describe("sqlite RunLedger against a broken store", () => {
           data: "{}",
           atMillis: 1000,
         });
+        yield* ledger.updateRun(runId("broken-1"), {
+          status: "failed",
+          usage: null,
+          endedAtMillis: 1001,
+        });
+
+        const transitionLogs = (yield* logs.entries)
+          .slice(before)
+          .filter((message) =>
+            ["appended Run event", "settled Run"].some((transition) =>
+              JSON.stringify(message).includes(transition),
+            ),
+          );
+        assert.deepStrictEqual(transitionLogs, []);
       }),
     );
 

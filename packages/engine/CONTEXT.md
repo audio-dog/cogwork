@@ -4,77 +4,73 @@ The work control plane packaged as an embeddable library — the machinery that 
 and runs work. It owns the *verbs*; the nouns live in the shared kernel
 ([contracts](../contracts/CONTEXT.md)). It has no process identity of its own; the daemon hosts it.
 
-Role in the flow: **reconcile → schedule → execute → dispatch to a harness**. See the root
+Role in the flow: **observe → schedule → run → dispatch to a harness**. See the root
 `CONTEXT-MAP.md` for the end-to-end story.
 
 ## Language
 
 **Daemon**:
-The long-lived host process that runs the engine on one machine: it serves the RPC group and drives three heartbeats (reconcile, execute, and performance regression). Not a class — a set of modules composed at startup. The composition itself is the **seam** `Daemon.serverLayer(hostAdapters)`: it assembles the RPC server, its handlers, and the NDJSON framing on top of the engine's own services, taking a host's adapters (credential store, run ledger, workspace registry, worktree platform, harness runners, scheduler config, RPC transport, performance health source) as its one argument. The one-credential-store rule lives here — the issue-tracker reads and the MCP-server bearer must share one store instance. `Daemon.serializationLayer` is exported so a client frames its end of the wire the same way. Any host (the CLI today, desktop next) builds those adapters and calls this.
+The long-lived host process that runs the engine on one machine: it serves the RPC group and drives Trigger observation, scheduling, and performance-regression heartbeats. Not a class — a set of modules composed at startup. `Daemon.serverLayer(hostAdapters)` assembles the RPC server, framing, stores, registry, Harnesses, scheduler, Trigger sources, and Workflow runner.
 _Avoid_: Engine, orchestrator app, server (that's the RPC transport)
 
-**Reconcile worker**:
-The background worker that polls every workspace's issue tracker, asks its configured source control provider to resolve a trusted pull request for every observed work item, classifies the combined results, and stores them in an in-memory reconcile snapshot. A coordination comment is the record of acting, not a precondition for observing a pull request. One of the daemon's three heartbeats. A workspace whose rate-limit scope is inside a cooldown window is skipped before any request goes out, so a pinned credential is not hammered.
-_Avoid_: Sync, poll loop. Distinct from worktree reconcile (cleanup) and claim recovery (resuming this daemon's own interrupted runs or releasing genuinely stale claims).
+**Trigger observation**:
+The background service that asks every active Trigger source for source revisions, matches each event to published Workflows, and durably admits each match. It is the scheduler's source of waiting work.
+_Avoid_: Reconcile worker, snapshot, classifier
 
 **Rate-limit scope**:
-The key an issue tracker hands the reconcile worker to say *whose* request budget a poll spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. GitHub returns none: its client already fails fast inside its own cooldown, so there is nothing for reconcile to add.
+The key the Linear client backs off on to say *whose* request budget a call spends. Linear's budget is per user and shared across every key that user owns, so its scope is the token env var — all workspaces reading through one token back off together. The GitHub client fails fast inside its own cooldown instead.
 _Avoid_: Credential id (the credential store's business), workspace key (the point is that it is *not* per workspace)
 
 **Cooldown window**:
 The span a rate-limit scope is held out of polling for, opened when a source reports `rate-limited`. Length comes from the source's own retry timing when it has any (Linear's `retryAfter` / `requestsResetAt`), and from exponential backoff when it doesn't. Entering a window warns once; the skipped ticks in between are quiet, and a successful poll closes it.
 _Avoid_: Circuit breaker (nothing is tripped open by error rate), throttle
 
-**Classification**:
-The partition of an issue tracker's observed items into eligible, claimed, blocked, needs-human, and ready-to-merge. The first four shapes state whether or why an agent can act; ready-to-merge carries a required PR summary and waits for a person. *Blocked* means the issue tracker reports open blockers, so implementation is held until they close; *needs-human* means triage parked it for a person. Produced by `classify`.
-_Avoid_: Filtering, triage (triage is an operation, not this)
+**Ready-to-merge view**:
+A read-model projection of Cogwork-opened pull requests that are open, not drafts, green, conflict-free, and approved. It runs no model and changes no Workflow state.
+_Avoid_: Classification, merge stage, role
 
 **Assignee ownership gate**:
-A per-workspace precondition inside `classify`: when `issueTracker.assigneeAllowlist` is set, an observed item is silently dropped from every bucket unless one of its assignees is on the list. Absent allowlist means the gate is off and every item passes, exactly as before. The check is a re-evaluated precondition, not an action — it never releases a claim or interrupts an in-flight run; an item that loses its owner just stops being picked up on the next poll, honoring the tracker as the source of truth. The bound Connection's authenticated account (who the daemon *acts as*) is distinct from the allowlist (whose tickets the daemon is *allowed to pick up*).
-_Avoid_: Assignee filter (it gates all stages, not just a view), permission check
+A per-workspace Trigger-observation precondition: when `issueTracker.assigneeAllowlist` is set, an observed item is admitted only when an assignee is on the list. Absent means no gate. The bound Connection's account is distinct from whose work the daemon may take.
+_Avoid_: Assignee filter (it gates every Workflow, not just a view), permission check
 
 **Scheduler**:
-The in-memory concurrency gate. It picks candidates from the reconcile snapshot under a global limit, per-workspace limits, and a daily budget, then forks an executor for each. The limits are seeded from durable Control store rows; in-flight counts and daily usage stay in memory. It acts on a given work item at most once per snapshot generation: a completed item is not re-picked until a newer snapshot re-confirms it is eligible, which is what stops a fast execute tick from re-running work that a slow reconcile has not yet caught up on (see ADR 0001).
+The in-memory concurrency gate. It picks eligible Trigger admissions under global, per-workspace, and daily-budget limits, then forks a Workflow Run. Waiting work orders by whether the Workflow already acted on the item, priority, then oldest observed revision.
 _Avoid_: Queue, dispatcher, runner
 
 **Drain**:
 The scheduler's graceful stop: it picks no further candidates and gives the runs already in flight a **grace window** to finish on their own and record their normal outcome. Whatever is still running when the window closes — or when a second stop signal ends the wait early — is recorded `interrupted` and its agent torn down.
 _Avoid_: Shutdown (the whole process exit, of which this is one step), quiesce, graceful kill
 
-**Claim recovery**:
-The startup pass and repeatable live sweep that make this daemon's claims consistent after a stop, crash, or incomplete claim. Startup recovery preserves resumable runs; the live sweep releases a daemon-owned claim only when no current run requires it and the scheduler does not hold the work item in flight. A terminal run whose factual gate decline recorded `claimDisposition: hold` still requires its current claim.
-_Avoid_: Reconcile worker (that polls and classifies; this only reads its snapshot), drain (that's the scheduler's graceful stop, the mirror image of this), stale-claim cleanup (that's one of the three paths, not the whole thing)
-
-**Claim hold-off**:
-What the executor does with a **refused claim**: the item is held out of claiming for a growing window, keyed by workspace, item and operation, so one refusal cannot re-write coordination on every generation — the failure is not contention, so the next poll would get the same answer. A refusal the port reports as permanent also parks the item: the refusal is posted as a note *before* the role writes, since those writes can hit the very refusal being reported, then `ready-for-human` escalates it. A cleared claim clears the window, so the item recovers on its own once a person fixes the tracker.
-_Avoid_: Rate-limit cooldown (the reconcile worker's, keyed by credential scope — same mechanism, different scope), backoff, retry, exhausted (a run that gave up after trying)
-
-**Admit**:
-The narrow scheduler capability that reserves capacity for a recovered run and starts it. It always launches because recovery is resuming work this daemon already claimed; the scheduler separately exposes whether a work item is in flight so the live sweep cannot release a claim while its run starts.
-_Avoid_: Tick (that picks new candidates under the caps), schedule, enqueue
-
-**Snapshot generation**:
-The monotonic counter the reconcile worker stamps on each snapshot it publishes. It is how the scheduler tells one observation of the issue tracker from the next, so it can act on each work item at most once per observation.
-_Avoid_: Version, revision, epoch
+**Crash recovery**:
+The boot pass that runs once before the first scheduler tick. Each Run still `running` from a daemon that stopped without draining is marked `crashed`, the Claim this daemon holds on its item is released so the item is admitted again, and three crashed Runs in a row since the last handback park the item `exhausted` (ADR 0036).
+_Avoid_: Claim recovery (the fixed pipeline's sweep, deleted), drain (the graceful stop, the mirror image of this)
 
 **Candidate**:
-A schedulable pairing of a registered workspace with one eligible work item, plus the reservation keys that keep it from being picked twice.
+A schedulable Trigger admission plus the reservation keys that keep it from being picked twice.
 _Avoid_: Job, task
 
-**Executor**:
-The unit that runs one candidate end to end: claim, worktree, resolve its operation, assemble and atomically persist the Run with its Run Plan, dispatch the accepted plan to the harness, stream events through the run recorder, decode the terminal structured operation result once through the shared Effect Schema, and record the attempt. A Run without a Plan is never dispatched. A missing, duplicate, or malformed operation result is a retryable harness failure, not a text-parsing fallback.
-_Avoid_: Runner, worker, harness
+**Workflow runner**:
+The unit that executes one admission: claim, prepare the Run, resolve and persist the Run Plan, dispatch the Harness, record events, decode the document-derived Operation result, freeze and execute the Action plan, then complete the Run and route a hand-off or Stop. It orchestrates; the decisions sit in **Run Plan resolution** and **Run completion**.
+_Avoid_: Executor, fixed pipeline, stage runner
+
+**Run preparation**:
+The step between claim and dispatch that ensures the checkout, chooses the Session, provisions the instruction layers, runs Harness preflight, and gathers the facts Run Plan resolution decides over. It owns every side effect a Run needs before it starts; it makes no decision about the Plan's contents.
+_Avoid_: Setup, bootstrap, Run Plan resolution (the decision this step feeds)
+
+**Run completion**:
+The decision, taken from a Run's result and the item's coordination view, of what follows: retry, exhaust, park stuck, fan out, complete, or hand off. One decision serves a fresh Run, a resumed Action plan, and a review-plan refresh, so the failure counters and park reasons are applied in one place.
+_Avoid_: Outcome handling, completion closure, failure policy (one input to it), disposition
 
 **Run recorder**:
 The one seam a run's harness events cross between the harness runner and everything that reads them. Recording is one act with four parts: assign the event's sequence, encode it as a run event, append it to the run ledger (capturing an opaque session handle when one rides the event), and publish the same moment as run activity. Reads come back through the same seam — a settled run replays as run activity for the drill-in, and a session's events decode for the transcript fold — so live and replayed activity are identical by construction. The recorded-event codec is shared only with the replay harness, which needs the same decode boundary.
 _Avoid_: Run ledger (the store it writes to), daemon event bus (the transport it publishes on), event log, persistence (the TanStack adapter the session store hands the provider runner)
 
 **Session store**:
-The place sessions are minted and the read model a runner pulls a session's history from, given a `SessionId`. `mint` takes a harness name and the harness service's kind lookup, chooses the session kind from that runner's declaration, and inserts the row — owned-transcript for the provider runner (the run ledger holds the conversation), opaque-handle for a CLI harness (the harness holds its own history, with a null handle until one is captured). The executor asks for a session and never names a kind itself. It hands the provider runner a real `@tanstack/ai-persistence` adapter (`persistence`) that the runner runs under via `withPersistence`. Its **message store** is a ledger projection: `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first), including terminal structured results, projected into ordered model messages — and `saveThread` is a no-op, because the run recorder already appends every event, so the event-sourced ledger stays the one source of truth. Beside the message store sit process-scoped **run** and **interrupt** stores that wire durable pause/resume ahead of the interactive phase; they live in memory, matching the run ledger's own durability, and a persistent ledger backend will carry them too. `resumeHandle` still hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second transcript store: the run ledger is the only place a conversation lives.
+The place sessions are minted and the read model a runner pulls a session's history from, given a `SessionId`. `mint` takes a harness name and the harness service's kind lookup, chooses the session kind from that runner's declaration, and inserts the row — owned-transcript for the provider runner (the run ledger holds the conversation), opaque-handle for a CLI harness (the harness holds its own history, with a null handle until one is captured). The Workflow runner asks for a session and never names a kind itself. It hands the provider runner a real `@tanstack/ai-persistence` adapter (`persistence`) that the runner runs under via `withPersistence`. Its **message store** is a ledger projection: `loadThread` folds the session's transcript out of the run ledger — every event across the runs that share the session (oldest run first), including terminal structured results, projected into ordered model messages — and `saveThread` is a no-op, because the run recorder already appends every event, so the event-sourced ledger stays the one source of truth. Beside the message store sit process-scoped **run** and **interrupt** stores that wire durable pause/resume ahead of the interactive phase; they live in memory, matching the run ledger's own durability, and a persistent ledger backend will carry them too. `resumeHandle` still hands back the session's opaque handle, the thing a CLI runner needs to resume its own history. An empty transcript is `[]` and an unhandled session is a null handle, never a failure. There is no second transcript store: the run ledger is the only place a conversation lives.
 _Avoid_: Message store (that's the persistence library's term for the one piece of the adapter), transcript database, second store
 
 **Harness request**:
-The projection the executor hands the harness for one accepted Run Plan, plus secret MCP credentials and a `session` reference — the `SessionId` this run continues, or null for a fresh start. The harness consumes the Plan's frozen Messages, Instructions, model, effort, and policy. It references a session rather than shipping one; no frozen transcript crosses the seam, so compaction can live inside the runner's loop where context actually grows.
+The projection the Workflow runner hands the harness for one accepted Run Plan, plus secret MCP credentials and a `session` reference — the `SessionId` this run continues, or null for a fresh start. The harness consumes the Plan's frozen Messages, Instructions, model, model options, and policy. It references a session rather than shipping one; no frozen transcript crosses the seam, so compaction can live inside the runner's loop where context actually grows.
 _Avoid_: Prompt (that's now one field of the envelope), transcript (the request carries a reference, not history)
 
 **Harness service**:
@@ -82,7 +78,7 @@ The engine's registry and dispatcher for Harness runners. It exposes each runner
 _Avoid_: Harness (the concept, defined in contracts), model
 
 **Harness runner**:
-A pluggable implementation of one agent backend. Beside dispatch it declares its Session kind, operational facts, explicit authentication binding, catalog sources, observational readiness, and authoritative preflight; unavailable runners remain registered without preventing unrelated Harnesses from running.
+A pluggable implementation of one agent backend. Beside dispatch it declares its Session kind, operational facts, explicit authentication binding, managed option catalog, observational readiness, and authoritative preflight; unavailable runners remain registered without preventing unrelated Harnesses from running.
 _Avoid_: Harness service, adapter (adapter is the issue-tracker term)
 
 **Harness capability profile**:
@@ -90,11 +86,11 @@ The runner-declared operational facts TanStack does not expose at runtime: suppo
 _Avoid_: Feature flags, adapter metadata, projection matrix
 
 **External Harness runtime**:
-The engine-owned execution module beneath Claude Code, Codex, and Cursor. It preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, descriptor-required shared Git metadata, and selected Sandbox provider before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, and optional usage estimate. It normalizes supported native file activity to `sandbox.file.diff` without rebuilding the payload, and for a descriptor with no native file events it merges the engine's own File-diff feed instead of enabling the Sandbox watcher, holding `RUN_FINISHED` back until that feed has drained so the last write is not recorded behind the event a client stops reading at. It passes the Cogwork `RunId` as TanStack `runId`, the Cogwork `SessionId` as `threadId`, and any opaque native handle only through adapter model options. Its `withSandbox` call is intentionally nondurable: no Run store, stream durability, journal, detach, attach, or takeover option is present. Driver loss therefore cannot leave an intentional detached agent or trigger attach-first recovery. It also derives which Git paths a Run may write: a linked Worktree gets its own Worktree entry plus the common directory's `objects`, `refs`, `logs`, and its packed-ref files, never the common directory itself, a read-only Operation gets nothing at all because it commits nothing, and a checkout that owns its Git directory gets nothing either — that directory is the common one every Worktree shares, and Git's `index.lock` sits in its root, so there is nothing narrower to grant. No Run can write the shared `config`, install a hook, or disturb a sibling Worktree.
+The engine-owned execution module beneath Claude Code, Codex, and Cursor. It validates the prepared checkout before adapter work, builds the trusted local-process Sandbox provider, applies the descriptor's inherited-environment allow list, and preflights the explicit authentication binding, mandatory Harness Workspace and MCP projection, and descriptor-required shared Git metadata before composing the typed TanStack adapter, `chat()` stream, cancellation, event bridge, and optional usage estimate. It normalizes supported native file activity to `sandbox.file.diff` without rebuilding the payload, and for a descriptor with no native file events it merges the engine's own File-diff feed instead of enabling the Sandbox watcher, holding `RUN_FINISHED` back until that feed has drained so the last write is not recorded behind the event a client stops reading at. A descriptor declares `Tools` when its adapter carries `chat()` tools to the CLI through TanStack's host MCP tool bridge; only then does the Run Plan list the Operation's engine tools and the runtime pass them to `chat({ tools })`, and nothing is written for them into the checkout beyond the adapter's own per-Run files. Claude Code and Codex declare `Tools`; Cursor does not. It passes the Cogwork `RunId` as TanStack `runId`, the Cogwork `SessionId` as `threadId`, and any opaque native handle only through adapter model options. Its `withSandbox` call is intentionally nondurable: no Run store, stream durability, journal, detach, attach, or takeover option is present. Driver loss therefore cannot leave an intentional detached agent or trigger attach-first recovery. It also derives which Git paths a Run may write: a linked Worktree gets its own Worktree entry plus the common directory's `objects`, `refs`, `logs`, and its packed-ref files, never the common directory itself, a read-only Operation gets nothing at all because it commits nothing, and a checkout that owns its Git directory gets nothing either — that directory is the common one every Worktree shares, and Git's `index.lock` sits in its root, so there is nothing narrower to grant. No Run can write the shared `config`, install a hook, or disturb a sibling Worktree.
 _Avoid_: Harness service (the dispatcher above it), Harness runner (the engine-facing backend seam), provider runner (the owned-transcript path)
 
 **Harness Workspace projection**:
-The one portable TanStack Workspace definition the external Harness runtime creates for each Run. It carries fresh per-Run authentication and MCP `SecretRef`s. By default it also carries resolved MCP servers; a descriptor that declares native MCP projection consumes those servers from its request instead. The runtime also carries the Context assembler's ordered mandatory Instructions and the host-provisioned Operating Instructions package path, then uses the descriptor's native instruction channel. TanStack renders each Workspace input into the native Harness form. The work-specific Message remains the user turn, public MCP servers get no invented secret, and secret values resolve only into the live Sandbox environment. Events and Harness errors are scrubbed before they reach the caller or ledger. When the Workspace has secrets but no files to project, the runtime hands the adapter an already-satisfied projection, so the adapter's file-based projection pass writes nothing into the prepared checkout. Its source is `none` and snapshots are off: the selected Sandbox provider binds the prepared checkout, while the Worktree manager continues to own checkout, branch, Git metadata, and cleanup. A missing required projection is a launch refusal, never ambient discovery.
+The one portable TanStack Workspace definition the external Harness runtime creates for each Run. It carries fresh per-Run authentication and MCP `SecretRef`s. By default it also carries resolved MCP servers; a descriptor that declares native MCP projection consumes those servers from its request instead. The runtime also carries the Context assembler's ordered mandatory Instructions and the host-provisioned Operating Instructions package path, then uses the descriptor's native instruction channel. TanStack renders each Workspace input into the native Harness form. The work-specific Message remains the user turn, public MCP servers get no invented secret, and secret values resolve only into the live Sandbox environment. Events and Harness errors are scrubbed before they reach the caller or ledger. When the Workspace has secrets but no files to project, the runtime hands the adapter an already-satisfied projection, so the adapter's file-based projection pass writes nothing into the prepared checkout. Its source is `none` and snapshots are off: the runtime's local-process Sandbox provider binds the prepared checkout, while the Worktree manager continues to own checkout, branch, Git metadata, and cleanup. A missing required projection is a launch refusal, never ambient discovery.
 _Avoid_: Workspace (the registered repository), Workspace registry, Worktree, native Harness config
 
 **MCP server assembler**:
@@ -114,7 +110,7 @@ The owned tools the engine hands a run instead of leaning on the harness's built
 _Avoid_: Built-in tools (those are the harness's), MCP server (one server exposes Tools; this set is native)
 
 **Worktree sandbox**:
-An `ai-sandbox` `localProcessSandbox` opened onto a run's worktree, so the owned tools read, write, and exec against that checkout and nothing else. Opened as an Effect resource (acquire the handle, release on scope close); the release only tears down the sandbox handle, never the checkout itself. The base SHA it reports is `git rev-parse HEAD`, or `""` when the checkout is not a git repo.
+An `ai-sandbox` `localProcessSandbox` opened onto a Run Plan's Workspace checkout, so the owned tools read, write, and exec against that checkout and nothing else. With no Workspace it owns an empty scratch directory instead. It is an Effect resource: scope close removes an owned scratch directory, but never a Workspace checkout. The base SHA it reports is `git rev-parse HEAD`, or `""` when the checkout is not a git repo.
 _Avoid_: Worktree manager (that owns the git lifecycle; this is the process boundary a run's tools execute inside), container
 
 **Path confinement**:
@@ -126,9 +122,7 @@ The stream of file-change events the live run view consumes. One watcher serves 
 _Avoid_: Event log (that's the durable run record), file watcher (that's the mechanism, this is the diff stream on top of it)
 
 **Policy profile**:
-The allow/ask/deny rules a run's owned tools are gated by, chosen from the selected operation and its settings. Two engine-owned defaults over one shared tool set: **read-only** for triage (read/glob/grep/webfetch; writes and shell refused), and **full** for implementation and follow-up (everything, with only the hard-deny list as a floor). A profile is a TanStack `ai-sandbox` `SandboxPolicy`, so the engine reuses that package's `evaluateCommand` to match bash against command globs; `write`/`edit` ride the `fileWrite` capability, `webfetch` rides `network`, and `read`/`glob`/`grep` are always allowed. The Harness request carries the resolved profile. A runner declares which profiles it can enforce, plus non-interactive and worktree-confined postures; the Harness service refuses a missing hard posture before the executor claims the item or records a Run. Per-workspace overrides wait for settings-as-data.
-
-`LifecycleStage` is the retained wire name for the three Operations. It maps without aliases: triage uses `read-only`; implement and follow-up use `full`. Run Plan resolution chooses this profile once. The Harness consumes that immutable choice and rejects a mismatched Sandbox policy.
+The allow/ask/deny rules a Run's owned tools are gated by. A Workflow Operation chooses `read-only` or `full`. The Harness request carries the immutable choice, and a Harness declares which profiles it can enforce.
 
 An external Harness receives the same `SandboxPolicy` as engine-owned tools. Its native built-in tools are not Cogwork's bridged server tools: the native adapter projects the policy into its own permission, tool, command, and Sandbox controls, while MCP projection stays a separate transport. `policyFidelity` reports whether that native projection is exact, profile-only, or absent. Provider selection is a separate input to the shared external Harness runtime, not part of Harness selection.
 
@@ -147,21 +141,28 @@ _Avoid_: Confinement (that keeps writes inside the worktree root; this bounds sh
 The Operation-owned instruction document and supporting directory carrying its mandatory Operating Instructions. It is supplied through an instruction-specific resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills. The engine ships the default package, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
-**Operation resolution**:
-The engine's combination of an Operation Definition, Operation Settings, Operating Instructions, Work Context, Tools, Skills, MCP servers, Middleware, and Sandbox Policy into an immutable Run Plan before dispatch.
-Its home is `src/operation-resolution.ts`.
-_Avoid_: Playbook, resolved stage, prompt assembly
+**Run Plan resolution**:
+The decision that combines the published Operation, Default settings, Operating Instructions, Work Context, contributions, Sandbox Policy, and the tool needs its Action entries declare into one immutable Run Plan — or into a **Run Plan rejection** with its reason when the machine cannot satisfy the Operation. It decides over facts Run preparation gathered and performs no side effect.
+_Avoid_: Fixed Operation resolution, stage resolution, prompt assembly, decline (the runner's act on a rejection)
+
+**Action entry**:
+One registered output action: its catalog row, the target it freezes, the write it performs, its phase in the Action plan's fixed order (approval, write, notify, terminal), and the engine Tools a Run needs to use it. Registered once under its full catalog key; the Trigger and action catalog's action rows derive from the registry, so a row cannot exist without its write. The row also gives the entry's **Workspace source**: where its target's Workspace comes from — the item, else the agent's choice (`item-else-agent`), or the agent's choice only (`agent`). The target producer reads the Workspace through that field, and the Operation result asks the agent for a Workspace only when the field says the agent chooses it.
+_Avoid_: Action executor (one field), catalog row (one field), handler, action definition
 
 **Issue tracker adapter**:
-A concrete implementation of the issue tracker port. `GitHub.adapterLayer` and `Linear.adapterLayer` are the real ones; daemon composition routes by the tracker `type`. Both adapters are the coordination tracker bound to a per-tracker coordination host: the host reads tracker-native issues/labels/comments and supplies the native writes; the choreography — coordination state into a bot-owned coordination comment, human-facing notes (triage proposals) as separate comments — lives in the coordination tracker, once. Linear's host pre-fetches its coordination comments in the item listing and its Canceled-on-wontfix write rides the after-role-change hook. **Claim identity is adapter-owned**: the port's `claim` write takes no `by`; GitHub stamps the authenticated Connection account and Linear stamps `cogwork`, then each reports on every observed item whether that claim is one it would itself have written (`claimedByUs`). Nothing above the seam supplies or compares an identity string. Both hosts resolve their authenticated identity before reading coordination state, so an identity failure stops observation instead of making that state appear absent. Linear reads open blockers from an issue's inverse `blocks` relations (a blocker counts until its own state is `completed` or `canceled`). The tracker no longer observes pull requests — that moved to the source control provider.
-_Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin
+A concrete implementation of the issue tracker port for GitHub or Linear. It supplies the tracker-native reads — items changed since a cursor, when a label was applied, an item's prose with each comment marked as a person's or not — loads Work Context, and performs catalog actions such as adding a label or posting a comment. It observes nothing by itself; the Tracker Trigger source observes through it. Coordination is a separate authority.
+_Avoid_: Work source adapter, client (the HTTP/GraphQL client is a lower-level detail), plugin, Trigger source (the module that reads through it)
+
+**Tracker Trigger source**:
+The one Trigger source implementation for issue trackers, instantiated once per tracker system over the issue tracker port. It owns polling, per-workspace cursors, catch-up, the label and comment source revisions, the origin-record cause, and the Cogwork-marker filter; it holds no tracker-specific branch. Each instance keeps its own source id so one tracker's cooldown never stops the other's polling.
+_Avoid_: GitHub Trigger source, Linear Trigger source (instances, not modules), pull request Trigger source (the source control port's own)
 
 **Source control provider adapter**:
-A concrete implementation of the source control provider port, with GitHub the only one today. Given every observed work item, it resolves the item's PR by the link key: a GitHub closing reference for numeric GitHub items, or the open PR whose head branch starts with `ticketSlug(item.id)`. A pull request is trusted when the actor opened it or a write-access account opened it. It reads checks, reviews, mergeable / base-divergence signal, human comments, the draft flag, and the head branch. Its narrow writes open a pull request and post the daemon's marked round summary. A non-draft same-repository head can drive a follow-up worktree on its exact branch. A draft remains attached to the work item but cannot enter follow-up. A GitHub issue tracker doubles as its own provider by default; a Linear tracker pairs with a GitHub provider through an explicit `sourceControl` config block. Both use the repository derived from the checkout's selected remote.
+A concrete implementation of pull-request Trigger sources and Workflow actions, with GitHub the only one today. It also projects the ready-to-merge view from Cogwork origin records and live pull-request state.
 _Avoid_: Forge, code host, client (the HTTP client is a lower-level detail), plugin
 
 **Credential store**:
-The seam every Connection credential is resolved through. A Connection id selects a stored API key, an environment-variable reference, or a stored browser grant; the caller receives the token and discovered identity, never the persisted secret. Both Linear and GitHub resolve through it. A stored browser grant refreshes at read time when possible, and a rejected credential can be invalidated. The same store resolves **provider keys** (see below), so one instance holds external-system credentials and AI-provider keys in one file. A keychain-backed layer can arrive behind the same seam later.
+The seam every Connection credential is resolved through. A Connection id selects a stored API key, an environment-variable reference, or a stored browser grant; the caller receives the token and discovered identity, never the persisted secret. Linear, GitHub, Granola, and Slack resolve through it. A stored browser grant refreshes at read time when possible; Slack refresh also replaces the single-use refresh token. A rejected credential can be invalidated. The same store resolves **provider keys** (see below), so one instance holds external-system credentials and AI-provider keys in one file. A keychain-backed layer can arrive behind the same seam later.
 _Avoid_: Secret manager, token cache (the credential file, not the store, holds tokens), auth provider
 
 **Provider key**:
@@ -192,28 +193,16 @@ _Avoid_: Service account, machine token, app token (that is what it mints, not t
 One organization's OAuth grant as it is persisted: the token pair, its expiry and scopes, the OAuth client id needed to refresh it, and the identity discovered when it was granted (the organization and the `actorUserId` the app posts as). Keyed by issue tracker and organization, so one file can hold grants for several organizations. The engine defines the shape and the read path; where it lives on disk is the CLI's business.
 _Avoid_: Session, Connection record (the `login linear` command mints the grant; the Connection only references it)
 
-**Coordination tracker**:
-The single implementation of the issue tracker port's choreography — claim, release, note, the observe-side parse that builds a tracker item, and the **coordination outcomes** (the operation-result writes) — written once over a **coordination host**: the per-tracker bundle of native operations (comment list/edit/create, label add/remove, id resolution, item listing with coordination comments attached), the wire codec, the claim identity, role mapping, and an after-role-change hook (Linear's `wontfix` → Canceled state write). GitHub and Linear both supply a host; a third tracker is a host plus a codec. It exposes coordination outcomes, not the raw step writes: the role change, the attempt record, and the follow-up marker are its private detail, so nothing above the seam sequences them.
-_Avoid_: Issue tracker adapter (the host-supplying side), coordination module (the payload and comment policy this calls), shell (say coordination tracker)
-
-**Coordination outcome**:
-The single issue-tracker write that records what an operation attempt produced, composing the role change, the attempt record, the follow-up marker, and any note behind one verb on the issue tracker port. The verbs are `triaged`, `implemented`, `followedUp`, `attemptFailed`, `handOff`, `stalled`, and the human-driven `reclassify` and `handBack`; the surviving primitives beside them are `observe`, `claim`, `release`, `note` (free-text operator/recovery prose), and `rateLimitScope`. The executor names the outcome and keeps the exhaustion decision — on a failed attempt it calls `attemptFailed`, then `handOff` only when the attempt count is spent — but it never sequences the tracker writes itself, and it settles its own **run** on the run ledger separately (a coordination outcome touches the tracker only, never the local run). Each verb takes already-parsed data (a role, a proposal string, a `FollowUpMarker`), never the run's raw text.
-_Avoid_: Attempt record (one marker an outcome may write), step verb (the raw `setRoles`/`recordAttempt`/`recordFollowUp` an outcome now hides), apply (the executor's old per-operation handler this replaces)
-
 **Coordination module**:
-The single home of the coordination-comment policy (`src/coordination.ts`), shared by both issue-tracker adapters. It owns the upsert choreography (read comments → select the ledger → carry status/markers/detail forward → edit-or-create), ledger selection, strict reads, the `key=value` payload codec, status prose, body layout, and note formatting. Each adapter supplies a **wire codec** — encode a marker, scan a body into marker spans, name the ledger anchor — plus its normalized comments (`list` / `edit` / `create`); the module does the rest. Everything else about a marker change lives here, so it touches one file, not two.
-_Avoid_: Markers file (each adapter's `markers.ts` now holds only its wire codec and role-label mapping, not the policy).
+The authority-neutral fold over claims, attempts, parks, handbacks, source revisions, and lineage. Every item's records live in the Control store, issue-backed items included (ADR 0036). A **hand-off** means only a Workflow Transition routing to another Operation; coordination never uses it to mean escalation or explanation.
+_Avoid_: Coordination tracker, role write, hand-off explanation, follow-up marker
 
-**Coordination markers**:
-Machine-readable claim / attempt / follow-up / ledger records written into the coordination comment so the control plane's coordination state travels with the issue tracker. The coordination module owns the shared payload format; each adapter's wire codec only dresses it for the host. GitHub embeds markers as HTML comments; Linear writes the same payloads as visible `cogwork:…` plain-text lines (Linear has no hidden HTML comments), and a Linear marker is only real at the start of a line. Claim markers carry `stage=` on both hosts; older stage-less markers still decode. A claim marker's `by=` value is each adapter's own wire detail — filled on write and matched on read to decide ownership — never a value handed down from above the seam.
-_Avoid_: Metadata. The "ledger" marker here is not the run ledger.
-
-**Coordination comment**:
-The single bot-owned comment an adapter keeps on an issue for control-plane state — specifically, the **oldest** bot comment bearing the ledger marker, so a forgery posted later can never displace it. Every coordination write edits it in place rather than adding another comment, and reads take claim / attempts / follow-up / status / detail from it alone (markers in other bot comments are ignored). It holds the **status** (one line naming what the control plane is doing now), optional **detail** (a hand-off explanation such as a no-progress follow-up note), and the coordination markers. Triage proposals are not stored here — each triage round is a separate comment so the thread stays conversational and notifiable. A write that sets one part carries the others forward, so a status change never erases a hand-off detail.
-_Avoid_: Ledger comment (the ledger marker is only its anchor), proposal comment (proposals are separate notes).
+**Park notice**:
+The one marked comment the Coordination module posts on a parked issue: the park reason and the Attention command that continues the item. It is Workflow output for a person, never a coordination record, so nothing reads it back. The raw failure behind an `exhausted` or `write-failed` park stays in Cogwork. The notice posts on a fiber that the Coordination layer owns, so a park returns before the tracker write ends. A notice that does not post is logged, and the park stands (ADR 0036).
+_Avoid_: Coordination comment (the deleted fixed-pipeline ledger), stuck comment (every park kind gets one)
 
 **Worktree manager**:
-The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list them, remove them, and reconcile away idle ones. It also reports whether the prepared implement worktree is still on the Engine-cut branch and whether that head is ahead of the configured base before the Engine can open a pull request. "Reconcile" here means worktree cleanup — not the reconcile worker. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
+The git worktree lifecycle for the repos cogwork *drives*: ensure a branch's checkout exists, list it, remove it, and reconcile away idle ones. An implement worktree blocks its normal push path with a worktree-only invalid `pushurl`; follow-up retains agent-owned push. Before the Engine opens a pull request, it refreshes the base and requires the local Engine-cut head to be ahead. The Engine then pushes that head through the selected remote's explicit URL. Pull request readiness does not depend on a Run worktree still existing. "Reconcile" here means worktree cleanup: the maintenance heartbeat keeps the worktrees of open tracker items, open pull requests, and running Runs, and removes the rest. It links only the paths a driven workspace's config declares (`linkPaths`); it is not the setup a coding harness runs when it opens a worktree of *this* repo to work on cogwork itself — that is a repo-local developer concern, deliberately kept separate (see ADR 0005).
 _Avoid_: Checkout, clone, worktree setup (that is the repo-local harness concern, not this)
 
 **Branch divergence**:
@@ -221,7 +210,7 @@ A worktree branch holding commits its remote branch lacks while the remote holds
 _Avoid_: Conflict (that's one reason a rebase fails), drift, stale branch (that's just being behind)
 
 **Base divergence**:
-A pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the source control provider's mergeable signal (GitHub's `dirty`) on the reconcile poll and treats it as a fourth follow-up trigger; the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
+A pull request's branch and its base branch (`main`) have each gained commits the other lacks and those commits overlap, so the branch can no longer merge into the base. The engine reads it from the source control provider's mergeable signal (GitHub's `dirty`) on the pull request Trigger source's poll and treats it as a **follow-up trigger** in its own right — one the agent clears by working, which is what qualifies it (see ADR 0013); the follow-up agent integrates the base — a merge commit by default, a rebase with `--force-with-lease` only where the repo requires linear history — and pushes to the same branch (see ADR 0003). A branch merely *behind* its base (no overlap, still mergeable) is not this and is left alone.
 _Avoid_: Branch divergence (that's the branch versus its own remote, not the base), merge conflict (one reason integrating the base fails), stale branch (that's merely behind)
 
 **Workspace registry**:
@@ -236,8 +225,17 @@ _Avoid_: Control store (the authoritative store; ADR 0015's one-database rule st
 Deterministic engine code that watches the telemetry store's health signals and, on a sustained threshold breach, files a thin evidence ticket at `needs-triage` with an `origin:selfperf` label and a fingerprint marker (ADR 0021). The proactive layer's first non-tracker sensor; it fires on transitions into alarm, dedups against the tracker itself, and never reopens a closed issue.
 _Avoid_: Performance sensor (ambiguous once budgets also file), detector, watchdog, monitor (a Datadog-style alert rule), triage (the stage that verifies what the sensor files)
 
+**Performance verdict**:
+One sensor's decision that a performance claim holds, handed to the Performance issue filer as data: the kind (health signal, suite comparison, suite budget, test-file budget), the signal, subsystem, and direction, the numbers, and the evidence. The filer renders the ticket from it; a sensor never writes ticket text or a Fingerprint string itself.
+_Avoid_: Alarm (the state a health signal is in), finding, report (the comparison tool's JSON, which a verdict is decoded from)
+
+**Performance issue filer**:
+The one engine module that turns a Performance verdict into tracker action: dedup by Fingerprint against the tracker, the shared daily cap, file or comment, re-file and never reopen (ADR 0021). Three sensors call it — the regression sensor in the daemon, the suite comparison and the budget check in CI — and one GitHub adapter sits behind it, reached through the GitHub client alone. A capped verdict in CI fails the job rather than vanishing.
+Its home is `src/performance-issue-filer.ts`.
+_Avoid_: Sensor (the caller that decides), issue tracker adapter (the coordination port, which the filer does not use), script filer (deleted)
+
 **Performance budget sensor**:
-A scheduled job that measures a performance budget and files a ticket while the budget is unmet (ADR 0023). It fires on a standing condition rather than a transition, so it files about work the app has never done; it never gates a merge, and it reuses the regression sensor's filer, label and fingerprint contract.
+A scheduled job that measures a performance budget and files a ticket while the budget is unmet (ADR 0023). It fires on a standing condition rather than a transition, so it files about work the app has never done; it never gates a merge, and it hands a `budget` Performance verdict to the Performance issue filer, sharing its label, Fingerprint, and cap.
 _Avoid_: Performance regression sensor (fires on change, not on level), budget gate (nothing here blocks a merge), optimizer (it proposes work, it does not do it)
 
 **Performance budget**:

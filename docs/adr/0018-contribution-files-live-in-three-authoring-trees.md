@@ -3,10 +3,11 @@
 - **Status:** accepted
 - **Date:** 2026-08-25
 - **Amended:** 2026-09-01 — [the private overlay tree may replace an Operating Instructions package](#amendment-2026-09-01--the-private-overlay-tree-may-replace-an-operating-instructions-package)
+- **Amended:** 2026-11-05 — [Commands are retired](#amendment-2026-11-05--commands-are-retired)
 
 ## Context
 
-[#127](https://github.com/colonylabs/cogwork/issues/127) asked how to migrate off today's agent input
+[#127](https://github.com/taylorfsteele/cogwork/issues/127) asked how to migrate off today's agent input
 sources. Eight were named. Giving each one a disposition was meant to be bookkeeping. It was not:
 deciding *where the files land* turned up two structural answers the map had not reached, and each
 one reverses an earlier decision.
@@ -54,7 +55,7 @@ ADR 0014. Nothing a person authors is copied there, and nothing the engine provi
 
 **Install is for bytes that came from somewhere else.** A person installs nothing they wrote. This
 is what dissolves the collision that surfaced the whole question: a Plugin absent a declared version
-is identified by content revision, and [#135](https://github.com/colonylabs/cogwork/issues/135)
+is identified by content revision, and [#135](https://github.com/taylorfsteele/cogwork/issues/135)
 stages an update for acceptance — so a Plugin pointed at a live working directory would have turned
 every save of a rule file into a pending update. An authored tree is read live and has no revision to
 stage.
@@ -88,7 +89,7 @@ to the executing kinds. Text handed to a model sits at the same trust level as t
 
 Two trees may hold the same local name. Both reach the harness. Existing harnesses permit duplicate
 skill names and leave the choice to the person, and Cogwork does the same rather than minting a
-reconciliation rule. [#204](https://github.com/colonylabs/cogwork/issues/204) owned whether `local`
+reconciliation rule. [#204](https://github.com/taylorfsteele/cogwork/issues/204) owned whether `local`
 splits the person from the repository, and this decision — removing the setting that used to
 distinguish two same-named files — is what sharpened it. **It has since answered yes**: the Authority
 carries the tree, so two trees holding one local name are two identities, and this paragraph's
@@ -124,7 +125,7 @@ Dispositions:
 
 | Source | Disposition |
 |---|---|
-| `*.workspace.ts` and their loader | **Retired.** Fields route per ADR 0016's acts; `issueTracker`, `sourceControl`, `linearHistory`, `mcpSkills`, and all of `worktrees` become columns on the workspace record, off the Scope axis. The Workspace input has no settings file; [#332](https://github.com/colonylabs/cogwork/issues/332) amends the earlier split. |
+| `*.workspace.ts` and their loader | **Retired.** Fields route per ADR 0016's acts; `issueTracker`, `sourceControl`, `linearHistory`, `mcpSkills`, and all of `worktrees` become columns on the workspace record, off the Scope axis. The Workspace input has no settings file; [#332](https://github.com/taylorfsteele/cogwork/issues/332) amends the earlier split. |
 | Engine Operating Instructions | **Kept as is.** Engine Authority, shipped with the binary, not a contribution and not in any tree. |
 | `~/.agents/skills` | **Becomes the Settings profile tree.** Referenced where it lies, never copied. |
 | Repository `.agents` inputs | **Becomes the Workspace input tree.** |
@@ -162,7 +163,7 @@ than a new decision.
 - **Customize stops being a settings surface for four of six kinds.** Skill, Rules, Command and
   Subagent become read-only rows showing what exists and which tree it came from. Only MCP server
   keeps a toggle, and Hook's row is undecided.
-  [#131](https://github.com/colonylabs/cogwork/issues/131)'s prototype changes shape accordingly.
+  [#131](https://github.com/taylorfsteele/cogwork/issues/131)'s prototype changes shape accordingly.
 - ADR 0013 gains an amendment collapsing its first row. Its second row, its empty cells, and its
   Operation settings family are unchanged.
 - ADR 0014's identity-keyed provision now has a narrower job — fetched bundles only — and
@@ -191,3 +192,10 @@ package whole for that operation's Runs in that Workspace.
 tree scan does not produce it — the Context assembler resolves it directly, and presence is its
 whole state. "Not in any tree" is the part that falls. The deregister cascade this ADR already
 records deletes the override with the rest of the overlay directory.
+
+## Amendment (2026-11-05) — Commands are retired
+
+ADR [0037](./0037-commands-are-retired-and-subagent-files-follow-the-claude-code-shape.md) removes the
+Command kind. The scanner no longer reads `commands/` in any tree. "Skill, Rules, Command and
+Subagent" above now reads "Skill, Rules and Subagent".
+ADR 0037 also moves Subagent files from `subagents/` to `agents/`; that change lands separately.

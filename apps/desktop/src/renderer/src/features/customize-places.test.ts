@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { Authority, scopeKey } from "./configuration-model";
 import {
   clankerWorkspaceId,
   cogworkWorkspaceId,
   contributionById,
   placeholderConfiguration,
-} from "./configuration-placeholder";
+} from "../testing/configuration";
+import { Authority, scopeKey } from "./configuration-model";
 import { customizePlaces, placeOf, profilePlace, toggle, workspaceScopeKinds } from "./customize-places";
 
 const { workspaces } = placeholderConfiguration;
@@ -122,7 +122,7 @@ describe("toggle", () => {
 
 describe("groupContributions", () => {
   it("drops empty groups — a checked place with nothing in it needs no heading", () => {
-    const groups = groupContributions("command", allPlaceKeys, "");
+    const groups = groupContributions("rules", allPlaceKeys, "");
     for (const group of groups) expect(group.rows.length).toBeGreaterThan(0);
   });
 
@@ -132,10 +132,9 @@ describe("groupContributions", () => {
     const groups = groupContributions("skill", allPlaceKeys, "");
     const byPlugin = groups.find((group) => group.label === "GitHub review pack");
     expect(byPlugin?.rows.map((row) => row.id)).toEqual(["plugin:gh-review/skill/pr-summary"]);
-    // And nothing a Plugin ships appears in any group that is not that Plugin's.
-    const elsewhere = groups
-      .filter((group) => group.label !== "GitHub review pack")
-      .flatMap((group) => group.rows);
+    // And nothing a Plugin ships appears in any group that is not a Plugin's.
+    const pluginNames = new Set(placeholderConfiguration.plugins.map((plugin) => plugin.name));
+    const elsewhere = groups.filter((group) => !pluginNames.has(group.label)).flatMap((group) => group.rows);
     expect(elsewhere.every((row) => !Authority.$is("plugin")(row.authority))).toBe(true);
   });
 
@@ -207,7 +206,7 @@ describe("search", () => {
 
 describe("countAt and kindCount", () => {
   it("counts only the given kind at the given place", () => {
-    expect(countAt(profilePlace, "skill")).toBe(2);
+    expect(countAt(profilePlace, "skill")).toBe(3);
     expect(countAt({ kind: "workspace-input", workspaceId: cogworkWorkspaceId }, "skill")).toBe(1);
     expect(countAt({ kind: "workspace-input", workspaceId: clankerWorkspaceId }, "skill")).toBe(0);
     expect(countAt(profilePlace, "rules")).toBe(2);

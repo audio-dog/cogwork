@@ -17,7 +17,7 @@ import type { TranscriptEntry } from "./run-activity";
  * A harness puts three shapes on the wire that the AG-UI types do not describe,
  * and reading any of them as a plain string puts raw JSON on the screen:
  * a tool result rides on `content` as a JSON string holding
- * `{aggregated_output, exit_code, status}`; assistant text is the stage result
+ * `{aggregated_output, exit_code, status}`; assistant text is the Operation result
  * object (`{_tag, summary}`) rather than prose; and a file edit arrives as
  * `{changes:[{path, kind}]}` instead of a command.
  */
@@ -127,10 +127,10 @@ export interface StepView {
   readonly note: string | null;
 }
 
-type StepEntry = Exclude<TranscriptEntry, { kind: "text" | "error" }>;
+type StepEntry = Extract<TranscriptEntry, { kind: "reasoning" | "tool" | "diff" }>;
 
 const isStep = (entry: TranscriptEntry): entry is StepEntry =>
-  entry.kind !== "text" && entry.kind !== "error";
+  entry.kind === "reasoning" || entry.kind === "tool" || entry.kind === "diff";
 
 const reasoningView = (entry: Extract<StepEntry, { kind: "reasoning" }>): StepView => {
   const head = firstLine(entry.text);
@@ -222,6 +222,7 @@ export type TranscriptRow =
       readonly foldNoun: "tool call" | "step";
     }
   | { readonly kind: "note"; readonly key: string; readonly text: string }
+  | { readonly kind: "warning"; readonly key: string; readonly message: string }
   | { readonly kind: "error"; readonly key: string; readonly message: string };
 
 const groupEntries = (entries: Iterable<TranscriptEntry>) =>
@@ -243,6 +244,7 @@ const toRow = (group: readonly TranscriptEntry[], runComplete: boolean): Transcr
   const [first] = group;
   if (!first) return null;
   if (first.kind === "error") return { kind: "error", key: first.key, message: first.message };
+  if (first.kind === "warning") return { kind: "warning", key: first.key, message: first.message };
   if (first.kind === "text") return noteRow(first);
   const steps = group.filter(isStep);
   return {
@@ -258,6 +260,7 @@ export const transcriptRows = (entries: Iterable<TranscriptEntry>, runComplete: 
 
 const terminalLine: Partial<Record<RunStatus, string>> = {
   succeeded: "Run finished.",
+  declined: "Pull request creation declined.",
   failed: "Run failed.",
   crashed: "Run failed.",
   exhausted: "Run failed.",
@@ -283,7 +286,7 @@ export const runLine = (rows: readonly TranscriptRow[], status: RunStatus) => {
   const last = rows.at(-1);
   if (!last) return "Starting…";
   if (last.kind === "note") return firstLine(last.text);
-  if (last.kind === "error") return last.message;
+  if (last.kind === "error" || last.kind === "warning") return last.message;
   return workLine(last.steps);
 };
 

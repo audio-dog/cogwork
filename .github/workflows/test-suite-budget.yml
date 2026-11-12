@@ -1,0 +1,80 @@
+name: Test Suite Budget
+
+on:
+  schedule:
+    - cron: '0 15 * * 1'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@v2
+        with:
+          cache: true
+
+      - name: Download seed-run history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p test-suite-seed-history
+          gh run list \
+            --workflow=test-suite-seed.yml \
+            --branch=main \
+            --status=success \
+            --limit=20 \
+            --json=databaseId,headSha,startedAt,url \
+            > test-suite-seed-history/runs.json
+
+          while IFS= read -r run_id; do
+            gh run download "$run_id" \
+              --name=test-suite-seed-measurement \
+              --dir="test-suite-seed-history/$run_id"
+          done < <(jq -r '.[].databaseId' test-suite-seed-history/runs.json)
+
+          node --input-type=module <<'EOF'
+          import { readFile, writeFile } from 'node:fs/promises'
+
+          const directory = 'test-suite-seed-history'
+          const runs = JSON.parse(await readFile(`${directory}/runs.json`, 'utf8'))
+          const history = await Promise.all(
+            runs.map(async ({ databaseId, headSha, startedAt, url }) => ({
+              ...JSON.parse(
+                await readFile(`${directory}/${databaseId}/test-suite-seed-measurement.json`, 'utf8'),
+              ),
+              sha: headSha,
+              startedAt,
+              workflowRunUrl: url,
+            })),
+          )
+          await writeFile(`${directory}/history.json`, `${JSON.stringify(history, null, 2)}\n`)
+          EOF
+
+      - name: Check test suite budget
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm --filter @cogwork/sensor test:file-budget "${{ github.workspace }}/test-suite-seed-history/history.json"
+
+      - name: Measure test file durations
+        run: pnpm --silent --filter @cogwork/sensor test:measure > test-suite-timing-report.json
+
+      - name: Check slowest test file budget
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          pnpm --filter @cogwork/sensor test:slowest-file-budget
+          "${{ github.workspace }}/test-suite-timing-report.json"
+          "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

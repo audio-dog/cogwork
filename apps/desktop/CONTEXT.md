@@ -136,7 +136,7 @@ _Avoid_: Dashboard, home screen, Board / Inbox (both deleted).
 The **Subject surface** for a work item — a side-panel tab opened by clicking a work item card, one
 per work item, keyed to (workspace, work item), titled by its `WorkItemId` (`#50`, `AUD-1`), deduped
 (a second open focuses the existing tab) and persistent (no preview state). The canonical drill-in,
-and both a context and an action surface: identity, triage approve/reclassify, the item's Pull
+and both a context and an action surface: identity, the item's Pull
 request, blockers, the live run transcript, previous attempts, and metadata. The Pull-request section
 is labelled plainly "Pull request" — never "PR gate".
 _Avoid_: Detail tab (there is no single reusable one), preview tab, PR gate (as user-facing copy).
@@ -154,7 +154,7 @@ fixed tab.
 **Needs a decision**:
 An attention item where the agent stopped and waits on a human — it needs info, or it is ready for a
 human to take over (read-model tag `NeedsHuman`, reasons `needs-info` / `ready-for-human`). The human
-resolves it with triage approve/reclassify on the **item tab**, not on the attention card. The
+resolves it through the Workflow action on the **item tab**, not on the attention card. The
 agent's triage proposal is AI prose; it lives on the item tab, clearly marked as an AI suggestion.
 _Avoid_: Self-halt (jargon), needs-human (the code tag, not the human word).
 
@@ -179,7 +179,7 @@ _Avoid_: Raw activity (that's the Activity tab), firehose, chat log.
 One unit of agent work inside a **run transcript** — a shell command, a file edit, or a recorded
 thought — drawn as a single row of verb, target and outcome. Consecutive steps fold into one group so
 a long tool chain never buries the notes either side of it. A step is what the agent *did*; a **note**
-is what it *said* (the stage result's summary, which this harness emits in place of prose).
+is what it *said* (the Operation result's summary, which this harness emits in place of prose).
 _Avoid_: Tool call (only some steps are tool calls), activity (that's the daemon event stream), event.
 
 **Provider** (settings section):
@@ -191,6 +191,22 @@ enablement per Harness. Disabled Harnesses stay visible first with muted treatme
 new Operation choices, and remain visible when an existing Operation still selects one.
 _Avoid_: Harnesses (as the section's name — only as what it currently lists), Models (that is one of
 its tabs), Source control provider (a different noun in contracts)
+
+**Provider picker**:
+The per-Operation control that selects a Provider and its model. It offers every enabled Provider
+for every Operation. Permissions is a select constrained to the chosen Provider's declared
+profiles; the Operation supplies the default when the Provider declares it. An unavailable Provider
+(not installed, not signed in, failed probe) stays visible with its state but cannot be newly picked;
+a saved selection survives unavailability and shows the state. A Provider whose readiness is still
+unknown stays pickable — the picker never waits on a probe.
+_Avoid_: Harness rail (implementation detail), model dropdown, provider switcher
+
+**Traits**:
+The per-model options menu beside the model picker, rendered generically from the selected model's
+option descriptors: one radio group per select axis, On/Off per boolean. It hard-codes no Harness's
+axes; a model with no descriptors shows no Traits control. What it saves is the contracts term
+**model options**.
+_Avoid_: Effort dropdown (one axis of it, the old UI), parameters, model settings
 
 ## Cross-context edges
 

@@ -1,11 +1,10 @@
-import type { LifecycleStage } from "@cogwork/contracts";
 import {
   defineSandboxPolicy,
   evaluateCommand,
   type PolicyDecision,
   type SandboxPolicy,
 } from "@tanstack/ai-sandbox";
-import { type OperationPolicyProfile, operationPolicyProfile } from "../operation-policy";
+import type { OperationPolicyProfile } from "../harness";
 
 export type OwnedToolName = "read" | "write" | "edit" | "bash" | "glob" | "grep" | "webfetch";
 
@@ -43,12 +42,13 @@ export const fullProfile = defineSandboxPolicy({
 
 const profiles: Record<OperationPolicyProfile, SandboxPolicy> = {
   "read-only": readOnlyProfile,
-  full: fullProfile,
+  full: defineSandboxPolicy({
+    ...fullProfile,
+    commands: { deny: [...hardDenyCommands, "git push*"] },
+  }),
 };
 
 export const policyForProfile = (profile: OperationPolicyProfile) => profiles[profile];
-
-export const profileForStage = (stage: LifecycleStage) => policyForProfile(operationPolicyProfile(stage));
 
 type Capability = "read" | "fileWrite" | "network" | "command";
 
@@ -95,10 +95,10 @@ export const isPolicyDenied = (result: unknown): result is PolicyDenied =>
 
 const reasonByCapability: Record<Capability, string> = {
   read: "This read-only tool is always available under every policy profile.",
-  fileWrite: "This stage's policy profile is read-only, so file writes are denied.",
-  network: "Network access is denied by this stage's policy profile.",
+  fileWrite: "This operation's policy profile is read-only, so file writes are denied.",
+  network: "Network access is denied by this operation's policy profile.",
   command:
-    "This command is denied by policy — it is either not allowed in this stage or it matches a hard-deny rule (force-pushing to main, piping a download into a shell, or recursively deleting an absolute or home path). Take a different approach.",
+    "This command is denied by policy — it is either not allowed in this operation or it matches a hard-deny rule (force-pushing to main, piping a download into a shell, or recursively deleting an absolute or home path). Take a different approach.",
 };
 
 export const denyReason = (tool: OwnedToolName) => reasonByCapability[toolCapability[tool]];

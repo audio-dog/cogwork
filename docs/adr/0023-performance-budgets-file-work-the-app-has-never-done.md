@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-08
+- **Amended by:** [0026](./0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md) — a budget may be a duration when it is per-test-normalized and aggregated over ~20 same-fleet uncached seed runs; counts remain the rule everywhere else.
 
 ## Context
 
@@ -13,7 +14,7 @@ than a baseline commit. ADR [0020](./0020-telemetry-is-local-first-in-its-own-st
 the store both read from. Every one of them is quiet while the app is uniformly slow and staying
 slow.
 
-The measurement campaign for [#414](https://github.com/colonylabs/cogwork/issues/414) made the gap
+The measurement campaign for [#414](https://github.com/taylorfsteele/cogwork/issues/414) made the gap
 concrete. The two largest costs it found — a worktree ensure averaging 8.1s and peaking at 68.1s,
 and a `git diff` exec averaging 94.7ms and peaking at 2426ms — are not regressions. They are what
 the app has always done. No sensor in 0021 or 0022 will ever file a ticket about either, because
@@ -57,9 +58,9 @@ since a count rising back above the new target files again without any separate 
 **It lives where its signal is produced, and reuses what already exists.** ADR 0022's principle
 decides the placement: a count of the engine's own operations is produced by running the engine,
 which is cheapest and most deterministic under a swapped service layer, so it is measured in CI.
-The fortnightly workflow of [#500](https://github.com/colonylabs/cogwork/issues/500) already has
+The fortnightly workflow of [#500](https://github.com/taylorfsteele/cogwork/issues/500) already has
 the cadence, the runner and the permission to write issues, and the filer of
-[#499](https://github.com/colonylabs/cogwork/issues/499) already implements 0021's contract —
+[#499](https://github.com/taylorfsteele/cogwork/issues/499) already implements 0021's contract —
 fingerprint, tracker-derived dedup, filing cap, re-file rather than reopen. Budgets are a second
 verdict kind into that one filer, at `needs-triage` with `origin:selfperf`, and the existing
 pipeline carries the ticket from there.

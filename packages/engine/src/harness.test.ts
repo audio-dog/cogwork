@@ -12,15 +12,13 @@ import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
   fullHarnessExecution,
-  type HarnessCatalogSource,
   HarnessError,
   type HarnessExecution,
   type HarnessRunner,
   make,
-  stageResultSchema,
-  staticCatalogSource,
 } from "./harness";
 import { SessionStore } from "./session-store";
+import { LogProbe } from "./testing/log-probe";
 
 const name = Schema.decodeSync(HarnessName)("unsupported");
 
@@ -69,11 +67,8 @@ const controlledRunnerDefaults = {
     takeover: false,
   },
   authentication: { mode: "host", reference: "controlled login" },
-  catalogSources: {
-    fallback: staticCatalogSource(
-      { models: [{ value: "controlled", label: "Controlled" }] },
-      { source: "cogwork-fallback", fallbackVersion: "1" },
-    ),
+  catalog: {
+    models: [{ value: "controlled", label: "Controlled" }],
   },
   readiness: () =>
     Effect.succeed({
@@ -84,16 +79,13 @@ const controlledRunnerDefaults = {
       diagnostics: [],
     }),
   preflight: () => Effect.void,
-} satisfies Pick<
-  HarnessRunner,
-  "authentication" | "capabilities" | "catalogSources" | "preflight" | "readiness"
->;
+} satisfies Pick<HarnessRunner, "authentication" | "capabilities" | "catalog" | "preflight" | "readiness">;
 
 const request = {
   plan: Schema.decodeSync(RunPlan)({
     id: "run-harness-test",
     operation: "triage",
-    harness: { name, model: null, effort: null, profile: "read-only" },
+    harness: { name, model: null, options: {}, profile: "read-only" },
     instructions: [],
     operatingInstructions: {
       name: "triage-agent",
@@ -104,7 +96,6 @@ const request = {
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,
@@ -112,13 +103,12 @@ const request = {
     messages: [{ role: "user", content: "triage the issue" }],
     workContext: {
       reference: { workItem: "#1", url: null },
+      prose: { body: "", comments: [] },
       facts: {
-        roles: [],
         assignees: [],
         openBlockers: 0,
         claim: null,
         priority: "medium",
-        pr: null,
       },
       observation: { generation: 1, observedAtMillis: 1 },
     },
@@ -136,226 +126,84 @@ const request = {
   mcpCredentials: new Map(),
 };
 
-const requestFor = (harness: typeof name, model: string | null = null, effort: string | null = null) => ({
+const requestFor = (harness: typeof name, model: string | null = null) => ({
   ...request,
   plan: new RunPlan({
     ...request.plan,
-    harness: { ...request.plan.harness, name: harness, model, effort },
+    harness: { ...request.plan.harness, name: harness, model },
   }),
 });
 
-const unavailableCatalogSource = {
-  catalog: Effect.succeed(null),
-} satisfies HarnessCatalogSource;
-
-describe("stageResultSchema", () => {
-  it.effect("prepares the triage result as a validating Standard JSON Schema", () =>
-    Effect.gen(function* () {
-      const schema = stageResultSchema("triage");
-
-      const jsonSchema = schema["~standard"].jsonSchema.input({ target: "draft-2020-12" });
-      const root = yield* Schema.decodeUnknownEffect(
-        Schema.Struct({
-          type: Schema.Literal("object"),
-          properties: Schema.Record(Schema.String, Schema.Unknown),
-          required: Schema.Array(Schema.String),
-        }),
-      )(jsonSchema);
-      assert.hasAllKeys(root.properties, ["_tag", "role", "proposal"]);
-      assert.deepStrictEqual([...root.required].sort(), ["_tag", "proposal", "role"]);
-
-      const result = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "triage",
-            role: "ready-for-agent",
-            proposal: "Verified and ready.",
-          }),
-        ),
-      );
-      assert.isUndefined(result.issues);
-
-      const invalid = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "triage",
-            role: "needs-triage",
-            proposal: "Run triage again.",
-          }),
-        ),
-      );
-      assert.isDefined(invalid.issues);
-    }),
-  );
-
-  it.effect("prepares the implement result as a validating Standard JSON Schema", () =>
-    Effect.gen(function* () {
-      const schema = stageResultSchema("implement");
-
-      const result = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "implement",
-            outcome: "opened-pr",
-            summary: "Opened PR #110.",
-            title: null,
-            body: null,
-          }),
-        ),
-      );
-      assert.isUndefined(result.issues);
-
-      const ready = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "implement",
-            outcome: "ready-for-pr",
-            summary: "Implementation complete.",
-            title: "Open pull requests from the engine",
-            body: "Closes #474",
-          }),
-        ),
-      );
-      assert.isUndefined(ready.issues);
-
-      const invalid = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "implement",
-            outcome: "opened-pr",
-            summary: " ",
-            title: null,
-            body: null,
-          }),
-        ),
-      );
-      assert.isDefined(invalid.issues);
-    }),
-  );
-
-  it.effect("prepares the follow-up result as a validating Standard JSON Schema", () =>
-    Effect.gen(function* () {
-      const schema = stageResultSchema("follow-up");
-
-      const result = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "follow-up",
-            outcome: "pushed",
-            summary: "Fixed the failing check and pushed.",
-          }),
-        ),
-      );
-      assert.isUndefined(result.issues);
-
-      const invalid = yield* Effect.promise(() =>
-        Promise.resolve(
-          schema["~standard"].validate({
-            _tag: "follow-up",
-            outcome: "pushed",
-            summary: " ",
-          }),
-        ),
-      );
-      assert.isDefined(invalid.issues);
-    }),
-  );
-});
-
 describe("Harness", () => {
+  it.layer(Layer.merge(harnessRunnerLayer, LogProbe.captureLayer))((it) => {
+    it.effect("logs each Harness launch and exit once", () => {
+      const failure = new HarnessError({
+        reason: "turn",
+        retryable: true,
+        message: "turn failed",
+      });
+      const runs = [
+        { stream: Stream.empty, outcome: "success" },
+        { stream: Stream.fail(failure), outcome: "failure" },
+        { stream: Stream.fromEffect(Effect.interrupt), outcome: "interrupt" },
+      ] satisfies ReadonlyArray<{
+        readonly stream: Stream.Stream<never, HarnessError>;
+        readonly outcome: "success" | "failure" | "interrupt";
+      }>;
+
+      return Effect.gen(function* () {
+        const logs = yield* LogProbe;
+        yield* Effect.forEach(
+          runs,
+          (run) => {
+            const runner = {
+              ...controlledRunnerDefaults,
+              name,
+              sessionKind: "opaque-handle",
+              projectedMembers: [],
+              planMiddleware: [],
+              execution: fullHarnessExecution,
+              run: () => run.stream,
+            } satisfies HarnessRunner;
+            return make([runner]).run(request).pipe(Stream.runDrain, Effect.exit);
+          },
+          { discard: true },
+        );
+
+        assert.deepStrictEqual(
+          (yield* logs.entries).map(({ message }) => message),
+          runs.flatMap(({ outcome }) => [
+            ["launched Harness", { harness: name }],
+            ["exited Harness", { harness: name, outcome }],
+          ]),
+        );
+      });
+    });
+  });
+
   it.layer(harnessRunnerLayer)((it) => {
-    it.effect("uses runtime metadata before native discovery and fallback", () =>
-      Effect.gen(function* () {
-        const runner = {
-          ...controlledRunnerDefaults,
-          name,
-          sessionKind: "opaque-handle",
-          projectedMembers: [],
-          planMiddleware: [],
-          execution: fullHarnessExecution,
-          catalogSources: {
-            runtime: staticCatalogSource(
-              { models: [{ value: "runtime-model", label: "Runtime model" }] },
-              { source: "tanstack-runtime", packageVersion: "1.2.3" },
-            ),
-            native: staticCatalogSource(
-              { models: [{ value: "native-model", label: "Native model" }] },
-              {
-                source: "native-discovery",
-                runtimeHost: "host-149",
-                harnessVersion: "4.5.6",
-              },
-            ),
-            fallback: staticCatalogSource(
-              { models: [{ value: "fallback-model", label: "Fallback model" }] },
-              { source: "cogwork-fallback", fallbackVersion: "7" },
-            ),
-          },
-          run: () => Stream.empty,
-        } satisfies HarnessRunner;
-        const catalog = yield* make([runner]).catalog(name);
+    it("serves the managed catalog with one provenance shape", () => {
+      const runner = {
+        ...controlledRunnerDefaults,
+        name,
+        sessionKind: "opaque-handle",
+        projectedMembers: [],
+        planMiddleware: [],
+        execution: fullHarnessExecution,
+        catalog: {
+          models: [{ value: "managed-model", label: "Managed model" }],
+        },
+        run: () => Stream.empty,
+      } satisfies HarnessRunner;
+      const catalog = make([runner]).catalogs.get(name);
 
-        assert.deepStrictEqual(catalog.models, [{ value: "runtime-model", label: "Runtime model" }]);
-        assert.deepStrictEqual(catalog.provenance, {
-          source: "tanstack-runtime",
-          packageVersion: "1.2.3",
-        });
-      }),
-    );
+      assert.isNotNull(catalog);
+      if (!catalog) return;
+      assert.deepStrictEqual(catalog.models, [{ value: "managed-model", label: "Managed model" }]);
+      assert.deepStrictEqual(catalog.provenance, { source: "managed" });
+    });
 
-    it.effect("falls through unavailable sources and records native or fallback provenance", () =>
-      Effect.gen(function* () {
-        const nativeName = yield* Schema.decodeEffect(HarnessName)("native-controlled");
-        const fallbackName = yield* Schema.decodeEffect(HarnessName)("fallback-controlled");
-        const runners = [
-          {
-            ...controlledRunnerDefaults,
-            name: nativeName,
-            sessionKind: "opaque-handle",
-            projectedMembers: [],
-            planMiddleware: [],
-            execution: fullHarnessExecution,
-            catalogSources: {
-              runtime: unavailableCatalogSource,
-              native: staticCatalogSource(
-                { models: [{ value: "native", label: "Native" }] },
-                {
-                  source: "native-discovery",
-                  runtimeHost: "host-149",
-                  harnessVersion: "2",
-                },
-              ),
-              fallback: controlledRunnerDefaults.catalogSources.fallback,
-            },
-            run: () => Stream.empty,
-          },
-          {
-            ...controlledRunnerDefaults,
-            name: fallbackName,
-            sessionKind: "opaque-handle",
-            projectedMembers: [],
-            planMiddleware: [],
-            execution: fullHarnessExecution,
-            catalogSources: {
-              runtime: unavailableCatalogSource,
-              native: unavailableCatalogSource,
-              fallback: controlledRunnerDefaults.catalogSources.fallback,
-            },
-            run: () => Stream.empty,
-          },
-        ] satisfies ReadonlyArray<HarnessRunner>;
-        const harness = make(runners);
-        const native = yield* harness.catalog(nativeName);
-        const fallback = yield* harness.catalog(fallbackName);
-
-        assert.strictEqual(native.models[0]?.value, "native");
-        assert.strictEqual(native.provenance.source, "native-discovery");
-        assert.strictEqual(fallback.models[0]?.value, "controlled");
-        assert.strictEqual(fallback.provenance.source, "cogwork-fallback");
-      }),
-    );
-
-    it.effect("preserves retryable native catalog failures", () =>
+    it.effect("rejects saved model options when the current model omits the control", () =>
       Effect.gen(function* () {
         const launches: Array<true> = [];
         const runner = {
@@ -365,54 +213,8 @@ describe("Harness", () => {
           projectedMembers: [],
           planMiddleware: [],
           execution: fullHarnessExecution,
-          catalogSources: {
-            native: {
-              catalog: Effect.fail(
-                new HarnessError({
-                  reason: "launch",
-                  retryable: true,
-                  message: "native catalog timed out",
-                }),
-              ),
-            },
-            fallback: controlledRunnerDefaults.catalogSources.fallback,
-          },
-          run: () => {
-            launches.push(true);
-            return Stream.empty;
-          },
-        } satisfies HarnessRunner;
-        const configured = {
-          ...request,
-          plan: new RunPlan({
-            ...request.plan,
-            harness: { ...request.plan.harness, model: "native-only" },
-          }),
-        };
-        const error = yield* make([runner]).run(configured).pipe(Stream.runDrain, Effect.flip);
-
-        assert.strictEqual(error.reason, "launch");
-        assert.isTrue(error.retryable);
-        assert.strictEqual(error.message, "native catalog timed out");
-        assert.deepStrictEqual(launches, []);
-      }),
-    );
-
-    it.effect("rejects unsupported effort absent from the current catalog", () =>
-      Effect.gen(function* () {
-        const launches: Array<true> = [];
-        const runner = {
-          ...controlledRunnerDefaults,
-          name,
-          sessionKind: "opaque-handle",
-          projectedMembers: [],
-          planMiddleware: [],
-          execution: fullHarnessExecution,
-          catalogSources: {
-            fallback: staticCatalogSource(
-              { models: [{ value: "runtime-model", label: "Runtime model" }] },
-              { source: "cogwork-fallback", fallbackVersion: "1" },
-            ),
+          catalog: {
+            models: [{ value: "managed-model", label: "Managed model" }],
           },
           run: () => {
             launches.push(true);
@@ -424,13 +226,13 @@ describe("Harness", () => {
           ...request,
           plan: new RunPlan({
             ...request.plan,
-            harness: { ...request.plan.harness, model: "runtime-model", effort: "high" },
+            harness: { ...request.plan.harness, model: "managed-model", options: { effort: "high" } },
           }),
         };
         const error = yield* harness.run(configured).pipe(Stream.runDrain, Effect.flip);
 
         assert.strictEqual(error.reason, "stale-selection");
-        assert.include(error.message, "effort high");
+        assert.include(error.message, 'model option effort="high"');
         assert.deepStrictEqual(launches, []);
       }),
     );
@@ -646,6 +448,24 @@ describe("Harness", () => {
           assert.match(error.message, new RegExp(`unsupported.*${posture.expected}`));
           assert.strictEqual(error.reason, "policy");
         }
+      }),
+    );
+
+    it.effect("accepts a Full profile without a worktree-confinement claim", () =>
+      Effect.gen(function* () {
+        const harness = make([
+          {
+            ...controlledRunnerDefaults,
+            name,
+            sessionKind: "opaque-handle",
+            projectedMembers: [],
+            planMiddleware: [],
+            execution: { nonInteractive: true, worktreeConfined: false, profiles: ["full"] },
+            run: () => Stream.empty,
+          },
+        ]);
+
+        yield* harness.preflight(name, "full", null);
       }),
     );
 

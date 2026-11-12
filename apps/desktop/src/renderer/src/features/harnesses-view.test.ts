@@ -1,7 +1,9 @@
 import {
   defaultControlStore,
-  HarnessItem,
+  HarnessCatalog,
   HarnessName,
+  HarnessReadiness,
+  HarnessReadinessItem,
   HarnessSignIn,
   HarnessState,
 } from "@cogwork/contracts";
@@ -9,26 +11,28 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import {
   applyHarnessEnablement,
+  type HarnessItem,
   harnessEnablementView,
+  harnessItems,
   harnessSummary,
   installedVersion,
   versionLabel,
 } from "./harnesses-view";
 
-const item = (
-  state: HarnessState,
-  version: string | null,
-  models: ReadonlyArray<string> = [],
-  enabled = true,
-) =>
-  HarnessItem.make({
+const readinessItem = (state: HarnessState, version: string | null, enabled = true) =>
+  HarnessReadinessItem.make({
     harness: Schema.decodeSync(HarnessName)("codex"),
     enabled,
     version,
     state,
-    models,
-    catalog: null,
+    diagnostics: [],
   });
+
+const item = (state: HarnessState, version: string | null, enabled = true) =>
+  ({
+    ...readinessItem(state, version, enabled),
+    catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
+  }) satisfies HarnessItem;
 
 describe("versionLabel", () => {
   it("prefixes a bare version so it reads as one", () => {
@@ -78,7 +82,7 @@ describe("harnessSummary", () => {
   });
 
   it("puts disabled ahead of readiness", () => {
-    const summary = harnessSummary(item(HarnessState.cases.Ready.make({}), null, [], false));
+    const summary = harnessSummary(item(HarnessState.cases.Ready.make({}), null, false));
     expect(summary).toEqual({ headline: "Disabled", detail: null, attention: "muted", signIn: null });
   });
 });
@@ -92,6 +96,37 @@ describe("applyHarnessEnablement", () => {
     };
 
     expect(applyHarnessEnablement([codex], controlStore)[0]?.enabled).toBe(false);
+  });
+});
+
+describe("harnessItems", () => {
+  it("joins live readiness to the separately loaded catalog", () => {
+    const observed = readinessItem(HarnessState.cases.Ready.make({}), "0.154.0");
+    const readiness = HarnessReadiness.make({ harnesses: [observed], checkedAtMillis: 12 });
+    const catalog = HarnessCatalog.make({
+      harness: observed.harness,
+      catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
+    });
+
+    expect(harnessItems(readiness, [catalog])).toEqual([{ ...observed, catalog: catalog.catalog }]);
+  });
+
+  it("shows catalog entries while readiness is still loading", () => {
+    const catalog = HarnessCatalog.make({
+      harness: Schema.decodeSync(HarnessName)("codex"),
+      catalog: { models: [], policyProfiles: [], provenance: { source: "managed" } },
+    });
+
+    expect(harnessItems(null, [catalog])).toEqual([
+      {
+        harness: catalog.harness,
+        enabled: true,
+        version: null,
+        state: HarnessState.cases.Unknown.make({ diagnostic: "Readiness check pending" }),
+        diagnostics: [],
+        catalog: catalog.catalog,
+      },
+    ]);
   });
 });
 

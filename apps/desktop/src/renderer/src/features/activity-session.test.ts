@@ -1,4 +1,11 @@
-import { type AgUiEvent, ClassifiedItem, DaemonEvent, initialBoard, RunSummary } from "@cogwork/contracts";
+import {
+  type AgUiEvent,
+  DaemonEvent,
+  initialBoard,
+  ReadModelItem,
+  RunSummary,
+  WorkflowRecord,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import {
@@ -12,15 +19,30 @@ import { previewMap } from "./run-activity";
 
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const decodeRun = Schema.decodeSync(RunSummary);
-const decodeItem = Schema.decodeSync(ClassifiedItem);
+const decodeItem = Schema.decodeSync(ReadModelItem);
+const decodeWorkflow = Schema.decodeUnknownSync(WorkflowRecord);
 const event = (value: Record<string, unknown>) => decodeEvent({ emittedAtMillis: 0, ...value });
+const readyToMerge = (id: string, title: string) =>
+  decodeItem({
+    _tag: "ReadyToMerge",
+    id,
+    title,
+    pr: {
+      number: 1,
+      url: "https://example.test/pull/1",
+      checks: "passing",
+      review: "ready",
+      baseDivergence: "clean",
+      waitingSinceMillis: 0,
+    },
+  });
 
 const run = (over: Partial<Parameters<typeof decodeRun>[0]> = {}) =>
   decodeRun({
     id: "run-1",
     workspace: "acme",
     workItem: "42",
-    stage: "implement",
+    operation: "implement",
     harness: "cursor",
     branch: null,
     session: null,
@@ -39,7 +61,7 @@ const activity = (runId: string, agui: AgUiEvent & { type: string }) =>
       runId,
       workspace: "acme",
       workItem: "42",
-      stage: "implement",
+      operation: "implement",
       seq: 0,
       atMillis: 0,
       correlation: { threadId: null, messageId: null, toolCallId: agui.toolCallId ?? null },
@@ -48,6 +70,34 @@ const activity = (runId: string, agui: AgUiEvent & { type: string }) =>
   });
 
 describe("activity session", () => {
+  it("keeps the Workflow view current through change and delete events", () => {
+    const workflow = decodeWorkflow({
+      id: "workflow-1",
+      principal: "person",
+      workingCopy: {
+        name: "Shared Workflow",
+        workspaces: { _tag: "Every" },
+        triggers: [],
+        operations: [],
+      },
+      workingRevision: 1,
+      publishedCopy: null,
+      publishedRevision: null,
+      enabled: false,
+      diagnostics: [],
+      readiness: [],
+    });
+    const changed = ingestDaemonEvent(
+      initialActivitySession,
+      event({ _tag: "WorkflowChanged", workflow }),
+      1,
+    );
+    const removed = ingestDaemonEvent(changed, event({ _tag: "WorkflowDeleted", id: workflow.id }), 2);
+
+    expect(changed.workflows.get(workflow.id)).toEqual(workflow);
+    expect(removed.workflows.has(workflow.id)).toBe(false);
+  });
+
   it("constructs and folds every board result", () => {
     const initial = BoardResult.Initial();
     const failure = BoardResult.Failure();
@@ -65,13 +115,13 @@ describe("activity session", () => {
     const seed = event({
       _tag: "ItemChanged",
       workspace: "acme",
-      item: decodeItem({ _tag: "Eligible", id: "old", title: "Old", stage: "implement" }),
+      item: readyToMerge("old", "Old"),
     });
     const live = event({ _tag: "RunChanged", run: run() });
     const replacement = event({
       _tag: "ItemChanged",
       workspace: "acme",
-      item: decodeItem({ _tag: "Eligible", id: "new", title: "New", stage: "implement" }),
+      item: readyToMerge("new", "New"),
     });
     const first = [seed, event({ _tag: "SeedEnd" }), live].reduce(
       (session, next) => ingestDaemonEvent(session, next, 1),
@@ -86,6 +136,15 @@ describe("activity session", () => {
     expect(reconnected.board.items.has("acme::new")).toBe(true);
     expect(reconnected.board.runs.size).toBe(0);
     expect(reconnected.log.map((row) => row.summary)).toEqual(["42 · run running"]);
+  });
+
+  it("refreshes Workflow inputs for live changes, not seed events", () => {
+    const changed = event({ _tag: "WorkspaceRemoved", workspace: "acme" });
+    const seeded = ingestDaemonEvent(initialActivitySession, changed, 1);
+    const live = ingestDaemonEvent(ingestDaemonEvent(seeded, event({ _tag: "SeedEnd" }), 2), changed, 3);
+
+    expect(seeded.workflowInputsRevision).toBe(0);
+    expect(live.workflowInputsRevision).toBe(1);
   });
 
   it("releases a terminal run's preview scratch state", () => {

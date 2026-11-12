@@ -1,5 +1,6 @@
 import {
   type DaemonStatus,
+  OperationSettingRefused,
   type RunId,
   RunId as RunIdSchema,
   type WorkItemId,
@@ -13,7 +14,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import { RpcClientDefect, RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { SocketOpenError } from "effect/unstable/socket/Socket";
 import {
@@ -21,7 +22,9 @@ import {
   daemonOrStore,
   daemonStatusPicture,
   formatDaemonLimits,
+  formatOperationSettingRefusal,
   formatOperationSettings,
+  formatRunEvents,
   limitsCommand,
   makeContributionSettingUpdate,
   makeOperationSettingUpdate,
@@ -42,6 +45,19 @@ const unavailableSocket = new SocketOpenError({
   cause: new Error("socket unavailable"),
 });
 const unavailableDaemon = new RpcClientError({ reason: unavailableSocket });
+
+describe("run events", () => {
+  it("distinguishes pruned history from an eventless Run", () => {
+    assert.strictEqual(
+      formatRunEvents({ events: [], eventsPrunedAtMillis: 123 }),
+      "(run history pruned at 123)",
+    );
+    assert.strictEqual(
+      formatRunEvents({ events: [], eventsPrunedAtMillis: null }),
+      "(no events for this run)",
+    );
+  });
+});
 
 describe("watch reconnect", () => {
   it.effect("retries a daemon transport failure", () =>
@@ -96,6 +112,7 @@ const unavailableStoreStatus: DaemonStatus = {
     dailyBudgetLimit: 50,
     perWorkspace: [],
   },
+  sources: [],
   workspaces: [],
   failures: [],
 };
@@ -160,6 +177,34 @@ describe("limits", () => {
 });
 
 describe("operation settings", () => {
+  it("reports a refusal with the daemon's permitted option values", () => {
+    const refusal = OperationSettingRefused.make({
+      setting: "model-options",
+      source: "Harness cursor",
+      reason:
+        'cursor does not offer model option effort="medium" for cursor-model; permitted model options: effort ("low" | "high"), speed (true | false)',
+    });
+
+    assert.strictEqual(
+      formatOperationSettingRefusal(refusal),
+      'Harness cursor refused model-options: cursor does not offer model option effort="medium" for cursor-model; permitted model options: effort ("low" | "high"), speed (true | false)',
+    );
+  });
+
+  it("makes refusal diagnostics safe for terminal output", () => {
+    const refusal = OperationSettingRefused.make({
+      setting: "model-options",
+      source: "Harness cursor\u001b[2J",
+      reason: "invalid\nvalue",
+    });
+
+    const message = formatOperationSettingRefusal(refusal);
+
+    assert.strictEqual(message, "Harness cursor[2J refused model-options: invalid value");
+    assert.notInclude(message, "\u001b");
+    assert.notInclude(message, "\n");
+  });
+
   it("renders effective values from raw rows with level before Scope", () => {
     assert.strictEqual(
       formatOperationSettings(
@@ -179,7 +224,7 @@ describe("operation settings", () => {
             },
             {
               setting: "model",
-              level: { _tag: "Operation", workflow: "coding", operation: "implement" },
+              level: { _tag: "Default" },
               scope: { _tag: "SettingsProfile" },
               value: "operation-model",
             },
@@ -189,34 +234,83 @@ describe("operation settings", () => {
           harnessSettings: [],
           contributionSettings: [],
         },
-        { workflow: "coding", operation: "implement", workspace: null },
+        { workspace: null },
       ),
-      "enabled: unset\nharness: unset\nmodel: operation-model\neffort: unset\npermission-profile: unset\nbindings: unset",
+      "harness: unset\nmodel: operation-model\nmodel-options: unset",
     );
     assert.isDefined(operationSettingsCommand);
+  });
+
+  it("renders an empty model options override", () => {
+    assert.include(
+      formatOperationSettings(
+        {
+          daemonLimits: {
+            globalConcurrency: 4,
+            perWorkspaceConcurrency: 4,
+            dailyBudget: 50,
+            revision: 0,
+          },
+          operationSettings: [
+            {
+              setting: "model-options",
+              level: { _tag: "Default" },
+              scope: { _tag: "SettingsProfile" },
+              value: {},
+            },
+          ],
+          connections: [],
+          pluginInstalls: [],
+          harnessSettings: [],
+          contributionSettings: [],
+        },
+        { workspace: null },
+      ),
+      "model-options: {}",
+    );
   });
 
   it.effect("maps the set form to a typed Operation setting row", () =>
     Effect.gen(function* () {
       const update = yield* makeOperationSettingUpdate(
         {
-          setting: "enabled",
+          setting: "harness",
           scope: "overlay",
-          level: "workflow",
-          workflow: "coding",
-          operation: "implement",
           workspace: Option.some("example"),
         },
-        Option.some("off"),
+        Option.some("cursor"),
       );
 
       assert.deepStrictEqual(update, {
         _tag: "Set",
         row: {
-          setting: "enabled",
+          setting: "harness",
           scope: { _tag: "PrivateWorkspaceOverlay", workspace: workspaceId("example") },
-          level: { _tag: "Workflow", workflow: "coding" },
-          value: false,
+          level: { _tag: "Default" },
+          value: "cursor",
+        },
+      });
+    }),
+  );
+
+  it.effect("decodes model options from JSON", () =>
+    Effect.gen(function* () {
+      const update = yield* makeOperationSettingUpdate(
+        {
+          setting: "model-options",
+          scope: "profile",
+          workspace: Option.none(),
+        },
+        Option.some('{"effort":"high","speed":true}'),
+      );
+
+      assert.deepStrictEqual(update, {
+        _tag: "Set",
+        row: {
+          setting: "model-options",
+          scope: { _tag: "SettingsProfile" },
+          level: { _tag: "Default" },
+          value: { effort: "high", speed: true },
         },
       });
     }),
@@ -228,9 +322,6 @@ describe("operation settings", () => {
         {
           setting: "harness",
           scope: "host",
-          level: "default",
-          workflow: "coding",
-          operation: "implement",
           workspace: Option.none(),
         },
         Option.none(),

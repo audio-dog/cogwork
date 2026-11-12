@@ -1,5 +1,2 @@
 .env
 node_modules
-run-summary.json
-probe-summary.json
-resume-summary.json

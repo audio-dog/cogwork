@@ -37,3 +37,7 @@ packages/*/.claude/
 
 # TypeScript incremental build state
 *.tsbuildinfo
+.tanstack-mcp-bridge-*
+tanstack-claude-argv-*
+tanstack-claude-run-*
+tanstack-output-schema-*

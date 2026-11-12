@@ -4,13 +4,14 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/co
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@cogwork/ui/components/table";
-import { RiCheckLine, RiTimeLine } from "@remixicon/react";
+import { RiCheckLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use } from "react";
-import { BoardResult, useBoard } from "../features/activity-session";
-import type { FeedRun, QueuedItem } from "../features/feed";
-import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
+import { BoardResult, useBoard, useOperationName } from "../features/activity-session";
+import type { FeedRun, OperationRun } from "../features/feed";
+import { recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
+import { runStatusLabel } from "../features/run-status";
 import { useNow } from "../features/use-now";
 import { workspaceLabelById } from "../features/workspace-record";
 import type { ItemSelection } from "../store/chrome";
@@ -19,7 +20,6 @@ import { useRightPanelStore } from "../store/right-panel";
 
 interface FeedState {
   running: ReadonlyArray<FeedRun>;
-  queued: ReadonlyArray<QueuedItem>;
   done: ReadonlyArray<FeedRun>;
   previews: ReadonlyMap<string, RunActivityPreview>;
 }
@@ -31,6 +31,7 @@ interface FeedActions {
 interface FeedMeta {
   now: number;
   workspaceName: (workspace: WorkspaceId) => string;
+  operationName: (run: OperationRun) => string;
 }
 
 interface FeedContextValue {
@@ -115,9 +116,9 @@ function ConsoleLine({ preview }: { preview: RunActivityPreview | undefined }) {
 function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivityPreview | undefined }) {
   const {
     actions: { select },
-    meta: { now, workspaceName },
+    meta: { now, workspaceName, operationName },
   } = useFeed();
-  const { run, title } = entry;
+  const { run, label, title } = entry;
   return (
     <button
       type="button"
@@ -126,14 +127,16 @@ function TerminalStrip({ entry, preview }: { entry: FeedRun; preview: RunActivit
     >
       <span className="flex w-full items-center gap-3">
         <TypingDots />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{title ?? run.workItem}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{title ?? label}</span>
         <Badge variant="secondary" className="w-20 shrink-0 justify-center">
-          {run.stage}
+          {operationName(run)}
         </Badge>
         <span className="w-16 shrink-0 truncate text-end text-xs text-muted-foreground">
           {workspaceName(run.workspace)}
         </span>
-        <span className="w-14 shrink-0 text-end font-mono text-xs text-muted-foreground">{run.workItem}</span>
+        <span className="w-14 shrink-0 truncate text-end font-mono text-xs text-muted-foreground">
+          {label}
+        </span>
         <span className="w-12 shrink-0 text-end font-mono text-xs text-muted-foreground tabular-nums">
           {elapsed(run.startedAtMillis, now)}
         </span>
@@ -171,6 +174,7 @@ const runStateBadge: Record<
 > = {
   running: { variant: "secondary" },
   succeeded: { variant: "secondary", icon: RiCheckLine },
+  declined: { variant: "outline" },
   failed: { variant: "destructive" },
   crashed: { variant: "destructive" },
   interrupted: { variant: "outline" },
@@ -180,42 +184,10 @@ const runStateBadge: Record<
 function RunStateBadge({ status }: { status: FeedRun["run"]["status"] }) {
   const { variant, icon: Icon } = runStateBadge[status];
   return (
-    <Badge variant={variant} className="gap-1 font-normal capitalize">
+    <Badge variant={variant} className="gap-1 font-normal">
       {Icon && <Icon className="size-3" />}
-      {status}
+      {runStatusLabel[status]}
     </Badge>
-  );
-}
-
-function QueuedBadge() {
-  return (
-    <Badge variant="outline" className="gap-1 font-normal">
-      <RiTimeLine className="size-3" />
-      Queued
-    </Badge>
-  );
-}
-
-function QueuedLedgerRow({ entry }: { entry: QueuedItem }) {
-  const {
-    actions: { select },
-    meta: { workspaceName },
-  } = useFeed();
-  return (
-    <TableRow
-      className="cursor-pointer"
-      onClick={() => select({ workspace: entry.workspace, workItem: entry.item.id })}
-    >
-      <TableCell>
-        <QueuedBadge />
-      </TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{entry.item.id}</TableCell>
-      <TableCell className="truncate text-foreground">{entry.item.title}</TableCell>
-      <TableCell>
-        <Badge variant="outline">{workspaceName(entry.workspace)}</Badge>
-      </TableCell>
-      <TableCell className="text-end text-xs text-muted-foreground tabular-nums">—</TableCell>
-    </TableRow>
   );
 }
 
@@ -224,7 +196,7 @@ function DoneLedgerRow({ entry }: { entry: FeedRun }) {
     actions: { select },
     meta: { workspaceName },
   } = useFeed();
-  const { run, title } = entry;
+  const { run, label, title } = entry;
   return (
     <TableRow
       className="cursor-pointer"
@@ -233,8 +205,8 @@ function DoneLedgerRow({ entry }: { entry: FeedRun }) {
       <TableCell>
         <RunStateBadge status={run.status} />
       </TableCell>
-      <TableCell className="font-mono text-xs text-muted-foreground">{run.workItem}</TableCell>
-      <TableCell className="truncate text-foreground">{title ?? run.workItem}</TableCell>
+      <TableCell className="truncate font-mono text-xs text-muted-foreground">{label}</TableCell>
+      <TableCell className="truncate text-foreground">{title ?? label}</TableCell>
       <TableCell>
         <Badge variant="outline">{workspaceName(run.workspace)}</Badge>
       </TableCell>
@@ -247,18 +219,17 @@ function DoneLedgerRow({ entry }: { entry: FeedRun }) {
 
 function LedgerSection() {
   const {
-    state: { queued, done },
+    state: { done },
   } = useFeed();
-  const total = queued.length + done.length;
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
         <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Ledger</h2>
-        <Badge variant="secondary">{total}</Badge>
-        <span className="text-xs text-muted-foreground">queued &amp; recently done</span>
+        <Badge variant="secondary">{done.length}</Badge>
+        <span className="text-xs text-muted-foreground">recently done</span>
       </div>
-      {total === 0 ? (
-        <EmptyNote>Nothing queued or finished yet.</EmptyNote>
+      {done.length === 0 ? (
+        <EmptyNote>Nothing finished yet.</EmptyNote>
       ) : (
         <div className="overflow-hidden rounded-xl border">
           <Table className="table-fixed">
@@ -272,9 +243,6 @@ function LedgerSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {queued.map((entry) => (
-                <QueuedLedgerRow key={`q:${entry.workspace}:${entry.item.id}`} entry={entry} />
-              ))}
               {done.map((entry) => (
                 <DoneLedgerRow key={`d:${entry.run.id}`} entry={entry} />
               ))}
@@ -295,7 +263,6 @@ const FeedCompound = {
 
 function FeedContent({
   running,
-  queued,
   done,
   previews,
   workspaceName,
@@ -303,11 +270,12 @@ function FeedContent({
   const openItem = useRightPanelStore((state) => state.openItem);
   const select = (selection: ItemSelection) => openItem(selection.workspace, selection.workItem);
   const now = useNow();
+  const operationName = useOperationName();
   return (
     <FeedCompound.Provider
-      state={{ running, queued, done, previews }}
+      state={{ running, done, previews }}
       actions={{ select }}
-      meta={{ now, workspaceName }}
+      meta={{ now, workspaceName, operationName }}
     >
       <FeedCompound.Frame>
         <FeedCompound.LiveNow />
@@ -348,10 +316,9 @@ export function Feed() {
 
   const { board, previews } = result;
   const running = runningRuns(board, filter);
-  const queued = queuedItems(board, filter);
   const done = recentlyDone(board, filter);
 
-  if (running.length === 0 && queued.length === 0 && done.length === 0) {
+  if (running.length === 0 && done.length === 0) {
     return (
       <ScrollArea className="h-full">
         <div className="p-6">
@@ -359,7 +326,7 @@ export function Feed() {
             <EmptyHeader>
               <EmptyTitle>Nothing in flight</EmptyTitle>
               <EmptyDescription>
-                Running agents, queued work, and recent results will appear here as the daemon works.
+                Running agents and recent results will appear here as the daemon works.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -371,7 +338,6 @@ export function Feed() {
   return (
     <FeedContent
       running={running}
-      queued={queued}
       done={done}
       previews={previews}
       workspaceName={(workspace) => workspaceLabelById(board, workspace)}

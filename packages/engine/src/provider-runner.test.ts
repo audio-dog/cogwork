@@ -1,8 +1,21 @@
-import { agUiTextDelta, HarnessName, RunPlan, SessionId, stageResultJsonSchema } from "@cogwork/contracts";
+import {
+  type AgUiEvent,
+  agUiIsFileDiffUnavailableEvent,
+  agUiTextDelta,
+  HarnessName,
+  RunPlan,
+  SessionId,
+} from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
-import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
+import {
+  EventType,
+  InMemoryRunStore,
+  type ModelMessage,
+  type StreamChunk,
+  toolDefinition,
+} from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import {
   type ChatWithInterruptsPersistence,
@@ -12,26 +25,35 @@ import {
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import { ContextAssembler, type ContextAssemblerService, type InstructionLayer } from "./context-assembler";
 import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 import type { HarnessRequest } from "./harness";
-import { defaultModelAdapterFactory, type ModelAdapterFactory, parseModelRef } from "./provider-adapter";
+import {
+  defaultModelAdapterFactory,
+  type ModelAdapterFactory,
+  parseModelRef,
+  providerModelRefs,
+} from "./provider-adapter";
 import {
   defaultLoopBudget,
   defaultRunBudget,
+  mergeProviderFileDiffs,
   providerInstructionContext,
   providerRunner,
   type RunChat,
   type RunChatOptions,
 } from "./provider-runner";
 import { SessionStore, type SessionStoreService } from "./session-store";
+import { isPolicyDenied } from "./tools";
 
 const SECRET = "sk-super-secret-value";
 const harnessName = Schema.decodeSync(HarnessName)("provider");
@@ -54,6 +76,15 @@ const scriptedChunks: ReadonlyArray<StreamChunk> = [
   { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m1", delta: "hello world" },
   { type: EventType.RUN_FINISHED, threadId: "t1", runId: "r1" },
 ];
+
+const scriptedRunChat =
+  (exercise: (options: RunChatOptions) => Promise<void>): RunChat =>
+  (options) => {
+    const iterator = exercise(options).then(() => toAsyncIterable(scriptedChunks)[Symbol.asyncIterator]());
+    return {
+      [Symbol.asyncIterator]: () => ({ next: () => iterator.then((current) => current.next()) }),
+    };
+  };
 
 const structuredTriageJson = '{"_tag":"triage","role":"ready-for-agent","proposal":"Verified and ready."}';
 
@@ -128,6 +159,7 @@ const contextService = (layers: ReadonlyArray<InstructionLayer>): ContextAssembl
   assemble: () =>
     Effect.succeed({
       layers,
+      operatingInstructionsName: "implement-agent",
       operatingInstructionsPath: "/operating-instructions/implement-agent",
       operatingInstructionResources: [],
       sources: [],
@@ -139,23 +171,21 @@ const contextLayer = (layers: ReadonlyArray<InstructionLayer>) =>
   Layer.succeed(ContextAssembler, contextService(layers));
 
 interface RequestOverrides {
-  readonly checkoutPath?: string;
+  readonly checkoutPath?: string | null;
   readonly session?: HarnessRequest["session"];
-  readonly stage?: "triage" | "implement";
+  readonly operation?: string;
   readonly model?: string;
 }
 
 const request = (overrides: RequestOverrides): HarnessRequest => {
-  const stage = overrides.stage ?? "implement";
-  const profile = stage === "triage" ? "read-only" : "full";
-  const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
-    target: "draft-2020-12",
-  });
+  const operation = overrides.operation ?? "operate";
+  const profile = operation === "triage" ? "read-only" : "full";
+  const structuredOutput = { type: "object" as const };
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-provider-test",
-      operation: stage,
-      harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", effort: null, profile },
+      operation,
+      harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", options: {}, profile },
       instructions: [{ ...sampleLayer, kind: "repo" }],
       operatingInstructions: {
         name: "implement-agent",
@@ -166,7 +196,6 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["persistence", "instruction-context"],
       structuredOutput,
@@ -174,10 +203,24 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
       messages: [{ role: "user", content: "do the thing" }],
       workContext: {
         reference: { workItem: "#1", url: null },
-        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        prose: {
+          body: "Ship the requested provider change.",
+          comments: [
+            {
+              author: "maintainer",
+              authorAssociation: "MEMBER",
+              body: "Keep the adapter contract stable.",
+              createdAtMillis: 2,
+            },
+          ],
+        },
+        facts: { assignees: [], openBlockers: 0, claim: null, priority: "medium" },
         observation: { generation: 1, observedAtMillis: 1 },
       },
-      sandbox: { workspace: overrides.checkoutPath ?? "/tmp/does-not-matter", policy: profile },
+      sandbox: {
+        workspace: overrides.checkoutPath === undefined ? "/tmp/does-not-matter" : overrides.checkoutPath,
+        policy: profile,
+      },
       persistence: { sessionKind: "owned-transcript" },
       provenance: {
         resolution: [],
@@ -187,7 +230,7 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
         observation: { generation: 1, observedAtMillis: 1 },
       },
     }),
-    session: overrides.session ?? null,
+    session: "session" in overrides ? (overrides.session ?? null) : sessionId,
     mcpCredentials: new Map(),
   };
 };
@@ -213,7 +256,7 @@ const providerRunnerLayer = (
     httpClient,
   );
 
-describe("providerRunner", () => {
+describe("providerRunner", { timeout: 30_000 }, () => {
   it("projects Operating Instructions resources into provider context", () => {
     assert.deepStrictEqual(
       providerInstructionContext(request({}).plan).map(({ content }) => content),
@@ -223,6 +266,13 @@ describe("providerRunner", () => {
 
   it("declares the owned-transcript session kind", () => {
     assert.strictEqual(providerRunner({ name: harnessName }).sessionKind, "owned-transcript");
+  });
+
+  it("serves every managed provider model", () => {
+    assert.deepStrictEqual(
+      providerRunner({ name: harnessName }).catalog.models.map(({ value }) => value),
+      providerModelRefs,
+    );
   });
 
   it.live(
@@ -266,13 +316,12 @@ describe("providerRunner", () => {
 
         const options = capturedOptions[0];
         if (!options) return assert.fail("runChat was never invoked");
-        assert.deepStrictEqual(
-          [...options.messages],
-          [
-            { role: "assistant", content: "earlier turn" },
-            { role: "user", content: "do the thing" },
-          ],
-        );
+        assert.strictEqual(options.messages.length, 3);
+        assert.deepStrictEqual(options.messages[0], { role: "assistant", content: "earlier turn" });
+        assert.strictEqual(options.messages[1]?.role, "user");
+        assert.deepStrictEqual(options.messages[2], { role: "user", content: "do the thing" });
+        assert.include(String(options.messages[1]?.content), "Ship the requested provider change.");
+        assert.include(String(options.messages[1]?.content), "Keep the adapter contract stable.");
         assert.lengthOf([...options.tools], 7);
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "cogwork-context"));
         assert.isTrue(options.middleware.some((middleware) => middleware.name === "chat-persistence"));
@@ -280,6 +329,139 @@ describe("providerRunner", () => {
         assert.strictEqual(options.threadId, sessionId);
       }),
     30000,
+  );
+
+  it.live("keys a fresh chat thread by its Session", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const capturedOptions: Array<RunChatOptions> = [];
+      const runChat: RunChat = (options) => {
+        capturedOptions.push(options);
+        return toAsyncIterable(scriptedChunks);
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ checkoutPath }))).pipe(
+        Effect.provide(providerRunnerLayer()),
+      );
+
+      assert.strictEqual(capturedOptions[0]?.threadId, sessionId);
+    }),
+  );
+
+  it.live("renders an engine-owned issue search tool named by the Run Plan", () =>
+    Effect.gen(function* () {
+      const capturedOptions: Array<RunChatOptions> = [];
+      const runChat: RunChat = (options) => {
+        capturedOptions.push(options);
+        return toAsyncIterable(scriptedChunks);
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+      const base = request({ checkoutPath: null });
+      const issueSearch = toolDefinition({
+        name: "issue-search",
+        description: "Search issues",
+      }).server(() => Promise.resolve({ matches: [] }));
+      const plan = RunPlan.make({ ...base.plan, tools: [...base.plan.tools, "issue-search"] });
+
+      yield* Stream.runDrain(runner.run({ ...base, plan, engineTools: [issueSearch] })).pipe(
+        Effect.provide(providerRunnerLayer()),
+      );
+
+      assert.isTrue(capturedOptions[0]?.tools.some(({ name }) => name === "issue-search"));
+    }),
+  );
+
+  it.live("runs without a Workspace in an empty scratch directory and removes it after the Run", () =>
+    Effect.gen(function* () {
+      const roots: Array<string> = [];
+      const runChat = scriptedRunChat((options) => {
+        const bash = options.tools.find((tool) => tool.name === "bash")?.execute;
+        if (!bash) return Promise.reject(new Error("bash tool was not provided"));
+        return Promise.resolve(bash({ command: "pwd\nfind . -mindepth 1 -maxdepth 1 -print" })).then(
+          (result) => {
+            if (isPolicyDenied(result)) throw new Error(result.reason);
+            const [root, ...entries] = result.stdout.trim().split("\n");
+            if (!root) throw new Error("scratch directory path was empty");
+            roots.push(root);
+            assert.deepStrictEqual(entries, []);
+          },
+        );
+      });
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ checkoutPath: null })));
+
+      const root = roots[0];
+      if (!root) return assert.fail("scratch directory was not opened");
+      const fs = yield* FileSystem.FileSystem;
+      assert.isFalse(yield* fs.exists(root));
+    }).pipe(Effect.provide(providerRunnerLayer())),
+  );
+
+  it.live("uses the Workspace checkout for a read-only Run and denies writes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const checkoutPath = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-provider-read-only-" });
+      yield* fs.writeFileString(`${checkoutPath}/seed.txt`, "workspace checkout");
+      const runChat = scriptedRunChat((options) => {
+        const read = options.tools.find((tool) => tool.name === "read")?.execute;
+        const write = options.tools.find((tool) => tool.name === "write")?.execute;
+        if (!read || !write) return Promise.reject(new Error("owned file tools were not provided"));
+        return Promise.all([
+          read({ path: "seed.txt" }),
+          write({ path: "changed.txt", content: "blocked" }),
+        ]).then(([readResult, writeResult]) => {
+          assert.deepStrictEqual(readResult, {
+            path: "seed.txt",
+            content: "workspace checkout",
+          });
+          assert.isTrue(isPolicyDenied(writeResult));
+        });
+      });
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ operation: "triage", checkoutPath })));
+
+      assert.isFalse(yield* fs.exists(`${checkoutPath}/changed.txt`));
+    }).pipe(Effect.provide(providerRunnerLayer())),
+  );
+
+  it.live("uses the prepared checkout for a full Run", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const checkoutPath = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-provider-worktree-" });
+      yield* fs.writeFileString(`${checkoutPath}/branch.txt`, "branch worktree");
+      const runChat = scriptedRunChat((options) => {
+        const read = options.tools.find((tool) => tool.name === "read")?.execute;
+        if (!read) return Promise.reject(new Error("read tool was not provided"));
+        return Promise.resolve(read({ path: "branch.txt" })).then((result) => {
+          assert.deepStrictEqual(result, {
+            path: "branch.txt",
+            content: "branch worktree",
+          });
+        });
+      });
+      const runner = providerRunner({ name: harnessName, runChat });
+
+      yield* Stream.runDrain(runner.run(request({ checkoutPath })));
+    }).pipe(Effect.provide(providerRunnerLayer())),
+  );
+
+  it.live("refuses to open a chat without a Session", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const runner = providerRunner({ name: harnessName, runChat: () => toAsyncIterable(scriptedChunks) });
+
+      const error = yield* Effect.flip(
+        Stream.runDrain(runner.run(request({ checkoutPath, session: null }))).pipe(
+          Effect.provide(providerRunnerLayer()),
+        ),
+      );
+
+      assert.strictEqual(error.reason, "launch");
+      assert.include(error.message, "Session");
+    }),
   );
 
   it.live("aborts the chat request when the provider stream is interrupted", () =>
@@ -304,6 +486,39 @@ describe("providerRunner", () => {
       yield* Fiber.interrupt(fiber);
 
       assert.isTrue(chatOptions.abortController.signal.aborted);
+    }),
+  );
+
+  it.effect("keeps the provider Run alive and reports a dead diff feed", () =>
+    Effect.gen(function* () {
+      const harnessEvents = Stream.make(
+        { type: "RUN_STARTED" } satisfies AgUiEvent,
+        { type: "RUN_FINISHED", finishReason: "stop" } satisfies AgUiEvent,
+      );
+      const merged = yield* mergeProviderFileDiffs(harnessEvents, () =>
+        Stream.fail(new Error("raw provider watcher failure")),
+      );
+      const events = yield* Stream.runCollect(merged);
+
+      assert.isTrue(events.some(agUiIsFileDiffUnavailableEvent));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.effect("releases the provider terminal event when the diff feed does not drain", () =>
+    Effect.gen(function* () {
+      const harnessEvents = Stream.make(
+        { type: "RUN_STARTED" } satisfies AgUiEvent,
+        { type: "RUN_FINISHED", finishReason: "stop" } satisfies AgUiEvent,
+      );
+      const merged = yield* mergeProviderFileDiffs(harnessEvents, () => Stream.never);
+      const collected = yield* Stream.runCollect(merged).pipe(Effect.forkChild({ startImmediately: true }));
+
+      yield* TestClock.adjust("10 seconds");
+      const events = yield* Fiber.join(collected);
+
+      assert.isTrue(events.some(agUiIsFileDiffUnavailableEvent));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
     }),
   );
 
@@ -347,9 +562,9 @@ describe("providerRunner", () => {
         makeAdapter: () => nativeStructuredAdapter,
       });
 
-      const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
-        Effect.provide(providerRunnerLayer()),
-      );
+      const events = yield* Stream.runCollect(
+        runner.run(request({ operation: "triage", checkoutPath })),
+      ).pipe(Effect.provide(providerRunnerLayer()));
 
       assert.strictEqual(
         events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")
@@ -357,7 +572,7 @@ describe("providerRunner", () => {
         1,
       );
       assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
-      assert.strictEqual(events.at(-1)?.name, "structured-output.complete");
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
     }),
   );
 
@@ -409,15 +624,14 @@ describe("parseModelRef", () => {
 });
 
 describe("defaultLoopBudget", () => {
-  it("gives read-only stages fewer turns than writing stages", () => {
-    assert.isBelow(defaultLoopBudget("triage"), defaultLoopBudget("implement"));
+  it("gives read-only profiles fewer turns than full profiles", () => {
+    assert.isBelow(defaultLoopBudget("read-only"), defaultLoopBudget("full"));
   });
 });
 
 describe("defaultRunBudget", () => {
-  it("gives read-only stages less wall-clock time than writing stages", () => {
-    assert.strictEqual(defaultRunBudget("triage"), "15 minutes");
-    assert.strictEqual(defaultRunBudget("implement"), "2 hours");
-    assert.strictEqual(defaultRunBudget("follow-up"), "2 hours");
+  it("gives read-only profiles less wall-clock time than full profiles", () => {
+    assert.strictEqual(defaultRunBudget("read-only"), "15 minutes");
+    assert.strictEqual(defaultRunBudget("full"), "2 hours");
   });
 });

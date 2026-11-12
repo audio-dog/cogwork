@@ -2,16 +2,18 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
 import { Claim } from "./coordination";
-import { PrSummary } from "./daemon";
 import { ProvenanceStamp } from "./provenance";
 import { RunId, SessionKind } from "./run";
-import { ResolutionOperator, RunPlanPolicyProfile } from "./settings";
-import { LifecycleStage, Priority, TriageRole } from "./triage";
+import { ModelOptionSelections, ResolutionOperator, RunPlanPolicyProfile } from "./settings";
+import { Priority } from "./work-item";
 
 export class RunPlanHarness extends Schema.Class<RunPlanHarness>("RunPlanHarness")({
   name: HarnessName,
   model: Schema.NullOr(TrimmedNonEmptyString),
-  effort: Schema.NullOr(TrimmedNonEmptyString),
+  options: ModelOptionSelections.pipe(
+    Schema.withConstructorDefault(Effect.succeed({})),
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
+  ),
   profile: RunPlanPolicyProfile,
 }) {}
 
@@ -71,14 +73,34 @@ export class RunPlanWorkContextReference extends Schema.Class<RunPlanWorkContext
   url: Schema.NullOr(TrimmedNonEmptyString),
 }) {}
 
+export const RunPlanFollowUpTrigger = Schema.Struct({
+  kind: Schema.Literals(["human-feedback", "trusted-bot-finding", "failing-check", "merge-conflict"]),
+  atMillis: Schema.Natural,
+});
+export type RunPlanFollowUpTrigger = typeof RunPlanFollowUpTrigger.Type;
+
 export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFacts>("RunPlanWorkContextFacts")(
   {
-    roles: Schema.Array(TriageRole),
     assignees: Schema.Array(TrimmedNonEmptyString),
     openBlockers: Schema.Natural,
     claim: Schema.NullOr(Claim),
     priority: Priority,
-    pr: Schema.NullOr(PrSummary),
+  },
+) {}
+
+export class RunPlanWorkContextComment extends Schema.Class<RunPlanWorkContextComment>(
+  "RunPlanWorkContextComment",
+)({
+  author: Schema.NullOr(TrimmedNonEmptyString),
+  authorAssociation: Schema.NullOr(TrimmedNonEmptyString),
+  body: Schema.String,
+  createdAtMillis: Schema.Natural,
+}) {}
+
+export class RunPlanWorkContextProse extends Schema.Class<RunPlanWorkContextProse>("RunPlanWorkContextProse")(
+  {
+    body: Schema.String,
+    comments: Schema.Array(RunPlanWorkContextComment),
   },
 ) {}
 
@@ -88,6 +110,7 @@ export type RunPlanMcpMember = typeof RunPlanMcpMember.Type;
 export class RunPlanWorkContext extends Schema.Class<RunPlanWorkContext>("RunPlanWorkContext")({
   reference: RunPlanWorkContextReference,
   facts: RunPlanWorkContextFacts,
+  prose: RunPlanWorkContextProse,
   observation: RunPlanObservation,
 }) {}
 
@@ -130,7 +153,6 @@ export const RunPlanMember = Schema.Literals([
   "Skills",
   "MCP",
   "Subagents",
-  "Commands",
   "Hooks",
   "Middleware",
   "Sandbox",
@@ -158,7 +180,7 @@ export class RunPlanProvenance extends Schema.Class<RunPlanProvenance>("RunPlanP
 }) {}
 
 export class RunPlanSandbox extends Schema.Class<RunPlanSandbox>("RunPlanSandbox")({
-  workspace: TrimmedNonEmptyString,
+  workspace: Schema.NullOr(TrimmedNonEmptyString),
   policy: RunPlanPolicyProfile,
 }) {}
 
@@ -173,7 +195,7 @@ const StructuredOutput = Schema.NullOr(Schema.Record(Schema.String, Schema.Unkno
 
 export class RunPlan extends Schema.Class<RunPlan>("RunPlan")({
   id: RunId,
-  operation: LifecycleStage,
+  operation: TrimmedNonEmptyString,
   harness: RunPlanHarness,
   instructions: Schema.Array(RunPlanInstruction),
   operatingInstructions: RunPlanOperatingInstructions,
@@ -182,7 +204,6 @@ export class RunPlan extends Schema.Class<RunPlan>("RunPlan")({
   skills: Schema.Array(RunPlanContributionMember),
   mcp: Schema.Array(RunPlanMcpMember),
   subagents: Schema.Array(RunPlanContributionMember),
-  commands: Schema.Array(RunPlanContributionMember),
   hooks: Schema.Array(RunPlanContributionMember),
   middleware: Schema.Array(RunPlanMiddlewareName),
   structuredOutput: StructuredOutput,

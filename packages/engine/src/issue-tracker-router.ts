@@ -10,30 +10,31 @@ import type { WorkspaceIssueTrackerBinding } from "./projector";
 export const route = (github: IssueTrackerService, linear: IssueTrackerService): IssueTrackerService => {
   const forWorkspace = (workspace: WorkspaceIssueTrackerBinding) =>
     workspace.config.issueTracker.type === "linear" ? linear : github;
-
   return {
-    rateLimitScope: (workspace) => forWorkspace(workspace).rateLimitScope(workspace),
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
-    createIssue: Effect.fn("issueTrackerRouter.createIssue")((workspace, input) =>
-      forWorkspace(workspace).createIssue(workspace, input),
-    ),
-    claim: (workspace, id, claim) => forWorkspace(workspace).claim(workspace, id, claim),
-    release: (workspace, id) => forWorkspace(workspace).release(workspace, id),
-    note: (workspace, id, detail) => forWorkspace(workspace).note(workspace, id, detail),
-    triaged: (workspace, id, outcome) => forWorkspace(workspace).triaged(workspace, id, outcome),
-    implemented: (workspace, id, outcome) => forWorkspace(workspace).implemented(workspace, id, outcome),
-    followedUp: (workspace, id, outcome) => forWorkspace(workspace).followedUp(workspace, id, outcome),
-    attemptFailed: (workspace, id, outcome) => forWorkspace(workspace).attemptFailed(workspace, id, outcome),
-    handOff: (workspace, id, outcome) => forWorkspace(workspace).handOff(workspace, id, outcome),
-    handBack: (workspace, id, outcome) => forWorkspace(workspace).handBack(workspace, id, outcome),
-    stalled: (workspace, id, outcome) => forWorkspace(workspace).stalled(workspace, id, outcome),
-    reclassify: (workspace, id, outcome) => forWorkspace(workspace).reclassify(workspace, id, outcome),
+    itemsChangedSince: (workspace, sinceMillis) =>
+      forWorkspace(workspace).itemsChangedSince(workspace, sinceMillis),
+    openItemsWithLabel: (workspace, label) => forWorkspace(workspace).openItemsWithLabel(workspace, label),
+    readItem: (workspace, id) => forWorkspace(workspace).readItem(workspace, id),
+    readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
+    readTriggerProse: (workspace, id) => forWorkspace(workspace).readTriggerProse(workspace, id),
+    labelAppliedAt: (workspace, id, label) => forWorkspace(workspace).labelAppliedAt(workspace, id, label),
+    listLabels: (workspace) => forWorkspace(workspace).listLabels(workspace),
+    assignees: (workspace, id) => forWorkspace(workspace).assignees?.(workspace, id) ?? Effect.succeed([]),
+    createIssue: (workspace, input) => forWorkspace(workspace).createIssue(workspace, input),
+    commentIssue: (workspace, id, body, writeKey) =>
+      forWorkspace(workspace).commentIssue(workspace, id, body, writeKey),
+    addLabels: (workspace, id, labels) => forWorkspace(workspace).addLabels(workspace, id, labels),
+    removeLabel: (workspace, id, label) => forWorkspace(workspace).removeLabel(workspace, id, label),
+    closeIssue: (workspace, id) => forWorkspace(workspace).closeIssue(workspace, id),
   };
 };
 
 export const routedLayer = Layer.effect(
   IssueTracker,
   Effect.gen(function* () {
-    return route(makeGitHub(yield* GitHubClient), makeLinear(yield* LinearClient));
+    const githubClient = yield* GitHubClient;
+    const linearClient = yield* LinearClient;
+    return route(makeGitHub(githubClient), makeLinear(linearClient));
   }),
 );

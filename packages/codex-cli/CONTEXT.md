@@ -12,10 +12,17 @@ AG-UI event stream.
 
 **codexRunner**:
 The factory that produces the Codex descriptor-backed harness runner. The descriptor declares an
-opaque Session, native model/effort/authentication projection, readiness and error refinements,
+opaque Session, native model-option/authentication projection, readiness and error refinements,
 coarse policy fidelity, and required shared-Git access. The shared runtime owns Workspace,
 Sandbox, stream, cancellation, event, and structured-output plumbing.
 _Avoid_: Provider runner, OpenAI runner
+
+**Managed Codex catalog**:
+The checked-in Codex model list. Every model declares the native `effort` choices and its default,
+and the catalog records the Codex CLI version it was generated against. Catalog reads are pure data
+reads; only readiness starts Codex. Run dispatch projects the selected effort, or its descriptor
+default, onto Codex's native reasoning-effort field.
+_Avoid_: Runtime model probe, adapter model list
 
 **Durable-run capability**:
 The Codex adapter supports journaled output and takeover attachment. The runner declares that fact, but the shared runtime does not supply durability stores or flags, so Codex Runs remain nondurable and locally cancelled.
@@ -29,7 +36,7 @@ _Avoid_: Native Codex file event, exact delivery
 The shared runtime passes the Run Plan's root JSON Schema through streaming `outputSchema`; TanStack
 projects it to native Codex `--output-schema`. Codex emits one terminal `structured-output.complete` event;
 the executor, not this package, decodes that object with Effect before it changes coordination.
-The runner preserves ordinary AG-UI events but never parses a stage result itself.
+The runner preserves ordinary AG-UI events but never parses an Operation result itself.
 _Avoid_: Result footer, text-result parser
 
 **Setup handoff**:

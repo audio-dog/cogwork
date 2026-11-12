@@ -8,10 +8,10 @@ import {
 } from "@cogwork/ui/components/input-group";
 import { RiAddLine, RiSubtractLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
 import { useState } from "react";
 import { SettingRow, SettingsSection, SubSectionCard } from "../../components/settings-parts";
 import { BoardResult, useBoard } from "../../features/activity-session";
+import { daemonFailureMessage } from "../../features/daemon-failure";
 import { settingEntry } from "../../features/settings-catalog";
 import { minConcurrency, minDailyBudget, settingsOfflineFallbacks } from "../../features/settings-defaults";
 import { parseCount, sanitizeCountDraft } from "../../features/settings-values";
@@ -82,7 +82,7 @@ function SchedulingSettings() {
   const limits = controlStore?.daemonLimits ?? null;
   // A second click would interrupt the first write and resubmit its pre-write revision.
   const disabled = limits === null || result.waiting;
-  const failure = result._tag === "Failure" && result.cause ? Cause.pretty(result.cause) : null;
+  const failure = result._tag === "Failure" && result.cause ? daemonFailureMessage(result.cause) : null;
   const expectedRevision = limits?.revision ?? 0;
 
   const limitRows: ReadonlyArray<{

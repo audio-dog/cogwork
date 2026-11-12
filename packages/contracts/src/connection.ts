@@ -1,12 +1,12 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
 
-export const ConnectionSystem = Schema.Literals(["github", "linear"]);
+export const ConnectionSystem = Schema.Literals(["github", "linear", "granola", "slack"]);
 export type ConnectionSystem = typeof ConnectionSystem.Type;
 
-export const ConnectionId = TrimmedNonEmptyString.check(Schema.isPattern(/^(github|linear)\/.+$/)).pipe(
-  Schema.brand("ConnectionId"),
-);
+export const ConnectionId = TrimmedNonEmptyString.check(
+  Schema.isPattern(/^(github|linear|granola|slack)\/.+$/),
+).pipe(Schema.brand("ConnectionId"));
 export type ConnectionId = typeof ConnectionId.Type;
 
 export const ConnectionBindingId = Schema.Union([ConnectionId, Schema.Literal("unbound")]);
@@ -36,6 +36,16 @@ export const ConnectionEstablishment = Schema.Union([
     system: Schema.Literal("linear"),
     account: TrimmedNonEmptyString,
     source: ConnectionSource,
+  }),
+  Schema.Struct({
+    system: Schema.Literal("granola"),
+    account: TrimmedNonEmptyString,
+    source: ConnectionSource,
+  }),
+  Schema.Struct({
+    system: Schema.Literal("slack"),
+    account: TrimmedNonEmptyString,
+    source: Schema.TaggedStruct("Stored", {}),
   }),
 ]).pipe(Schema.toTaggedUnion("system"));
 export type ConnectionEstablishment = typeof ConnectionEstablishment.Type;
@@ -82,7 +92,7 @@ export const connectionIdOf = (system: ConnectionSystem, account: string) =>
 
 export const connectionSystemOf = (connectionId: string) => {
   const system = connectionId.split("/", 1)[0];
-  return system === "github" || system === "linear" ? system : null;
+  return ConnectionSystem.literals.find((candidate) => candidate === system) ?? null;
 };
 
 export const connectionAccountOf = (connectionId: string) =>

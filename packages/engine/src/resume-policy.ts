@@ -1,4 +1,4 @@
-import type { SessionKind } from "@cogwork/contracts";
+import type { SessionKind, TokenUsage } from "@cogwork/contracts";
 import * as Data from "effect/Data";
 
 export type ResumeReason = "no-session" | "fresh-requested" | "worktree-recreated" | "stale" | "token-limit";
@@ -8,6 +8,10 @@ export type ResumeDecision = Data.TaggedEnum<{
   Fresh: { readonly kind: "fresh"; readonly reason: ResumeReason };
 }>;
 export const ResumeDecision = Data.taggedEnum<ResumeDecision>();
+
+// Estimated usage can undercount the transcript, so only metered usage can gate the resume token cap.
+export const meteredTotalTokens = (usage: TokenUsage | null | undefined) =>
+  usage && !usage.estimated ? (usage.totalTokens ?? null) : null;
 
 export interface ResumeInputs {
   readonly sessionKind: SessionKind | null;

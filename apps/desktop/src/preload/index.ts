@@ -15,6 +15,7 @@ const bridge: CogworkBridge = {
   getEngineStatus: () => ipcRenderer.invoke(IpcChannel.getEngineStatus),
   setEngineEnabled: (enabled) => ipcRenderer.invoke(IpcChannel.setEngineEnabled, enabled),
   onEngineStatus: (listener) => subscribe(IpcChannel.engineStatusChanged, listener),
+  onSystemResume: (listener) => subscribe(IpcChannel.systemResumed, listener),
   getWindowPreferences: () => ipcRenderer.invoke(IpcChannel.getWindowPreferences),
   getProcessHealth: async () => {
     const [main, memory] = await Promise.all([
@@ -35,6 +36,16 @@ const bridge: CogworkBridge = {
   },
   setWindowPreferences: (preferences) => ipcRenderer.invoke(IpcChannel.setWindowPreferences, preferences),
   captureProcessProfile: (capture) => ipcRenderer.invoke(IpcChannel.captureProcessProfile, capture),
+  chooseFolder: () => ipcRenderer.invoke(IpcChannel.chooseFolder),
+  notifications: {
+    enable: () => ipcRenderer.invoke(IpcChannel.enableDesktopNotifications),
+    sync: (requests) => ipcRenderer.invoke(IpcChannel.syncDesktopNotifications, requests),
+    getStatus: () => ipcRenderer.invoke(IpcChannel.getDesktopNotificationStatus),
+    onStatus: (listener) => subscribe(IpcChannel.desktopNotificationStatusChanged, listener),
+    onNavigation: (listener) => subscribe(IpcChannel.desktopNotificationNavigation, listener),
+    takeNavigation: () => ipcRenderer.invoke(IpcChannel.takeDesktopNotificationNavigation),
+    openSettings: () => ipcRenderer.invoke(IpcChannel.openNotificationSettings),
+  },
   rpc: {
     connect: (sessionId) => ipcRenderer.invoke(IpcChannel.rpcConnect, sessionId),
     disconnect: () => ipcRenderer.invoke(IpcChannel.rpcDisconnect),

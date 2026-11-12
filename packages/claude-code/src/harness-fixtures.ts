@@ -2,11 +2,10 @@ import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   HarnessName,
-  type LifecycleStage,
   RunPlan,
   SessionId,
 } from "@cogwork/contracts";
-import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert } from "@effect/vitest";
@@ -22,7 +21,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { type ClaudeCodeRunnerOptions, claudeCodeCatalogSources, claudeCodeRunner } from "./harness";
+import { type ClaudeCodeRunnerOptions, claudeCodeRunner } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("claude");
 const companionName = Schema.decodeSync(HarnessName)("companion");
@@ -52,11 +51,8 @@ const companionRunner = {
     takeover: false,
   },
   authentication: { mode: "host", reference: "companion login" },
-  catalogSources: {
-    fallback: Harness.staticCatalogSource(
-      { models: [{ value: "companion", label: "Companion" }] },
-      { source: "cogwork-fallback", fallbackVersion: "1" },
-    ),
+  catalog: {
+    models: [{ value: "companion", label: "Companion" }],
   },
   projectedMembers: [],
   planMiddleware: [],
@@ -85,6 +81,39 @@ const inheritedEnvironment = {
   ANTHROPIC_AUTH_TOKEN: environmentValue("ANTHROPIC_AUTH_TOKEN"),
   GITHUB_TOKEN: environmentValue("GITHUB_TOKEN"),
   GH_TOKEN: environmentValue("GH_TOKEN"),
+  CLAUDE_CONFIG_DIR: environmentValue("CLAUDE_CONFIG_DIR"),
+  USERPROFILE: environmentValue("USERPROFILE"),
+  HOMEDRIVE: environmentValue("HOMEDRIVE"),
+  HOMEPATH: environmentValue("HOMEPATH"),
+  APPDATA: environmentValue("APPDATA"),
+  SYSTEMROOT: environmentValue("SYSTEMROOT"),
+  PATHEXT: environmentValue("PATHEXT"),
+  COMSPEC: environmentValue("COMSPEC"),
+  HTTP_PROXY: environmentValue("HTTP_PROXY"),
+  HTTPS_PROXY: environmentValue("HTTPS_PROXY"),
+  NO_PROXY: environmentValue("NO_PROXY"),
+  http_proxy: environmentValue("http_proxy"),
+  https_proxy: environmentValue("https_proxy"),
+  NODE_EXTRA_CA_CERTS: environmentValue("NODE_EXTRA_CA_CERTS"),
+};
+
+const windowsEnvironmentProbe = {
+  USERPROFILE: "C:\\Users\\cogwork",
+  HOMEDRIVE: "C:",
+  HOMEPATH: "\\Users\\cogwork",
+  APPDATA: "C:\\Users\\cogwork\\AppData\\Roaming",
+  SYSTEMROOT: "C:\\Windows",
+  PATHEXT: ".COM;.EXE;.BAT;.CMD",
+  COMSPEC: "C:\\Windows\\System32\\cmd.exe",
+};
+
+const networkEnvironmentProbe = {
+  HTTP_PROXY: "http://proxy.example.test:8080",
+  HTTPS_PROXY: "https://proxy.example.test:8443",
+  NO_PROXY: "localhost,.example.test",
+  http_proxy: "http://lowercase-proxy.example.test:8080",
+  https_proxy: "https://lowercase-proxy.example.test:8443",
+  NODE_EXTRA_CA_CERTS: "/tmp/cogwork-enterprise-ca.pem",
 };
 
 const persistence = memoryPersistence();
@@ -173,8 +202,10 @@ const destroyTestSandbox = (sandbox: SandboxHandle) =>
 interface RequestOverrides {
   readonly session?: SessionId | null;
   readonly profile?: "read-only" | "full";
-  readonly operation?: LifecycleStage;
+  readonly operation?: string;
   readonly mcp?: boolean;
+  readonly model?: string | null;
+  readonly effort?: string | null;
 }
 
 const mcpSelection = (enabled?: boolean) => {
@@ -200,14 +231,19 @@ const outputSchema = {
 } as const;
 
 const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => {
-  const operation = overrides.operation ?? (overrides.profile === "read-only" ? "triage" : "implement");
-  const profile = overrides.profile ?? OperationPolicy.operationPolicyProfile(operation);
+  const operation = overrides.operation ?? "operate";
+  const profile = overrides.profile ?? "full";
   const mcp = mcpSelection(overrides.mcp);
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-claude-test",
       operation,
-      harness: { name, model: "sonnet", effort: null, profile },
+      harness: {
+        name,
+        model: overrides.model ?? "sonnet",
+        options: typeof overrides.effort === "string" ? { effort: overrides.effort } : {},
+        profile,
+      },
       instructions: [
         { kind: "rules", source: "/home/.agents/rules/global.md", content: "global rules" },
         { kind: "repo", source: "/repo/AGENTS.md", content: "repo rules" },
@@ -226,7 +262,6 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       skills: [],
       mcp,
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput: outputSchema,
@@ -234,13 +269,12 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       messages: [{ role: "user", content: "implement the issue" }],
       workContext: {
         reference: { workItem: "#153", url: null },
+        prose: { body: "", comments: [] },
         facts: {
-          roles: ["ready-for-agent"],
           assignees: [],
           openBlockers: 0,
           claim: null,
           priority: "medium",
-          pr: null,
         },
         observation: { generation: 1, observedAtMillis: 1 },
       },
@@ -284,16 +318,14 @@ const makeLiveHarness = (
         ),
       ).pipe(Effect.timeout(testProcessDeadline)),
     ),
-    Effect.map((handle) => ({
-      handle,
-      harness: Harness.make([
-        claudeCodeRunner({
-          name,
-          authentication,
-          claudeExecutable: fakeClaudeExecutable(args),
-        }),
-      ]),
-    })),
+    Effect.map((handle) => {
+      const runner = claudeCodeRunner({
+        name,
+        authentication,
+        claudeExecutable: fakeClaudeExecutable(args),
+      });
+      return { handle, harness: Harness.make([runner]), runner };
+    }),
   );
 
 const structuredObjects = (events: ReadonlyArray<Harness.AgUiEvent>) =>
@@ -301,11 +333,6 @@ const structuredObjects = (events: ReadonlyArray<Harness.AgUiEvent>) =>
 
 const sessionHandles = (events: ReadonlyArray<Harness.AgUiEvent>) =>
   events.flatMap((event) => (agUiIsSessionHandleEvent(event) ? [event.value.sessionId] : []));
-
-const runnerWithoutRuntimeCatalog = (claudeExecutable: string) => ({
-  ...claudeCodeRunner({ name, authentication: hostAuthentication, claudeExecutable }),
-  catalogSources: claudeCodeCatalogSources(claudeExecutable, []),
-});
 
 const Capture = Schema.Struct({
   args: Schema.Array(Schema.String),
@@ -330,6 +357,24 @@ const Capture = Schema.Struct({
   authToken: Schema.NullOr(Schema.String),
   githubToken: Schema.NullOr(Schema.String),
   ghToken: Schema.NullOr(Schema.String),
+  claudeConfigDir: Schema.NullOr(Schema.String),
+  windowsEnvironment: Schema.Struct({
+    USERPROFILE: Schema.NullOr(Schema.String),
+    HOMEDRIVE: Schema.NullOr(Schema.String),
+    HOMEPATH: Schema.NullOr(Schema.String),
+    APPDATA: Schema.NullOr(Schema.String),
+    SYSTEMROOT: Schema.NullOr(Schema.String),
+    PATHEXT: Schema.NullOr(Schema.String),
+    COMSPEC: Schema.NullOr(Schema.String),
+  }),
+  networkEnvironment: Schema.Struct({
+    HTTP_PROXY: Schema.NullOr(Schema.String),
+    HTTPS_PROXY: Schema.NullOr(Schema.String),
+    NO_PROXY: Schema.NullOr(Schema.String),
+    http_proxy: Schema.NullOr(Schema.String),
+    https_proxy: Schema.NullOr(Schema.String),
+    NODE_EXTRA_CA_CERTS: Schema.NullOr(Schema.String),
+  }),
 });
 
 const NativeSandboxSettings = Schema.fromJsonString(
@@ -377,14 +422,14 @@ const capturedDisallowedTools = (capture: typeof Capture.Type) => {
   return capture.args.at(index + 1)?.split(",") ?? [];
 };
 
-const captureOperation = (operation: LifecycleStage) =>
+const captureOperation = (operation: string, profile: "read-only" | "full") =>
   Effect.scoped(
     makeLiveHarness().pipe(
       Effect.flatMap(({ handle, harness }) =>
-        harness.run(makeRequest(handle.id, { operation })).pipe(Stream.runCollect),
+        harness.run(makeRequest(handle.id, { operation, profile })).pipe(Stream.runCollect),
       ),
       Effect.flatMap(captureFrom),
-      Effect.map((capture) => [operation, capture] satisfies [LifecycleStage, typeof Capture.Type]),
+      Effect.map((capture) => [profile, capture] as const),
     ),
   );
 
@@ -402,6 +447,9 @@ const withInheritedCredentialEnvironment = <Value, Error, Requirements>(
       Reflect.set(process.env, "ANTHROPIC_AUTH_TOKEN", "inherited-auth-token");
       Reflect.set(process.env, "GITHUB_TOKEN", "inherited-github-token");
       Reflect.set(process.env, "GH_TOKEN", "inherited-gh-token");
+      Reflect.set(process.env, "CLAUDE_CONFIG_DIR", "/tmp/cogwork-claude-config");
+      Object.assign(process.env, windowsEnvironmentProbe);
+      Object.assign(process.env, networkEnvironmentProbe);
     }),
     () => effect,
     () =>
@@ -444,17 +492,18 @@ export {
   missingByokHarnessLayer,
   NativeSandboxSettings,
   name,
+  networkEnvironmentProbe,
   occurrences,
   outputSchema,
   persistence,
   restoreEnvironment,
   resumedSession,
   rotatingByokHarnessLayer,
-  runnerWithoutRuntimeCatalog,
   runtimeLayer,
   sessionHandles,
   sessionStore,
   structuredObjects,
   testProcessDeadline,
+  windowsEnvironmentProbe,
   withInheritedCredentialEnvironment,
 };

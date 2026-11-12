@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 
@@ -19,18 +18,59 @@ const result = JSON.stringify({
   proposal: "Verified and ready.",
 });
 
-const responseContent = async (sessionParams) => {
+const promptText = (prompt) =>
+  prompt
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+
+const responseContent = (sessionParams, prompt) => {
   if (process.argv.includes("--malformed")) return "Disposition: ready-for-agent";
   if (!process.argv.includes("--observe")) return result;
   return JSON.stringify({
-    instructions: await readFile("AGENTS.md", "utf8"),
+    prompt: promptText(prompt),
     model: process.argv[process.argv.indexOf("--model") + 1],
     mcp: sessionParams.mcpServers.map((server) => ({
       name: server.name,
       url: server.url,
       authenticated: server.headers.some((header) => header.name === "Authorization"),
     })),
+    cursorConfigDir: process.env.CURSOR_CONFIG_DIR ?? null,
+    windowsEnvironment: {
+      USERPROFILE: process.env.USERPROFILE ?? null,
+      HOMEDRIVE: process.env.HOMEDRIVE ?? null,
+      HOMEPATH: process.env.HOMEPATH ?? null,
+      APPDATA: process.env.APPDATA ?? null,
+      SYSTEMROOT: process.env.SYSTEMROOT ?? null,
+      PATHEXT: process.env.PATHEXT ?? null,
+      COMSPEC: process.env.COMSPEC ?? null,
+    },
+    networkEnvironment: {
+      HTTP_PROXY: process.env.HTTP_PROXY ?? null,
+      HTTPS_PROXY: process.env.HTTPS_PROXY ?? null,
+      NO_PROXY: process.env.NO_PROXY ?? null,
+      NODE_USE_ENV_PROXY: process.env.NODE_USE_ENV_PROXY ?? null,
+      NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS ?? null,
+    },
+    hasCursorApiKey: process.env.CURSOR_API_KEY !== undefined,
   });
+};
+
+const commandPermissionContent = async (connection, sessionId) => {
+  const { outcome } = await connection.requestPermission({
+    sessionId,
+    toolCall: {
+      toolCallId: "fake-command",
+      title: "`pnpm typecheck`",
+      kind: "execute",
+      rawInput: { command: "pnpm typecheck" },
+    },
+    options: [
+      { optionId: "allow-once", name: "Allow once", kind: "allow_once" },
+      { optionId: "reject-once", name: "Reject once", kind: "reject_once" },
+    ],
+  });
+  return JSON.stringify(outcome);
 };
 
 class FakeCursorAgent {
@@ -76,7 +116,9 @@ class FakeCursorAgent {
       );
       if (!refused) throw new Error("cursor/create_plan was not refused with method-not-found");
     }
-    const content = await responseContent(this.sessionParams);
+    const content = process.argv.includes("--request-command-permission")
+      ? await commandPermissionContent(this.connection, params.sessionId)
+      : responseContent(this.sessionParams, params.prompt);
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,
       update: {

@@ -9,8 +9,8 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
+import { placeholderConfiguration } from "../testing/configuration";
 import { Diagnostic, McpReadiness } from "./configuration-model";
-import { placeholderConfiguration } from "./configuration-placeholder";
 import { resolveEnablement, viewOf } from "./configuration-resolve";
 import {
   configurationWithPlugins,

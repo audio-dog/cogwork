@@ -14,13 +14,17 @@ lives in a separate safekeep repo: [taylorfsteele/sync](https://github.com/taylo
 
 ### Orchestration (the control plane)
 
-- [contracts](./packages/contracts/CONTEXT.md) — shared kernel: the schemas and vocabulary every other orchestration context speaks (`WorkItem`, `Run`, `Claim`, harness terms, lifecycle stages).
+- [contracts](./packages/contracts/CONTEXT.md) — shared kernel: the schemas and vocabulary every other orchestration context speaks (`WorkItem`, `Run`, `Claim`, harness terms, Workflows).
 - [engine](./packages/engine/CONTEXT.md) — the runtime machinery: daemon, reconcile, scheduler, executor, harness dispatch, worktrees, and the issue-tracker and source-control-provider adapters.
 - [cli](./apps/cli/CONTEXT.md) — `cogwork`, the client and headless daemon host: subcommands, RPC transport, workspace loading, live watch. On a laptop the desktop app is the primary daemon host (see product ADR 0008).
 - [desktop](./apps/desktop/CONTEXT.md) — the Electron mission-control shell: primary daemon host on a laptop, supervising the engine as a bundled Node child and giving the renderer a typed IPC seam to the daemon (see product ADRs 0008/0009).
 - [cursor-acp](./packages/cursor-acp/CONTEXT.md) — the Cursor harness adapter: bridges the engine's harness contract to the Cursor agent over ACP.
 - [claude-code](./packages/claude-code/CONTEXT.md) — the Claude Code harness adapter: drives an installed, host-authenticated Claude Code CLI through the TanStack adapter.
 - [codex-cli](./packages/codex-cli/CONTEXT.md) — the Codex harness adapter: drives an installed, host-authenticated Codex CLI through the TanStack Codex adapter.
+
+### Self-correction (the sensing layer)
+
+- [sensor](./configs/sensor/CONTEXT.md) — the CI-resident sensors: seed runs, test-suite budgets, and the paired comparison tool that measure the app's own health and file work items on the issue tracker (ADRs 0021, 0022, 0026).
 
 ## Relationships
 

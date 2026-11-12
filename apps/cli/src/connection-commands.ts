@@ -37,6 +37,7 @@ const accountArgument = Argument.string("account").pipe(Argument.optional);
 const connectionIdArgument = Argument.string("connection-id");
 const decodeSystem = Schema.decodeUnknownEffect(ConnectionSystem);
 const decodeConnectionId = Schema.decodeUnknownEffect(ConnectionId);
+const storedLoginSystems = new Set<ConnectionSystemType>(["linear", "granola"]);
 
 type ApiKeySource = Extract<ConnectionEstablishment["source"], { readonly _tag: "ApiKey" }>;
 type ConnectionSourceOptions = {
@@ -51,6 +52,13 @@ const apiKeyInputFailure = (message: string) =>
     operation: "read Connection API key",
     connectionId: null,
     message,
+  });
+
+const slackBrowserLoginFailure = () =>
+  new ConnectionFailure({
+    operation: "parse Connection account",
+    connectionId: null,
+    message: "Slack Connections use browser sign-in; run cogwork login slack",
   });
 
 export const formatConnectionMutation = (
@@ -69,6 +77,7 @@ export const resolveConnectionSource = Effect.fn("connection.source")(function* 
   system: ConnectionSystemType,
   readApiKey: Effect.Effect<ApiKeySource, ConnectionFailure>,
 ) {
+  if (system === "slack") return yield* slackBrowserLoginFailure();
   const selected = [Option.isSome(options.env), options.githubCli, options.stored].filter(Boolean);
   if (selected.length > 1) {
     return yield* new ConnectionFailure({
@@ -88,11 +97,11 @@ export const resolveConnectionSource = Effect.fn("connection.source")(function* 
   }
   if (options.githubCli) return { _tag: "GitHubCli" } satisfies ConnectionEstablishment["source"];
   if (!options.stored) return yield* readApiKey;
-  if (system !== "linear") {
+  if (!storedLoginSystems.has(system)) {
     return yield* new ConnectionFailure({
       operation: "parse Connection source",
       connectionId: null,
-      message: "--stored is available only for Linear browser login",
+      message: "--stored is available only for browser-login Connections",
     });
   }
   return { _tag: "Stored" } satisfies ConnectionEstablishment["source"];
@@ -131,6 +140,7 @@ export const establishmentOf = Effect.fn("connection.establishment")(function* (
   account: Option.Option<string>,
   source: ConnectionEstablishment["source"],
 ) {
+  if (system === "slack") return yield* slackBrowserLoginFailure();
   if (system === "github" && Option.isSome(account)) {
     return yield* new ConnectionFailure({
       operation: "parse Connection account",
@@ -139,12 +149,19 @@ export const establishmentOf = Effect.fn("connection.establishment")(function* (
     });
   }
   if (system === "github") return { system, source } satisfies ConnectionEstablishment;
+  if (system === "granola" && source._tag === "ApiKey" && !Redacted.value(source.key).startsWith("grn_")) {
+    return yield* new ConnectionFailure({
+      operation: "parse Connection API key",
+      connectionId: null,
+      message: "Granola API keys must start with grn_",
+    });
+  }
   if (Option.isSome(account))
     return { system, account: account.value, source } satisfies ConnectionEstablishment;
   return yield* new ConnectionFailure({
     operation: "parse Connection account",
     connectionId: null,
-    message: "Linear Connections require an account argument",
+    message: `${system === "linear" ? "Linear" : "Granola"} Connections require an account argument`,
   });
 });
 

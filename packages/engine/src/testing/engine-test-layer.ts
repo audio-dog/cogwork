@@ -4,6 +4,7 @@ import * as Path from "effect/Path";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as DaemonEventBus from "../daemon-event-bus";
 import { layer as githubClientLayer } from "../github/client";
+import { HarnessReadinessCache } from "../harness-readiness";
 import * as RunLedger from "../run-ledger";
 import { layer as runRecorderLayer } from "../run-recorder";
 import * as SessionStore from "../session-store";
@@ -28,6 +29,11 @@ export const engineTestLayer = ({
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBus));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   return Layer.mergeAll(
+    Layer.mock(HarnessReadinessCache, {
+      readiness: () => Effect.succeed({ harnesses: [], checkedAtMillis: 0 }),
+      requestAll: () => Effect.void,
+      requestOne: () => Effect.void,
+    }),
     daemonEventBus,
     runLedger,
     runRecorder,

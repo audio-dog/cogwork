@@ -3,7 +3,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import { vi } from "vitest";

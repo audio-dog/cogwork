@@ -16,9 +16,9 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { Textarea } from "@cogwork/ui/components/textarea";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use } from "react";
 import { githubPriorityFieldsAtom } from "../daemon/atoms";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import type { WorkspaceRecordDraft } from "../features/workspace-record";
 
 export type PatchDraft = (next: Partial<WorkspaceRecordDraft>) => void;
@@ -274,7 +274,7 @@ function LivePriorityFieldSelect({
       <PriorityFieldSelect fields={[]} />
       <Alert variant="destructive" className="max-w-80">
         <AlertTitle>Could not load priority fields</AlertTitle>
-        <AlertDescription>{Cause.pretty(result.cause)}</AlertDescription>
+        <AlertDescription>{daemonFailureMessage(result.cause)}</AlertDescription>
         <Button type="button" variant="outline" size="sm" onClick={refresh}>
           Try again
         </Button>
@@ -295,7 +295,7 @@ function PriorityFieldRow() {
       <FieldContent>
         <FieldTitle>Priority</FieldTitle>
         <FieldDescription>
-          Optional organization issue field used to order work within a stage.
+          Optional organization issue field used to order work within a Workflow.
         </FieldDescription>
       </FieldContent>
       {workspace ? (
@@ -310,16 +310,17 @@ function PriorityFieldRow() {
   );
 }
 
+export const trackerItems = [
+  { value: "github", label: "GitHub Issues" },
+  { value: "linear", label: "Linear" },
+] as const;
+
 function IssueTrackerRows() {
   const {
     state: { draft, connections },
     actions: { patch },
     meta: { disabled },
   } = useWorkspaceRecord();
-  const trackerItems = [
-    { value: "github", label: "GitHub Issues" },
-    { value: "linear", label: "Linear" },
-  ];
   return (
     <FieldGroup>
       <Field orientation="responsive">
@@ -398,30 +399,11 @@ function TriageRows() {
       <Field orientation="responsive">
         <FieldContent>
           <FieldTitle>Bot allowlist</FieldTitle>
-          <FieldDescription>Comma-separated bot logins whose comments may wake follow-up.</FieldDescription>
+          <FieldDescription>
+            Comma-separated bot logins. Add :any to accept comments outside new diff threads.
+          </FieldDescription>
         </FieldContent>
         <DraftInput field="trackerBotAllowlist" label="Tracker bot allowlist" />
-      </Field>
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Role labels</FieldTitle>
-          <FieldDescription>The five labels that move work through triage.</FieldDescription>
-        </FieldContent>
-        <FieldGroup className="w-auto">
-          <DraftInput field="needsTriageLabel" label="Needs triage label" placeholder="needs-triage" />
-          <DraftInput
-            field="readyForAgentLabel"
-            label="Ready for agent label"
-            placeholder="ready-for-agent"
-          />
-          <DraftInput field="needsInfoLabel" label="Needs info label" placeholder="needs-info" />
-          <DraftInput
-            field="readyForHumanLabel"
-            label="Ready for human label"
-            placeholder="ready-for-human"
-          />
-          <DraftInput field="wontfixLabel" label="Won't fix label" placeholder="wontfix" />
-        </FieldGroup>
       </Field>
     </FieldGroup>
   );
@@ -496,7 +478,9 @@ function SourceControlRows() {
           <Field orientation="responsive">
             <FieldContent>
               <FieldTitle>Bot allowlist</FieldTitle>
-              <FieldDescription>Comma-separated bots allowed to wake follow-up.</FieldDescription>
+              <FieldDescription>
+                Comma-separated bot logins. Add :any to accept comments outside new diff threads.
+              </FieldDescription>
             </FieldContent>
             <DraftInput field="sourceControlBotAllowlist" label="Source control bot allowlist" />
           </Field>

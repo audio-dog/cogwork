@@ -18,7 +18,6 @@ const registeredWorkspace = Schema.decodeSync(WorkspaceState)({
   checkoutPath: "/repos/example",
   issueTracker: "github",
   record: workspaceRecord("Example", "/repos/example"),
-  poll: { status: "ok" },
   contributions: [
     {
       id: "local:repo/mcp/tools",
@@ -67,6 +66,7 @@ const board: Board = {
   pluginNotices: [],
   connections: null,
   connectionNotices: [],
+  harnesses: null,
 };
 
 describe("configurationPicture", () => {
@@ -139,7 +139,6 @@ describe("configurationPicture", () => {
         checkoutPath,
         issueTracker: "github",
         record: workspaceRecord(name, checkoutPath),
-        poll: { status: "ok" },
         contributions: [userServer, userSkill, { ...sharedRepoServer, file: `${checkoutPath}/tools.json` }],
       });
     const picture = configurationPicture({
@@ -207,7 +206,6 @@ describe("configurationPicture", () => {
         checkoutPath: `/repos/${name}`,
         issueTracker: "github",
         record: workspaceRecord(name, `/repos/${name}`),
-        poll: { status: "ok" },
         contributions: [userServer],
       });
     const picture = configurationPicture({
@@ -263,7 +261,6 @@ describe("configurationPicture", () => {
       checkoutPath: "/repos/example",
       issueTracker: "github",
       record: workspaceRecord("Example", "/repos/example"),
-      poll: { status: "ok" },
       contributions: [userServer],
     });
     const picture = configurationPicture({

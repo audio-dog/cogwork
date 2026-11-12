@@ -1,12 +1,17 @@
 import {
   type ConnectionBindingId,
   DaemonRpcs,
-  type OperationSettingName,
+  type OperationSettingBatch,
   type RunId,
+  type WorkflowCatalogKey,
+  type WorkflowEditBatch,
+  type WorkflowId,
   type WorkItemId,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
 import * as Atom from "effect/unstable/reactivity/Atom";
 import * as AtomRpc from "effect/unstable/reactivity/AtomRpc";
@@ -20,6 +25,22 @@ export class DaemonAtomRpc extends AtomRpc.Service<DaemonAtomRpc>()("DaemonAtomR
   protocol: layerProtocolIpc(electronDaemonBridge),
   makeEffect: Effect.gen(function* () {
     const client = yield* RpcClient.make(DaemonRpcs, { flatten: true });
+    const runPromise = yield* FiberSet.makeRuntimePromise();
+    yield* Effect.acquireRelease(
+      Effect.sync(() =>
+        window.cogwork.onSystemResume(() =>
+          runPromise(
+            client("CheckHarnesses", undefined).pipe(
+              Effect.catchCauseIf(
+                (cause) => !Cause.hasInterruptsOnly(cause),
+                (cause) => Effect.logError("Harness readiness wake check failed", { cause }),
+              ),
+            ),
+          ),
+        ),
+      ),
+      (unsubscribe) => Effect.sync(unsubscribe),
+    );
     yield* reportDesktopProcessHealth(
       () => window.cogwork.getProcessHealth(),
       (samples) => client("ReportProcessHealth", { samples }),
@@ -52,8 +73,6 @@ export const runActivityAtom = Atom.family((runId: RunId) =>
 
 export const cancelRunAtom = DaemonAtomRpc.mutation("CancelRun");
 
-export const reclassifyAtom = DaemonAtomRpc.mutation("Reclassify");
-
 export const handBackAtom = Atom.keepAlive(DaemonAtomRpc.mutation("HandBack"));
 
 export const handBackTargetAtom = Atom.keepAlive(
@@ -69,23 +88,23 @@ export const setDaemonLimitAtom = DaemonAtomRpc.mutation("SetDaemonLimit");
 
 export const setContributionSettingAtom = DaemonAtomRpc.mutation("SetContributionSetting");
 
-// One mutation atom per workspace and setting. `Atom.fn` is non-concurrent, so a second call
-// on the same atom interrupts the first — and choosing a model writes both the harness and
-// the model. The workspace is in the key because an atom outlives the page: without it one
-// workspace's failure disables and reports on the next.
-export const setOperationSettingAtom = Atom.family((_key: string) =>
-  DaemonAtomRpc.mutation("SetOperationSetting"),
+export const setOperationSettingAtom = Atom.family((_workspace: WorkspaceId) =>
+  DaemonAtomRpc.runtime.fn<{
+    readonly payload: { readonly updates: OperationSettingBatch };
+  }>()(({ payload }) => Effect.flatMap(DaemonAtomRpc, (client) => client("SetOperationSetting", payload)), {
+    concurrent: true,
+  }),
 );
-
-export const operationSettingAtomKey = (workspace: WorkspaceId, setting: OperationSettingName) =>
-  `${workspace}/${setting}`;
 
 export const pluginsAtom = DaemonAtomRpc.query("GetPlugins", undefined);
 
 export const connectionsAtom = DaemonAtomRpc.query("GetConnections", undefined);
 
-// Reading this spawns every installed harness's CLI. Never put it on a timer.
-export const harnessesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnesses", undefined));
+export const harnessCatalogsAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnessCatalogs", undefined));
+
+export const harnessReadinessAtom = Atom.keepAlive(DaemonAtomRpc.query("GetHarnessReadiness", undefined));
+
+export const checkHarnessesAtom = DaemonAtomRpc.mutation("CheckHarnesses");
 
 const githubPriorityFieldsForWorkspaceAtom = Atom.family((workspace: WorkspaceId) =>
   Atom.family((connection: ConnectionBindingId) =>
@@ -104,6 +123,10 @@ export const uninstallPluginAtom = DaemonAtomRpc.mutation("UninstallPlugin");
 
 export const establishConnectionAtom = DaemonAtomRpc.mutation("EstablishConnection");
 
+export const loginGranolaAtom = DaemonAtomRpc.mutation("LoginGranola");
+
+export const loginSlackAtom = DaemonAtomRpc.mutation("LoginSlack");
+
 export const reconnectConnectionAtom = DaemonAtomRpc.mutation("ReconnectConnection");
 
 export const removeConnectionAtom = DaemonAtomRpc.mutation("RemoveConnection");
@@ -115,3 +138,45 @@ export const updateWorkspaceAtom = DaemonAtomRpc.mutation("UpdateWorkspace");
 export const deregisterWorkspaceAtom = DaemonAtomRpc.mutation("DeregisterWorkspace");
 
 export const rebindWorkspaceAtom = DaemonAtomRpc.mutation("RebindWorkspace");
+
+export const workflowsAtom = DaemonAtomRpc.query("ListWorkflows", undefined);
+
+export const workflowAttentionAtom = DaemonAtomRpc.query("ListWorkflowAttention", undefined);
+
+export const workflowNotificationsAtom = DaemonAtomRpc.query("ListWorkflowNotifications", undefined);
+
+export const approveWorkflowPlanAtom = DaemonAtomRpc.mutation("ApproveWorkflowPlan");
+
+export const rejectWorkflowPlanAtom = DaemonAtomRpc.mutation("RejectWorkflowPlan");
+
+export const chooseWorkflowAnswerAtom = DaemonAtomRpc.mutation("ChooseWorkflowAnswer");
+
+export const dismissWorkflowNotificationAtom = DaemonAtomRpc.mutation("DismissWorkflowNotification");
+
+export const workflowCatalogAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWorkflowCatalog", undefined));
+
+export const workflowTemplatesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWorkflowTemplates", undefined));
+
+export const createWorkflowAtom = DaemonAtomRpc.mutation("CreateWorkflow");
+
+export const publishWorkflowAtom = DaemonAtomRpc.mutation("PublishWorkflow");
+
+export const switchWorkflowAtom = DaemonAtomRpc.mutation("SwitchWorkflow");
+
+export const deleteWorkflowAtom = DaemonAtomRpc.mutation("DeleteWorkflow");
+
+export const listWorkflowOptionsAtom = DaemonAtomRpc.runtime.fn<{
+  readonly payload: {
+    readonly entry: WorkflowCatalogKey;
+    readonly parameter: string;
+    readonly workspaces: ReadonlyArray<WorkspaceId>;
+  };
+}>()(({ payload }) => Effect.flatMap(DaemonAtomRpc, (client) => client("ListWorkflowOptions", payload)), {
+  concurrent: true,
+});
+
+export const applyWorkflowEditAtom = DaemonAtomRpc.runtime.fn<{
+  readonly payload: { readonly id: WorkflowId; readonly edits: WorkflowEditBatch };
+}>()(({ payload }) => Effect.flatMap(DaemonAtomRpc, (client) => client("EditWorkflow", payload)), {
+  concurrent: true,
+});

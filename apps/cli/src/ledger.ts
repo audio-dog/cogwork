@@ -1,4 +1,5 @@
 import type {
+  BranchName,
   RunEvent,
   RunId,
   RunPlan,
@@ -58,17 +59,16 @@ const runValues = (record: RunRecord) => ({
   id: record.id,
   workspace: record.workspace,
   workItem: record.workItem,
-  stage: record.stage,
+  subjectTitle: record.subject?.title ?? null,
+  subjectUrl: record.subject?.url ?? null,
+  workflow: record.workflow ?? null,
+  operation: record.operation,
   harness: record.harness,
   branch: record.branch,
   session: record.session,
-  claimDisposition: record.claimDisposition ?? null,
   startedAt: record.startedAtMillis,
   ...runColumns(record),
 });
-
-const claimDispositionUpdate = (record: Pick<RunRecord, "claimDisposition">) =>
-  record.claimDisposition === undefined ? {} : { claimDisposition: record.claimDisposition };
 
 const sessionValues = (session: Session) => ({
   id: session.id,
@@ -116,7 +116,10 @@ const runRecordSelection = {
   id: runs.id,
   workspace: runs.workspace,
   workItem: runs.workItem,
-  stage: runs.stage,
+  subjectTitle: runs.subjectTitle,
+  subjectUrl: runs.subjectUrl,
+  workflow: runs.workflow,
+  operation: runs.operation,
   harness: runs.harness,
   branch: runs.branch,
   session: runs.session,
@@ -125,7 +128,6 @@ const runRecordSelection = {
   totalTokens: runs.totalTokens,
   estimated: runs.estimated,
   status: runs.status,
-  claimDisposition: runs.claimDisposition,
   startedAt: runs.startedAt,
   endedAt: runs.endedAt,
 };
@@ -133,13 +135,17 @@ const runRecordSelection = {
 const runSummarySelection = {
   ...runRecordSelection,
   eventCount: runs.eventCount,
+  eventsPrunedAt: runs.eventsPrunedAt,
 };
 
 const runRecordFromRow = (row: {
   readonly id: string;
   readonly workspace: string;
   readonly workItem: string;
-  readonly stage: string;
+  readonly subjectTitle: string | null;
+  readonly subjectUrl: string | null;
+  readonly workflow: string | null;
+  readonly operation: string;
   readonly harness: string;
   readonly branch: string | null;
   readonly session: string | null;
@@ -148,29 +154,33 @@ const runRecordFromRow = (row: {
   readonly totalTokens: number | null;
   readonly estimated: boolean | null;
   readonly status: string;
-  readonly claimDisposition: string | null;
   readonly startedAt: number;
   readonly endedAt: number | null;
 }) => ({
   id: row.id,
   workspace: row.workspace,
   workItem: row.workItem,
-  stage: row.stage,
+  ...(row.subjectTitle === null ? {} : { subject: { title: row.subjectTitle, url: row.subjectUrl } }),
+  ...(row.workflow === null ? {} : { workflow: row.workflow }),
+  operation: row.operation,
   harness: row.harness,
   branch: row.branch,
   session: row.session,
   usage: usageOf(row),
   status: row.status,
-  ...(row.claimDisposition === null ? {} : { claimDisposition: row.claimDisposition }),
   startedAtMillis: row.startedAt,
   endedAtMillis: row.endedAt,
 });
 
 const runSummaryFromRow = (
-  row: Parameters<typeof runRecordFromRow>[0] & { readonly eventCount: number },
+  row: Parameters<typeof runRecordFromRow>[0] & {
+    readonly eventCount: number;
+    readonly eventsPrunedAt: number | null;
+  },
 ) => ({
   ...runRecordFromRow(row),
   eventCount: row.eventCount,
+  eventsPrunedAtMillis: row.eventsPrunedAt,
 });
 
 type RunRow = Parameters<typeof runRecordFromRow>[0];
@@ -362,11 +372,11 @@ const make = Effect.fn("ledger.make")(function* () {
   });
 
   const service: RunLedger.CoreRunLedgerService = {
-    acceptRun: (record: RunRecord, plan: RunPlan) => {
+    acceptRun: Effect.fn("RunLedger.acceptRun")(function* (record: RunRecord, plan: RunPlan) {
       if (record.id !== plan.id) {
-        return runPlanError(`Run ${record.id} does not match Plan ${plan.id}`);
+        return yield* runPlanError(`Run ${record.id} does not match Plan ${plan.id}`);
       }
-      return hardWrite(() =>
+      yield* hardWrite(() =>
         sqlClient.withTransaction(
           Effect.gen(function* () {
             yield* db.insert(runs).values(runValues(record)).run();
@@ -376,8 +386,9 @@ const make = Effect.fn("ledger.make")(function* () {
               .run();
           }),
         ),
-      ).pipe(Effect.asVoid);
-    },
+      );
+      yield* RunLedger.logRunAccepted(record);
+    }),
 
     getRunPlan: (runId: RunId) =>
       readRows("getRunPlan", () =>
@@ -397,37 +408,47 @@ const make = Effect.fn("ledger.make")(function* () {
       );
     },
 
-    updateRun: (runId: RunId, patch: RunLedger.RunUpdate) =>
-      write("updateRun", () =>
-        db
-          .update(runs)
-          .set({ ...runColumns(patch), ...claimDispositionUpdate(patch) })
-          .where(eq(runs.id, runId))
-          .run(),
-      ),
+    updateRun: Effect.fn("RunLedger.updateRun")(function* (runId: RunId, patch: RunLedger.RunUpdate) {
+      const runIds = yield* writeIds("updateRun", () =>
+        db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).returning({ id: runs.id }).all(),
+      );
+      yield* RunLedger.logRunsSettled(runIds, patch.status);
+    }),
 
     setRunSession: (runId: RunId, session: SessionId) =>
       write("setRunSession", () => db.update(runs).set({ session }).where(eq(runs.id, runId)).run()),
 
-    interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
-      writeIds("interruptRunning", () =>
+    interruptRunning: Effect.fn("RunLedger.interruptRunning")(function* (
+      startedFromMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("interruptRunning", () =>
         db
           .update(runs)
           .set({ status: "interrupted", endedAt: endedAtMillis })
           .where(and(eq(runs.status, "running"), gte(runs.startedAt, startedFromMillis)))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
 
-    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
-      writeIds("interruptRunningBefore", () =>
+    interruptRunningBefore: Effect.fn("RunLedger.interruptRunningBefore")(function* (
+      beforeMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("interruptRunningBefore", () =>
         db
           .update(runs)
           .set({ status: "interrupted", endedAt: endedAtMillis })
           .where(and(eq(runs.status, "running"), lt(runs.startedAt, beforeMillis)))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
 
     insertSession: (session: Session) =>
       write("insertSession", () =>
@@ -452,7 +473,7 @@ const make = Effect.fn("ledger.make")(function* () {
         db.update(sessions).set({ handle }).where(eq(sessions.id, id)).run(),
       ),
 
-    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: BranchName) =>
       readRows("sessionForBranch", () =>
         db
           .select({ id: runs.id, session: runs.session })
@@ -504,25 +525,39 @@ const make = Effect.fn("ledger.make")(function* () {
         ),
       ),
 
-    closeRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      writeIds("closeRunning", () =>
+    closeRunning: Effect.fn("RunLedger.closeRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("closeRunning", () =>
         db
           .update(runs)
           .set({ status: "failed", endedAt: endedAtMillis })
           .where(and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "failed");
+      return runIds;
+    }),
 
-    crashRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      writeIds("crashRunning", () =>
+    crashRunning: Effect.fn("RunLedger.crashRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* writeIds("crashRunning", () =>
         db
           .update(runs)
           .set({ status: "crashed", endedAt: endedAtMillis })
           .where(and(eq(runs.workspace, workspace), eq(runs.workItem, workItem), eq(runs.status, "running")))
           .returning({ id: runs.id })
           .all(),
-      ),
+      );
+      yield* RunLedger.logRunsSettled(runIds, "crashed");
+      return runIds;
+    }),
 
     consecutiveCrashes: (workspace: WorkspaceId, workItem: WorkItemId, sinceMillis: number) =>
       readRows("consecutiveCrashes", () =>
@@ -544,7 +579,7 @@ const make = Effect.fn("ledger.make")(function* () {
           .all(),
       ).pipe(Effect.map((rows) => Number(rows[0]?.count ?? 0))),
 
-    appendEvent: (runId: RunId, event: RunEvent) => {
+    appendEvent: Effect.fn("RunLedger.appendEvent")(function* (runId: RunId, event: RunEvent) {
       const values = {
         runId,
         seq: event.seq,
@@ -553,7 +588,7 @@ const make = Effect.fn("ledger.make")(function* () {
         data: event.data,
         at: event.atMillis,
       };
-      return write("appendEvent", () =>
+      yield* write("appendEvent", () =>
         sqlClient
           .withTransaction(
             Effect.gen(function* () {
@@ -578,9 +613,12 @@ const make = Effect.fn("ledger.make")(function* () {
                 .run();
             }),
           )
-          .pipe(Effect.trackDuration(runLedgerAppendDuration)),
+          .pipe(
+            Effect.trackDuration(runLedgerAppendDuration),
+            Effect.tap(() => RunLedger.logRunEventAppended(event)),
+          ),
       );
-    },
+    }),
 
     latestSeq: (runId: RunId) =>
       hardOperation(RunLedger.readRunEventsOperation, () =>
@@ -591,7 +629,7 @@ const make = Effect.fn("ledger.make")(function* () {
           .all(),
       ).pipe(Effect.map((rows) => rows[0]?.seq ?? null)),
 
-    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
+    latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       readRun("latestRunByBranch", () =>
         db
           .select(runRecordSelection)

@@ -23,7 +23,7 @@ Neither restates the other.
 first capability, not its definition.** The `triage → implement → follow-up → PR` pipeline is
 one workflow keyed by a work-item type, not the product itself. A Slack reply or meeting prep
 is a peer workflow over the same runtime, never another stage bolted onto the pipeline.
-([#168](https://github.com/colonylabs/cogwork/issues/168))
+([#168](https://github.com/taylorfsteele/cogwork/issues/168))
 
 **The general loop is sense → classify → schedule → act → record.** Issue-tracker-plus-coding-
 harness is its first instance. Nothing may assume that *sense* means polling a tracker or that
@@ -101,9 +101,10 @@ and multi-user; the hosting itself has no owner and no date.
 product's future, and session contracts are shaped for them from the start. The surface and the
 machinery come after mission control and the owned runtime are real.
 
-**Pull request review stays on GitHub.** The one hard human gate is review and merge, and it
-lives where the maintainer already reviews. The PR read model is shaped richly enough to host an
-in-app panel the day that changes.
+**Pull request review stays on GitHub.** The shipped coding template ends with a person reviewing and
+merging there, as does the process used to build Cogwork. Workflow authors choose their human gates;
+Cogwork does not enforce one. Branch protection supplies a hard mechanism when wanted. The PR read
+model is shaped richly enough to host an in-app panel the day that changes.
 
 **Workspace config is heading for declarative, schema-validated data.** It is executable
 TypeScript today. That is a migration with a destination, not the destination.
@@ -116,15 +117,12 @@ user's own, brought to cogwork.
 
 Named so future work knows the reopen cost. None of this is in scope to build.
 
-**The issue tracker plays three roles at once** — sensor, work-item identity, and coordination
-store (ADR [0003](../adr/0003-work-source-as-coordination-substrate.md)). Non-coding work has no
-tracker, so the roles separate eventually.
+**The issue tracker plays two roles** — sensor and work-item identity. Coordination moved to the
+Control store for every Work item (ADR [0036](../adr/0036-every-work-item-is-coordinated-in-the-control-store.md)),
+so a second machine cannot take over an issue by reading the tracker.
 
 **"Act" generalises to an actuator.** The coding harness is one actuator and the owned provider
 layer is another. Nothing may assume that acting means running a harness.
-
-**The coordination store becomes ours when a work item has no tracker.** The first small instance
-already exists as an ingestion watermark; the full store waits for the first non-coding workflow.
 
 **A knowledge layer — what cogwork knows about you — is deferred.** Meeting ingestion is its seed.
 
@@ -141,7 +139,7 @@ A claim here gists a decision; the decision itself lives in exactly one place.
 
 - `docs/adr/` — system-wide decisions, and the per-package `<context>/docs/adr/` beside them.
 - [`docs/spec/next-phase.md`](../spec/next-phase.md) — a superseded snapshot of closed wayfinder
-  map [#159](https://github.com/colonylabs/cogwork/issues/159). Its **Decision log** table is the
+  map [#159](https://github.com/taylorfsteele/cogwork/issues/159). Its **Decision log** table is the
   index from an area to the ticket that holds its full reasoning.
 - The issue tracker — every live map and its decision tickets. See
   [`docs/agents/issue-tracker.md`](./issue-tracker.md).

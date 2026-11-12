@@ -7,10 +7,13 @@ import { assert, describe, it, layer } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
+import * as Logger from "effect/Logger";
+import * as MutableRef from "effect/MutableRef";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
@@ -96,6 +99,20 @@ const exitedProcess = (exitCode: number, stdout = "", stderr = "") =>
     stderr ? textOutput(stderr) : Stream.empty,
   );
 
+const failedTargetedFetchResponses: Record<
+  string,
+  (oldObjectId: string) => ReturnType<typeof exitedProcess>
+> = {
+  fetch: () => exitedProcess(1, "", "fetch failed"),
+  "for-each-ref": (oldObjectId) => exitedProcess(0, `${oldObjectId}\trefs/remotes/origin/707-fix\n`),
+  "ls-remote": () => exitedProcess(0, `${"2".repeat(40)}\trefs/heads/main\n`),
+  "update-ref": () => exitedProcess(1, "", "ref changed"),
+};
+
+const failedTargetedFetchProcess = (oldObjectId: string, command: string) =>
+  failedTargetedFetchResponses[command.split(" ")[1] ?? ""]?.(oldObjectId) ??
+  exitedProcess(1, "", "unexpected command");
+
 const hangingSpawnerLayer = Layer.succeed(
   ChildProcessSpawner.ChildProcessSpawner,
   ChildProcessSpawner.make(() =>
@@ -117,6 +134,26 @@ class GitCommands extends Context.Service<GitCommands, Ref.Ref<ReadonlyArray<str
   "@cogwork/cli/platform.test/GitCommands",
 ) {
   static readonly layer = Layer.effect(GitCommands, Ref.make<ReadonlyArray<string>>([]));
+}
+
+interface GitLogProbeService {
+  readonly capture: (entry: unknown) => void;
+  readonly entries: Effect.Effect<ReadonlyArray<unknown>>;
+}
+
+class GitLogProbe extends Context.Service<GitLogProbe, GitLogProbeService>()(
+  "@cogwork/cli/platform.test/GitLogProbe",
+) {
+  static readonly layer = Layer.sync(GitLogProbe, () => {
+    const entries = MutableRef.make<ReadonlyArray<unknown>>([]);
+    return {
+      capture: (entry) => MutableRef.update(entries, (current) => [...current, entry]),
+      entries: Effect.sync(() => MutableRef.get(entries)),
+    };
+  });
+  static readonly captureLayer = Logger.layer([
+    Effect.map(GitLogProbe, (probe) => Logger.make<unknown, void>(({ message }) => probe.capture(message))),
+  ]).pipe(Layer.provideMerge(GitLogProbe.layer));
 }
 
 const recordedSpawnerLayer = (handleFor: (command: string) => ChildProcessSpawner.ChildProcessHandle) =>
@@ -153,6 +190,8 @@ const hangingWorktreeFsLayer = worktreeFsLayer.pipe(
 
 const worktreeFsLayerWithSpawner = (spawner: ChildProcessSpawner.ChildProcessSpawner["Service"]) =>
   worktreeFsLayer.pipe(Layer.provide(platformDependenciesWithSpawner(spawner)));
+
+const worktreeFsTestLayer = worktreeFsLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 const setupEnvironmentLayer = worktreeFsLayerWithSpawner(
   ChildProcessSpawner.make((command) => {
@@ -203,6 +242,37 @@ const denied = (method: string, target: string) =>
     pathOrDescriptor: target,
   });
 
+const missing = (method: string, target: string) =>
+  PlatformError.systemError({
+    _tag: "NotFound",
+    module: "FileSystem",
+    method,
+    pathOrDescriptor: target,
+  });
+
+const debrisInspectionFailureLayer: Layer.Layer<
+  WorktreeFs.WorktreeFs | FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner
+> = worktreeFsLayer.pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(
+      Layer.effect(
+        FileSystem.FileSystem,
+        Effect.map(FileSystem.FileSystem, (fs) =>
+          FileSystem.FileSystem.of({
+            ...fs,
+            stat: (target) =>
+              String(target).includes(".cogwork-debris-")
+                ? Effect.fail(denied("stat", String(target)))
+                : fs.stat(target),
+          }),
+        ),
+      ).pipe(Layer.provide(NodeFileSystem.layer)),
+      NodePath.layer,
+      hangingSpawnerLayer,
+    ),
+  ),
+);
+
 const executeFixtureCommand = Effect.fn("test.executeFixtureCommand")(function* (
   cwd: string,
   script: string,
@@ -245,7 +315,7 @@ const shell = Effect.fn("test.shell")(function* (fixtureRoot: string, cwdOrScrip
   return yield* executeFixtureCommand(cwd, script);
 });
 
-describe("real git fixture confinement", () => {
+describe("real git fixture confinement", { timeout: 30_000 }, () => {
   it.effect("rejects a repository outside the fixture root before running its script", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -330,6 +400,98 @@ describe("subprocess deadlines", () => {
   );
 });
 
+describe("git fetch", () => {
+  it.effect("fetches only selected remote branches", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const commands = yield* GitCommands;
+
+      yield* git.fetch("/repo", "origin", { branches: ["main", "707-fix"] });
+
+      assert.deepStrictEqual(yield* Ref.get(commands), [
+        "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/707-fix:refs/remotes/origin/707-fix",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer(() => exitedProcess(0)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("reports a missing branch when compare-and-swap cleanup loses a race", () => {
+    const oldObjectId = "1".repeat(40);
+    return Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const commands = yield* GitCommands;
+
+      const error = yield* Effect.flip(git.fetch("/repo", "origin", { branches: ["main", "707-fix"] }));
+
+      assert.deepStrictEqual(error.missingBranches, ["707-fix"]);
+      assert.deepStrictEqual(yield* Ref.get(commands), [
+        "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/707-fix:refs/remotes/origin/707-fix",
+        "git for-each-ref --format=%(objectname)%09%(refname) refs/remotes/origin/main refs/remotes/origin/707-fix",
+        "git ls-remote --heads origin refs/heads/main refs/heads/707-fix",
+        `git update-ref -d refs/remotes/origin/707-fix ${oldObjectId}`,
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer((command) => failedTargetedFetchProcess(oldObjectId, command)),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+
+  it.effect("does not update tracking refs when every selected branch exists", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const commands = yield* GitCommands;
+
+      const error = yield* Effect.flip(git.fetch("/repo", "origin", { branches: ["main", "707-fix"] }));
+
+      assert.strictEqual(error.missingBranches, undefined);
+      assert.deepStrictEqual(yield* Ref.get(commands), [
+        "git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/heads/707-fix:refs/remotes/origin/707-fix",
+        "git for-each-ref --format=%(objectname)%09%(refname) refs/remotes/origin/main refs/remotes/origin/707-fix",
+        "git ls-remote --heads origin refs/heads/main refs/heads/707-fix",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer((command) =>
+                command.startsWith("git fetch")
+                  ? exitedProcess(1, "", "fetch failed")
+                  : exitedProcess(
+                      0,
+                      `${"1".repeat(40)}\trefs/heads/main\n${"2".repeat(40)}\trefs/heads/707-fix\n`,
+                    ),
+              ),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
 describe("git configuration scope", () => {
   it.effect("reads remote URLs only from the checkout configuration", () =>
     Effect.gen(function* () {
@@ -345,6 +507,37 @@ describe("git configuration scope", () => {
           Layer.provideMerge(
             Layer.mergeAll(
               recordedSpawnerLayer(() => exitedProcess(0, "git@github.com:acme/repo.git\n")),
+              FileSystem.layerNoop({}),
+              Path.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+});
+
+describe("git divergence", () => {
+  it.effect("compares a remote head with a remote base from the repository checkout", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+
+      assert.deepStrictEqual(
+        yield* git.divergence("/repo", "origin", "main", {
+          branch: "696-fix-the-gate",
+          remote: "origin",
+        }),
+        { ahead: 2, behind: 1 },
+      );
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git rev-list --left-right --count origin/main...origin/696-fix-the-gate",
+      ]);
+    }).pipe(
+      Effect.provide(
+        gitLayer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              recordedSpawnerLayer(() => exitedProcess(0, "1\t2\n")),
               FileSystem.layerNoop({}),
               Path.layer,
             ),
@@ -377,6 +570,92 @@ describe("worktree setup commands", () => {
         }),
     );
   });
+});
+
+describe("worktree debris removal", () => {
+  it.effect("removes a target containing only setup debris", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-debris-" });
+      const target = path.join(root, "worktree");
+      const store = path.join(target, ".pnpm-store");
+      yield* fs.makeDirectory(store, { recursive: true });
+      yield* fs.writeFileString(path.join(store, "cache"), "residue");
+
+      assert.isTrue(yield* worktreeFs.removeDebris(root, target));
+      assert.isFalse(yield* fs.exists(target));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), []);
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
+
+  it.effect("removes a regular file left at the target path", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-file-debris-" });
+      const target = path.join(root, "worktree");
+      yield* fs.writeFileString(target, "residue");
+
+      assert.isTrue(yield* worktreeFs.removeDebris(root, target));
+      assert.isFalse(yield* fs.exists(target));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), []);
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
+
+  it.effect("restores a target when a git entry appears before removal", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-detached-" });
+      const target = path.join(root, "worktree");
+      yield* fs.makeDirectory(target, { recursive: true });
+      yield* fs.writeFileString(path.join(target, ".git"), "gitdir: elsewhere");
+
+      assert.isFalse(yield* worktreeFs.removeDebris(root, target));
+      assert.isTrue(yield* fs.exists(path.join(target, ".git")));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), ["worktree"]);
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
+
+  it.effect("restores a target when quarantine inspection fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-inspection-" });
+      const target = path.join(root, "worktree");
+      yield* fs.makeDirectory(target);
+      yield* fs.writeFileString(path.join(target, "keep"), "user data");
+
+      yield* Effect.flip(worktreeFs.removeDebris(root, target));
+
+      assert.isTrue(yield* fs.exists(path.join(target, "keep")));
+      assert.deepStrictEqual(yield* fs.readDirectory(root), ["worktree"]);
+    }).pipe(Effect.scoped, Effect.provide(debrisInspectionFailureLayer)),
+  );
+
+  it.effect("refuses debris reached through a symlink outside the worktree root", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const worktreeFs = yield* WorktreeFs.WorktreeFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-root-" });
+      const outside = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-outside-" });
+      const target = path.join(outside, "victim");
+      yield* fs.makeDirectory(target);
+      yield* fs.writeFileString(path.join(target, "keep"), "user data");
+      yield* fs.symlink(outside, path.join(root, "escaped"));
+
+      const error = yield* Effect.flip(worktreeFs.removeDebris(root, path.join(root, "escaped", "victim")));
+
+      assert.isFalse(error.retryable);
+      assert.isTrue(yield* fs.exists(path.join(target, "keep")));
+    }).pipe(Effect.scoped, Effect.provide(worktreeFsTestLayer)),
+  );
 });
 
 describe("platform read failures", () => {
@@ -574,6 +853,37 @@ describe("worktree removal", () => {
       ),
     ),
   );
+
+  it.effect("logs a completed removal when the following prune fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const logs = yield* GitLogProbe;
+      yield* git.removeWorktree("/repo", "/repo.worktrees/277-stale", true);
+
+      assert.deepStrictEqual(yield* logs.entries, [
+        ["removed Git worktree", { worktreePath: "/repo.worktrees/277-stale", force: true }],
+      ]);
+      assert.deepStrictEqual(yield* Ref.get(yield* GitCommands), [
+        "git worktree remove --force /repo.worktrees/277-stale",
+        "git worktree prune",
+      ]);
+    }).pipe(
+      Effect.provide(
+        Layer.merge(
+          gitLayer.pipe(
+            Layer.provideMerge(
+              Layer.mergeAll(
+                recordedSpawnerLayer((text) => exitedProcess(text === "git worktree prune" ? 1 : 0)),
+                FileSystem.layerNoop({}),
+                Path.layer,
+              ),
+            ),
+          ),
+          GitLogProbe.captureLayer,
+        ),
+      ),
+    ),
+  );
 });
 
 const fixture = Effect.fn("test.fixture")(function* (branch: string) {
@@ -639,8 +949,64 @@ const operationFixtures: ReadonlyArray<{
 // time spent waiting on real git subprocesses. Overlap that wait. Overlapping it is also why
 // these tests need their own ceiling: five fixtures competing for the same git stretch each one
 // past the 5s default, and a test here is slow because it queued, not because it hung.
-describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, () => {
+describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, () => {
   layer(testLayer)((it) => {
+    it.effect("blocks engine-owned pushes and restores the configured agent pushurl", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const path = yield* Path.Path;
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const { root, checkout, worktree, branch } = yield* fixture("807-engine-push");
+        const fetchRemote = path.join(root, "remote.git");
+        const pushRemote = path.join(root, "push.git");
+        const revision = (args: ReadonlyArray<string>) =>
+          spawner.string(ChildProcess.make("git", [...args], { cwd: root, env: gitFixtureEnvironment }));
+
+        yield* executeFixtureCommand(root, `git init -q --bare ${pushRemote}`);
+        yield* shell(root, checkout, `git remote set-url --push origin ${pushRemote}`);
+
+        yield* git.allowPush(worktree, "origin");
+        yield* git.blockPush(worktree, "origin");
+        yield* shell(
+          root,
+          checkout,
+          "echo main >> base.txt && git commit -qam main && git push -q origin main",
+        );
+        yield* shell(root, worktree, "echo engine >> work.txt && git commit -qam engine");
+
+        const directPush = yield* Effect.exit(shell(root, worktree, `git push -q origin ${branch}`));
+        assert.isTrue(Exit.isFailure(directPush));
+
+        yield* git.pushBranch(worktree, yield* git.remoteUrl(checkout, "origin"), branch);
+        yield* git.fetch(checkout, "origin", { branches: [branch] });
+
+        assert.deepStrictEqual(yield* git.divergence(worktree, "origin", branch), {
+          ahead: 0,
+          behind: 0,
+        });
+
+        yield* git.allowPush(worktree, "origin");
+        yield* shell(root, worktree, "echo agent >> work.txt && git commit -qam agent");
+        const restoredPush = yield* Effect.exit(shell(root, worktree, `git push -q origin ${branch}`));
+        assert.isTrue(Exit.isSuccess(restoredPush));
+        const localHead = (yield* revision(["-C", worktree, "rev-parse", "HEAD"])).trim();
+        const fetchHead = (yield* revision([
+          "--git-dir",
+          fetchRemote,
+          "rev-parse",
+          `refs/heads/${branch}`,
+        ])).trim();
+        assert.notStrictEqual(fetchHead, localHead);
+        const pushHead = (yield* revision([
+          "--git-dir",
+          pushRemote,
+          "rev-parse",
+          `refs/heads/${branch}`,
+        ])).trim();
+        assert.strictEqual(pushHead, localHead);
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("returns the configured remote before insteadOf rewriting", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
@@ -794,6 +1160,20 @@ describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, (
     }).pipe(Effect.scoped, Effect.provide(testLayer)),
   );
 
+  it.effect("clears a confirmed missing branch after a targeted fetch fails", () =>
+    Effect.gen(function* () {
+      const git = yield* Git.Git;
+      const { root, checkout, peer, branch } = yield* fixture("707-targeted-fetch-delete");
+
+      yield* shell(root, peer, `git push -q origin --delete ${branch}`);
+      assert.isTrue(yield* git.remoteBranchExists(checkout, "origin", branch));
+
+      yield* Effect.flip(git.fetch(checkout, "origin", { branches: ["main", branch] }));
+
+      assert.isFalse(yield* git.remoteBranchExists(checkout, "origin", branch));
+    }).pipe(Effect.scoped, Effect.provide(testLayer)),
+  );
+
   it.effect("measures divergence against the fetched remote and replays local commits", () =>
     Effect.gen(function* () {
       const git = yield* Git.Git;
@@ -826,7 +1206,7 @@ describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, (
       const git = yield* Git.Git;
       const { worktree, branch } = yield* fixture("474-ready-for-pr");
 
-      assert.deepStrictEqual(yield* git.divergence(worktree, "origin", "main", branch), {
+      assert.deepStrictEqual(yield* git.divergence(worktree, "origin", "main", { branch }), {
         ahead: 1,
         behind: 0,
       });
@@ -860,7 +1240,43 @@ describe.concurrent("gitLayer against a real repository", { timeout: 20_000 }, (
 const contextTestLayer = contextFsLayer.pipe(Layer.provideMerge(NodeServices.layer));
 
 describe("contextFsLayer against a real filesystem", () => {
-  it.effect("lists an Authoring tree directory and treats a missing one as empty", () =>
+  it.effect("keeps readable files when a listed child disappears", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-race-" });
+      yield* fs.writeFileString(path.join(root, "keep.md"), "keep");
+      yield* fs.writeFileString(path.join(root, "gone.md"), "gone");
+
+      assert.deepStrictEqual(yield* context.readDirectory(root), ["keep.md"]);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        contextFsLayer.pipe(
+          Layer.provideMerge(
+            Layer.merge(
+              Layer.effect(
+                FileSystem.FileSystem,
+                Effect.map(FileSystem.FileSystem, (fs) =>
+                  FileSystem.FileSystem.of({
+                    ...fs,
+                    stat: (target) =>
+                      String(target).endsWith("gone.md")
+                        ? Effect.fail(missing("stat", String(target)))
+                        : fs.stat(target),
+                  }),
+                ),
+              ).pipe(Layer.provide(NodeFileSystem.layer)),
+              NodePath.layer,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  it.effect("lists only files from an Authoring tree and treats a missing directory as empty", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -875,11 +1291,19 @@ describe("contextFsLayer against a real filesystem", () => {
       assert.deepStrictEqual(yield* context.readDirectory(rules), ["global.md"]);
       assert.deepStrictEqual(yield* context.readDirectory(path.join(root, "missing")), []);
 
+      const nestedRules = path.join(rules, "nested");
+      yield* fs.makeDirectory(nestedRules);
+      yield* fs.writeFileString(path.join(nestedRules, "local.md"), "local rules");
+      assert.deepStrictEqual([...(yield* context.readDirectory(rules, { recursive: true }))].sort(), [
+        "global.md",
+        path.join("nested", "local.md"),
+      ]);
+
       const file = path.join(root, "not-a-directory");
       yield* fs.writeFileString(file, "not a directory");
       const error = yield* Effect.flip(context.readDirectory(file));
       assert.strictEqual(error._tag, "ContextFsError");
-      assert.include(error.operation, "read directory");
+      assert.include(error.operation, "read files");
     }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 
@@ -894,6 +1318,39 @@ describe("contextFsLayer against a real filesystem", () => {
 
       assert.strictEqual(yield* context.readFile(agents), "repo rules");
       assert.isNull(yield* context.readFile(path.join(root, "missing.md")));
+    }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
+  );
+
+  it.effect("writes a context file and creates its parent directory", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-write-" });
+      const target = path.join(root, "nested", "INSTRUCTIONS.md");
+
+      yield* context.writeFile(target, "operating instructions");
+
+      assert.strictEqual(yield* fs.readFileString(target), "operating instructions");
+    }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
+  );
+
+  it.effect("replaces a context-file symlink without writing through it", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const context = yield* ContextFs.ContextFs;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-context-symlink-" });
+      const victim = path.join(root, "victim.md");
+      const target = path.join(root, "run", "INSTRUCTIONS.md");
+      yield* fs.makeDirectory(path.dirname(target), { recursive: true });
+      yield* fs.writeFileString(victim, "keep me");
+      yield* fs.symlink(victim, target);
+
+      yield* context.writeFile(target, "operating instructions");
+
+      assert.strictEqual(yield* fs.readFileString(target), "operating instructions");
+      assert.strictEqual(yield* fs.readFileString(victim), "keep me");
     }).pipe(Effect.scoped, Effect.provide(contextTestLayer)),
   );
 

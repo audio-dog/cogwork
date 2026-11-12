@@ -21,9 +21,10 @@ import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiArrowDownSLine, RiCheckLine, RiErrorWarningLine, RiStopCircleLine } from "@remixicon/react";
-import * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
+import { useOperationName } from "../features/activity-session";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import { duration } from "../features/format";
 import { useRunTranscript } from "../features/run-activity";
 import {
@@ -83,12 +84,12 @@ function RunTranscriptProvider({ run, children }: { run: RunSummary; children: R
           rows,
           line: runLine(rows, run.status),
           running,
-          streamError: result._tag === "Failure" ? Cause.pretty(result.cause) : null,
+          streamError: result._tag === "Failure" ? daemonFailureMessage(result.cause) : null,
         },
         actions: { cancel: () => cancelRun({ payload: { runId: run.id } }) },
         meta: {
           cancelPending: cancelResult.waiting,
-          cancelError: cancelResult._tag === "Failure" ? Cause.pretty(cancelResult.cause) : null,
+          cancelError: cancelResult._tag === "Failure" ? daemonFailureMessage(cancelResult.cause) : null,
         },
       }}
     >
@@ -221,9 +222,22 @@ function ErrorRow({ row }: { row: Extract<TranscriptRow, { kind: "error" }> }) {
   );
 }
 
+function WarningRow({ row }: { row: Extract<TranscriptRow, { kind: "warning" }> }) {
+  return (
+    <div className="py-1">
+      <Alert>
+        <RiErrorWarningLine />
+        <AlertTitle>File changes may be incomplete</AlertTitle>
+        <AlertDescription>{row.message}</AlertDescription>
+      </Alert>
+    </div>
+  );
+}
+
 function Row({ row }: { row: TranscriptRow }) {
   if (row.kind === "work") return <WorkRow row={row} />;
   if (row.kind === "note") return <NoteRow row={row} />;
+  if (row.kind === "warning") return <WarningRow row={row} />;
   return <ErrorRow row={row} />;
 }
 
@@ -278,10 +292,23 @@ function StreamError({ message }: { message: string }) {
  */
 function TranscriptConversation() {
   const {
-    state: { rows, running, streamError },
+    state: { run, rows, running, streamError },
   } = useRunTranscriptContext();
 
   if (streamError) return <StreamError message={streamError} />;
+  if (run.eventsPrunedAtMillis !== null)
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Empty className="m-4">
+          <EmptyHeader>
+            <EmptyTitle>Run history was pruned</EmptyTitle>
+            <EmptyDescription>
+              Cogwork removed this opaque session&apos;s events to keep local history bounded.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
+    );
   if (rows.length === 0)
     return (
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -368,6 +395,7 @@ function RunNow() {
     state: { run, line },
     meta: { cancelError },
   } = useRunTranscriptContext();
+  const operationName = useOperationName();
   return (
     <div className="shrink-0 border-b p-3">
       <div className="rounded-lg border bg-card px-3 py-2.5">
@@ -380,7 +408,7 @@ function RunNow() {
         <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
           <ElapsedTime />
           <span aria-hidden>·</span>
-          <span>{run.stage}</span>
+          <span>{operationName(run)}</span>
           <CancelButton />
         </div>
         {cancelError && <p className="mt-1.5 text-xs text-destructive">{cancelError}</p>}

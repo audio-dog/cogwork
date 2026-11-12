@@ -4,22 +4,21 @@ import {
   agUiIsFileDiffEvent,
   FILE_DIFF_EVENT,
   type HarnessName,
+  type ModelOptionSelections,
   type RunId,
   type RunPlanInstruction,
+  type RunPlanMember,
   type RunPlanMessage,
   type RunPlanOperatingInstructions,
   type SessionId,
-  type SessionKind,
 } from "@cogwork/contracts";
 import {
   type AnyTextAdapter,
+  type AnyTool,
   type ChatMiddleware,
-  type ConstrainedModelMessage,
   chat,
   type JSONSchema,
-  type ModelMessage,
   RUN_CANCEL_REASON,
-  type SystemPrompt,
 } from "@tanstack/ai";
 import { scrubSecrets } from "@tanstack/ai/byok";
 import {
@@ -28,32 +27,28 @@ import {
   DEFAULT_WORKSPACE_ROOT,
   defineSandbox,
   defineWorkspace,
-  getSandbox,
   mcpSkill,
   ProjectionCapability,
   provideWorkspaceProjection,
   resolveAllSecrets,
-  resolveHarnessCwd,
-  type SandboxPolicy,
+  type SandboxHandle,
   type SandboxProvider,
   type Secrets,
   type WorkspaceDefinition,
   withSandbox,
 } from "@tanstack/ai-sandbox";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
-import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
   type HarnessAuthenticationBinding,
   type HarnessAuthenticationMode,
   type HarnessCapabilityProfile,
-  type HarnessCatalogSources,
+  type HarnessCatalogOptions,
   HarnessError,
   type HarnessExecution,
   HarnessPreflightInput,
@@ -64,21 +59,17 @@ import {
   type OperationPolicyProfile,
   type ResolvedMcpSkill,
   resolvedMcpSkills,
+  validateCheckoutDirectory,
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
+import { workContextMessage } from "./run-plan";
 import { SessionStore } from "./session-store";
-import { boundedDiff, ignored, tolerateFeedDeath, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { boundedDiff, ignored, mergeFileDiffFeed, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { policyForProfile } from "./tools/policy";
 import { openWorktreeSandbox, resolveBaseSha } from "./tools/sandbox";
 
 type AdapterModel<Adapter extends AnyTextAdapter> = Adapter["model"];
 type AdapterOptions<Adapter extends AnyTextAdapter> = Adapter["~types"]["providerOptions"];
-type AdapterSystemPrompt<Adapter extends AnyTextAdapter> = SystemPrompt<
-  Adapter["~types"]["systemPromptMetadata"]
->;
-type AdapterMessage<Adapter extends AnyTextAdapter> = ConstrainedModelMessage<{
-  inputModalities: Adapter["~types"]["inputModalities"];
-  messageMetadataByModality: Adapter["~types"]["messageMetadataByModality"];
-}>;
 
 export interface ExternalHarnessAuthentication {
   readonly mode: HarnessAuthenticationMode;
@@ -93,7 +84,7 @@ export interface ExternalHarnessIdentity {
 
 export interface ExternalHarnessSelection {
   readonly model: string | null;
-  readonly effort: string | null;
+  readonly options: ModelOptionSelections;
 }
 
 export interface ExternalHarnessCheckout {
@@ -117,16 +108,15 @@ export interface ExternalHarnessResolvedRequest {
   readonly checkout: ExternalHarnessCheckout;
   readonly prompt: ReadonlyArray<RunPlanMessage>;
   readonly outputSchema: JSONSchema | null;
+  readonly tools: ReadonlyArray<AnyTool>;
 }
 
 export interface ExternalHarnessCapabilities {
   readonly execution: HarnessExecution;
   readonly profile: HarnessCapabilityProfile;
-  readonly projectedMembers: HarnessRunner["projectedMembers"];
-  readonly planMiddleware: HarnessRunner["planMiddleware"];
 }
 
-export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
+export interface ExternalHarnessTransport {
   readonly instructionProjection?: "workspace" | "system-prompt";
   /**
    * `"native"` promises the descriptor delivers `request.mcp` itself through its
@@ -140,13 +130,6 @@ export interface ExternalHarnessTransport<Adapter extends AnyTextAdapter> {
    * label must not switch the feed off.
    */
   readonly runtimeFileDiffFeed?: boolean;
-  readonly messages?: (
-    request: ExternalHarnessResolvedRequest,
-  ) => ReadonlyArray<ModelMessage | AdapterMessage<Adapter>>;
-  readonly systemPrompts?: (
-    request: ExternalHarnessResolvedRequest,
-  ) => ReadonlyArray<AdapterSystemPrompt<Adapter>>;
-  readonly middleware?: (request: ExternalHarnessResolvedRequest) => ReadonlyArray<ChatMiddleware>;
 }
 
 export type ExternalHarnessUsageEstimator = (
@@ -155,24 +138,24 @@ export type ExternalHarnessUsageEstimator = (
   outputTextCharacters: number,
 ) => AgUiEvent;
 
-export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter, NativeAuthentication = unknown> {
+export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter> {
   readonly name: HarnessName;
-  readonly sessionKind: SessionKind;
   readonly capabilities: ExternalHarnessCapabilities;
   readonly authentication: HarnessAuthenticationBinding;
   readonly signIn?: string;
-  readonly catalogSources: HarnessCatalogSources;
+  readonly catalog: HarnessCatalogOptions;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
+  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Tools">>;
+  readonly inheritedEnvironment: ReadonlyArray<string>;
   readonly makeAdapter: (input: {
     readonly model: AdapterModel<Adapter>;
-    readonly authentication: NativeAuthentication;
+    readonly nativeAuthentication: "host";
     readonly request: ExternalHarnessResolvedRequest;
   }) => Adapter;
   readonly projectModel: (request: ExternalHarnessResolvedRequest) => AdapterModel<Adapter>;
   readonly projectOptions: (request: ExternalHarnessResolvedRequest) => AdapterOptions<Adapter>;
-  readonly projectAuthentication: (authentication: ExternalHarnessAuthentication) => NativeAuthentication;
-  readonly transport: ExternalHarnessTransport<Adapter>;
+  readonly transport: ExternalHarnessTransport;
   readonly diagnostics: (cause: unknown) => HarnessError;
   readonly turnDiagnostics?: (cause: unknown) => HarnessError;
   readonly estimateUsage?: ExternalHarnessUsageEstimator;
@@ -182,9 +165,57 @@ type ExternalInputEffect<Value> = Effect.Effect<Value, HarnessError, HarnessRunn
 
 export interface ExternalHarnessRuntimeInputs {
   readonly authentication: (request: HarnessRequest) => ExternalInputEffect<ExternalHarnessAuthentication>;
-  readonly sandboxProvider: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxProvider>;
-  readonly sandboxPolicy?: (request: ExternalHarnessResolvedRequest) => ExternalInputEffect<SandboxPolicy>;
 }
+
+export const defaultInheritedEnvironment = Object.freeze([
+  "HOME",
+  "PATH",
+  "CODEX_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "USER",
+  "LOGNAME",
+  "SHELL",
+  "TMPDIR",
+  "TEMP",
+  "TMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+]);
+
+export const windowsInheritedEnvironment = Object.freeze([
+  "USERPROFILE",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "APPDATA",
+  "SYSTEMROOT",
+  "PATHEXT",
+  "COMSPEC",
+]);
+
+export const nodeNetworkInheritedEnvironment = Object.freeze([
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NODE_EXTRA_CA_CERTS",
+]);
+
+export const externalHarnessDeclaration = Object.freeze({
+  sessionKind: "opaque-handle",
+  projectedMembers: Object.freeze([
+    "Harness Adapter",
+    "Instructions",
+    "Messages",
+    "MCP",
+    "Middleware",
+    "Sandbox",
+    "Structured Output",
+    "Persistence",
+    "Connections",
+  ]),
+  planMiddleware: Object.freeze(["sandbox"]),
+} satisfies Pick<HarnessRunner, "sessionKind" | "projectedMembers" | "planMiddleware">);
 
 const preparedWorkspace = { source: { type: "none" } } satisfies WorkspaceDefinition;
 
@@ -199,27 +230,6 @@ const authenticationMismatch = (
     message: `harness runner ${name} requires ${expected} authentication, received ${actual.mode}`,
   });
 
-const incompatibleSandbox = (name: HarnessName, capability: string) =>
-  new HarnessError({
-    reason: "sandbox",
-    retryable: false,
-    message: `Sandbox provider for harness runner ${name} does not support ${capability}`,
-  });
-
-const validateSandboxProvider = <Adapter extends AnyTextAdapter, NativeAuthentication>(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
-  provider: SandboxProvider,
-) => {
-  const capabilities = provider.capabilities();
-  const missingCapability = [
-    { supported: capabilities.fs, label: "filesystem access" },
-    { supported: capabilities.exec, label: "command execution" },
-    { supported: capabilities.backgroundProcesses, label: "background processes" },
-    { supported: capabilities.killableProcesses, label: "killable processes" },
-  ].find(({ supported }) => !supported);
-  if (!missingCapability) return Effect.void;
-  return Effect.fail(incompatibleSandbox(descriptor.name, missingCapability.label));
-};
 // Hex-hashed so the name is a valid environment identifier for any projected server name,
 // and so a rotated credential never changes the name the harness is configured with. Shared
 // with native MCP projection (the Codex descriptor), whose config references this name.
@@ -253,8 +263,8 @@ const mcpWorkspaceProjection = (request: ExternalHarnessResolvedRequest) => {
 const resolvedSecretValues = (secrets: Secrets) =>
   Object.keys(secrets).length === 0 ? {} : resolveAllSecrets(secrets);
 
-const harnessWorkspace = <Adapter extends AnyTextAdapter, NativeAuthentication>(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+const harnessWorkspace = <Adapter extends AnyTextAdapter>(
+  descriptor: ExternalHarnessDescriptor<Adapter>,
   request: ExternalHarnessResolvedRequest,
 ) => {
   const mcp = mcpWorkspaceProjection(request);
@@ -330,7 +340,6 @@ const satisfiedProjection = (): ChatMiddleware => ({
   name: "cogwork-workspace-already-projected",
   provides: [ProjectionCapability],
   setup: (context) => {
-    const root = resolveHarnessCwd(getSandbox(context));
     // The duplicate-provide warning exists to catch accidental overwrites; this overwrite
     // is the point, and the warning would otherwise land in the daemon log on every such
     // launch. This middleware is the last provider in the chain, so muting loses nothing.
@@ -341,55 +350,35 @@ const satisfiedProjection = (): ChatMiddleware => ({
       resolveSecret: () => {
         throw new Error("this run projects no Workspace members, so no secret can be resolved");
       },
-      markerPath: `${root}/.git`,
-      root,
+      markerPath: `${DEFAULT_WORKSPACE_ROOT}/.git`,
+      root: DEFAULT_WORKSPACE_ROOT,
     });
   },
 });
 
-const requiredWorkspaceMembers = (request: ExternalHarnessResolvedRequest) => {
-  const base = ["Instructions", "Messages", "Sandbox"] satisfies HarnessRunner["projectedMembers"];
-  if (request.mcp.length === 0) return base;
-  return [...base, "MCP" satisfies HarnessRunner["projectedMembers"][number]];
-};
-
-const validateWorkspaceProjection = Effect.fn("ExternalHarnessRuntime.validateWorkspaceProjection")(
-  function* <Adapter extends AnyTextAdapter, NativeAuthentication>(
-    descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
-    request: HarnessRequest,
-    resolved: ExternalHarnessResolvedRequest,
-  ) {
-    const missingCredentials = request.plan.mcp.flatMap((server) =>
-      "endpoint" in server && server.authenticated && !request.mcpCredentials.has(server.identity)
-        ? [server.projectedName]
-        : [],
-    );
-    if (missingCredentials.length > 0) {
-      return yield* new HarnessError({
-        reason: "credential",
-        retryable: false,
-        message: `authenticated MCP servers have no live credential: ${missingCredentials.join(", ")}`,
-      });
-    }
-    const projected = new Set<string>(descriptor.capabilities.projectedMembers);
-    const missing = requiredWorkspaceMembers(resolved).filter((member) => !projected.has(member));
-    if (missing.length === 0) return;
+const validateMcpCredentials = Effect.fn("ExternalHarnessRuntime.validateMcpCredentials")(function* (
+  request: HarnessRequest,
+) {
+  const missingCredentials = request.plan.mcp.flatMap((server) =>
+    "endpoint" in server && server.authenticated && !request.mcpCredentials.has(server.identity)
+      ? [server.projectedName]
+      : [],
+  );
+  if (missingCredentials.length > 0) {
     return yield* new HarnessError({
-      reason: "workspace",
+      reason: "credential",
       retryable: false,
-      message: `harness runner ${descriptor.name} cannot project required Harness Workspace members: ${missing.join(", ")}`,
+      message: `authenticated MCP servers have no live credential: ${missingCredentials.join(", ")}`,
     });
-  },
-);
+  }
+});
 
 const validateExternalRequest = Effect.fn("ExternalHarnessRuntime.validateRequest")(function* <
   Adapter extends AnyTextAdapter,
-  NativeAuthentication,
 >(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  descriptor: ExternalHarnessDescriptor<Adapter>,
   request: HarnessRequest,
   resolved: ExternalHarnessResolvedRequest,
-  provider: SandboxProvider,
 ) {
   if (request.plan.sandbox.policy !== request.plan.harness.profile) {
     return yield* new HarnessError({
@@ -409,8 +398,7 @@ const validateExternalRequest = Effect.fn("ExternalHarnessRuntime.validateReques
   if (authentication.mode !== descriptor.authentication.mode) {
     return yield* authenticationMismatch(descriptor.name, descriptor.authentication.mode, authentication);
   }
-  yield* validateWorkspaceProjection(descriptor, request, resolved);
-  yield* validateSandboxProvider(descriptor, provider);
+  yield* validateMcpCredentials(request);
 });
 
 const resolveResumeHandle = Effect.fn("ExternalHarnessRuntime.resolveResumeHandle")(function* (
@@ -487,54 +475,61 @@ const gitWritablePaths = (
   return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
 };
 
-const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
-  descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
+const projectedTools = (
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "declaredMembers">,
   request: HarnessRequest,
+) =>
+  descriptor.declaredMembers?.includes("Tools")
+    ? (request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [])
+    : [];
+
+const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "sharedGit" | "declaredMembers">,
+  request: HarnessRequest,
+  checkoutPath: string,
   session: SessionId,
   authentication: ExternalHarnessAuthentication,
 ) {
   const resumeHandle = yield* resolveResumeHandle(session);
-  const writablePaths = yield* gitWritablePaths(
-    descriptor,
-    request.plan.harness.profile,
-    request.plan.sandbox.workspace,
-  );
+  const writablePaths = yield* gitWritablePaths(descriptor, request.plan.harness.profile, checkoutPath);
   return {
     identity: { run: request.plan.id, session, resumeHandle },
-    selection: { model: request.plan.harness.model, effort: request.plan.harness.effort },
+    selection: { model: request.plan.harness.model, options: request.plan.harness.options },
     authentication,
     policy: request.plan.harness.profile,
     instructions: request.plan.instructions,
     operatingInstructions: request.plan.operatingInstructions,
     mcp: resolvedMcpSkills(request),
     secrets: { mcp: request.mcpCredentials },
-    checkout: { path: request.plan.sandbox.workspace, gitWritablePaths: writablePaths },
-    prompt: request.plan.messages,
+    checkout: { path: checkoutPath, gitWritablePaths: writablePaths },
+    prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
+    tools: projectedTools(descriptor, request),
   } satisfies ExternalHarnessResolvedRequest;
 });
 
 const resolveExternalLaunch = Effect.fn("ExternalHarnessRuntime.resolveLaunch")(function* <
   Adapter extends AnyTextAdapter,
-  NativeAuthentication,
 >(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+  descriptor: ExternalHarnessDescriptor<Adapter>,
   inputs: ExternalHarnessRuntimeInputs,
   request: HarnessRequest,
 ) {
+  const checkoutPath = yield* validateCheckoutDirectory(descriptor.name, request.plan.sandbox.workspace);
   const session = yield* requireSession(request.session);
   const authentication = yield* inputs.authentication(request);
-  const resolved = yield* resolvedRequest(descriptor, request, session, authentication);
-  const provider = yield* inputs.sandboxProvider(resolved);
-  yield* validateExternalRequest(descriptor, request, resolved, provider);
+  const resolved = yield* resolvedRequest(descriptor, request, checkoutPath, session, authentication);
+  yield* validateExternalRequest(descriptor, request, resolved);
   const workspaceDefinition = harnessWorkspace(descriptor, resolved);
-  const policy = yield* inputs.sandboxPolicy?.(resolved) ?? Effect.succeed(null);
+  const provider = localProcessSandboxProvider(resolved.checkout.path, {
+    inherited: descriptor.inheritedEnvironment,
+    allowed: Object.keys(workspaceDefinition.secrets ?? {}),
+  });
   return {
     resolved,
     provider,
     workspaceDefinition,
     secretValues: workspaceSecretValues(workspaceDefinition),
-    policy,
   };
 });
 
@@ -599,14 +594,8 @@ const withUsage = (
     },
   );
 
-const adapterMessages = <Adapter extends AnyTextAdapter, NativeAuthentication>(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
-  request: ExternalHarnessResolvedRequest,
-) =>
-  descriptor.transport.messages?.(request) ?? request.prompt.map(({ role, content }) => ({ role, content }));
-
-const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+const makeChatStream = <Adapter extends AnyTextAdapter>(
+  descriptor: ExternalHarnessDescriptor<Adapter>,
   request: ExternalHarnessResolvedRequest,
   adapter: Adapter,
   middleware: ReadonlyArray<ChatMiddleware>,
@@ -615,17 +604,14 @@ const makeChatStream = <Adapter extends AnyTextAdapter, NativeAuthentication>(
 ) =>
   chat({
     adapter,
-    messages: [...adapterMessages(descriptor, request)],
-    systemPrompts: [
-      ...(descriptor.transport.instructionProjection === "system-prompt"
-        ? [workspaceInstructions(request)]
-        : []),
-      ...(descriptor.transport.systemPrompts?.(request) ?? []),
-    ],
-    middleware: [...middleware, ...(descriptor.transport.middleware?.(request) ?? [])],
+    messages: request.prompt.map(({ role, content }) => ({ role, content })),
+    systemPrompts:
+      descriptor.transport.instructionProjection === "system-prompt" ? [workspaceInstructions(request)] : [],
+    middleware: [...middleware],
     abortController,
     modelOptions: descriptor.projectOptions(request),
     outputSchema: request.outputSchema ?? undefined,
+    tools: request.tools,
     threadId: request.identity.session,
     runId: request.identity.run,
     stream: true,
@@ -648,12 +634,6 @@ const abortOnReturn = <Value>(stream: AsyncIterable<Value>, abortController: Abo
   },
 });
 
-// Not derived from the harness's own reported changes: Codex reports `file_change`
-// only for its `apply_patch` tool, so a shell-driven edit carries no such item.
-// Holding the terminal event on the drain means a stalled `git diff` would hold the
-// Run, so the drain gets its own bound.
-const feedDrainDeadline = "10 seconds";
-
 const checkoutFileDiffs = (
   checkoutPath: string,
   secretValues: ReadonlyArray<string>,
@@ -665,60 +645,36 @@ const checkoutFileDiffs = (
       const baseSha = yield* resolveBaseSha(sandbox);
       return watchWorktreeDiffs(sandbox, baseSha, stop);
     }),
-  ).pipe(
-    Stream.map((event) => scrubEvent(event, secretValues)),
-    Stream.interruptWhen(Effect.andThen(stop, Effect.sleep(feedDrainDeadline))),
-    tolerateFeedDeath("checkout file-diff feed stopped"),
-  );
+  ).pipe(Stream.map((event) => scrubEvent(event, secretValues)));
 
 // A client stops reading at the terminal event, so the feed must drain first.
 // `RUN_ERROR` is not held: the stream fails right behind it.
-const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeCheckoutFileDiffs")(function* (
+export const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeCheckoutFileDiffs")(function* <
+  E,
+  R,
+>(
   harnessEvents: Stream.Stream<AgUiEvent, HarnessError>,
-  checkoutPath: string,
-  secretValues: ReadonlyArray<string>,
+  fileDiffs: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, E, R>,
 ) {
-  const harnessDone = yield* Deferred.make<void>();
-  const withheldTerminal = yield* Ref.make<AgUiEvent | null>(null);
-  return Stream.merge(
-    harnessEvents.pipe(
-      Stream.filterEffect((event) =>
-        AgUiEvent.guards.RUN_FINISHED(event)
-          ? Effect.map(Ref.set(withheldTerminal, event), () => false)
-          : Effect.succeed(true),
-      ),
-      Stream.ensuring(Deferred.succeed(harnessDone, undefined)),
-    ),
-    checkoutFileDiffs(checkoutPath, secretValues, Deferred.await(harnessDone)),
-    { haltStrategy: "both" },
-  ).pipe(
-    Stream.concat(
-      Stream.unwrap(
-        Effect.map(Ref.get(withheldTerminal), (event) =>
-          event === null ? Stream.empty : Stream.make(event),
-        ),
-      ),
-    ),
-  );
+  return yield* mergeFileDiffFeed(harnessEvents, fileDiffs, "checkout file-diff feed stopped");
 });
 
-const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+const openChat = <Adapter extends AnyTextAdapter>(
+  descriptor: ExternalHarnessDescriptor<Adapter>,
   request: ExternalHarnessResolvedRequest,
   provider: SandboxProvider,
   workspaceDefinition: WorkspaceDefinition,
-  policy: SandboxPolicy | null,
   secretValues: ReadonlyArray<string>,
 ) => {
   const model = descriptor.projectModel(request);
-  const nativeAuthentication = descriptor.projectAuthentication(request.authentication);
-  const adapter = descriptor.makeAdapter({ model, authentication: nativeAuthentication, request });
+  const adapter = descriptor.makeAdapter({ model, nativeAuthentication: "host", request });
+  const policy = policyForProfile(request.policy);
   const sandbox = defineSandbox({
     id: `cogwork-${descriptor.name}`,
     provider,
     workspace: defineWorkspace(workspaceDefinition),
     lifecycle: { reuse: "none", snapshot: "none", destroyOnComplete: true },
-    ...(policy ? { policy } : {}),
+    policy,
     // Kept off: turning it on retains one diff promise per filesystem event for the whole Run.
     fileEvents: false,
   });
@@ -731,8 +687,8 @@ const openChat = <Adapter extends AnyTextAdapter, NativeAuthentication>(
   return { abortController, stream };
 };
 
-export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuthentication>(
-  descriptor: ExternalHarnessDescriptor<Adapter, NativeAuthentication>,
+export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
+  descriptor: ExternalHarnessDescriptor<Adapter>,
   inputs: ExternalHarnessRuntimeInputs,
 ): HarnessRunner => {
   const preflightPhase = HarnessPreflightInput.$match({
@@ -744,22 +700,23 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
   );
   return {
     name: descriptor.name,
-    sessionKind: descriptor.sessionKind,
+    ...externalHarnessDeclaration,
+    projectedMembers: [...externalHarnessDeclaration.projectedMembers, ...(descriptor.declaredMembers ?? [])],
     execution: descriptor.capabilities.execution,
     capabilities: descriptor.capabilities.profile,
     authentication: descriptor.authentication,
     ...(descriptor.signIn ? { signIn: descriptor.signIn } : {}),
-    catalogSources: descriptor.catalogSources,
+    catalog: descriptor.catalog,
     readiness: descriptor.readiness,
-    projectedMembers: descriptor.capabilities.projectedMembers,
-    planMiddleware: descriptor.capabilities.planMiddleware,
+    validateLaunch: (request) =>
+      validateCheckoutDirectory(descriptor.name, request.plan.sandbox.workspace).pipe(Effect.asVoid),
     preflight,
     run: (request) =>
       Stream.unwrap(
         resolveExternalLaunch(descriptor, inputs, request).pipe(
-          Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues, policy }) =>
+          Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues }) =>
             Effect.try({
-              try: () => openChat(descriptor, resolved, provider, workspaceDefinition, policy, secretValues),
+              try: () => openChat(descriptor, resolved, provider, workspaceDefinition, secretValues),
               catch: descriptor.diagnostics,
             }).pipe(
               Effect.mapError((error) => scrubHarnessError(error, secretValues)),
@@ -780,7 +737,9 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
                   ),
                 );
                 return descriptor.transport.runtimeFileDiffFeed
-                  ? mergeCheckoutFileDiffs(harnessEvents, resolved.checkout.path, secretValues)
+                  ? mergeCheckoutFileDiffs(harnessEvents, (stop) =>
+                      checkoutFileDiffs(resolved.checkout.path, secretValues, stop),
+                    )
                   : Effect.succeed(harnessEvents);
               }),
             ),
@@ -791,11 +750,116 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter, NativeAuth
   };
 };
 
-export const trustedLocalProcessSandboxProvider =
-  (options: { readonly scrubEnv: ReadonlyArray<string> }) => (request: ExternalHarnessResolvedRequest) =>
-    Effect.succeed(
-      localProcessSandbox({
-        dir: request.checkout.path,
-        scrubEnv: [...options.scrubEnv],
-      }),
+const environmentName = (name: string) => (process.platform === "win32" ? name.toUpperCase() : name);
+
+interface EnvironmentRule {
+  readonly inherited: ReadonlyArray<string>;
+  readonly allowed?: ReadonlyArray<string>;
+  readonly denied?: ReadonlyArray<string>;
+}
+
+const inheritedEnvironmentNames = ({ inherited, allowed = [], denied = [] }: EnvironmentRule) => {
+  const deniedNames = new Set(denied.map(environmentName));
+  return new Set([...inherited, ...allowed].map(environmentName).filter((name) => !deniedNames.has(name)));
+};
+
+export const environmentVariablesToRemove = (
+  environment: ReadonlyArray<string>,
+  inherited: ReadonlyArray<string>,
+  allowed: ReadonlyArray<string> = [],
+  denied: ReadonlyArray<string> = [],
+) => {
+  const inheritedNames = inheritedEnvironmentNames({ inherited, allowed, denied });
+  return environment.filter((name) => !inheritedNames.has(environmentName(name)));
+};
+
+const withCurrentEnvironment = <Value>(refreshEnvironment: () => void, action: () => Value) => {
+  refreshEnvironment();
+  return action();
+};
+
+const sandboxWithCurrentEnvironment = (
+  sandbox: SandboxHandle,
+  refreshEnvironment: () => void,
+): SandboxHandle => ({
+  ...sandbox,
+  process: {
+    ...sandbox.process,
+    exec: (command, options) =>
+      withCurrentEnvironment(refreshEnvironment, () => sandbox.process.exec(command, options)),
+    spawn: (command, options) =>
+      withCurrentEnvironment(refreshEnvironment, () => sandbox.process.spawn(command, options)),
+  },
+  git: {
+    ...sandbox.git,
+    clone: (input) => withCurrentEnvironment(refreshEnvironment, () => sandbox.git.clone(input)),
+    status: (directory) => withCurrentEnvironment(refreshEnvironment, () => sandbox.git.status(directory)),
+    add: (paths, directory) =>
+      withCurrentEnvironment(refreshEnvironment, () => sandbox.git.add(paths, directory)),
+    commit: (message, directory) =>
+      withCurrentEnvironment(refreshEnvironment, () => sandbox.git.commit(message, directory)),
+    push: (directory) => withCurrentEnvironment(refreshEnvironment, () => sandbox.git.push(directory)),
+    pull: (directory) => withCurrentEnvironment(refreshEnvironment, () => sandbox.git.pull(directory)),
+    branch: (directory) => withCurrentEnvironment(refreshEnvironment, () => sandbox.git.branch(directory)),
+  },
+  destroy: () => sandbox.destroy(),
+});
+
+const localProcessSandboxProvider = (directory: string, rule: EnvironmentRule) => {
+  const scrubEnv: Array<string> = [];
+  const refreshEnvironment = () => {
+    scrubEnv.splice(
+      0,
+      scrubEnv.length,
+      ...environmentVariablesToRemove(Object.keys(process.env), rule.inherited, rule.allowed, rule.denied),
     );
+  };
+  refreshEnvironment();
+  const handles = new Map<string, SandboxHandle>();
+  // A command gets only the provider's short base list plus `passEnv`; `scrubEnv` then removes the
+  // base names this rule does not inherit.
+  const provider = localProcessSandbox({
+    dir: directory,
+    passEnv: [...inheritedEnvironmentNames(rule)],
+    scrubEnv,
+  });
+  const register = (sandbox: SandboxHandle) => {
+    const current = sandboxWithCurrentEnvironment(sandbox, refreshEnvironment);
+    handles.set(current.id, current);
+    return current;
+  };
+  return {
+    name: provider.name,
+    capabilities: () => provider.capabilities(),
+    create: (input) => {
+      refreshEnvironment();
+      return provider.create(input).then(register);
+    },
+    resume: (input) => {
+      refreshEnvironment();
+      return provider.resume(input).then((sandbox) => (sandbox ? register(sandbox) : null));
+    },
+    destroy: (input) => {
+      const handle = handles.get(input.id);
+      if (!handle) return provider.destroy(input);
+      handles.delete(input.id);
+      return handle.destroy();
+    },
+  } satisfies SandboxProvider;
+};
+
+export const withLocalProcessSandbox = <Value, Error, Requirements>(
+  directory: string,
+  inheritedEnvironment: ReadonlyArray<string>,
+  onCreateError: (cause: unknown) => Error,
+  use: (sandbox: SandboxHandle) => Effect.Effect<Value, Error, Requirements>,
+) =>
+  Effect.scoped(
+    Effect.acquireRelease(
+      Effect.tryPromise({
+        try: () => localProcessSandboxProvider(directory, { inherited: inheritedEnvironment }).create({}),
+        catch: onCreateError,
+      }),
+      (sandbox) => Effect.tryPromise({ try: () => sandbox.destroy(), catch: () => null }).pipe(Effect.ignore),
+    ).pipe(Effect.flatMap(use)),
+  );

@@ -11,6 +11,18 @@
       "name": "Linear",
       "summary": "Linear tools and issue-writing guidance.",
       "bundle": "bundles/linear"
+    },
+    {
+      "pluginId": "granola",
+      "name": "Granola",
+      "summary": "Granola meeting notes through its hosted MCP server.",
+      "bundle": "bundles/granola"
+    },
+    {
+      "pluginId": "slack",
+      "name": "Slack",
+      "summary": "Slack tools through its hosted MCP server.",
+      "bundle": "bundles/slack"
     }
   ]
 }

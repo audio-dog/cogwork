@@ -1,9 +1,15 @@
 import { createHash, type Hash } from "node:crypto";
-import { type AgUiEvent, agUiFileDiffEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
+import {
+  AgUiEvent,
+  agUiFileDiffEvent,
+  agUiFileDiffUnavailableEvent,
+  FILE_DIFF_EVENT,
+} from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Arr from "effect/Array";
 import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
+import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -29,6 +35,9 @@ export const fileDiffBatches = Metric.counter("cogwork_file_diff_batches_total",
 });
 export const fileDiffGitChildren = Metric.counter("cogwork_file_diff_git_children_total", {
   description: "Git child processes started to compute file diffs.",
+});
+export const fileDiffFeedFailures = Metric.counter("cogwork_file_diff_feed_failures_total", {
+  description: "Unexpected file-diff feed failures.",
 });
 const fileDiffMaxBytes = 64 * 1024;
 const diffTruncationMarker = "\n... diff truncated by Cogwork ...\n";
@@ -761,12 +770,59 @@ export const tolerateFeedDeath =
   (message: string) =>
   <A, E, R>(feed: Stream.Stream<A, E, R>) =>
     feed.pipe(
-      Stream.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Stream.empty
-          : Stream.fromEffect(Effect.logWarning(message, { cause: Cause.pretty(cause) })).pipe(Stream.drain),
-      ),
+      Stream.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Stream.empty;
+        return Stream.fromEffect(
+          Effect.logWarning(message, { cause: Cause.pretty(cause) }).pipe(
+            Effect.andThen(Metric.update(fileDiffFeedFailures, 1)),
+            Effect.map(() => agUiFileDiffUnavailableEvent()),
+          ),
+        );
+      }),
     );
+
+const feedDrainDeadline = "10 seconds";
+
+class FileDiffDrainTimeout extends Data.TaggedError("FileDiffDrainTimeout")<{
+  readonly deadline: string;
+}> {}
+
+export const mergeFileDiffFeed = Effect.fn("Tools.mergeFileDiffFeed")(function* <E, R>(
+  harnessEvents: Stream.Stream<AgUiEvent, E>,
+  fileDiffs: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, unknown, R>,
+  failureMessage: string,
+) {
+  const harnessDone = yield* Deferred.make<void>();
+  const withheldTerminal = yield* Ref.make<AgUiEvent | null>(null);
+  const stop = Deferred.await(harnessDone);
+  return Stream.merge(
+    harnessEvents.pipe(
+      Stream.filterEffect((event) =>
+        AgUiEvent.guards.RUN_FINISHED(event)
+          ? Effect.map(Ref.set(withheldTerminal, event), () => false)
+          : Effect.succeed(true),
+      ),
+      Stream.ensuring(Deferred.succeed(harnessDone, undefined)),
+    ),
+    fileDiffs(stop).pipe(
+      Stream.interruptWhen(
+        Effect.andThen(stop, Effect.sleep(feedDrainDeadline)).pipe(
+          Effect.andThen(Effect.fail(new FileDiffDrainTimeout({ deadline: feedDrainDeadline }))),
+        ),
+      ),
+      tolerateFeedDeath(failureMessage),
+    ),
+    { haltStrategy: "both" },
+  ).pipe(
+    Stream.concat(
+      Stream.unwrap(
+        Effect.map(Ref.get(withheldTerminal), (event) =>
+          event === null ? Stream.empty : Stream.make(event),
+        ),
+      ),
+    ),
+  );
+});
 
 const changedPathsCommand = (baseSha: string) =>
   baseSha === ""

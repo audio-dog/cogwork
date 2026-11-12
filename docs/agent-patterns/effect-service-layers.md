@@ -53,10 +53,9 @@ Naming rules:
   `Effect.Success<typeof make>` when `make` is the top-level effect.
 - `make` and `layer` are module-level exports, not `static` members on the class. The vendored
   `ai-docs` examples attach `static readonly layer` to the class — that is Effect's docs style, not
-  this repo's. Do not copy it; the two production `static readonly layer` sites
-  (`packages/engine/src/availability.ts`, `apps/desktop/src/main/engine-supervisor.ts`) predate this
-  rule. Test doubles keep their own class-member shape (`effect-test-layers.md`). Call sites read
-  the same either way, so the migration is local to the defining module.
+  this repo's. Do not copy it. Test doubles keep their own class-member shape
+  (`effect-test-layers.md`). Call sites read the same either way, so a migration is local to the
+  defining module.
 
 ## Choose the make shape
 
@@ -192,11 +191,9 @@ then `yield*` the service directly.
   drift: ai-docs examples use `static readonly layer` on the class; this repo does not.
 - `.repos/biome-effect-linting-rules/rules/no-inline-runtime-provide.grit`: the provide-at-edges
   rule (vendored; not wired into this repo's `biome.json`).
-- `packages/engine/src/context-assembler.ts`, `packages/engine/src/executor.ts`,
+- `packages/engine/src/context-assembler.ts`, `packages/engine/src/workflow-run.ts`,
   `packages/engine/src/model-catalog.ts`: the three `make` variants.
 - `packages/engine/src/daemon.ts`: the `engineLayer`/`serverLayer` composition graph.
 - `packages/engine/src/harness.ts`: `Layer.succeed` as a primary production layer.
-- `packages/engine/src/availability.ts`, `apps/desktop/src/main/engine-supervisor.ts`: the
-  `static readonly layer` shape this doc retires.
 - opencode pins `effect@4.0.0-beta.83` and t3code `4.0.0-beta.103` — use them for style comparison
   only, never as signature authority.

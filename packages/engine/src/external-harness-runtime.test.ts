@@ -1,6 +1,7 @@
 import {
   type AgUiEvent,
   agUiIsFileDiffEvent,
+  agUiIsFileDiffUnavailableEvent,
   FILE_DIFF_EVENT,
   HarnessName,
   RunId,
@@ -20,21 +21,16 @@ import {
   type StreamChunk,
   type TextAdapter,
   type TextOptions,
+  toolDefinition,
 } from "@tanstack/ai";
 import { memoryPersistence } from "@tanstack/ai-persistence";
-import type {
-  SandboxCapabilities,
-  SandboxHandle,
-  SandboxProvider,
-  WorkspaceDefinition,
-} from "@tanstack/ai-sandbox";
 import {
   createSecrets,
   getSandbox,
+  getSandboxPolicy,
   getWorkspaceProjection,
   SandboxDurabilityCapability,
 } from "@tanstack/ai-sandbox";
-import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -46,26 +42,27 @@ import { afterEach, vi } from "vitest";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
+  defaultInheritedEnvironment,
   type ExternalHarnessAuthentication,
   type ExternalHarnessDescriptor,
+  environmentVariablesToRemove,
   externalHarnessRunner,
+  mcpBearerEnvironmentName,
+  mergeCheckoutFileDiffs,
+  withLocalProcessSandbox,
 } from "./external-harness-runtime";
-import {
-  fullHarnessExecution,
-  HarnessError,
-  HarnessPreflightInput,
-  make,
-  staticCatalogSource,
-} from "./harness";
+import { fullHarnessExecution, HarnessError, make } from "./harness";
 import { messageFromUnknown } from "./provider-bridge";
 import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { policyForProfile } from "./tools/policy";
 
 afterEach(() => vi.restoreAllMocks());
 
 const name = Schema.decodeSync(HarnessName)("controlled-external");
+const checkoutPath = process.cwd();
 const freshSession = Schema.decodeSync(SessionId)("sess-external-fresh");
 const resumedSession = Schema.decodeSync(SessionId)("sess-external-147");
 const secondCheckoutRunId = Schema.decodeSync(RunId)("run-second-checkout");
@@ -120,12 +117,9 @@ class ControlledAdapter
 }
 
 class ControlledProbe {
-  readonly resolved: Array<
-    Parameters<ExternalHarnessDescriptor<ControlledAdapter, string>["makeAdapter"]>[0]
-  > = [];
+  readonly resolved: Array<Parameters<ExternalHarnessDescriptor<ControlledAdapter>["makeAdapter"]>[0]> = [];
   readonly chatOptions: Array<TextOptions<ControlledOptions>> = [];
   readonly cancellations: Array<true> = [];
-  readonly sandboxDestructions: Array<true> = [];
   inspect?: (options: TextOptions<ControlledOptions>) => Promise<void>;
 }
 
@@ -147,20 +141,6 @@ const afterInspection = <Value>(inspection: Promise<void>, stream: AsyncIterable
   },
 });
 
-const capabilities: SandboxCapabilities = {
-  fs: true,
-  exec: true,
-  env: true,
-  ports: true,
-  backgroundProcesses: true,
-  writableStdin: true,
-  killableProcesses: true,
-  snapshots: false,
-  networkPolicy: false,
-  durableFilesystem: false,
-  fork: false,
-};
-
 const toAsyncIterable = <Value>(values: ReadonlyArray<Value>) => ({
   [Symbol.asyncIterator]: () => {
     const iterator = values[Symbol.iterator]();
@@ -180,76 +160,6 @@ const cancellableAsyncIterable = <Value>(values: ReadonlyArray<Value>, cancellat
     };
   },
 });
-
-const watchProbeSandbox = (probe: { watches: number }) => {
-  const handle = sandboxHandle("watch-probe-sandbox");
-  return {
-    ...handle,
-    fs: {
-      ...handle.fs,
-      list: () => Promise.resolve([]),
-      exists: () => Promise.resolve(true),
-      watch: () => {
-        probe.watches += 1;
-        return Promise.resolve({ stop: () => Promise.resolve() });
-      },
-    },
-  } satisfies SandboxHandle;
-};
-
-const sandboxHandle = (id: string) =>
-  ({
-    id,
-    provider: "controlled",
-    workspaceRoot: "/checkout",
-    capabilities,
-    fs: {
-      read: () => Promise.reject(new Error("unexpected read")),
-      readBytes: () => Promise.reject(new Error("unexpected byte read")),
-      write: () => Promise.resolve(),
-      list: () => Promise.resolve([]),
-      mkdir: () => Promise.resolve(),
-      remove: () => Promise.resolve(),
-      rename: () => Promise.resolve(),
-      exists: () => Promise.resolve(false),
-    },
-    git: {
-      clone: () => Promise.reject(new Error("unexpected clone")),
-      status: () => Promise.resolve(""),
-      add: () => Promise.resolve(),
-      commit: () => Promise.resolve(),
-      push: () => Promise.resolve(),
-      pull: () => Promise.resolve(),
-      branch: () => Promise.resolve("issue-147"),
-    },
-    process: {
-      exec: () => Promise.resolve({ stdout: "controlled-base\n", stderr: "", exitCode: 0 }),
-      spawn: () => Promise.reject(new Error("unexpected spawn")),
-    },
-    ports: { connect: () => Promise.reject(new Error("unexpected port")) },
-    env: { set: () => Promise.resolve() },
-    destroy: () => Promise.resolve(),
-  }) satisfies SandboxHandle;
-
-const controlledProvider = (
-  created: Array<string>,
-  destructions: Array<true>,
-  workspaces: Array<WorkspaceDefinition> = [],
-) =>
-  ({
-    name: "controlled",
-    capabilities: () => capabilities,
-    create: (input) => {
-      created.push(input.workspace?.source.type ?? "missing");
-      if (input.workspace) workspaces.push(input.workspace);
-      return Promise.resolve(sandboxHandle("controlled-sandbox"));
-    },
-    resume: () => Promise.resolve(null),
-    destroy: () => {
-      destructions.push(true);
-      return Promise.resolve();
-    },
-  }) satisfies SandboxProvider;
 
 const harnessServices = {
   sessionStore: {
@@ -289,7 +199,7 @@ const hostAuthentication = () =>
 const request = Schema.decodeSync(RunPlan)({
   id: "run-external-test",
   operation: "implement",
-  harness: { name, model: "controlled", effort: "high", profile: "full" },
+  harness: { name, model: "controlled", options: {}, profile: "full" },
   instructions: [{ kind: "repo", source: "repo", content: "Follow repo rules." }],
   operatingInstructions: {
     name: "implement-agent",
@@ -300,7 +210,6 @@ const request = Schema.decodeSync(RunPlan)({
   skills: [],
   mcp: [],
   subagents: [],
-  commands: [],
   hooks: [],
   middleware: ["sandbox"],
   structuredOutput: {
@@ -312,17 +221,26 @@ const request = Schema.decodeSync(RunPlan)({
   messages: [{ role: "user", content: "Implement #147." }],
   workContext: {
     reference: { workItem: "#147", url: null },
+    prose: {
+      body: "Ship the external Harness change.",
+      comments: [
+        {
+          author: "maintainer",
+          authorAssociation: "MEMBER",
+          body: "Keep this instruction in the admitted snapshot.",
+          createdAtMillis: 2,
+        },
+      ],
+    },
     facts: {
-      roles: ["ready-for-agent"],
       assignees: [],
       openBlockers: 0,
       claim: null,
       priority: "medium",
-      pr: null,
     },
     observation: { generation: 1, observedAtMillis: 1 },
   },
-  sandbox: { workspace: "/checkout", policy: "full" },
+  sandbox: { workspace: checkoutPath, policy: "full" },
   persistence: { sessionKind: "opaque-handle" },
   provenance: {
     resolution: [],
@@ -336,9 +254,8 @@ const request = Schema.decodeSync(RunPlan)({
 const descriptor = (
   chunks: ReadonlyArray<StreamChunk>,
   probe: ControlledProbe,
-): ExternalHarnessDescriptor<ControlledAdapter, string> => ({
+): ExternalHarnessDescriptor<ControlledAdapter> => ({
   name,
-  sessionKind: "opaque-handle",
   capabilities: {
     execution: fullHarnessExecution,
     profile: {
@@ -352,18 +269,10 @@ const descriptor = (
       journal: false,
       takeover: false,
     },
-    projectedMembers: ["Harness Adapter", "Instructions", "Messages", "MCP", "Sandbox", "Structured Output"],
-    planMiddleware: ["sandbox"],
   },
   authentication: { mode: "host", reference: "controlled host login" },
-  catalogSources: {
-    fallback: staticCatalogSource(
-      {
-        models: [{ value: "controlled", label: "Controlled" }],
-        efforts: [{ value: "high", label: "High" }],
-      },
-      { source: "cogwork-fallback", fallbackVersion: "controlled-1" },
-    ),
+  catalog: {
+    models: [{ value: "controlled", label: "Controlled" }],
   },
   readiness: () =>
     Effect.succeed({
@@ -382,18 +291,21 @@ const descriptor = (
       diagnostics: [],
     }),
   sharedGit: "none",
+  inheritedEnvironment: ["PATH"],
   makeAdapter: (resolved) => {
     probe.resolved.push(resolved);
     return new ControlledAdapter(() => toAsyncIterable(chunks), probe);
   },
   projectModel: () => "controlled",
-  projectOptions: (resolved) => ({
-    effort: resolved.selection.effort ?? "high",
-    authentication: resolved.authentication.mode,
-    sessionId: resolved.identity.resumeHandle,
-  }),
-  projectAuthentication: (authentication) => authentication.mode,
-  transport: {},
+  projectOptions: (resolved) => {
+    const effort = resolved.selection.options.effort;
+    return {
+      effort: typeof effort === "string" ? effort : "high",
+      authentication: resolved.authentication.mode,
+      sessionId: resolved.identity.resumeHandle,
+    };
+  },
+  transport: { instructionProjection: "system-prompt" },
   diagnostics: (cause) =>
     new HarnessError({
       reason: "launch",
@@ -421,20 +333,14 @@ const descriptor = (
 });
 
 const makeHarness = (
-  controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string>,
-  created: Array<string>,
-  destructions: Array<true> = [],
+  controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter>,
   options: {
     readonly authentication?: Effect.Effect<ExternalHarnessAuthentication>;
-    readonly provider?: SandboxProvider;
-    readonly workspaces?: Array<WorkspaceDefinition>;
   } = {},
 ) =>
   make([
     externalHarnessRunner(controlledDescriptor, {
       authentication: () => options.authentication ?? Effect.succeed({ mode: "host", secrets: {} }),
-      sandboxProvider: () =>
-        Effect.succeed(options.provider ?? controlledProvider(created, destructions, options.workspaces)),
     }),
   ]);
 
@@ -448,52 +354,184 @@ const terminalEvents: ReadonlyArray<StreamChunk> = [
   { type: EventType.RUN_FINISHED, threadId: "session-148", runId: request.id },
 ];
 
-describe("external Harness runtime", () => {
+describe("external Harness runtime", { timeout: 30_000 }, () => {
+  it("removes every environment variable outside the inherited list", () => {
+    assert.deepStrictEqual(
+      environmentVariablesToRemove(
+        ["PATH", "COGWORK_ALLOWED", "COGWORK_REMOVED"],
+        ["PATH", "COGWORK_ALLOWED"],
+      ),
+      ["COGWORK_REMOVED"],
+    );
+    assert.deepStrictEqual(
+      environmentVariablesToRemove(
+        ["PATH", "COGWORK_ALLOWED", "COGWORK_REMOVED"],
+        ["PATH"],
+        ["COGWORK_ALLOWED"],
+        ["PATH"],
+      ),
+      ["PATH", "COGWORK_REMOVED"],
+    );
+  });
+
+  it("matches environment variable names case-insensitively on Windows", () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    assert.deepStrictEqual(environmentVariablesToRemove(["Path", "SECRET"], ["PATH"]), ["SECRET"]);
+  });
+
+  it.effect("removes environment variables added after sandbox creation", () => {
+    const name = "COGWORK_LATE_EXTERNAL_SECRET";
+    return withLocalProcessSandbox(process.cwd(), defaultInheritedEnvironment, String, (sandbox) =>
+      Effect.acquireUseRelease(
+        Effect.sync(() => Reflect.get(process.env, name)),
+        () =>
+          Effect.sync(() => Reflect.set(process.env, name, "late-secret")).pipe(
+            Effect.andThen(
+              Effect.tryPromise({
+                try: (signal) =>
+                  sandbox.process.exec(
+                    `node -e 'process.stdout.write(process.env[process.argv[1]] ?? "")' '${name}'`,
+                    { signal },
+                  ),
+                catch: String,
+              }).pipe(Effect.timeout("5 seconds")),
+            ),
+            Effect.tap((result) => Effect.sync(() => assert.strictEqual(result.stdout, ""))),
+          ),
+        (previous) =>
+          Effect.sync(() =>
+            previous === undefined
+              ? Reflect.deleteProperty(process.env, name)
+              : Reflect.set(process.env, name, previous),
+          ),
+      ),
+    );
+  });
+
+  it("keeps the Codex inherited environment unchanged", () => {
+    assert.deepStrictEqual(defaultInheritedEnvironment, [
+      "HOME",
+      "PATH",
+      "CODEX_HOME",
+      "XDG_CONFIG_HOME",
+      "XDG_DATA_HOME",
+      "XDG_STATE_HOME",
+      "USER",
+      "LOGNAME",
+      "SHELL",
+      "TMPDIR",
+      "TEMP",
+      "TMP",
+      "LANG",
+      "LC_ALL",
+      "LC_CTYPE",
+    ]);
+  });
+
   it.layer(harnessRunnerLayer)((it) => {
+    it("owns the common external Harness declaration", () => {
+      const runner = externalHarnessRunner(descriptor([], new ControlledProbe()), {
+        authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
+      });
+
+      assert.strictEqual(runner.sessionKind, "opaque-handle");
+      assert.deepStrictEqual(runner.projectedMembers, [
+        "Harness Adapter",
+        "Instructions",
+        "Messages",
+        "MCP",
+        "Middleware",
+        "Sandbox",
+        "Structured Output",
+        "Persistence",
+        "Connections",
+      ]);
+      assert.deepStrictEqual(runner.planMiddleware, ["sandbox"]);
+      const toolRunner = externalHarnessRunner(
+        { ...descriptor([], new ControlledProbe()), declaredMembers: ["Tools"] },
+        { authentication: () => Effect.succeed({ mode: "host", secrets: {} }) },
+      );
+      assert.include(toolRunner.projectedMembers, "Tools");
+    });
+
     it.effect(
       "projects mandatory instructions through one Harness Workspace and keeps work context user-authored",
       () =>
         Effect.gen(function* () {
-          const created: Array<string> = [];
-          const destructions: Array<true> = [];
-          const workspaces: Array<WorkspaceDefinition> = [];
+          const fs = yield* FileSystem.FileSystem;
+          const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-projection-" });
           const probe = new ControlledProbe();
-          const harness = makeHarness(descriptor(terminalEvents, probe), created, destructions, {
-            workspaces,
+          const base = descriptor(terminalEvents, probe);
+          const harness = makeHarness({ ...base, transport: {} });
+          const plan = RunPlan.make({
+            ...request,
+            sandbox: { ...request.sandbox, workspace: checkout },
           });
 
           yield* harness
-            .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
+            .run({ plan, session: freshSession, mcpCredentials: new Map() })
             .pipe(Stream.runDrain);
 
-          assert.strictEqual(workspaces.length, 1);
-          assert.strictEqual(workspaces[0]?.source.type, "none");
-          assert.include(workspaces[0]?.instructions ?? "", "Follow repo rules.");
-          assert.include(
-            workspaces[0]?.instructions ?? "",
-            "Mandatory Operating Instructions: /instructions/implement-agent",
-          );
-          assert.deepStrictEqual(probe.chatOptions[0]?.messages, [
-            { role: "user", content: "Implement #147." },
-          ]);
+          const chatOptions = probe.chatOptions[0];
+          if (!chatOptions) return assert.fail("adapter received no chat options");
+          const projection = getWorkspaceProjection(runtimeCapabilities(chatOptions));
+          const instructions = yield* fs.readFileString(`${checkout}/AGENTS.md`);
+          assert.include(instructions, "Follow repo rules.");
+          assert.include(instructions, "Mandatory Operating Instructions: /instructions/implement-agent");
+          assert.strictEqual(projection.root, checkout);
+          const messages = probe.chatOptions[0]?.messages ?? [];
+          assert.strictEqual(messages.length, 2);
+          assert.strictEqual(messages[0]?.role, "user");
+          assert.include(messages[0]?.content ?? "", "Ship the external Harness change.");
+          assert.include(messages[0]?.content ?? "", "Keep this instruction in the admitted snapshot.");
+          assert.deepStrictEqual(messages[1], { role: "user", content: "Implement #147." });
           assert.deepStrictEqual(probe.chatOptions[0]?.systemPrompts, []);
-          assert.deepStrictEqual(destructions, [true]);
         }),
+    );
+
+    it.effect("renders only the Run Plan's engine tools, and only for a descriptor that declares Tools", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-engine-tool-" });
+        const pullRequestTool = toolDefinition({
+          name: "pull-request",
+          description: "Read a pull request",
+        }).server(() => Promise.resolve({}));
+        const hiddenTool = toolDefinition({
+          name: "hidden-tool",
+          description: "Must stay hidden",
+        }).server(() => Promise.resolve({}));
+        const plan = RunPlan.make({
+          ...request,
+          tools: ["pull-request"],
+          sandbox: { ...request.sandbox, workspace: checkout },
+        });
+        const chatTools = (declaredMembers: ReadonlyArray<"Tools">) => {
+          const probe = new ControlledProbe();
+          return makeHarness({ ...descriptor(terminalEvents, probe), declaredMembers })
+            .run({
+              plan,
+              session: freshSession,
+              mcpCredentials: new Map(),
+              engineTools: [pullRequestTool, hiddenTool],
+            })
+            .pipe(
+              Stream.runDrain,
+              Effect.map(() => probe.chatOptions[0]?.tools?.map(({ name }) => name)),
+            );
+        };
+
+        assert.deepStrictEqual(yield* chatTools(["Tools"]), ["pull-request"]);
+        assert.deepStrictEqual(yield* chatTools([]), []);
+      }),
     );
 
     it.effect("ends a Run whose checkout feed never sees an event", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-harness-feed-" });
-        const created: Array<string> = [];
-        const watchProbe = { watches: 0 };
         const base = descriptor(terminalEvents, new ControlledProbe());
-        const harness = makeHarness({ ...base, transport: { runtimeFileDiffFeed: true } }, created, [], {
-          provider: {
-            ...controlledProvider(created, []),
-            create: () => Promise.resolve(watchProbeSandbox(watchProbe)),
-          },
-        });
+        const harness = makeHarness({ ...base, transport: { runtimeFileDiffFeed: true } });
         const seen: Array<AgUiEvent> = [];
 
         yield* harness
@@ -504,7 +542,6 @@ describe("external Harness runtime", () => {
           })
           .pipe(Stream.runForEach((event) => Effect.sync(() => seen.push(event))));
 
-        assert.strictEqual(watchProbe.watches, 0);
         assert.isFalse(
           seen.some((event) => event.type === EventType.CUSTOM && event.name === "sandbox.file"),
         );
@@ -513,6 +550,24 @@ describe("external Harness runtime", () => {
           seen.filter((event) => event.type === EventType.RUN_FINISHED),
           1,
         );
+      }),
+    );
+
+    it.effect("warns before finishing when the checkout diff feed dies", () =>
+      Effect.gen(function* () {
+        const harnessEvents = Stream.fromIterable([
+          { type: "RUN_STARTED" } satisfies AgUiEvent,
+          { type: "RUN_FINISHED", finishReason: "stop" } satisfies AgUiEvent,
+        ]);
+        const output = yield* mergeCheckoutFileDiffs(harnessEvents, () =>
+          Stream.fail(new Error("raw external watcher failure")),
+        ).pipe(Effect.flatMap(Stream.runCollect));
+        const warningIndex = output.findIndex(agUiIsFileDiffUnavailableEvent);
+        const finishedIndex = output.findIndex((event) => event.type === EventType.RUN_FINISHED);
+
+        assert.isAtLeast(warningIndex, 0);
+        assert.isAbove(finishedIndex, warningIndex);
+        assert.strictEqual(output.at(-1)?.type, EventType.RUN_FINISHED);
       }),
     );
 
@@ -539,17 +594,21 @@ describe("external Harness runtime", () => {
         };
         const plan = RunPlan.make({
           ...request,
+          sandbox: { ...request.sandbox, workspace: checkout },
           operatingInstructions: {
             name: "implement-agent",
             path: resourceDirectory,
             resources: [{ source: resource, content: "supporting guide" }],
           },
         });
+        const base = descriptor(terminalEvents, probe);
         const harness = make([
-          externalHarnessRunner(descriptor(terminalEvents, probe), {
-            authentication: hostAuthentication,
-            sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
-          }),
+          externalHarnessRunner(
+            { ...base, transport: {} },
+            {
+              authentication: hostAuthentication,
+            },
+          ),
         ]);
 
         yield* harness.run({ plan, session: freshSession, mcpCredentials: new Map() }).pipe(Stream.runDrain);
@@ -576,8 +635,6 @@ describe("external Harness runtime", () => {
         const harness = make([
           externalHarnessRunner(descriptor(terminalEvents, probe), {
             authentication: hostAuthentication,
-            sandboxProvider: (resolved) =>
-              Effect.succeed(localProcessSandbox({ dir: resolved.checkout.path })),
           }),
         ]);
         const runAt = (id: RunId, workspace: string) =>
@@ -645,6 +702,7 @@ describe("external Harness runtime", () => {
         };
         const plan = RunPlan.make({
           ...request,
+          sandbox: { ...request.sandbox, workspace: checkout },
           mcp: [
             {
               identity: "local:repo/mcp/public.mcp",
@@ -677,7 +735,6 @@ describe("external Harness runtime", () => {
           make([
             externalHarnessRunner(controlledDescriptor, {
               authentication: hostAuthentication,
-              sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
             }),
           ])
             .run({
@@ -690,10 +747,31 @@ describe("external Harness runtime", () => {
             })
             .pipe(Stream.runCollect);
 
-        yield* runWith("first");
-        yield* runWith("rotated");
-        const agents = yield* fs.readFileString(`${checkout}/AGENTS.md`);
-
+        const bearerNames = ["linear.api", "linear-api"].map(mcpBearerEnvironmentName);
+        yield* Effect.acquireUseRelease(
+          Effect.sync(() => {
+            const original = Object.fromEntries(
+              bearerNames.map((environmentName) => [
+                environmentName,
+                Reflect.get(process.env, environmentName),
+              ]),
+            );
+            Object.assign(
+              process.env,
+              Object.fromEntries(bearerNames.map((environmentName) => [environmentName, "host-bearer"])),
+            );
+            return original;
+          }),
+          () => Effect.forEach(["first", "rotated"], runWith, { discard: true }),
+          (original) =>
+            Effect.sync(() =>
+              Object.entries(original).map(([environmentName, value]) =>
+                value === undefined
+                  ? Reflect.deleteProperty(process.env, environmentName)
+                  : Reflect.set(process.env, environmentName, value),
+              ),
+            ),
+        );
         assert.deepStrictEqual(observations, [
           {
             names: ["public.mcp", "linear.api", "linear-api"],
@@ -706,34 +784,47 @@ describe("external Harness runtime", () => {
             liveBearers: ["rotated-dot-bearer", "rotated-dash-bearer"],
           },
         ]);
-        assert.notInclude(agents, "first-dot-bearer");
-        assert.notInclude(agents, "first-dash-bearer");
-        assert.notInclude(agents, "rotated-dot-bearer");
-        assert.notInclude(agents, "rotated-dash-bearer");
       }),
     );
 
-    it.effect("hands MCP to the descriptor and leaves the checkout untouched for native MCP projection", () =>
+    it.effect("hands native MCP a latched Sandbox projection marker", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-native-mcp-" });
+        yield* fs.writeFileString(`${checkout}/.git`, "gitdir: /elsewhere\n");
         const probe = new ControlledProbe();
-        const projections: Array<{ readonly skills: number; readonly markerGate: string }> = [];
         probe.inspect = (options) => {
-          const projection = getWorkspaceProjection(runtimeCapabilities(options));
-          projections.push({
-            skills: projection.skills.length,
-            markerGate: projection.markerPath.split("/").at(-1) ?? "",
+          const capabilities = runtimeCapabilities(options);
+          const sandbox = getSandbox(capabilities);
+          const projection = getWorkspaceProjection(capabilities);
+          return Promise.all([
+            sandbox.fs.exists(projection.markerPath),
+            sandbox.fs.exists(".git"),
+            sandbox.fs.read("../outside").then(
+              () => false,
+              (error) =>
+                error instanceof Error &&
+                error.message.includes('path "../outside" resolves outside the sandbox root'),
+            ),
+            sandbox.fs.exists("/workspace/.git"),
+          ]).then(([markerExists, relativeMarkerExists, traversalEscapeRejected, virtualMarkerExists]) => {
+            assert.strictEqual(projection.root, "/workspace");
+            assert.strictEqual(projection.skills.length, 0);
+            assert.isTrue(markerExists);
+            assert.isTrue(relativeMarkerExists);
+            assert.isTrue(traversalEscapeRejected);
+            assert.isTrue(virtualMarkerExists);
+            return sandbox.fs.write(projection.markerPath, "gitdir: /elsewhere\n");
           });
-          return Promise.resolve();
         };
         const base = descriptor(terminalEvents, probe);
-        const nativeDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
+        const nativeDescriptor: ExternalHarnessDescriptor<ControlledAdapter> = {
           ...base,
           transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
         };
         const plan = RunPlan.make({
           ...request,
+          sandbox: { ...request.sandbox, workspace: checkout },
           mcp: [
             {
               identity: "local:repo/mcp/linear.api",
@@ -746,12 +837,12 @@ describe("external Harness runtime", () => {
           ],
         });
 
-        yield* make([
+        const harness = make([
           externalHarnessRunner(nativeDescriptor, {
             authentication: hostAuthentication,
-            sandboxProvider: () => Effect.succeed(localProcessSandbox({ dir: checkout })),
           }),
-        ])
+        ]);
+        yield* harness
           .run({
             plan,
             session: freshSession,
@@ -773,57 +864,14 @@ describe("external Harness runtime", () => {
             },
           ],
         );
-        assert.deepStrictEqual(projections, [{ skills: 0, markerGate: ".git" }]);
-        assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
-      }),
-    );
-
-    it.effect("rejects a required MCP projection before the native Harness launches", () =>
-      Effect.gen(function* () {
-        const created: Array<string> = [];
-        const probe = new ControlledProbe();
-        const base = descriptor(terminalEvents, probe);
-        const harness = makeHarness(
-          {
-            ...base,
-            capabilities: {
-              ...base.capabilities,
-              projectedMembers: base.capabilities.projectedMembers.filter((member) => member !== "MCP"),
-            },
-          },
-          created,
-        );
-        const plan = RunPlan.make({
-          ...request,
-          mcp: [
-            {
-              identity: "local:repo/mcp/required",
-              name: "required",
-              projectedName: "required",
-              endpoint: "https://required.example.test/mcp",
-              authenticated: false,
-              unavailableReason: null,
-            },
-          ],
-        });
-
-        const error = yield* harness
-          .run({ plan, session: freshSession, mcpCredentials: new Map() })
-          .pipe(Stream.runDrain, Effect.flip);
-
-        assert.strictEqual(error.reason, "workspace");
-        assert.strictEqual(error.retryable, false);
-        assert.include(error.message, "MCP");
-        assert.deepStrictEqual(created, []);
-        assert.deepStrictEqual(probe.resolved, []);
+        assert.deepStrictEqual(yield* fs.readDirectory(checkout), [".git"]);
       }),
     );
 
     it.effect("rejects an authenticated MCP server without a live credential before launch", () =>
       Effect.gen(function* () {
-        const created: Array<string> = [];
         const probe = new ControlledProbe();
-        const harness = makeHarness(descriptor(terminalEvents, probe), created);
+        const harness = makeHarness(descriptor(terminalEvents, probe));
         const plan = RunPlan.make({
           ...request,
           mcp: [
@@ -845,14 +893,12 @@ describe("external Harness runtime", () => {
         assert.strictEqual(error.reason, "credential");
         assert.strictEqual(error.retryable, false);
         assert.include(error.message, "required-auth");
-        assert.deepStrictEqual(created, []);
         assert.deepStrictEqual(probe.resolved, []);
       }),
     );
 
     it.effect("launches through Harness and preserves complete AG-UI and structured-result events", () =>
       Effect.gen(function* () {
-        const created: Array<string> = [];
         const probe = new ControlledProbe();
         const events: ReadonlyArray<StreamChunk> = [
           { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
@@ -866,7 +912,7 @@ describe("external Harness runtime", () => {
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout/file.ts", diff: "diff --git a/file.ts b/file.ts" },
+            value: { path: `${checkoutPath}/file.ts`, diff: "diff --git a/file.ts b/file.ts" },
             metadata: { controlled: { fidelity: "terminal" } },
           },
           {
@@ -876,22 +922,24 @@ describe("external Harness runtime", () => {
           },
           { type: EventType.RUN_FINISHED, threadId: "session-147", runId: "run-external-test" },
         ];
-        const harness = makeHarness(descriptor(events, probe), created);
+        const harness = makeHarness(descriptor(events, probe));
         const output = yield* harness
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runCollect);
 
-        assert.deepStrictEqual(created, ["none"]);
+        const chatOptions = probe.chatOptions[0];
+        if (!chatOptions) return assert.fail("adapter received no chat options");
+        assert.strictEqual(getSandboxPolicy(runtimeCapabilities(chatOptions)), policyForProfile("full"));
         assert.strictEqual(output.filter((event) => event.name === "structured-output.complete").length, 1);
         const diagnostic = output.find((event) => event.name === "controlled.diagnostic");
         assert.deepStrictEqual(diagnostic?.value, { native: true });
-        assert.deepStrictEqual(diagnostic?.metadata, { controlled: { trace: "trace-147" } });
+        assert.deepNestedInclude(diagnostic?.metadata, { controlled: { trace: "trace-147" } });
         const fileDiff = output.find((event) => event.name === FILE_DIFF_EVENT);
         assert.deepStrictEqual(fileDiff?.value, {
           path: "file.ts",
           diff: "diff --git a/file.ts b/file.ts",
         });
-        assert.deepStrictEqual(fileDiff?.metadata, { controlled: { fidelity: "terminal" } });
+        assert.deepNestedInclude(fileDiff?.metadata, { controlled: { fidelity: "terminal" } });
         assert.isFalse(output.some((event) => event.name === "file.changed"));
         const finished = output.find((event) => event.type === EventType.RUN_FINISHED);
         assert.deepStrictEqual(finished?.usage, {
@@ -903,13 +951,18 @@ describe("external Harness runtime", () => {
 
         const launch = probe.resolved[0];
         assert.strictEqual(launch?.model, "controlled");
-        assert.strictEqual(launch?.authentication, "host");
+        assert.strictEqual(launch?.nativeAuthentication, "host");
         assert.strictEqual(launch?.request.identity.run, request.id);
         assert.strictEqual(launch?.request.identity.session, freshSession);
         assert.strictEqual(launch?.request.policy, "full");
-        assert.strictEqual(launch?.request.checkout.path, "/checkout");
+        assert.strictEqual(launch?.request.checkout.path, checkoutPath);
         assert.strictEqual(launch?.request.operatingInstructions.path, "/instructions/implement-agent");
-        assert.deepStrictEqual(launch?.request.prompt, request.messages);
+        assert.deepStrictEqual(launch?.request.prompt.slice(1), request.messages);
+        assert.include(launch?.request.prompt[0]?.content ?? "", "Ship the external Harness change.");
+        assert.include(
+          launch?.request.prompt[0]?.content ?? "",
+          "Keep this instruction in the admitted snapshot.",
+        );
         assert.deepStrictEqual(launch?.request.outputSchema, request.structuredOutput);
         assert.strictEqual(probe.chatOptions[0]?.runId, request.id);
         assert.strictEqual(probe.chatOptions[0]?.threadId, freshSession);
@@ -936,48 +989,48 @@ describe("external Harness runtime", () => {
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout/big.ts", diff: oversized },
+            value: { path: `${checkoutPath}/big.ts`, diff: oversized },
           },
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout/touched.ts", diff: "" },
+            value: { path: `${checkoutPath}/touched.ts`, diff: "" },
           },
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout/.tanstack-projected-abc123", diff: "diff --git a/x b/x" },
+            value: { path: `${checkoutPath}/.tanstack-projected-abc123`, diff: "diff --git a/x b/x" },
           },
           {
             type: EventType.CUSTOM,
             name: "file.changed",
             value: {
-              path: "/checkout/.tanstack-output-schema-run-1.json",
+              path: `${checkoutPath}/.tanstack-output-schema-run-1.json`,
               diff: "diff --git a/y b/y",
             },
           },
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout/src/.tanstack-nested.ts", diff: "diff --git a/n b/n" },
+            value: { path: `${checkoutPath}/src/.tanstack-nested.ts`, diff: "diff --git a/n b/n" },
           },
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout", diff: "diff --git a/z b/z" },
+            value: { path: checkoutPath, diff: "diff --git a/z b/z" },
           },
           {
             type: EventType.CUSTOM,
             name: "file.changed",
             value: {
-              path: "/checkout/.repos/effect/packages/effect/src/Stream.ts",
+              path: `${checkoutPath}/.repos/effect/packages/effect/src/Stream.ts`,
               diff: "diff --git a/r b/r",
             },
           },
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout/node_modules/left-pad/index.js", diff: "diff --git a/m b/m" },
+            value: { path: `${checkoutPath}/node_modules/left-pad/index.js`, diff: "diff --git a/m b/m" },
           },
           // TanStack makes `diff` optional, so a file event with no diff is a real
           // shape. It cannot carry the shared contract and must not survive under
@@ -985,7 +1038,7 @@ describe("external Harness runtime", () => {
           {
             type: EventType.CUSTOM,
             name: "file.changed",
-            value: { path: "/checkout/nodiff.ts", type: "change", timestamp: 1 },
+            value: { path: `${checkoutPath}/nodiff.ts`, type: "change", timestamp: 1 },
           },
           {
             type: EventType.CUSTOM,
@@ -994,7 +1047,7 @@ describe("external Harness runtime", () => {
           },
           { type: EventType.RUN_FINISHED, threadId: "session-147", runId: "run-external-test" },
         ];
-        const output = yield* makeHarness(descriptor(events, probe), [])
+        const output = yield* makeHarness(descriptor(events, probe))
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runCollect);
         const diffs = output.filter(agUiIsFileDiffEvent);
@@ -1015,34 +1068,31 @@ describe("external Harness runtime", () => {
     it.effect("scrubs secrets before output, Workspace serialization, and persistence", () =>
       Effect.gen(function* () {
         const secret = "anthropic-test-key-secret";
+        const identifierSecret = "RUN-147";
         const probe = new ControlledProbe();
-        const workspaces: Array<WorkspaceDefinition> = [];
         const harness = makeHarness(
           descriptor(
             [
-              { type: EventType.RUN_STARTED, threadId: "RUN", runId: "RUN" },
+              { type: EventType.RUN_STARTED, threadId: identifierSecret, runId: identifierSecret },
               {
                 type: EventType.CUSTOM,
-                name: "RUN",
-                value: { message: `rejected RUN and ${secret}` },
+                name: identifierSecret,
+                value: { message: `rejected ${identifierSecret} and ${secret}` },
               },
               {
                 type: EventType.CUSTOM,
                 name: "structured-output.complete",
                 value: { object: { outcome: "opened-pr" }, raw: '{"outcome":"opened-pr"}' },
               },
-              { type: EventType.RUN_FINISHED, threadId: "RUN", runId: "RUN" },
+              { type: EventType.RUN_FINISHED, threadId: identifierSecret, runId: identifierSecret },
             ],
             probe,
           ),
-          [],
-          [],
           {
             authentication: Effect.succeed({
               mode: "host",
-              secrets: createSecrets({ LONG_KEY: secret, SHORT_KEY: "RUN" }),
+              secrets: createSecrets({ LONG_KEY: secret, IDENTIFIER_KEY: identifierSecret }),
             }),
-            workspaces,
           },
         );
         const output = yield* harness
@@ -1052,8 +1102,8 @@ describe("external Harness runtime", () => {
         if (!options) return yield* Effect.die("external Harness opened no chat");
 
         assert.strictEqual(output[0]?.type, EventType.RUN_STARTED);
-        assert.strictEqual(output[0]?.threadId, "RUN");
-        assert.strictEqual(output[1]?.name, "RUN");
+        assert.strictEqual(output[0]?.threadId, identifierSecret);
+        assert.strictEqual(output[1]?.name, identifierSecret);
         assert.deepStrictEqual(output[1]?.value, {
           message: "rejected [redacted] and [redacted]",
         });
@@ -1064,13 +1114,13 @@ describe("external Harness runtime", () => {
         vi.spyOn(console, "error").mockImplementation((...values) => logs.push(values));
         options.logger.errors("native adapter failed", { secret });
         assert.notInclude(yield* encodeJson(logs), secret);
-        assert.notInclude(yield* encodeJson(workspaces), secret);
+        assert.notInclude(yield* encodeJson(getWorkspaceProjection(runtimeCapabilities(options))), secret);
 
         const record: RunRecord = {
           id: request.id,
           workspace: secretWorkspace,
           workItem: secretWorkItem,
-          stage: "implement",
+          operation: "implement",
           harness: name,
           branch: null,
           session: freshSession,
@@ -1089,7 +1139,6 @@ describe("external Harness runtime", () => {
     it.effect("resolves the native session handle before descriptor projection", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const created: Array<string> = [];
         const harness = makeHarness(
           descriptor(
             [
@@ -1098,7 +1147,6 @@ describe("external Harness runtime", () => {
             ],
             probe,
           ),
-          created,
         );
 
         yield* harness
@@ -1121,7 +1169,7 @@ describe("external Harness runtime", () => {
     it.effect("keeps the shared external Harness launch nondurable", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const harness = makeHarness(descriptor(terminalEvents, probe), []);
+        const harness = makeHarness(descriptor(terminalEvents, probe));
 
         yield* harness
           .run({ plan: request, session: resumedSession, mcpCredentials: new Map() })
@@ -1135,7 +1183,7 @@ describe("external Harness runtime", () => {
 
     it.effect("rejects an external launch without a Cogwork Session", () =>
       Effect.gen(function* () {
-        const harness = makeHarness(descriptor(terminalEvents, new ControlledProbe()), []);
+        const harness = makeHarness(descriptor(terminalEvents, new ControlledProbe()));
 
         const error = yield* harness
           .run({ plan: request, session: null, mcpCredentials: new Map() })
@@ -1149,33 +1197,24 @@ describe("external Harness runtime", () => {
     it.effect("aborts the adapter when the Harness consumer cancels the stream", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const created: Array<string> = [];
         const events: ReadonlyArray<StreamChunk> = [
           { type: EventType.RUN_STARTED, threadId: "session-147", runId: "run-external-test" },
           { type: EventType.RUN_FINISHED, threadId: "session-147", runId: "run-external-test" },
         ];
         const base = descriptor(events, probe);
-        const harness = makeHarness(
-          {
-            ...base,
-            makeAdapter: (resolved) => {
-              probe.resolved.push(resolved);
-              return new ControlledAdapter(
-                () => cancellableAsyncIterable(events, probe.cancellations),
-                probe,
-              );
-            },
+        const harness = makeHarness({
+          ...base,
+          makeAdapter: (resolved) => {
+            probe.resolved.push(resolved);
+            return new ControlledAdapter(() => cancellableAsyncIterable(events, probe.cancellations), probe);
           },
-          created,
-          probe.sandboxDestructions,
-        );
+        });
 
         yield* harness
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.take(1), Stream.runDrain);
 
         assert.deepStrictEqual(probe.cancellations, [true]);
-        assert.deepStrictEqual(probe.sandboxDestructions, [true]);
         assert.isTrue(probe.chatOptions[0]?.request?.signal?.aborted);
       }),
     );
@@ -1183,15 +1222,14 @@ describe("external Harness runtime", () => {
     it.effect("maps native launch failures through the descriptor diagnostics", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const created: Array<string> = [];
         const nativeFailure = new Error("controlled executable missing");
-        const controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter, string> = {
+        const controlledDescriptor: ExternalHarnessDescriptor<ControlledAdapter> = {
           ...descriptor([], probe),
           makeAdapter: () => {
             throw nativeFailure;
           },
         };
-        const harness = makeHarness(controlledDescriptor, created);
+        const harness = makeHarness(controlledDescriptor);
         const error = yield* harness
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
           .pipe(Stream.runDrain, Effect.flip);
@@ -1205,8 +1243,7 @@ describe("external Harness runtime", () => {
     it.effect("refuses authentication mismatch without trying another mode", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const created: Array<string> = [];
-        const harness = makeHarness(descriptor([], probe), created, [], {
+        const harness = makeHarness(descriptor([], probe), {
           authentication: Effect.succeed({ mode: "byok", secrets: {} }),
         });
         const error = yield* harness
@@ -1216,69 +1253,13 @@ describe("external Harness runtime", () => {
         assert.strictEqual(error.reason, "credential");
         assert.include(error.message, "requires host authentication, received byok");
         assert.deepStrictEqual(probe.resolved, []);
-        assert.deepStrictEqual(created, []);
-      }),
-    );
-
-    it.effect("refuses an incompatible Sandbox provider before adapter launch", () =>
-      Effect.gen(function* () {
-        const probe = new ControlledProbe();
-        const created: Array<string> = [];
-        const provider = {
-          ...controlledProvider(created, []),
-          capabilities: () => ({ ...capabilities, killableProcesses: false }),
-        } satisfies SandboxProvider;
-        const harness = makeHarness(descriptor([], probe), created, [], { provider });
-        const error = yield* harness
-          .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
-          .pipe(Stream.runDrain, Effect.flip);
-
-        assert.strictEqual(error.reason, "sandbox");
-        assert.include(error.message, "killable processes");
-        assert.deepStrictEqual(probe.resolved, []);
-      }),
-    );
-
-    it.effect("rejects missing Workspace projection before resolving policy", () =>
-      Effect.gen(function* () {
-        const probe = new ControlledProbe();
-        const base = descriptor([], probe);
-        const runner = externalHarnessRunner(
-          {
-            ...base,
-            capabilities: {
-              ...base.capabilities,
-              projectedMembers: base.capabilities.projectedMembers.filter(
-                (member) => member !== "Instructions",
-              ),
-            },
-          },
-          {
-            authentication: () => Effect.succeed({ mode: "host", secrets: {} }),
-            sandboxProvider: () => Effect.succeed(controlledProvider([], [])),
-            sandboxPolicy: () => Effect.die(new Error("policy resolution must follow Workspace resolution")),
-          },
-        );
-
-        const error = yield* runner
-          .preflight(
-            HarnessPreflightInput.Launch({
-              request: { plan: request, session: freshSession, mcpCredentials: new Map() },
-            }),
-          )
-          .pipe(Effect.flip);
-
-        assert.strictEqual(error.reason, "workspace");
-        assert.include(error.message, "Instructions");
-        assert.deepStrictEqual(probe.resolved, []);
       }),
     );
 
     it.effect("rejects a Run Plan without Sandbox middleware before adapter launch", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const created: Array<string> = [];
-        const harness = makeHarness(descriptor([], probe), created);
+        const harness = makeHarness(descriptor([], probe));
         const plan = RunPlan.make({
           ...request,
           middleware: [],
@@ -1289,7 +1270,6 @@ describe("external Harness runtime", () => {
 
         assert.strictEqual(error.reason, "sandbox");
         assert.include(error.message, "missing mandatory Sandbox projection");
-        assert.deepStrictEqual(created, []);
         assert.deepStrictEqual(probe.resolved, []);
       }),
     );
@@ -1297,8 +1277,7 @@ describe("external Harness runtime", () => {
     it.effect("rejects a Sandbox policy mismatch before adapter launch", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const created: Array<string> = [];
-        const harness = makeHarness(descriptor([], probe), created);
+        const harness = makeHarness(descriptor([], probe));
         const plan = RunPlan.make({
           ...request,
           sandbox: { ...request.sandbox, policy: "read-only" },
@@ -1309,7 +1288,6 @@ describe("external Harness runtime", () => {
 
         assert.strictEqual(error.reason, "policy");
         assert.include(error.message, "does not match its immutable Harness profile");
-        assert.deepStrictEqual(created, []);
         assert.deepStrictEqual(probe.resolved, []);
       }),
     );
@@ -1317,7 +1295,6 @@ describe("external Harness runtime", () => {
     it.effect("preserves a run error event before failing through the Harness taxonomy", () =>
       Effect.gen(function* () {
         const probe = new ControlledProbe();
-        const created: Array<string> = [];
         const seen: Array<{ readonly [key: string]: unknown; readonly type: string }> = [];
         const harness = makeHarness(
           descriptor(
@@ -1332,7 +1309,6 @@ describe("external Harness runtime", () => {
             ],
             probe,
           ),
-          created,
         );
         const error = yield* harness
           .run({ plan: request, session: freshSession, mcpCredentials: new Map() })
@@ -1346,7 +1322,7 @@ describe("external Harness runtime", () => {
         assert.strictEqual(error.message, "controlled turn failed");
         assert.strictEqual(seen[1]?.type, EventType.RUN_ERROR);
         assert.strictEqual(seen[1]?.code, "CONTROLLED_FAILURE");
-        assert.deepStrictEqual(seen[1]?.metadata, { controlled: { retryAfter: 3 } });
+        assert.deepNestedInclude(seen[1]?.metadata, { controlled: { retryAfter: 3 } });
       }),
     );
   });

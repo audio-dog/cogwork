@@ -25,8 +25,8 @@ than letting it trust its transcript.
 
 ## Method
 
-`probe-resume.ts` drives raw ACP (no TanStack adapter, so nothing is hidden) against a throwaway
-git checkout, one session per run:
+The retired resume probe drove raw ACP (no TanStack adapter, so nothing was hidden) against a
+throwaway git checkout, one session per run:
 
 1. **Turn 1 (identical everywhere)** plants a codeword and completes — a known-good committed turn.
 2. **Turn 2** is a five-step task: create `step-N.md`, announce `STEP N DONE`, strictly one at a
@@ -210,17 +210,7 @@ Rationale, clause by clause — each earns its place from an observed behaviour:
 Conditions 1 and 2 are engine-side and need nothing from the harness seam; #97 already puts the
 session id where recovery can read it. Condition 3 is a process-lifecycle question for #101.
 
-## Reproduce
+## Archived evidence
 
-```bash
-pnpm install                     # from the repo root
-cd packages/cursor-acp
-agent login                      # or CURSOR_API_KEY in .env
-pnpm spike:resume                # all three arms → resume-summary.json
-SPIKE_ARMS=killed pnpm spike:resume
-SPIKE_STOP_AFTER_TOOLS=3 pnpm spike:resume
-```
-
-Roughly 4–5 minutes per arm against `auto`. `resume-summary.json` holds the full per-arm record
-(replayed updates, store snapshots, file mtimes, and which condition stopped the turn) and is
-gitignored.
+The spike script was retired after automatic resume shipped. This document preserves its findings,
+but the original experiment is no longer runnable from this package.

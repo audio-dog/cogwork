@@ -4,6 +4,7 @@ export {
   computeDiff,
   FILE_DIFF_EVENT,
   fileDiffEvent,
+  mergeFileDiffFeed,
   toFileDiffEvent,
   tolerateFeedDeath,
   watchWorktreeDiffs,
@@ -33,7 +34,6 @@ export {
   type OwnedToolName,
   type PolicyDenied,
   policyForProfile,
-  profileForStage,
   readOnlyProfile,
 } from "./policy";
 export { openWorktreeSandbox, resolveBaseSha, type WorktreeSandbox } from "./sandbox";

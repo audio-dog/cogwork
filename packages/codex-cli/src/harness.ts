@@ -1,40 +1,25 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
+import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
-  CODEX_MODELS,
-  type CodexAuthMode,
-  type CodexModel,
   type CodexTextAdapter,
   type CodexTextConfig,
   type CodexTextProviderOptions,
   codexText,
 } from "@tanstack/ai-codex";
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
-import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
-
-export type CodexEffort = NonNullable<CodexTextProviderOptions["modelReasoningEffort"]>;
+import { codexNativeEffort } from "./model";
+import { type CodexModel, codexCatalog, codexModels, defaultCodexModel } from "./models.generated";
 
 export type MakeCodexAdapter = (model: CodexModel, config: CodexTextConfig) => CodexTextAdapter<CodexModel>;
 
 export interface CodexRunnerOptions {
   readonly name: HarnessName;
-  readonly environment: NodeJS.ProcessEnv;
   readonly codexExecutable?: string;
   readonly makeAdapter?: MakeCodexAdapter;
 }
 
-const codexEfforts = ["minimal", "low", "medium", "high"] as const satisfies ReadonlyArray<CodexEffort>;
-
-// Cogwork owns this list because nobody else can. Codex CLI forwards any model id its backend
-// accepts, so `CODEX_MODELS` is an autocomplete hint upstream, not the set one host reaches — a
-// package cannot know which ids one account is entitled to. Extend it when Codex ships a model.
-const currentCodexModels = ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const;
-const codexModels: ReadonlyArray<CodexModel> = [...currentCodexModels, ...CODEX_MODELS];
-export const defaultCodexModel = currentCodexModels[0];
-const defaultCodexEffort = "high" satisfies CodexEffort;
-const codexAdapterVersion = "0.5.4";
 const codexVersionRequirement = ">=0.149.0";
 const minimumCodexVersion = [0, 149, 0] as const;
 const codexReadinessDeadline = "5 seconds";
@@ -132,17 +117,6 @@ const readinessTimeout = (subject: string) =>
     `Codex CLI did not answer its readiness check for ${subject} within ${codexReadinessDeadline}`,
   );
 
-const createReadinessSandbox = Effect.fn("CodexRunner.createReadinessSandbox")(
-  (scrubEnv: ReadonlyArray<string>) =>
-    Effect.tryPromise({
-      try: () => localProcessSandbox({ dir: process.cwd(), scrubEnv: [...scrubEnv] }).create({}),
-      catch: codexLaunchDiagnostics,
-    }).pipe(
-      Effect.timeout(codexReadinessDeadline),
-      Effect.catchTag("TimeoutError", () => readinessTimeout("sandbox creation")),
-    ),
-);
-
 const codexCommand = Effect.fn("CodexRunner.command")(
   (sandbox: SandboxHandle, executable: string, argument: string) =>
     Effect.tryPromise({
@@ -154,38 +128,61 @@ const codexCommand = Effect.fn("CodexRunner.command")(
     ),
 );
 
-const codexPreflight = Effect.fn("CodexRunner.preflight")(
-  (executable: string, scrubEnv: ReadonlyArray<string>) =>
-    Effect.scoped(
-      Effect.acquireRelease(createReadinessSandbox(scrubEnv), (sandbox) =>
-        Effect.promise(() => sandbox.destroy()),
-      ).pipe(
-        Effect.flatMap((sandbox) =>
-          Effect.gen(function* () {
-            const version = yield* codexCommand(sandbox, executable, "--version").pipe(
-              Effect.flatMap((result) => requireCommandSuccess(result, launchError)),
-            );
-            yield* codexCommand(sandbox, executable, "login status").pipe(
-              Effect.flatMap((result) => requireCommandSuccess(result, credentialError)),
-            );
-            return version.stdout.trim() || version.stderr.trim();
-          }),
-        ),
-      ),
-    ).pipe(Effect.mapError(addRemediation)),
+const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
+  ExternalHarnessRuntime.withLocalProcessSandbox(
+    process.cwd(),
+    ExternalHarnessRuntime.defaultInheritedEnvironment,
+    codexLaunchDiagnostics,
+    (sandbox) =>
+      Effect.gen(function* () {
+        const version = yield* codexCommand(sandbox, executable, "--version").pipe(
+          Effect.flatMap((result) => requireCommandSuccess(result, launchError)),
+        );
+        yield* codexCommand(sandbox, executable, "login status").pipe(
+          Effect.flatMap((result) => requireCommandSuccess(result, credentialError)),
+        );
+        return version.stdout.trim() || version.stderr.trim();
+      }),
+  ).pipe(Effect.mapError(addRemediation)),
 );
 
-const codexVersionCompatible = (version: string) => {
+const parseCodexVersion = (version: string) => {
   const match = version.match(/\b(\d+)\.(\d+)\.(\d+)\b/);
-  if (!match) return false;
-  return HarnessBridge.versionAtLeast(
-    [Number(match[1]), Number(match[2]), Number(match[3])],
-    minimumCodexVersion,
-  );
+  if (!match) return null;
+  return {
+    value: match[0],
+    parts: [Number(match[1]), Number(match[2]), Number(match[3])] as const,
+  };
 };
 
-const codexReadiness = (executable: string, scrubEnv: ReadonlyArray<string>) =>
-  codexPreflight(executable, scrubEnv).pipe(
+interface CodexReadinessDiagnosticInput {
+  readonly compatible: boolean;
+  readonly installedVersion: string | null;
+  readonly version: string;
+}
+
+const codexReadinessDiagnosticRules = [
+  {
+    when: ({ compatible }: CodexReadinessDiagnosticInput) => !compatible,
+    diagnostic: ({ version }: CodexReadinessDiagnosticInput) =>
+      `Codex ${version || "unknown"} is unsupported. Update Codex to ${codexVersionRequirement}.`,
+  },
+  {
+    when: ({ installedVersion }: CodexReadinessDiagnosticInput) =>
+      installedVersion !== codexCatalog.generatedAgainst,
+    diagnostic: ({ installedVersion }: CodexReadinessDiagnosticInput) =>
+      `The model catalog was generated against Codex ${codexCatalog.generatedAgainst}; this Runtime Host has Codex ${installedVersion ?? "unknown"}.`,
+  },
+] as const;
+
+const codexReadinessDiagnostics = (input: CodexReadinessDiagnosticInput) => {
+  return codexReadinessDiagnosticRules
+    .filter(({ when }) => when(input))
+    .map(({ diagnostic }) => diagnostic(input));
+};
+
+const codexReadiness = (executable: string) =>
+  codexPreflight(executable).pipe(
     Effect.match({
       onFailure: (error) =>
         ({
@@ -207,7 +204,10 @@ const codexReadiness = (executable: string, scrubEnv: ReadonlyArray<string>) =>
           diagnostics: [error.message],
         }) satisfies Harness.HarnessReadiness,
       onSuccess: (version) => {
-        const compatible = codexVersionCompatible(version);
+        const installedVersion = parseCodexVersion(version);
+        const compatible =
+          installedVersion !== null &&
+          HarnessBridge.versionAtLeast(installedVersion.parts, minimumCodexVersion);
         return {
           operational: { status: "ready", retryable: false, diagnostic: "Codex is ready" },
           installation: { status: "installed", version: version || null },
@@ -220,46 +220,29 @@ const codexReadiness = (executable: string, scrubEnv: ReadonlyArray<string>) =>
             status: "available",
             diagnostic: "Codex host login is available",
           },
-          diagnostics: compatible
-            ? []
-            : [`Codex ${version || "unknown"} is unsupported. Update Codex to ${codexVersionRequirement}.`],
+          diagnostics: codexReadinessDiagnostics({
+            compatible,
+            installedVersion: installedVersion?.value ?? null,
+            version,
+          }),
         } satisfies Harness.HarnessReadiness;
       },
     }),
   );
 
-const selectedEffort = (effort: string | null) => {
-  const selected = effort ?? defaultCodexEffort;
-  const supported = codexEfforts.find((candidate) => candidate === selected);
-  if (supported) return supported;
-  throw new Error(`unsupported Codex reasoning effort: ${selected}`);
-};
-
 const catalogOptions = {
-  models: codexModels.map((model) => ({ value: model, label: model })),
-  efforts: codexEfforts.map((effort) => ({ value: effort, label: effort })),
+  models: codexCatalog.models,
+  generatedAgainst: codexCatalog.generatedAgainst,
+  rawModelIds: codexCatalog.rawModelIds,
 };
 
-const inheritedCodexEnvironment = new Set([
-  "HOME",
-  "PATH",
-  "CODEX_HOME",
-  "XDG_CONFIG_HOME",
-  "XDG_DATA_HOME",
-  "XDG_STATE_HOME",
-  "USER",
-  "LOGNAME",
-  "SHELL",
-  "TMPDIR",
-  "TEMP",
-  "TMP",
-  "LANG",
-  "LC_ALL",
-  "LC_CTYPE",
-]);
-
-const scrubbedEnvironment = (environment: NodeJS.ProcessEnv) =>
-  Object.keys(environment).filter((name) => !inheritedCodexEnvironment.has(name));
+const codexSelectionEffort = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => {
+  const effort = request.selection.options.effort;
+  return codexNativeEffort(
+    request.selection.model ?? defaultCodexModel,
+    typeof effort === "string" ? effort : null,
+  );
+};
 
 const hostAuthentication = () =>
   Effect.succeed({
@@ -314,13 +297,11 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
 
 const codexDescriptor = (
   options: CodexRunnerOptions,
-): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>, CodexAuthMode> => {
+): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>> => {
   const makeAdapter = options.makeAdapter ?? codexText;
   const executable = options.codexExecutable ?? codexExecutableWithRepositoryHooks;
-  const scrubEnv = scrubbedEnvironment(options.environment);
   return {
     name: options.name,
-    sessionKind: "opaque-handle",
     capabilities: {
       execution: Harness.fullHarnessExecution,
       profile: {
@@ -334,36 +315,20 @@ const codexDescriptor = (
         journal: true,
         takeover: true,
       },
-      projectedMembers: [
-        "Harness Adapter",
-        "Instructions",
-        "Messages",
-        "MCP",
-        "Middleware",
-        "Sandbox",
-        "Structured Output",
-        "Persistence",
-        "Connections",
-      ],
-      planMiddleware: ["sandbox"],
     },
     authentication: { mode: "host", reference: "Codex host login" },
     signIn: "codex login",
-    catalogSources: {
-      // No runtime source: nothing here reads the Runtime host, so claiming `tanstack-runtime`
-      // provenance made a stale pin out of every model the shipped package had not heard of.
-      fallback: Harness.staticCatalogSource(catalogOptions, {
-        source: "cogwork-fallback",
-        fallbackVersion: `codex-${codexAdapterVersion}`,
-      }),
-    },
-    readiness: () => codexReadiness(executable, scrubEnv),
+    catalog: catalogOptions,
+    readiness: () => codexReadiness(executable),
     sharedGit: "required",
-    makeAdapter: ({ model, authentication, request }) => {
+    declaredMembers: ["Tools"],
+    inheritedEnvironment: ExternalHarnessRuntime.defaultInheritedEnvironment,
+    makeAdapter: ({ model, nativeAuthentication, request }) => {
       const mcp = codexMcpProjection(request.mcp);
       return makeAdapter(model, {
-        authMode: authentication,
+        authMode: nativeAuthentication,
         approvalPolicy: "never",
+        modelReasoningEffort: codexSelectionEffort(request),
         codexExecutable: executable,
         // Codex's `read-only` sandbox mode blocks network too, cutting a read-only
         // Operation off from the Issue tracker it reads with `gh`.
@@ -375,13 +340,13 @@ const codexDescriptor = (
         ...(Object.keys(mcp.env).length > 0 ? { env: mcp.env } : {}),
       });
     },
-    projectModel: (request) => request.selection.model ?? defaultCodexModel,
-    projectOptions: (request) => ({
-      ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
-      modelReasoningEffort: selectedEffort(request.selection.effort),
-      authMode: "host",
-    }),
-    projectAuthentication: () => "host",
+    projectModel: (request) =>
+      codexModels.find((model) => model === request.selection.model) ?? defaultCodexModel,
+    projectOptions: (request) =>
+      ({
+        ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
+        authMode: "host",
+      }) satisfies CodexTextProviderOptions,
     transport: {
       instructionProjection: "system-prompt",
       mcpProjection: "native",
@@ -393,10 +358,7 @@ const codexDescriptor = (
 };
 
 export const codexRunner = (options: CodexRunnerOptions): Harness.HarnessRunner => {
-  const scrubEnv = scrubbedEnvironment(options.environment);
   return ExternalHarnessRuntime.externalHarnessRunner(codexDescriptor(options), {
     authentication: hostAuthentication,
-    sandboxProvider: ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({ scrubEnv }),
-    sandboxPolicy: (request) => Effect.succeed(Tools.policyForProfile(request.policy)),
   });
 };

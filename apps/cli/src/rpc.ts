@@ -28,10 +28,12 @@ import * as RpcMiddleware from "effect/unstable/rpc/RpcMiddleware";
 import * as RpcServer from "effect/unstable/rpc/RpcServer";
 import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
+import { granolaLoginLayer } from "./granola-login";
 import { layer as ledgerLayer } from "./ledger";
 import { defaultTelemetryStorePath } from "./paths";
 import { readPerformanceHealthSnapshot } from "./performance-health";
 import { contextFsLayer, gitLayer, worktreeManagerLayer } from "./platform";
+import { slackLoginLayer } from "./slack-login";
 
 export interface DaemonOptions {
   readonly socketPath: string;
@@ -85,23 +87,27 @@ export const transportLayer = (socketPath: string) =>
     Layer.provide(restrictSocket(socketPath).pipe(Layer.provideMerge(boundSocketServer(socketPath)))),
   );
 
+const providerName = Schema.decodeSync(HarnessName)("provider");
 const cursorName = Schema.decodeSync(HarnessName)("cursor");
 const claudeName = Schema.decodeSync(HarnessName)("claude");
 const codexName = Schema.decodeSync(HarnessName)("codex");
-const providerName = Schema.decodeSync(HarnessName)("provider");
 const replayName = Schema.decodeSync(HarnessName)("replay");
 
 const standardHarnessRunners = [
+  Provider.providerRunner({ name: providerName }),
   cursorRunner({ name: cursorName }),
   claudeCodeRunner({ name: claudeName, authentication: { mode: "host" } }),
-  codexRunner({ name: codexName, environment: process.env }),
-  Provider.providerRunner({ name: providerName }),
+  codexRunner({ name: codexName }),
 ];
 
-export const harnessRunners = Replay.replayRunner({
-  name: replayName,
-  fixturePath: Config.option(Config.string("COGWORK_REPLAY_FIXTURE")).pipe(Effect.map(Option.getOrUndefined)),
-}).pipe(Effect.map((runner) => [...standardHarnessRunners, runner]));
+export const harnessRunners = Config.option(Config.string("COGWORK_REPLAY_FIXTURE")).pipe(
+  Effect.flatMap((fixturePath) =>
+    Effect.forEach(Option.toArray(fixturePath), (path) =>
+      Replay.replayRunner({ name: replayName, fixturePath: Effect.succeed(path) }),
+    ),
+  ),
+  Effect.map((replayRunners) => [...standardHarnessRunners, ...replayRunners]),
+);
 
 const engineOperatingInstructionsDir = nodePath.resolve(
   nodePath.dirname(fileURLToPath(import.meta.resolve("@cogwork/engine"))),
@@ -354,6 +360,8 @@ export const serverLayer = (options: DaemonOptions) =>
         Daemon.serverLayer({
           transport: transportLayer(options.socketPath),
           credentials: credentialsLayer(options.credentialsPath),
+          granolaLogin: granolaLoginLayer(),
+          slackLogin: slackLoginLayer(),
           contextAssembler: contextAssemblerLayer(nodePath.dirname(options.controlStorePath)),
           runLedger: ledgerLayer,
           controlStorePath: options.controlStorePath,

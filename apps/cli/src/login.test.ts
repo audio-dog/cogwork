@@ -7,6 +7,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
@@ -15,7 +16,7 @@ import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import type * as HttpServer from "effect/unstable/http/HttpServer";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
@@ -210,6 +211,42 @@ describe("login linear", () => {
 });
 
 describe("browser opener", () => {
+  it.effect("rejects a non-HTTPS authorization URL before spawning", () =>
+    Effect.gen(function* () {
+      const opener = yield* BrowserOpener;
+      const outcome = yield* Effect.exit(opener.open("http://example.com/authorize"));
+
+      assert.isTrue(Exit.isFailure(outcome));
+    }).pipe(
+      Effect.provide(
+        browserOpenerLayer.pipe(
+          Layer.provide(
+            Layer.succeed(
+              ChildProcessSpawner.ChildProcessSpawner,
+              ChildProcessSpawner.make(() =>
+                Effect.succeed(
+                  ChildProcessSpawner.makeHandle({
+                    pid: ChildProcessSpawner.ProcessId(1),
+                    stdin: Sink.drain,
+                    stdout: Stream.empty,
+                    stderr: Stream.empty,
+                    all: Stream.empty,
+                    exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+                    isRunning: Effect.succeed(false),
+                    kill: () => Effect.void,
+                    getInputFd: () => Sink.drain,
+                    getOutputFd: () => Stream.empty,
+                    unref: Effect.succeed(Effect.void),
+                  }),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
   it.effect("times out a hanging browser subprocess with retry guidance", () =>
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;
@@ -219,8 +256,7 @@ describe("browser opener", () => {
       const error = yield* Fiber.join(fiber);
 
       assert.strictEqual(error._tag, "LinearOAuthError");
-      assert.include(error.message, "timed out");
-      assert.include(error.message, "retry");
+      assert.strictEqual(error.message, "Opening the browser timed out after 30 seconds; retry the login.");
     }).pipe(
       Effect.provide(
         browserOpenerLayer.pipe(

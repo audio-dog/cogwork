@@ -27,6 +27,9 @@ const makeEmptyCounts = () =>
     operationInProgress: 0,
     rebase: 0,
     remoteUrl: 0,
+    blockPush: 0,
+    allowPush: 0,
+    pushBranch: 0,
   }) satisfies GitInvocationCounts;
 
 export class GitInvocationCounter extends Context.Service<
@@ -57,7 +60,7 @@ export const countingLayer = Layer.effect(
     const counter = yield* GitInvocationCounter;
 
     const countedGit = {
-      fetch: (repoPath, remote) => counter.track("fetch", git.fetch(repoPath, remote)),
+      fetch: (repoPath, remote, options) => counter.track("fetch", git.fetch(repoPath, remote, options)),
       remoteBranchExists: (repoPath, remote, branch) =>
         counter.track("remoteBranchExists", git.remoteBranchExists(repoPath, remote, branch)),
       addWorktree: (args) => counter.track("addWorktree", git.addWorktree(args)),
@@ -73,6 +76,10 @@ export const countingLayer = Layer.effect(
       rebase: (worktreePath, remote, branch) =>
         counter.track("rebase", git.rebase(worktreePath, remote, branch)),
       remoteUrl: (repoPath, remote) => counter.track("remoteUrl", git.remoteUrl(repoPath, remote)),
+      blockPush: (worktreePath, remote) => counter.track("blockPush", git.blockPush(worktreePath, remote)),
+      allowPush: (worktreePath, remote) => counter.track("allowPush", git.allowPush(worktreePath, remote)),
+      pushBranch: (repoPath, remoteUrl, branch) =>
+        counter.track("pushBranch", git.pushBranch(repoPath, remoteUrl, branch)),
     } satisfies GitService;
 
     return countedGit;

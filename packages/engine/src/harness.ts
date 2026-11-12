@@ -1,20 +1,24 @@
 import {
   type AgUiEvent,
   type HarnessCatalogChoice as ContractHarnessCatalogChoice,
-  type HarnessCatalogProvenance as ContractHarnessCatalogProvenance,
   type HarnessOptionCatalog as ContractHarnessOptionCatalog,
   type HarnessName,
+  type ModelOptionSelections,
   type RunPlan,
   type RunPlanMember,
   type RunPlanMiddlewareName,
+  type RunPlanPolicyProfile,
   type SessionId,
   type SessionKind,
-  type StageResultJsonSchema,
-  stageResultJsonSchema,
+  selectedHarnessCatalogModel,
+  unsupportedHarnessModelOption,
 } from "@cogwork/contracts";
+import type { AnyTool } from "@tanstack/ai";
+import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import type * as Path from "effect/Path";
@@ -25,20 +29,17 @@ import type * as HttpClient from "effect/unstable/http/HttpClient";
 import type { ContextAssembler } from "./context-assembler";
 import type { CredentialStore } from "./credential-store";
 import type { ResolvedMcpSkill } from "./mcp-skill";
-import type { OperationPolicyProfile } from "./operation-policy";
 import type { SessionStore } from "./session-store";
 
 export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
-export type { OperationPolicyProfile } from "./operation-policy";
-
-export const stageResultSchema = stageResultJsonSchema;
-export type StageResultSchema = StageResultJsonSchema;
+export type OperationPolicyProfile = RunPlanPolicyProfile;
 
 export interface HarnessRequest {
   readonly plan: RunPlan;
   readonly session: SessionId | null;
   readonly mcpCredentials: ReadonlyMap<string, Redacted.Redacted<string>>;
+  readonly engineTools?: ReadonlyArray<AnyTool>;
 }
 
 export const resolvedMcpSkills = (request: HarnessRequest): ReadonlyArray<ResolvedMcpSkill> =>
@@ -62,28 +63,9 @@ export interface HarnessExecution {
 
 export type HarnessCatalogChoice = ContractHarnessCatalogChoice;
 
-export interface HarnessCatalogOptions {
-  readonly models: ReadonlyArray<HarnessCatalogChoice>;
-  readonly efforts?: ReadonlyArray<HarnessCatalogChoice>;
-}
-
-export type HarnessCatalogProvenance = ContractHarnessCatalogProvenance;
-
-export interface HarnessCatalogSourceResult extends HarnessCatalogOptions {
-  readonly provenance: HarnessCatalogProvenance;
-}
+export type HarnessCatalogOptions = Omit<ContractHarnessOptionCatalog, "policyProfiles" | "provenance">;
 
 export type HarnessOptionCatalog = ContractHarnessOptionCatalog;
-
-export interface HarnessCatalogSource {
-  readonly catalog: Effect.Effect<HarnessCatalogSourceResult | null, HarnessError, HarnessRunnerEnv>;
-}
-
-export interface HarnessCatalogSources {
-  readonly runtime?: HarnessCatalogSource;
-  readonly native?: HarnessCatalogSource;
-  readonly fallback: HarnessCatalogSource;
-}
 
 export type HarnessAuthenticationMode = "host" | "byok";
 export type HarnessHumanAttach = "codex-cli" | false;
@@ -134,7 +116,7 @@ export interface HarnessReadiness {
 export interface HarnessSelection {
   readonly name: HarnessName;
   readonly model: string | null;
-  readonly effort: string | null;
+  readonly options: ModelOptionSelections;
   readonly profile: OperationPolicyProfile;
 }
 
@@ -145,15 +127,36 @@ export type HarnessPreflightInput = Data.TaggedEnum<{
 
 export const HarnessPreflightInput = Data.taggedEnum<HarnessPreflightInput>();
 
-export const staticCatalogSource = (
-  options: HarnessCatalogOptions,
-  provenance: HarnessCatalogProvenance,
-) => ({ catalog: Effect.succeed({ ...options, provenance }) });
+type HarnessPreflightTag = HarnessPreflightInput["_tag"];
+type HarnessPreflightVariant<Tag extends HarnessPreflightTag> = Extract<
+  HarnessPreflightInput,
+  { readonly _tag: Tag }
+>;
+type HarnessPreflightTable<Value, Arguments extends ReadonlyArray<unknown> = []> = {
+  readonly [Tag in HarnessPreflightTag]: (
+    input: HarnessPreflightVariant<Tag>,
+    ...arguments_: Arguments
+  ) => Value;
+};
 
-export const selectionOfPreflightInput = HarnessPreflightInput.$match({
+const applyPreflightTable = <
+  Tag extends HarnessPreflightTag,
+  Value,
+  Arguments extends ReadonlyArray<unknown>,
+>(
+  input: HarnessPreflightVariant<Tag>,
+  table: HarnessPreflightTable<Value, Arguments>,
+  ...arguments_: Arguments
+) => (table[input._tag] as HarnessPreflightTable<Value, Arguments>[Tag])(input, ...arguments_);
+
+const selectionByPreflightTag = {
   Static: ({ selection }) => selection,
   Launch: ({ request }) => request.plan.harness,
-});
+} satisfies HarnessPreflightTable<HarnessSelection>;
+
+export const selectionOfPreflightInput = <Tag extends HarnessPreflightTag>(
+  input: HarnessPreflightVariant<Tag>,
+) => applyPreflightTable(input, selectionByPreflightTag);
 
 export const fullHarnessExecution: HarnessExecution = {
   nonInteractive: true,
@@ -188,8 +191,15 @@ export class HarnessError extends Schema.TaggedError<HarnessError>()("HarnessErr
 
 export const validateCheckoutDirectory = Effect.fn("Harness.validateCheckoutDirectory")(function* (
   harness: HarnessName,
-  checkoutPath: string,
+  checkoutPath: string | null,
 ) {
+  if (checkoutPath === null) {
+    return yield* new HarnessError({
+      reason: "workspace",
+      retryable: false,
+      message: `harness runner ${harness} requires a Workspace checkout`,
+    });
+  }
   const fs = yield* FileSystem.FileSystem;
   const info = yield* fs.stat(checkoutPath).pipe(
     Effect.mapError(
@@ -218,6 +228,7 @@ export const validateCheckoutDirectory = Effect.fn("Harness.validateCheckoutDire
         }),
     ),
   );
+  return checkoutPath;
 });
 
 export interface HarnessRunner {
@@ -228,26 +239,23 @@ export interface HarnessRunner {
   readonly execution: HarnessExecution;
   readonly capabilities: HarnessCapabilityProfile;
   readonly authentication: HarnessAuthenticationBinding;
-  readonly catalogSources: HarnessCatalogSources;
+  readonly catalog: HarnessCatalogOptions;
   readonly projectedMembers: ReadonlyArray<RunPlanMember>;
   readonly planMiddleware: ReadonlyArray<RunPlanMiddlewareName>;
+  readonly validateLaunch?: (request: HarnessRequest) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly preflight: (input: HarnessPreflightInput) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
 }
 
 export interface HarnessService {
-  /** In registration order. */
-  readonly names: ReadonlyArray<HarnessName>;
   readonly signIn: (harness: HarnessName) => string | null;
-  readonly catalog: (
-    harness: HarnessName,
-  ) => Effect.Effect<HarnessOptionCatalog, HarnessError, HarnessRunnerEnv>;
+  readonly catalogs: ReadonlyMap<HarnessName, HarnessOptionCatalog>;
   readonly preflight: (
     harness: HarnessName,
     profile: OperationPolicyProfile,
     model: string | null,
-    effort?: string | null,
+    options?: ModelOptionSelections,
   ) => Effect.Effect<void, HarnessError, HarnessRunnerEnv>;
   readonly run: (request: HarnessRequest) => Stream.Stream<AgUiEvent, HarnessError, HarnessRunnerEnv>;
   readonly sessionKind: (harness: HarnessName) => SessionKind;
@@ -269,37 +277,33 @@ const unknownHarness = (harness: HarnessName) =>
     message: `no harness runner registered for ${harness}`,
   });
 
-const unavailableCatalog = (harness: HarnessName) =>
-  new HarnessError({
-    reason: "missing-harness",
-    retryable: false,
-    message: `no option catalog is available for harness runner ${harness}`,
-  });
-
-const hasCatalogOptions = (options: HarnessCatalogOptions | null): options is HarnessCatalogOptions =>
-  options !== null && options.models.length > 0;
-
-const catalogFrom = Effect.fn("Harness.catalogFrom")(function* (source: HarnessCatalogSource | undefined) {
-  if (!source) return null;
-  return yield* Effect.map(source.catalog, (catalog) => (hasCatalogOptions(catalog) ? catalog : null));
+const optionCatalog = (runner: HarnessRunner): HarnessOptionCatalog => ({
+  ...runner.catalog,
+  policyProfiles: runner.execution.profiles,
+  provenance: { source: "managed" },
 });
 
-const resolveCatalog = Effect.fn("Harness.resolveCatalog")(function* (runner: HarnessRunner) {
-  const runtimeCatalog = yield* catalogFrom(runner.catalogSources.runtime);
-  if (runtimeCatalog) return runtimeCatalog;
-  const nativeCatalog = yield* catalogFrom(runner.catalogSources.native);
-  if (nativeCatalog) return nativeCatalog;
-  const fallbackCatalog = yield* catalogFrom(runner.catalogSources.fallback);
-  if (fallbackCatalog) return fallbackCatalog;
-  return yield* unavailableCatalog(runner.name);
-});
+const lacksRequiredConfinement = (runner: HarnessRunner, profile: OperationPolicyProfile) =>
+  profile === "read-only" && !runner.execution.worktreeConfined;
 
-const unsupportedPosture = (runner: HarnessRunner, profile: OperationPolicyProfile) => {
-  if (!runner.execution.nonInteractive) return "a non-interactive turn";
-  if (!runner.execution.worktreeConfined) return "worktree confinement";
-  if (!runner.execution.profiles.includes(profile)) return `${profile} operation posture`;
-  return null;
-};
+const unsupportedPostures = [
+  {
+    when: (runner: HarnessRunner) => !runner.execution.nonInteractive,
+    posture: () => "a non-interactive turn",
+  },
+  {
+    when: (runner: HarnessRunner, profile: OperationPolicyProfile) =>
+      !runner.execution.profiles.includes(profile),
+    posture: (profile: OperationPolicyProfile) => `${profile} operation posture`,
+  },
+  {
+    when: lacksRequiredConfinement,
+    posture: () => "worktree confinement",
+  },
+] as const;
+
+const unsupportedPosture = (runner: HarnessRunner, profile: OperationPolicyProfile) =>
+  unsupportedPostures.find(({ when }) => when(runner, profile))?.posture(profile) ?? null;
 
 const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolicyProfile, posture: string) =>
   new HarnessError({
@@ -308,13 +312,11 @@ const unsupportedRunnerPosture = (runner: HarnessRunner, profile: OperationPolic
     message: `harness runner ${runner.name} cannot enforce ${posture} for the ${profile} profile`,
   });
 
-type HarnessSelectionOption = "model" | "effort";
-
-const staleSelection = (runner: HarnessRunner, option: HarnessSelectionOption, value: string) =>
+const staleSelection = (runner: HarnessRunner, selection: string) =>
   new HarnessError({
     reason: "stale-selection",
     retryable: false,
-    message: `harness runner ${runner.name} no longer offers ${option} ${value} on this Runtime Host`,
+    message: `harness runner ${runner.name} no longer offers ${selection} on this Runtime Host`,
   });
 
 const catalogHas = (choices: ReadonlyArray<HarnessCatalogChoice> | undefined, value: string) =>
@@ -322,21 +324,33 @@ const catalogHas = (choices: ReadonlyArray<HarnessCatalogChoice> | undefined, va
 
 const validateSelectionValue = (
   runner: HarnessRunner,
-  option: "model" | "effort",
+  option: "model",
   choices: ReadonlyArray<HarnessCatalogChoice> | undefined,
   value: string | null,
 ) => {
   if (!value || catalogHas(choices, value)) return Effect.void;
-  return Effect.fail(staleSelection(runner, option, value));
+  return Effect.fail(staleSelection(runner, `${option} ${value}`));
+};
+
+const validateModelOptions = (
+  runner: HarnessRunner,
+  catalog: HarnessCatalogOptions,
+  selection: HarnessSelection,
+) => {
+  const model = selectedHarnessCatalogModel(catalog.models, selection.model);
+  const stale = unsupportedHarnessModelOption(model, selection.options);
+  if (!stale) return Effect.void;
+  const [id, value] = stale;
+  return Effect.fail(staleSelection(runner, `model option ${id}=${JSON.stringify(value)}`));
 };
 
 const validateSelection = (
   runner: HarnessRunner,
-  catalog: HarnessCatalogSourceResult,
+  catalog: HarnessCatalogOptions,
   selection: HarnessSelection,
 ) =>
   validateSelectionValue(runner, "model", catalog.models, selection.model).pipe(
-    Effect.andThen(validateSelectionValue(runner, "effort", catalog.efforts, selection.effort)),
+    Effect.andThen(validateModelOptions(runner, catalog, selection)),
   );
 
 const validateAuthenticationMode = (runner: HarnessRunner) => {
@@ -403,14 +417,27 @@ const runnerFor = Effect.fn("Harness.runnerFor")(function* (
   return runner;
 });
 
+const launchValidationByPreflightTag = {
+  Static: () => Effect.void,
+  Launch: ({ request }, runner) => runner.validateLaunch?.(request) ?? Effect.void,
+} satisfies HarnessPreflightTable<
+  Effect.Effect<void, HarnessError, HarnessRunnerEnv>,
+  [runner: HarnessRunner]
+>;
+
+const validateLaunch = <Tag extends HarnessPreflightTag>(
+  input: HarnessPreflightVariant<Tag>,
+  runner: HarnessRunner,
+) => applyPreflightTable(input, launchValidationByPreflightTag, runner);
+
 const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
   registry: ReadonlyMap<HarnessName, HarnessRunner>,
   input: HarnessPreflightInput,
 ) {
   const selection = selectionOfPreflightInput(input);
   const runner = yield* runnerFor(registry, selection.name);
-  const catalog = yield* resolveCatalog(runner);
-  yield* validateSelection(runner, catalog, selection);
+  yield* validateLaunch(input, runner);
+  yield* validateSelection(runner, runner.catalog, selection);
   const posture = unsupportedPosture(runner, selection.profile);
   if (posture) return yield* unsupportedRunnerPosture(runner, selection.profile, posture);
   yield* validateAuthenticationMode(runner);
@@ -419,43 +446,52 @@ const preflightRunner = Effect.fn("Harness.preflightRunner")(function* (
   return runner;
 });
 
+const harnessOutcome = (exit: Exit.Exit<unknown, HarnessError>) => {
+  if (Exit.isSuccess(exit)) return "success";
+  if (Cause.hasInterruptsOnly(exit.cause)) return "interrupt";
+  return "failure";
+};
+
+const dispatch = (runner: HarnessRunner, request: HarnessRequest) =>
+  Stream.unwrap(
+    Effect.andThen(
+      Effect.logInfo("launched Harness", { harness: runner.name }),
+      Effect.sync(() => runner.run(request)),
+    ),
+  ).pipe(
+    Stream.onExit((exit) =>
+      Effect.logInfo("exited Harness", { harness: runner.name, outcome: harnessOutcome(exit) }),
+    ),
+  );
+
 export const make = (runners: ReadonlyArray<HarnessRunner>): HarnessService => {
   const registry = new Map(runners.map((runner) => [runner.name, runner] as const));
+  const catalogs = new Map(runners.map((runner) => [runner.name, optionCatalog(runner)] as const));
   const preflight = Effect.fn("Harness.preflight")(function* (
     harness: HarnessName,
     profile: OperationPolicyProfile,
     model: string | null,
-    effort: string | null = null,
+    options: ModelOptionSelections = {},
   ) {
     yield* preflightRunner(
       registry,
       HarnessPreflightInput.Static({
-        selection: { name: harness, profile, model, effort },
+        selection: { name: harness, profile, model, options },
       }),
     );
-  });
-  const catalog = Effect.fn("Harness.catalog")(function* (harness: HarnessName) {
-    const runner = yield* runnerFor(registry, harness);
-    const resolved = yield* resolveCatalog(runner);
-    return {
-      ...resolved,
-      policyProfiles: runner.execution.profiles,
-    };
   });
   const readiness = Effect.fn("Harness.readiness")(function* (harness: HarnessName) {
     return yield* (yield* runnerFor(registry, harness)).readiness();
   });
   return {
-    names: runners.map((runner) => runner.name),
     signIn: (harness) => registry.get(harness)?.signIn ?? null,
-    catalog,
+    catalogs,
     preflight,
     run: (request) =>
-      Stream.fromEffect(
-        preflightRunner(registry, HarnessPreflightInput.Launch({ request })).pipe(
-          Effect.withSpan("Harness.run"),
-        ),
-      ).pipe(Stream.flatMap((runner) => runner.run(request))),
+      Stream.fromEffect(preflightRunner(registry, HarnessPreflightInput.Launch({ request }))).pipe(
+        Stream.flatMap((runner) => dispatch(runner, request)),
+        Stream.withSpan("Harness.run"),
+      ),
     sessionKind: (harness) => registry.get(harness)?.sessionKind ?? "opaque-handle",
     capabilities: (harness) => registry.get(harness)?.capabilities ?? null,
     readiness,

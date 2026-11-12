@@ -1,7 +1,5 @@
 import {
   CancelRunError,
-  CancelRunResult,
-  type ClassifiedItem,
   type Connection,
   type ConnectionBindingId,
   ConnectionEstablishment,
@@ -18,7 +16,7 @@ import {
   type HarnessName,
   HarnessNotRegistered,
   IssueTrackerError,
-  type OperationSettingUpdate,
+  type OperationSettingBatch,
   type PluginFailure,
   type PluginId,
   type PluginMutationResult,
@@ -28,9 +26,7 @@ import {
   pluginRequiringConnection,
   type RunId,
   type RunStatus,
-  type TriageRole,
-  type WorkItemId,
-  WorkItemNotFound,
+  type WorkItemRef,
   type WorkspaceId,
   type WorkspaceRegistration,
   WorkspaceRegistrationError,
@@ -45,29 +41,24 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { ConnectionStore } from "./connection";
+import * as Semaphore from "effect/Semaphore";
+import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
-import { DaemonEventBus } from "./daemon-event-bus";
+import { CredentialStore } from "./credential-store";
 import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { repoTargetFor as githubRepoTargetFor } from "./github/host";
+import { GranolaLogin } from "./granola-login";
 import { Harness } from "./harness";
-import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
-import { applyHandbackBarrier } from "./observe";
-import { operationSettingRefusal } from "./operation-policy";
 import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
-import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
-import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
-import {
-  findWorkspaceIssueTrackerBinding,
-  WorkspaceManagement,
-  type WorkspaceRegistrationChange,
-  WorkspaceRegistry,
-} from "./registry";
+import { workspaceInfoOf } from "./read-model";
+import { WorkspaceManagement, type WorkspaceRegistrationChange, WorkspaceRegistry } from "./registry";
 import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
+import { SlackLogin } from "./slack-login";
+import { WorkflowRun } from "./workflow-run";
 
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
@@ -110,59 +101,6 @@ const samePluginMembership = (left: PluginOverview, right: PluginOverview) => {
   );
 };
 
-const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workItem: WorkItemId) =>
-  snapshot.workspaces
-    .find((state) => state.name === workspace)
-    ?.observed.find((item) => item.id === workItem) ?? null;
-
-const roleChanges = (roles: ReadonlyArray<TriageRole>, role: TriageRole) => ({
-  remove: roles.filter((current) => current !== role),
-  add: roles.includes(role) ? [] : [role],
-});
-
-const resolveObserved = Effect.fn("Daemon.resolveObserved")(function* (
-  workspaceId: WorkspaceId,
-  workItem: WorkItemId,
-) {
-  const registry = yield* (yield* WorkspaceRegistry).state;
-  const workspace = workspaceById(registry, workspaceId);
-  if (workspace === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
-  const snapshot = yield* (yield* ReconcileWorker).snapshot;
-  const observed = observedFor(snapshot, workspaceId, workItem);
-  if (observed === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
-  return { workspace, observed };
-});
-
-const publishChangedItem = Effect.fn("Daemon.publishChangedItem")(function* (
-  workspace: WorkspaceId,
-  item: ClassifiedItem | null,
-) {
-  if (item === null) return;
-  const bus = yield* DaemonEventBus;
-  yield* bus.publish({ _tag: "ItemChanged", workspace, item });
-});
-
-const parkedNeedsHuman = (id: WorkItemId, title: string): ClassifiedItem => ({
-  _tag: "NeedsHuman",
-  id,
-  title,
-  reason: "ready-for-human",
-  proposal: null,
-  url: null,
-});
-
-const parkedItem = (observed: ObservedItem | null) => {
-  if (observed === null) return null;
-  const roles = [...observed.roles.filter((role) => role !== "ready-for-human"), "ready-for-human" as const];
-  return classifiedItemWithPr({
-    ...observed,
-    roles,
-    claim: null,
-    claimLabeled: false,
-    claimedByUs: false,
-  });
-};
-
 const cancelDrainDeadline = "5 seconds";
 
 const runNotFound = (runId: RunId) => new CancelRunError({ reason: "not-found", runId });
@@ -177,114 +115,27 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   const ledger = yield* RunLedger;
   const run = yield* ledger.getRun(payload.runId);
   if (run === null) return yield* runNotFound(payload.runId);
-  if (run.status !== "running") {
-    return yield* runAlreadyFinished(payload.runId, run.status);
-  }
-
-  const runControl = yield* RunControl;
-  return yield* Effect.uninterruptible(
-    Effect.gen(function* () {
-      const cancellation = yield* runControl.cancel(payload.runId);
-      const controlledWorkspace =
-        cancellation._tag === "Interrupting" ? cancellation.workspace : Option.none();
-      const drained =
-        cancellation._tag === "NotFound"
-          ? true
-          : yield* cancellation.awaitTermination.pipe(
-              Effect.timeoutOption(cancelDrainDeadline),
-              Effect.map(Option.isSome),
-            );
-
-      const snapshot = yield* (yield* ReconcileWorker).snapshot;
-      const observed = observedFor(snapshot, run.workspace, run.workItem);
-      if (!drained) yield* Effect.logWarning("run cancellation still draining", { runId: payload.runId });
-
-      const registry = yield* (yield* WorkspaceRegistry).state;
-      const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
-      const workspace = Option.getOrUndefined(controlledWorkspace) ?? currentWorkspace;
-      const trackerClaim = workspace === undefined ? null : { workspace, issueTracker: yield* IssueTracker };
-      const releaseRunClaim =
-        trackerClaim === null
-          ? Effect.void
-          : releaseClaim(trackerClaim.issueTracker)(trackerClaim.workspace, run.workItem);
-      const releaseAbandonedClaim = cancellation._tag === "NotFound" ? releaseRunClaim : Effect.void;
-
-      const endedAtMillis = yield* Clock.currentTimeMillis;
-      const settled = yield* ledger.getRun(payload.runId);
-      if (settled === null) return yield* runNotFound(payload.runId);
-      if (settled.status !== "running") {
-        yield* releaseAbandonedClaim;
-        return yield* runAlreadyFinished(payload.runId, settled.status);
-      }
-      yield* ledger.updateRun(payload.runId, {
-        status: "interrupted",
-        usage: run.usage,
-        endedAtMillis,
-      });
-
-      if (trackerClaim !== null) {
-        yield* trackerClaim.issueTracker
-          .handOff(trackerClaim.workspace, run.workItem, { stage: run.stage, note: payload.note })
-          .pipe(
-            Effect.catchTag("IssueTrackerError", (error) =>
-              Effect.logWarning("run hand-off failed", { message: error.message }),
-            ),
-          );
-      }
-      yield* releaseAbandonedClaim;
-
-      const item = parkedItem(observed) ?? parkedNeedsHuman(run.workItem, run.workItem);
-      if (currentWorkspace !== undefined) {
-        const bus = yield* DaemonEventBus;
-        yield* bus.publish({ _tag: "ItemChanged", workspace: run.workspace, item });
-      }
-      return drained
-        ? CancelRunResult.cases.Cancelled.make({ item })
-        : CancelRunResult.cases.StillDraining.make({ item });
-    }),
-  );
-});
-
-export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
-  readonly workspace: WorkspaceId;
-  readonly workItem: WorkItemId;
-  readonly role: TriageRole;
-  readonly note?: string;
-}) {
-  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
-
-  const issueTracker = yield* IssueTracker;
-  yield* issueTracker.reclassify(workspace, payload.workItem, {
-    changes: roleChanges(observed.roles, payload.role),
-    note: payload.note,
+  if (run.status !== "running") return yield* runAlreadyFinished(payload.runId, run.status);
+  const cancellation = yield* (yield* RunControl).cancel(payload.runId);
+  const drained =
+    cancellation._tag === "NotFound" ||
+    Option.isSome(yield* cancellation.awaitTermination.pipe(Effect.timeoutOption(cancelDrainDeadline)));
+  if (!drained) yield* Effect.logWarning("run cancellation still draining", { runId: payload.runId });
+  const settled = yield* ledger.getRun(payload.runId);
+  if (settled === null) return yield* runNotFound(payload.runId);
+  if (settled.status !== "running") return;
+  yield* ledger.updateRun(payload.runId, {
+    status: "interrupted",
+    usage: settled.usage,
+    endedAtMillis: yield* Clock.currentTimeMillis,
   });
-
-  const item = classifiedItemWithPr({ ...observed, roles: [payload.role] });
-  yield* publishChangedItem(payload.workspace, item);
-  return item;
 });
 
 export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
-  readonly workspace: WorkspaceId;
-  readonly workItem: WorkItemId;
-  readonly role: TriageRole;
+  readonly item: WorkItemRef;
   readonly note?: string;
 }) {
-  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
-  const principal = yield* Principal;
-  const record = { by: principal.id, atMillis: yield* Clock.currentTimeMillis };
-  const issueTracker = yield* IssueTracker;
-  yield* issueTracker.handBack(workspace, payload.workItem, {
-    record,
-    changes: roleChanges(observed.roles, payload.role),
-    note: payload.note,
-  });
-
-  const item = classifiedItemWithPr(
-    applyHandbackBarrier({ ...observed, roles: [payload.role], handback: record }),
-  );
-  yield* publishChangedItem(payload.workspace, item);
-  return item;
+  yield* (yield* WorkflowRun).handBack(payload);
 });
 
 export const setScheduling = Effect.fn("Daemon.SetScheduling")(function* (payload: {
@@ -313,26 +164,24 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
   );
 });
 
-const publishAvailabilityMutation = Effect.fn("Daemon.publishAvailabilityMutation")(function* (
+const publishAfter = Effect.fn("Daemon.publishAfter")(
+  <A, E, R, B, E2, R2>(write: Effect.Effect<A, E, R>, publish: (written: A) => Effect.Effect<B, E2, R2>) =>
+    Effect.uninterruptibleMask((restore) => restore(write).pipe(Effect.flatMap(publish))),
+);
+
+const publishControlStoreMutation = Effect.fn("Daemon.publishControlStoreMutation")(function* <E, R>(
   store: ControlStoreService,
-  update: Effect.Effect<ControlStorePicture, ControlStoreFailure>,
+  update: Effect.Effect<ControlStorePicture, ControlStoreFailure | E, R>,
 ) {
   const publisher = yield* DaemonEventPublisher;
-  const worker = yield* ReconcileWorker;
-  const controlStore = yield* store.withWrite(update.pipe(Effect.tap(() => worker.invalidateAvailability())));
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  const published = yield* publisher.publishControlStore(controlStore);
-  yield* publisher.publishWorkspaces();
-  return published;
+  return yield* store.withWrite(update.pipe(Effect.tap(publisher.publishControlStore)));
 });
 
 export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
-  readonly update: OperationSettingUpdate;
+  readonly updates: OperationSettingBatch;
 }) {
-  const refusal = operationSettingRefusal(payload.update);
-  if (refusal !== null) return yield* refusal;
   const store = yield* ControlStore;
-  return yield* publishAvailabilityMutation(store, store.updateOperationSetting(payload.update));
+  return yield* publishControlStoreMutation(store, store.updateOperationSettings(payload.updates));
 });
 
 export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function* (payload: {
@@ -340,11 +189,11 @@ export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function*
   readonly enabled: boolean;
 }) {
   const harness = yield* Harness;
-  if (!harness.names.includes(payload.harness)) {
+  if (!harness.catalogs.has(payload.harness)) {
     return yield* HarnessNotRegistered.make({ harness: payload.harness });
   }
   const store = yield* ControlStore;
-  return yield* publishAvailabilityMutation(store, store.setHarnessEnabled(payload.harness, payload.enabled));
+  return yield* publishControlStoreMutation(store, store.setHarnessEnabled(payload.harness, payload.enabled));
 });
 
 const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
@@ -425,19 +274,7 @@ export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")
   const refusal = contributionSettingRefusal(payload.update, registry);
   if (refusal) return yield* refusal;
   const store = yield* ControlStore;
-  const publisher = yield* DaemonEventPublisher;
-  const worker = yield* ReconcileWorker;
-  const controlStore = yield* store.withWrite(
-    Effect.gen(function* () {
-      const updated = yield* store.updateContributionSetting(payload.update);
-      yield* worker.invalidateAvailability();
-      return updated;
-    }),
-  );
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  const published = yield* publisher.publishControlStore(controlStore);
-  yield* publisher.publishWorkspaces();
-  return published;
+  return yield* publishControlStoreMutation(store, store.updateContributionSetting(payload.update));
 });
 
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
@@ -454,10 +291,9 @@ export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function*
   }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
-  const change = yield* management.register(payload.registration);
-  const state = workspaceStateFromChange(change);
-  yield* publisher.publishWorkspaces();
-  return state;
+  return yield* publishAfter(management.register(payload.registration), (change) =>
+    publisher.publishWorkspaces().pipe(Effect.map(() => workspaceStateFromChange(change))),
+  );
 });
 
 export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(function* (payload: {
@@ -466,21 +302,24 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const store = yield* ControlStore;
-  const workspace = yield* management.deregister(payload.workspace);
-  yield* publisher.publishWorkspaceRemoved(workspace);
-  const controlStore = yield* store.picture.pipe(
-    Effect.mapError(
-      (error) =>
-        new WorkspaceRegistryError({
-          reason: "management-failed",
-          workspace,
-          operation: "deregister workspace",
-          message: error.message,
-        }),
-    ),
+  return yield* publishAfter(management.deregister(payload.workspace), (workspace) =>
+    Effect.gen(function* () {
+      yield* publisher.publishWorkspaceRemoved(workspace);
+      const controlStore = yield* store.picture.pipe(
+        Effect.mapError(
+          (error) =>
+            new WorkspaceRegistryError({
+              reason: "management-failed",
+              workspace,
+              operation: "deregister workspace",
+              message: error.message,
+            }),
+        ),
+      );
+      yield* publisher.publishControlStore(controlStore);
+      return workspace;
+    }),
   );
-  yield* publisher.publishControlStore(controlStore);
-  return workspace;
 });
 
 export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (payload: {
@@ -498,13 +337,14 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
   }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
-  const worker = yield* ReconcileWorker;
-  const change = yield* management.update(payload.workspace, payload.update);
-  const state = workspaceStateFromChange(change);
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  const published = yield* publisher.publishWorkspaces();
-  yield* publisher.publishScheduler();
-  return published.find((workspace) => workspace.name === payload.workspace) ?? state;
+  return yield* publishAfter(management.update(payload.workspace, payload.update), (change) =>
+    Effect.gen(function* () {
+      const state = workspaceStateFromChange(change);
+      const published = yield* publisher.publishWorkspaces();
+      yield* publisher.publishScheduler();
+      return published.find((workspace) => workspace.name === payload.workspace) ?? state;
+    }),
+  ).pipe(Effect.uninterruptible);
 });
 
 export const rebindWorkspace = Effect.fn("Daemon.RebindWorkspace")(function* (payload: {
@@ -525,21 +365,22 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
   const publisher = yield* DaemonEventPublisher;
   const plugins = yield* PluginManager;
   const store = yield* ControlStore;
-  const worker = yield* ReconcileWorker;
-  const completed = yield* mutation;
-  const result = yield* store.withWrite(
+  return yield* publishAfter(mutation, (completed) =>
     Effect.gen(function* () {
-      const overview = yield* plugins.overview;
-      const notices = samePluginMembership(completed.overview, overview) ? completed.notices : [];
-      yield* worker.invalidateAvailability();
-      return { overview, notices };
+      const result = yield* store.withWrite(
+        plugins.overview.pipe(
+          Effect.map((overview) => ({
+            overview,
+            notices: samePluginMembership(completed.overview, overview) ? completed.notices : [],
+          })),
+        ),
+      );
+      yield* publisher.publishPlugins(result.overview, result.notices);
+      yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
+      yield* publisher.publishWorkspaces();
+      return result;
     }),
   );
-  yield* worker.submitAfterCurrent().pipe(Effect.ignore);
-  yield* publisher.publishPlugins(result.overview, result.notices);
-  yield* store.picture.pipe(Effect.flatMap(publisher.publishControlStore), Effect.ignore);
-  yield* publisher.publishWorkspaces();
-  return result;
 });
 
 export const installPlugin = Effect.fn("Daemon.InstallPlugin")(function* (payload: {
@@ -593,18 +434,22 @@ const publishControlStore = Effect.fn("Daemon.publishControlStore")(function* ()
   );
 });
 
+const publishConnectionMutation = Effect.fn("Daemon.publishConnectionMutation")(function* (
+  danglingWorkspaces: readonly WorkspaceId[],
+) {
+  yield* publishControlStore();
+  return yield* publishConnections(danglingWorkspaces);
+});
+
 const ensureRequiredPlugin = Effect.fn("Daemon.ensureRequiredPlugin")(function* (
   system: ConnectionEstablishment["system"],
   principalId: PrincipalId,
-  rollback: Effect.Effect<void, never>,
 ) {
   const plugins = yield* PluginManager;
   const overview = yield* plugins.overview;
   const plugin = pluginRequiringConnection(overview, system);
   if (!plugin || plugin.record) return;
-  yield* publishPluginMutation(plugins.install(plugin.pluginId, principalId)).pipe(
-    Effect.onExit((exit) => (Exit.isSuccess(exit) ? Effect.void : rollback)),
-  );
+  yield* publishPluginMutation(plugins.install(plugin.pluginId, principalId));
 });
 
 export const establishConnection = Effect.fn("Daemon.EstablishConnection")(function* (payload: {
@@ -621,21 +466,31 @@ export const establishConnection = Effect.fn("Daemon.EstablishConnection")(funct
       "Connection already exists. Use re-connect for the same account, or remove it before connecting to a different account.",
     );
   }
-  const connection = yield* connections
-    .establish(establishment)
-    .pipe(mapConnectionFailure("establish Connection", null));
-  yield* ensureRequiredPlugin(
-    establishment.system,
-    principal.id,
-    connections.remove(connection.id).pipe(Effect.ignore),
+  return yield* Effect.uninterruptibleMask((restore) =>
+    restore(
+      connections.establish(establishment).pipe(mapConnectionFailure("establish Connection", null)),
+    ).pipe(
+      Effect.flatMap((connection) =>
+        restore(ensureRequiredPlugin(establishment.system, principal.id)).pipe(
+          Effect.onExit((exit) =>
+            Exit.isSuccess(exit)
+              ? Effect.void
+              : connections
+                  .remove(connection.id)
+                  .pipe(Effect.ignore, Effect.andThen(publishConnectionMutation([]).pipe(Effect.ignore))),
+          ),
+          Effect.andThen(
+            Effect.logInfo("Connection established", {
+              connectionId: connection.id,
+              system: connection.system,
+              account: connection.account,
+            }),
+          ),
+          Effect.andThen(publishConnectionMutation([])),
+        ),
+      ),
+    ),
   );
-  yield* publishControlStore();
-  yield* Effect.logInfo("Connection established", {
-    connectionId: connection.id,
-    system: connection.system,
-    account: connection.account,
-  });
-  return yield* publishConnections([]);
 });
 
 export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(function* (payload: {
@@ -653,6 +508,8 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
   const requestedAccount = ConnectionEstablishment.match(payload.establishment, {
     github: () => null,
     linear: ({ account }) => account,
+    granola: ({ account }) => account,
+    slack: ({ account }) => account,
   });
   if (requestedAccount !== null && existing.account !== requestedAccount) {
     return yield* connectionFailure(
@@ -661,17 +518,119 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
       `Connection is established for "${existing.account}". Remove it before connecting to "${requestedAccount}".`,
     );
   }
-  const connection = yield* connections
-    .establish(payload.establishment, existing.account)
-    .pipe(mapConnectionFailure("re-connect Connection", existing.id));
-  yield* publishControlStore();
-  yield* Effect.logInfo("Connection re-connected", {
-    connectionId: connection.id,
-    system: connection.system,
-    account: connection.account,
-  });
-  return yield* publishConnections([]);
+  return yield* publishAfter(
+    connections
+      .establish(payload.establishment, existing.account)
+      .pipe(mapConnectionFailure("re-connect Connection", existing.id)),
+    (connection) =>
+      Effect.logInfo("Connection re-connected", {
+        connectionId: connection.id,
+        system: connection.system,
+        account: connection.account,
+      }).pipe(Effect.andThen(publishConnectionMutation([]))),
+  );
 });
+
+const findGranolaConnection = Effect.fn("Daemon.findGranolaConnection")(function* (
+  connections: ConnectionStoreService,
+  account: string,
+) {
+  const connection = yield* connections.findSystem("granola");
+  const accountChanged = connection !== null && connection.account !== account;
+  if (!accountChanged) return connection;
+  return yield* connectionFailure(
+    "login Granola",
+    connection.id,
+    `Connection is established for "${connection.account}". Remove it before connecting to "${account}".`,
+  );
+});
+
+export const loginGranola = Effect.fn("Daemon.LoginGranola")(function* (payload: {
+  readonly account: string;
+}) {
+  const connections = yield* ConnectionStore;
+  const existing = yield* findGranolaConnection(connections, payload.account);
+  const credential = yield* (yield* GranolaLogin).login(payload.account);
+  const store = yield* CredentialStore;
+  const withStoredCredential = store.withStoredCredential;
+  if (!withStoredCredential) {
+    return yield* connectionFailure(
+      "login Granola",
+      existing?.id ?? null,
+      "Credential store cannot stage a browser login",
+    );
+  }
+  const current = yield* findGranolaConnection(connections, payload.account);
+  const establishment = {
+    system: "granola",
+    account: payload.account,
+    source: { _tag: "Stored" },
+  } as const;
+  const connect = current ? reconnectConnection({ establishment }) : establishConnection({ establishment });
+  return yield* withStoredCredential(credential, connect).pipe(
+    Effect.mapError((error) =>
+      error._tag === "CredentialError"
+        ? new ConnectionFailure({
+            operation: "login Granola",
+            connectionId: current?.id ?? null,
+            message: error.message,
+          })
+        : error,
+    ),
+  );
+});
+
+const findSlackConnection = Effect.fn("Daemon.findSlackConnection")(function* (
+  connections: ConnectionStoreService,
+  account: string,
+) {
+  const connection = yield* connections.findSystem("slack");
+  const accountChanged = connection !== null && connection.account !== account;
+  if (!accountChanged) return connection;
+  return yield* connectionFailure(
+    "login Slack",
+    connection.id,
+    `Connection is established for "${connection.account}". Remove it before connecting to "${account}".`,
+  );
+});
+
+const slackLoginGate = Semaphore.makeUnsafe(1);
+
+const loginSlackUnlocked = Effect.fn("Daemon.LoginSlack.unlocked")(function* () {
+  const connections = yield* ConnectionStore;
+  const credential = yield* (yield* SlackLogin).login;
+  const existing = yield* findSlackConnection(connections, credential.organization);
+  const store = yield* CredentialStore;
+  const withStoredCredential = store.withStoredCredential;
+  if (!withStoredCredential) {
+    return yield* connectionFailure(
+      "login Slack",
+      existing?.id ?? null,
+      "Credential store cannot stage a browser login",
+    );
+  }
+  const establishment = {
+    system: "slack",
+    account: credential.organization,
+    source: { _tag: "Stored" },
+  } as const;
+  const connect = existing ? reconnectConnection({ establishment }) : establishConnection({ establishment });
+  return yield* withStoredCredential(credential, connect).pipe(
+    Effect.mapError((error) =>
+      error._tag === "CredentialError"
+        ? new ConnectionFailure({
+            operation: "login Slack",
+            connectionId: existing?.id ?? null,
+            message: error.message,
+          })
+        : error,
+    ),
+  );
+});
+
+export const loginSlack = Effect.fn("Daemon.LoginSlack")(() =>
+  slackLoginGate.withPermit(loginSlackUnlocked()),
+);
 
 const boundWorkspaceName = (workspace: RegistryState["workspaces"][number], connectionId: ConnectionId) => {
   if (workspace.config.issueTracker.connectionId === connectionId) return workspace.config.name;
@@ -716,9 +675,10 @@ export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (
   });
   const registry = yield* (yield* WorkspaceRegistry).state;
   const danglingWorkspaces = boundWorkspaceIds(registry, payload.connectionId);
-  yield* connections
-    .remove(payload.connectionId)
-    .pipe(mapConnectionFailure("remove Connection", payload.connectionId));
-  yield* publishControlStore();
-  return yield* publishConnections(danglingWorkspaces);
+  return yield* publishAfter(
+    connections
+      .remove(payload.connectionId)
+      .pipe(mapConnectionFailure("remove Connection", payload.connectionId)),
+    () => publishConnectionMutation(danglingWorkspaces),
+  );
 });

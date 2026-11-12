@@ -2,7 +2,7 @@
 
 The product and architecture spec for cogwork's unified local-first system for settings, Plugins,
 Connections, and contributions, settled on wayfinder map
-[#124](https://github.com/colonylabs/cogwork/issues/124) between 2026-08-24 and 2026-08-26. It resolves profile, runtime-host, repository, private-workspace,
+[#124](https://github.com/taylorfsteele/cogwork/issues/124) between 2026-08-24 and 2026-08-26. It resolves profile, runtime-host, repository, private-workspace,
 Workflow, and Operation inputs into an engine-validated **Run Plan** for every Run; powers the
 **Plugins**, **Customize**, **Connections**, and **Workspaces** surfaces; and defines storage,
 migrations, and the cutover from today's drift-prone sources.
@@ -34,7 +34,7 @@ anything one changes the other cannot see.
 One local-first system, shared by the desktop app and the CLI, with four ideas at its core:
 
 1. **Files you author are contributions; presence is enablement.** You write Skills, Rules,
-   Commands, and Subagents as files in one of three fixed **Authoring trees** — your user tree, a
+   and Subagents as files in one of three fixed **Authoring trees** — your user tree, a
    repository's committed tree, or a per-workspace private tree. Cogwork scans the trees; a file
    that exists is active. Only the kinds that execute or connect keep a switch, and only you can
    flip it — a repository may offer, never enable.
@@ -167,7 +167,7 @@ picture, so the two clients can never drift.
 Do not re-derive these; each links its owner. Vocabulary throughout is the shared kernel glossary's
 (`packages/contracts/CONTEXT.md`), which these decisions minted.
 
-### The execution vocabulary ([#128](https://github.com/colonylabs/cogwork/issues/128))
+### The execution vocabulary ([#128](https://github.com/taylorfsteele/cogwork/issues/128))
 
 One chain: **Workflow → Operation (+ Work Context) → Run Plan → Run.** A Workflow is a reusable
 automation of Operations and Transitions; cogwork owns the graph today. An **Operation Definition**
@@ -178,11 +178,11 @@ work-specific facts for one Run). The **Run Plan** is the immutable, engine-vali
 one Operation and its Work Context before dispatch; a **Run** executes one Plan. Retired: playbook,
 playbook skill, lifecycle stage, run manifest.
 
-### Two lists, no umbrella (ADR [0011](../adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md), [#132](https://github.com/colonylabs/cogwork/issues/132))
+### Two lists, no umbrella (ADR [0011](../adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md), [#132](https://github.com/taylorfsteele/cogwork/issues/132))
 
 **Contribution kinds** — what a person authors as a file and Customize shows as a row: **MCP
-server, Skill, Subagent, Rules, Command, Hook.** **Run Plan members** — what the Engine resolves
-and hands a Harness: Harness Adapter, Instructions, Tools, Skills, MCP, Subagents, Commands, Hooks,
+server, Skill, Subagent, Rules, Hook.** **Run Plan members** — what the Engine resolves
+and hands a Harness: Harness Adapter, Instructions, Tools, Skills, MCP, Subagents, Hooks,
 Middleware, Sandbox (Workspace, Policy), Structured Output, Persistence, Connections, Messages,
 Provenance. The lists differ deliberately: Rules is a kind that resolves into Instructions; Tools,
 Connections, and Middleware are members never contributed. **"Capability" is retired**; name the
@@ -197,11 +197,11 @@ never define) is what is decided, and it holds whether or not the field ever fil
 **Identity** is `<authority>/<kind>/<localName>`. Authority is where the bytes came from —
 `plugin:<pluginId>`, `engine`, or `local:<tree>` — immutable, part of the identity, carried into
 the Run Plan as provenance. The `local` qualifier names the Authoring tree: `local:user`,
-`local:repo`, `local:private` ([#204](https://github.com/colonylabs/cogwork/issues/204), ADR 0011
+`local:repo`, `local:private` ([#204](https://github.com/taylorfsteele/cogwork/issues/204), ADR 0011
 amendment). Authority and Scope stay orthogonal: Authority is where the bytes came from, Scope is
 where the setting lives, and an id never changes when a setting moves.
 
-### Two settings families, four Scopes (ADR [0013](../adr/0013-two-settings-families-with-different-scope-sets.md), [#134](https://github.com/colonylabs/cogwork/issues/134))
+### Two settings families, four Scopes (ADR [0013](../adr/0013-two-settings-families-with-different-scope-sets.md), [#134](https://github.com/taylorfsteele/cogwork/issues/134))
 
 Four Scopes — **Settings profile** (principal), **Runtime host** (machine), **Workspace input**
 (repo, committed), **Private workspace overlay** (principal-owned, per-workspace, uncommitted).
@@ -238,7 +238,7 @@ file; since #204 it narrows to a genuine duplicate — two install records under
 *unsatisfiable* (the only one that waits for a Run; a Run Plan rejection). The resolution trace is
 embedded in every Run Plan, never recomputed.
 
-### Authoring trees and presence-as-enablement (ADR [0018](../adr/0018-contribution-files-live-in-three-authoring-trees.md), [#127](https://github.com/colonylabs/cogwork/issues/127))
+### Authoring trees and presence-as-enablement (ADR [0018](../adr/0018-contribution-files-live-in-three-authoring-trees.md), [#127](https://github.com/taylorfsteele/cogwork/issues/127))
 
 A person authors contribution files in three fixed trees, one per Scope that can hold them:
 `~/.agents/` (Settings profile), `<repo>/.agents/` (Workspace input),
@@ -248,7 +248,7 @@ install, no manifest, no record. `~/.agents/` is shared with the harnesses on pu
 Cursor already read `~/.agents/skills`), so a Skill there serves Runs and interactive sessions
 alike. The trees are fixed; the only thing a person points cogwork at is a workspace.
 
-**Presence is enablement for the four non-executing kinds.** Skill, Rules, Command, and Subagent
+**Presence is enablement for the three non-executing kinds.** Skill, Rules, and Subagent
 have no setting: they exist or they do not. MCP server keeps its switch and its scope set; **Hook
 is deferred whole** (a named kind; no cross-harness projection designed; no Customize row; no Scope
 set). Registering a workspace is the trust act that admits its repository's files — taken
@@ -265,7 +265,7 @@ Instructions, last and highest. Rules can never satisfy a required need.
 written by the Engine, authored by nobody. **Install is for bytes that came from somewhere else; a
 person installs nothing they wrote.**
 
-### Plugins: first-party, two acts (ADR [0014](../adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md) as amended, [#125](https://github.com/colonylabs/cogwork/issues/125), [#135](https://github.com/colonylabs/cogwork/issues/135), [#205](https://github.com/colonylabs/cogwork/issues/205))
+### Plugins: first-party, two acts (ADR [0014](../adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md) as amended, [#125](https://github.com/taylorfsteele/cogwork/issues/125), [#135](https://github.com/taylorfsteele/cogwork/issues/135), [#205](https://github.com/taylorfsteele/cogwork/issues/205))
 
 **Every Plugin ships with cogwork.** Nothing is fetched; nothing third-party can be added. The
 **Plugin catalog** is a first-party document on disk listing what ships. The Plugin acts are
@@ -298,9 +298,11 @@ Plugin ships this Hook; it failed to load; here is the file*. Uninstall removes 
 bytes become the reclaimer's — **uninstall does not free disk immediately**.
 
 Surviving trust decisions from #135, independent of where bytes come from: the **Engine ceiling**
-is hard at three named postures — a non-interactive turn, worktree confinement, and the Operation
-read/write posture — a Harness that cannot provide one fails before launch; finer enforcement may
-be coarse only with its actual fidelity recorded **and no client presenting it as exact**.
+requires a non-interactive turn and the resolved read/write posture. The user chooses among the
+selected Harness's declared profiles; the Operation supplies only the default. Read only also
+requires worktree confinement. ADR 0025 permits Full to rely on a runner's declared native trust
+boundary. Finer enforcement may be coarse only with its actual fidelity recorded **and no client
+presenting it as exact**.
 **Nothing reaches a contributed Hook's or MCP server's `command`, and the asymmetry is
 principled**: the hard-deny list guards a fallible model, not an adversarial one, and a bundle may
 ship the very script its Hook invokes — so a `command` allowlist would be theater. Executable
@@ -311,7 +313,7 @@ shell-sourced secret is unrepresentable rather than forbidden. Uninstall deletes
 Scope; committed Workspace input values survive as *dangling*. `localName` is a stable contract —
 a rename is a drop plus an add.
 
-### Connections (ADR [0017](../adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md), [#172](https://github.com/colonylabs/cogwork/issues/172))
+### Connections (ADR [0017](../adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md), [#172](https://github.com/taylorfsteele/cogwork/issues/172))
 
 **A Connection and a Plugin are two concepts**, cut by two cases neither set contains: a
 Rules-only Plugin authenticates nothing, and GitHub is a Connection with no contributions. A
@@ -345,7 +347,7 @@ an input to MCP server readiness for a contributed server, standing alone for an
 `Readiness` umbrella exists. A provider key is not a Connection — it buys inference, not access to
 the work.
 
-### Run Plan resolution ([#130](https://github.com/colonylabs/cogwork/issues/130))
+### Run Plan resolution ([#130](https://github.com/taylorfsteele/cogwork/issues/130))
 
 **Two paths into a Run Plan: on / off is the entry gate, and a binding is a designation.** Every
 contribution that is on flows into every Run Plan for its workspace; a binding only says which
@@ -353,8 +355,8 @@ contribution serves an Operation Definition's declared need. **No mechanism narr
 per Operation** — lazy tool discovery is the answer to context cost, not narrowing. **Every
 declared need is required**; there is no optional need. **A need is a named slot carrying a kind**:
 an Operation Definition never names a concrete `<authority>/<kind>/<localName>` — Operation
-Settings bind one to the slot. Six kinds are bindable as needs: MCP server, Skill, Subagent,
-Command, Hook, Connection. `unsatisfiable` has three reasons: unbound, bound but not available,
+Settings bind one to the slot. Five kinds are bindable as needs: MCP server, Skill, Subagent,
+Hook, Connection. `unsatisfiable` has three reasons: unbound, bound but not available,
 bound but not ready.
 
 **Refusal and rejection are two shapes.** A refusal constrains a value, names its source, and the
@@ -406,7 +408,7 @@ Run in flight**, which finishes and writes its outcome exactly as it would have.
 Run. Replay means re-read — reconstruction for a human, never
 re-dispatch. One Plan per Run, keyed by `RunId`; no minted `RunPlanId`.
 
-### The Control store (ADR [0015](../adr/0015-one-control-store-with-engine-owned-migrations.md), [#126](https://github.com/colonylabs/cogwork/issues/126))
+### The Control store (ADR [0015](../adr/0015-one-control-store-with-engine-owned-migrations.md), [#126](https://github.com/taylorfsteele/cogwork/issues/126))
 
 **One SQLite database per machine**, at `~/.cogwork` (not Electron `userData` — a headless daemon
 over SSH has no `userData`). It holds install records, Connection records, settings at every Scope
@@ -430,7 +432,7 @@ durable rows with a forced write order — row, then the in-memory value, then p
 **not** on the Scope axis: one machine holds one value with no rival. Scheduling running/paused
 stays a live control that resets to paused at launch.
 
-### The management contract (ADR [0016](../adr/0016-one-management-contract-for-the-app-and-the-cli.md) as amended, [#133](https://github.com/colonylabs/cogwork/issues/133))
+### The management contract (ADR [0016](../adr/0016-one-management-contract-for-the-app-and-the-cli.md) as amended, [#133](https://github.com/taylorfsteele/cogwork/issues/133))
 
 **Twelve acts across six subjects, and the list is closed:**
 
@@ -477,7 +479,7 @@ reports derived sections as *needs a daemon* — never omitted, never guessed; a
 is rejected. Connection remove carries the *dangling* warning naming affected workspaces, in both
 clients.
 
-### Surfaces ([#131](https://github.com/colonylabs/cogwork/issues/131), PR [#215](https://github.com/colonylabs/cogwork/pull/215); names per the glossary)
+### Surfaces ([#131](https://github.com/taylorfsteele/cogwork/issues/131), PR [#215](https://github.com/taylorfsteele/cogwork/pull/215); names per the glossary)
 
 Four surfaces, each owning a disjoint act set the commands enforce (the write split is a
 client-surface rule; the daemon sees one `Principal`):
@@ -510,9 +512,9 @@ separate Plugins route.
 
 No `…` row menu exists — the act list is closed and none of its members is "delete a file".
 
-### The cutover ([#127](https://github.com/colonylabs/cogwork/issues/127), ADR 0018)
+### The cutover ([#127](https://github.com/taylorfsteele/cogwork/issues/127), ADR 0018)
 
-Amended by [#332](https://github.com/colonylabs/cogwork/issues/332): the Workspace input is only an
+Amended by [#332](https://github.com/taylorfsteele/cogwork/issues/332): the Workspace input is only an
 Authoring tree. It has no settings file. `worktrees.setup`, `worktrees.linkPaths`, and `mcpSkills`
 move through `register` into the workspace record in the Control store.
 
@@ -582,18 +584,17 @@ Ruled out by the map's destination; return only as fresh efforts if the destinat
   #205 struck: the catalog fetch, digests, status sets, staged updates. Do not restore any of it on
   the argument that third-party install may arrive one day.
 - **Remote execution hosts and hosted Connection execution.**
-- **Interactive sessions**, and with them any machinery for a required Command (the kind stays in
-  the need list; nothing is built).
+- **Interactive sessions.**
 - **Non-coding Workflow execution**, and contribution needs for non-coding Workflows beyond the
   Granola-to-ticket example.
 - **Hook's setting and cross-harness projection** — the kind exists; everything else is deferred.
   Until designed, Hook has no Customize row and no Scope set.
 - **`pin`** — closed unresolved and deleted from the glossary
-  ([#203](https://github.com/colonylabs/cogwork/issues/203)); nothing in the corpus invites it
+  ([#203](https://github.com/taylorfsteele/cogwork/issues/203)); nothing in the corpus invites it
   back.
 - **Whether a Plugin source belongs in the identity key** — ruled out while every Plugin ships
   with cogwork; the `pluginId`-alone install-record key stands
-  ([#205](https://github.com/colonylabs/cogwork/issues/205), out-of-scope half).
+  ([#205](https://github.com/taylorfsteele/cogwork/issues/205), out-of-scope half).
 - **Named workspace commands as Sandbox Policy subjects** (the retired `Script`) — returns when
   cogwork owns the policy layer.
 - **Host-version compatibility declarations for Plugins** — unsolved across the field; only
@@ -602,7 +603,7 @@ Ruled out by the map's destination; return only as fresh efforts if the destinat
   divergences #130 recorded (the Codex runner's unconditional `danger-full-access`, and the
   executor's insert-before-resolve).
 - **Renaming the Private workspace overlay Scope** — a sharp, deliberately unticketed sweep
-  (candidates weighed in [#204](https://github.com/colonylabs/cogwork/issues/204)), worth doing
+  (candidates weighed in [#204](https://github.com/taylorfsteele/cogwork/issues/204)), worth doing
   whenever the UI makes it visible.
 - **Reclaiming superseded provisioned bytes** — owned by whoever implements ADR 0014's provision.
   The rule already decided: bytes at a key no install record has ever named may be deleted
@@ -613,10 +614,10 @@ Ruled out by the map's destination; return only as fresh efforts if the destinat
 ### Supersession chain
 
 The Plugin-lifecycle decisions were made, then partially struck, in order:
-[#125](https://github.com/colonylabs/cogwork/issues/125) (ADR 0014) →
-[#135](https://github.com/colonylabs/cogwork/issues/135) (amendments into 0014) →
-[#172](https://github.com/colonylabs/cogwork/issues/172) (ADR 0017) →
-[#205](https://github.com/colonylabs/cogwork/issues/205) (amendments to 0014/0016/0017, plus
+[#125](https://github.com/taylorfsteele/cogwork/issues/125) (ADR 0014) →
+[#135](https://github.com/taylorfsteele/cogwork/issues/135) (amendments into 0014) →
+[#172](https://github.com/taylorfsteele/cogwork/issues/172) (ADR 0017) →
+[#205](https://github.com/taylorfsteele/cogwork/issues/205) (amendments to 0014/0016/0017, plus
 corrected lines in 0011 and 0018). **Where they conflict, #205 is current.** The invariants that survive the whole chain: install is
 machine-local and keyed by `pluginId` alone; a bundle names an env key and the engine holds the
 value; the Engine ceiling's three hard postures; Connections are engine-owned with no Scope and a
@@ -624,7 +625,7 @@ one-to-one first-party pairing; removal cascades Connection → Plugin, never th
 
 ### Relation to `next-phase.md`
 
-That spec (map [#159](https://github.com/colonylabs/cogwork/issues/159)) listed
+That spec (map [#159](https://github.com/taylorfsteele/cogwork/issues/159)) listed
 "settings-as-data migration" under *Explicitly later*. This document is that item arriving. Its
 three-role tracker seam is held exactly as written — ADR 0017 only fixes that a Plugin lands on the
 contributions side of it. Its per-workspace policy override ("waits for settings-as-data") now has
@@ -647,21 +648,21 @@ The full reasoning per area, in resolution order on the map:
 
 | Area | Ticket / ADR |
 |---|---|
-| Workflow / Operation / Run vocabulary | [#128](https://github.com/colonylabs/cogwork/issues/128) |
-| Storage research (prior art) | [#129](https://github.com/colonylabs/cogwork/issues/129) · `docs/research/desktop-settings-storage-updates.md` |
-| Harness Plugin-model research | [#136](https://github.com/colonylabs/cogwork/issues/136) · `docs/research/agent-capability-product-models.md` |
-| Contribution kinds and the Plugin contract | [#132](https://github.com/colonylabs/cogwork/issues/132) · ADR [0011](../adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md) |
-| Scopes, precedence, conflicts | [#134](https://github.com/colonylabs/cogwork/issues/134) · ADR [0013](../adr/0013-two-settings-families-with-different-scope-sets.md) |
-| Plugin lifecycle | [#125](https://github.com/colonylabs/cogwork/issues/125) · ADR [0014](../adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md) |
-| Run Plan resolution | [#130](https://github.com/colonylabs/cogwork/issues/130) (resolution comment is the record) |
-| Plugin trust, permissions, secrets | [#135](https://github.com/colonylabs/cogwork/issues/135) (folded into ADR 0014) |
-| Control store and migrations | [#126](https://github.com/colonylabs/cogwork/issues/126) · ADR [0015](../adr/0015-one-control-store-with-engine-owned-migrations.md) |
-| Connections | [#172](https://github.com/colonylabs/cogwork/issues/172) · ADR [0017](../adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md) |
-| App and CLI management contract | [#133](https://github.com/colonylabs/cogwork/issues/133) · ADR [0016](../adr/0016-one-management-contract-for-the-app-and-the-cli.md) |
-| Migration from today's sources | [#127](https://github.com/colonylabs/cogwork/issues/127) · ADR [0018](../adr/0018-contribution-files-live-in-three-authoring-trees.md) |
-| The `local` Authority split | [#204](https://github.com/colonylabs/cogwork/issues/204) · ADR 0011 amendment |
-| No Plugin-level on / off; fetch machinery struck | [#205](https://github.com/colonylabs/cogwork/issues/205) · ADR 0014/0016/0017 amendments |
-| Plugins & Customize UI | [#131](https://github.com/colonylabs/cogwork/issues/131) · PR [#215](https://github.com/colonylabs/cogwork/pull/215) |
-| `pin` | [#203](https://github.com/colonylabs/cogwork/issues/203) (closed unresolved; term deleted) |
-| Surface and event names (Workspaces, `ControlStoreChanged`) | domain-modeling act 2026-08-26, recorded on [#133](https://github.com/colonylabs/cogwork/issues/133) and in ADR 0016 |
-| Wayfinder map | [#124](https://github.com/colonylabs/cogwork/issues/124) |
+| Workflow / Operation / Run vocabulary | [#128](https://github.com/taylorfsteele/cogwork/issues/128) |
+| Storage research (prior art) | [#129](https://github.com/taylorfsteele/cogwork/issues/129) · `docs/research/desktop-settings-storage-updates.md` |
+| Harness Plugin-model research | [#136](https://github.com/taylorfsteele/cogwork/issues/136) · `docs/research/agent-capability-product-models.md` |
+| Contribution kinds and the Plugin contract | [#132](https://github.com/taylorfsteele/cogwork/issues/132) · ADR [0011](../adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md) |
+| Scopes, precedence, conflicts | [#134](https://github.com/taylorfsteele/cogwork/issues/134) · ADR [0013](../adr/0013-two-settings-families-with-different-scope-sets.md) |
+| Plugin lifecycle | [#125](https://github.com/taylorfsteele/cogwork/issues/125) · ADR [0014](../adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md) |
+| Run Plan resolution | [#130](https://github.com/taylorfsteele/cogwork/issues/130) (resolution comment is the record) |
+| Plugin trust, permissions, secrets | [#135](https://github.com/taylorfsteele/cogwork/issues/135) (folded into ADR 0014) |
+| Control store and migrations | [#126](https://github.com/taylorfsteele/cogwork/issues/126) · ADR [0015](../adr/0015-one-control-store-with-engine-owned-migrations.md) |
+| Connections | [#172](https://github.com/taylorfsteele/cogwork/issues/172) · ADR [0017](../adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md) |
+| App and CLI management contract | [#133](https://github.com/taylorfsteele/cogwork/issues/133) · ADR [0016](../adr/0016-one-management-contract-for-the-app-and-the-cli.md) |
+| Migration from today's sources | [#127](https://github.com/taylorfsteele/cogwork/issues/127) · ADR [0018](../adr/0018-contribution-files-live-in-three-authoring-trees.md) |
+| The `local` Authority split | [#204](https://github.com/taylorfsteele/cogwork/issues/204) · ADR 0011 amendment |
+| No Plugin-level on / off; fetch machinery struck | [#205](https://github.com/taylorfsteele/cogwork/issues/205) · ADR 0014/0016/0017 amendments |
+| Plugins & Customize UI | [#131](https://github.com/taylorfsteele/cogwork/issues/131) · PR [#215](https://github.com/taylorfsteele/cogwork/pull/215) |
+| `pin` | [#203](https://github.com/taylorfsteele/cogwork/issues/203) (closed unresolved; term deleted) |
+| Surface and event names (Workspaces, `ControlStoreChanged`) | domain-modeling act 2026-08-26, recorded on [#133](https://github.com/taylorfsteele/cogwork/issues/133) and in ADR 0016 |
+| Wayfinder map | [#124](https://github.com/taylorfsteele/cogwork/issues/124) |

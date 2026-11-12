@@ -6,18 +6,19 @@ import { WorkspaceId } from "./base-schemas";
 import { applyDaemonEvent, initialBoard, liveOnly, workspaceFailureState } from "./board";
 import { LocalContribution } from "./contribution";
 import { ControlStore, SchedulerStats } from "./daemon";
-import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
+import { DaemonEvent, ReadModelItem, WorkspaceState } from "./daemon-event";
+import { HarnessReadiness } from "./harness";
 import { RunSummary } from "./run";
 import { defaultControlStore } from "./scheduler-defaults";
-import type { LifecycleStage } from "./triage";
 
 const workspace = Schema.decodeSync(WorkspaceId);
-const classifiedItem = Schema.decodeSync(ClassifiedItem);
+const readModelItem = Schema.decodeSync(ReadModelItem);
 const runSummary = Schema.decodeSync(RunSummary);
 const schedulerStats = Schema.decodeSync(SchedulerStats);
 const controlStore = Schema.decodeSync(ControlStore);
 const workspaceState = Schema.decodeSync(WorkspaceState);
 const localContribution = Schema.decodeSync(LocalContribution);
+const harnessReadiness = Schema.decodeSync(HarnessReadiness);
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
 
@@ -33,29 +34,26 @@ const registered = (name: string) =>
       issueTracker: { type: "github" },
       linearHistory: false,
     },
-    poll: { status: "ok" },
     contributions: [],
-    availability: [],
   });
 
-const eligible = (id: string, stage: LifecycleStage) =>
-  classifiedItem({ _tag: "Eligible", id, title: `Item ${id}`, url: null, stage });
-
-const needsHuman = (id: string, url: string | null) =>
-  classifiedItem({
-    _tag: "NeedsHuman",
+const readyToMerge = (id: string, title: string) =>
+  readModelItem({
+    _tag: "ReadyToMerge",
     id,
-    title: `Item ${id}`,
-    reason: "ready-for-human",
-    proposal: null,
-    url,
+    title,
+    url: null,
+    pr: {
+      number: Number(id.replace(/\D/g, "")) || 1,
+      url: `https://example.test/pull/${id}`,
+      checks: "passing",
+      review: "ready",
+      baseDivergence: "clean",
+      waitingSinceMillis: 0,
+    },
   });
 
-const stageOf = (item: ClassifiedItem | undefined) =>
-  item && ClassifiedItem.guards.Eligible(item) ? item.stage : null;
-
-const urlOf = (item: ClassifiedItem | undefined) =>
-  item && ClassifiedItem.guards.NeedsHuman(item) ? item.url : null;
+const titleOf = (item: ReadModelItem | undefined) => item?.title ?? null;
 
 const fold = (events: ReadonlyArray<DaemonEvent>) => events.reduce(applyDaemonEvent, initialBoard);
 
@@ -77,60 +75,42 @@ describe("applyDaemonEvent", () => {
     assert.throws(() => decodeEvent({ _tag: "SeedEnd" }));
   });
 
-  it("records the latest classified item per workspace and id", () => {
+  it("records the latest read-model item per workspace and id", () => {
     const board = fold([
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "implement") }),
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("2", "triage") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("1", "First") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("1", "Updated") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("2", "Second") }),
     ]);
 
     assert.strictEqual(board.items.size, 2);
     const first = board.items.get("acme::1");
-    assert.strictEqual(first?.item._tag, "Eligible");
-    assert.strictEqual(stageOf(first?.item), "implement");
+    assert.strictEqual(first?.item._tag, "ReadyToMerge");
+    assert.strictEqual(titleOf(first?.item), "Updated");
     assert.strictEqual(first?.workspace, workspace("acme"));
-  });
-
-  it("folds a needs-human item carrying its tracker ticket URL", () => {
-    const board = fold([
-      event({
-        _tag: "ItemChanged",
-        workspace: "acme",
-        item: needsHuman("1", "https://github.com/acme/repo/issues/1"),
-      }),
-    ]);
-
-    assert.strictEqual(urlOf(board.items.get("acme::1")?.item), "https://github.com/acme/repo/issues/1");
-  });
-
-  it("folds a needs-human item with no tracker ticket URL", () => {
-    const board = fold([event({ _tag: "ItemChanged", workspace: "acme", item: needsHuman("1", null) })]);
-
-    assert.isNull(urlOf(board.items.get("acme::1")?.item));
   });
 
   it("removes an item and leaves the rest of the board alone", () => {
     const board = fold([
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("2", "triage") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("1", "First") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("2", "Second") }),
       event({ _tag: "ItemRemoved", workspace: "acme", id: "1" }),
     ]);
 
     assert.strictEqual(board.items.size, 1);
     assert.isUndefined(board.items.get("acme::1"));
-    assert.strictEqual(stageOf(board.items.get("acme::2")?.item), "triage");
+    assert.strictEqual(titleOf(board.items.get("acme::2")?.item), "Second");
   });
 
   it("removes an item only in its own workspace", () => {
     const board = fold([
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
-      event({ _tag: "ItemChanged", workspace: "beta", item: eligible("1", "follow-up") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("1", "Acme") }),
+      event({ _tag: "ItemChanged", workspace: "beta", item: readyToMerge("1", "Beta") }),
       event({ _tag: "ItemRemoved", workspace: "acme", id: "1" }),
     ]);
 
     assert.strictEqual(board.items.size, 1);
     assert.isUndefined(board.items.get("acme::1"));
-    assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "follow-up");
+    assert.strictEqual(titleOf(board.items.get("beta::1")?.item), "Beta");
   });
 
   it("tolerates removing an item the board never had", () => {
@@ -140,27 +120,27 @@ describe("applyDaemonEvent", () => {
 
   it("keeps items with the same id apart across workspaces", () => {
     const board = fold([
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("1", "triage") }),
-      event({ _tag: "ItemChanged", workspace: "beta", item: eligible("1", "follow-up") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("1", "Acme") }),
+      event({ _tag: "ItemChanged", workspace: "beta", item: readyToMerge("1", "Beta") }),
     ]);
 
     assert.strictEqual(board.items.size, 2);
-    assert.strictEqual(stageOf(board.items.get("acme::1")?.item), "triage");
-    assert.strictEqual(stageOf(board.items.get("beta::1")?.item), "follow-up");
+    assert.strictEqual(titleOf(board.items.get("acme::1")?.item), "Acme");
+    assert.strictEqual(titleOf(board.items.get("beta::1")?.item), "Beta");
   });
 
   it("is idempotent: applying the same event twice is harmless", () => {
     const changed = event({
       _tag: "ItemChanged",
       workspace: "acme",
-      item: eligible("1", "implement"),
+      item: readyToMerge("1", "Implement"),
     });
 
     const once = applyDaemonEvent(initialBoard, changed);
     const twice = applyDaemonEvent(once, changed);
 
     assert.strictEqual(twice.items.size, 1);
-    assert.strictEqual(stageOf(twice.items.get("acme::1")?.item), "implement");
+    assert.strictEqual(titleOf(twice.items.get("acme::1")?.item), "Implement");
   });
 
   it("leaves the board unchanged for the SeedEnd subscription-control event", () => {
@@ -171,10 +151,10 @@ describe("applyDaemonEvent", () => {
 
   it("does not retain an item that a new complete seed omits", () => {
     const firstSeed = fold([
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("gone", "triage") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("gone", "Gone") }),
     ]);
     const nextSeed = fold([
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("kept", "implement") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("kept", "Kept") }),
     ]);
 
     assert.strictEqual(firstSeed.items.has("acme::gone"), true);
@@ -184,9 +164,9 @@ describe("applyDaemonEvent", () => {
 
   it.effect("keeps only events after the SeedEnd boundary for live consumers", () =>
     Stream.fromIterable([
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("seed", "triage") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("seed", "Seed") }),
       event({ _tag: "SeedEnd", emittedAtMillis: 1_000 }),
-      event({ _tag: "ItemChanged", workspace: "acme", item: eligible("live", "implement") }),
+      event({ _tag: "ItemChanged", workspace: "acme", item: readyToMerge("live", "Live") }),
     ]).pipe(
       liveOnly,
       Stream.runCollect,
@@ -206,7 +186,7 @@ describe("applyDaemonEvent", () => {
       id: "run-1",
       workspace: "acme",
       workItem: "1",
-      stage: "implement",
+      operation: "implement",
       harness: "cursor",
       branch: null,
       session: null,
@@ -332,6 +312,25 @@ describe("applyDaemonEvent", () => {
     assert.deepStrictEqual(board.pluginNotices, []);
   });
 
+  it("tracks the latest cached Harness readiness", () => {
+    const readiness = harnessReadiness({
+      checkedAtMillis: 12,
+      harnesses: [
+        {
+          harness: "codex",
+          enabled: true,
+          version: "0.154.0",
+          state: { _tag: "Ready" },
+          diagnostics: ["Codex 0.155.0 is available."],
+        },
+      ],
+    });
+
+    const board = fold([event({ _tag: "HarnessesChanged", readiness })]);
+
+    assert.deepStrictEqual(board.harnesses, readiness);
+  });
+
   it("keeps running runs and only the recent settled run window", () => {
     const runs = Array.from({ length: 25 }, (_, index) =>
       event({
@@ -340,7 +339,7 @@ describe("applyDaemonEvent", () => {
           id: `run-${index}`,
           workspace: "acme",
           workItem: "1",
-          stage: "implement",
+          operation: "implement",
           harness: "cursor",
           branch: null,
           session: null,
@@ -360,7 +359,7 @@ describe("applyDaemonEvent", () => {
           id: "running",
           workspace: "acme",
           workItem: "1",
-          stage: "implement",
+          operation: "implement",
           harness: "cursor",
           branch: null,
           session: null,
@@ -394,9 +393,7 @@ describe("applyDaemonEvent", () => {
             issueTracker: { type: "linear" },
             linearHistory: false,
           },
-          poll: { status: "ok" },
           contributions: [],
-          availability: [],
         }),
       }),
     ]);
@@ -474,7 +471,7 @@ describe("applyDaemonEvent", () => {
       event({
         _tag: "ItemChanged",
         workspace: "acme",
-        item: eligible("#1", "implement"),
+        item: readyToMerge("#1", "Implement"),
       }),
     ]);
 

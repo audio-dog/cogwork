@@ -1,10 +1,13 @@
+import { type BranchName, BranchName as BranchNameSchema } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as TxReentrantLock from "effect/TxReentrantLock";
 import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
 import { WorktreeFs } from "./worktree-fs";
@@ -13,26 +16,16 @@ export const worktreeEnsureDuration = Metric.timer("cogwork_worktree_ensure_dura
   description: "Time to ensure a worktree is ready for a Run.",
 });
 
-export class WorktreeDivergedError extends Schema.TaggedError<WorktreeDivergedError>()(
-  "WorktreeDivergedError",
-  {
-    remote: Schema.String,
-    branch: Schema.String,
-    message: Schema.String,
-    retryable: Schema.Boolean,
-  },
-) {}
-
-export class WorktreeOperationInProgressError extends Schema.TaggedError<WorktreeOperationInProgressError>()(
-  "WorktreeOperationInProgressError",
-  {
-    branch: Schema.String,
-    operation: Schema.Literals(["merge", "rebase", "cherry-pick"]),
-    unmergedPaths: Schema.Array(Schema.String),
-    message: Schema.String,
-    retryable: Schema.Boolean,
-  },
-) {}
+export class WorktreeError extends Schema.TaggedError<WorktreeError>()("WorktreeError", {
+  reason: Schema.Literals(["detached", "diverged", "operation-in-progress", "unsafe-branch"]),
+  branch: Schema.String,
+  path: Schema.optional(Schema.String),
+  remote: Schema.optional(Schema.String),
+  operation: Schema.optional(Schema.Literals(["merge", "rebase", "cherry-pick"])),
+  unmergedPaths: Schema.optional(Schema.Array(Schema.String)),
+  message: Schema.String,
+  retryable: Schema.Boolean,
+}) {}
 
 export interface WorkItemRef {
   readonly id: string;
@@ -56,14 +49,20 @@ const kebab = (value: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-export const ticketSlug = (id: string) => kebab(id);
+const codePointSlug = (value: string) =>
+  [...value].map((character) => character.codePointAt(0)?.toString(36).padStart(5, "0") ?? "00000").join("");
+
+export const ticketSlug = (id: string) => kebab(id) || `u--${codePointSlug(id)}`;
+
+export const branchBelongsToTicketSlug = (branch: string, slug: string) =>
+  branch === slug || (branch.startsWith(`${slug}-`) && !branch.startsWith(`${slug}--`));
 
 export const slugify = (title: string) => kebab(title);
 
 export const branchName = (item: WorkItemRef) => {
   const ticket = ticketSlug(item.id);
   const slug = slugify(item.title);
-  return slug ? `${ticket}-${slug}` : ticket;
+  return BranchNameSchema.make(slug ? `${ticket}-${slug}` : ticket);
 };
 
 export const worktreeRoot = (checkoutPath: string, config?: WorktreeSettings) =>
@@ -71,17 +70,11 @@ export const worktreeRoot = (checkoutPath: string, config?: WorktreeSettings) =>
 
 export const worktreePathFor = (root: string, branch: string) => joinPath(root, branch);
 
-export const checkoutPathFor = (
-  checkoutPath: string,
-  item: WorkItemRef,
-  stage: string,
-  config?: WorktreeSettings,
-) => {
-  if (stage === "triage") return checkoutPath;
-  return worktreePathFor(worktreeRoot(checkoutPath, config), branchName(item));
-};
-
 const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
+const safeWorktreeBranch = (branch: string) =>
+  !branch.startsWith("/") &&
+  !branch.includes("\\") &&
+  branch.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 
 const remoteOf = (config?: WorktreeSettings) => config?.remote ?? "origin";
 const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main";
@@ -89,19 +82,25 @@ const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main"
 const linkPathsFor = (config?: WorktreeSettings) => [...new Set(config?.linkPaths ?? [])];
 
 export interface EnsuredWorktree {
-  readonly branch: string;
+  readonly branch: BranchName;
   readonly path: string;
   readonly created: boolean;
 }
 
 export interface EnsureOptions {
   readonly resume?: boolean;
-  readonly branch?: string;
+  readonly branch?: BranchName;
+  readonly pushOwner?: "agent" | "engine";
 }
 
 export interface ReconcileOutcome {
   readonly tornDown: ReadonlyArray<string>;
   readonly reaped: ReadonlyArray<string>;
+}
+
+export interface ReconcileRetention {
+  readonly activeTicketKeys: ReadonlyArray<string>;
+  readonly ownedWorktreePaths: ReadonlyArray<string>;
 }
 
 export type PullRequestReadiness = Data.TaggedEnum<{
@@ -157,6 +156,25 @@ const operationMessage = (branch: string, operation: GitOperationInProgress) => 
 export const make = Effect.gen(function* () {
   const git = yield* Git;
   const fs = yield* WorktreeFs;
+  const retentionLock = yield* TxReentrantLock.make();
+
+  const withRunOwnershipLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    TxReentrantLock.withReadLock(retentionLock, effect);
+
+  const tryWithMaintenanceLock = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.acquireUseRelease(
+      Effect.tx(
+        TxReentrantLock.locked(retentionLock).pipe(
+          Effect.flatMap((locked) =>
+            locked
+              ? Effect.succeed(false)
+              : TxReentrantLock.acquireWrite(retentionLock).pipe(Effect.map(() => true)),
+          ),
+        ),
+      ),
+      (acquired) => (acquired ? Effect.asSome(effect) : Effect.succeed(Option.none<A>())),
+      (acquired) => (acquired ? TxReentrantLock.releaseWrite(retentionLock) : Effect.void),
+    );
 
   const pathFor = (repoPath: string, config: WorktreeSettings | undefined, branch: string) =>
     worktreePathFor(worktreeRoot(repoPath, config), branch);
@@ -185,6 +203,48 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const pushOwnership = {
+    agent: git.allowPush,
+    engine: git.blockPush,
+  } satisfies Record<NonNullable<EnsureOptions["pushOwner"]>, typeof git.blockPush>;
+
+  const configurePush = (
+    worktreePath: string,
+    remote: string,
+    owner: NonNullable<EnsureOptions["pushOwner"]> = "agent",
+  ) => pushOwnership[owner](worktreePath, remote);
+
+  const registeredOrDetached = Effect.fn("Worktree.registeredOrDetached")(function* (
+    repoPath: string,
+    branch: string,
+    worktreePath: string,
+  ) {
+    const entries = yield* git.listWorktrees(repoPath);
+    const registered = entries.some((entry) => entry.path === worktreePath);
+    if (registered) return "registered";
+    return yield* new WorktreeError({
+      reason: "detached",
+      branch,
+      path: worktreePath,
+      message: `worktree path ${worktreePath} contains a .git entry but git does not register it; it was left untouched because it may contain uncommitted work`,
+      retryable: false,
+    });
+  });
+
+  const recoverUnregisteredPath = Effect.fn("Worktree.recoverUnregisteredPath")(function* (
+    repoPath: string,
+    root: string,
+    branch: string,
+    worktreePath: string,
+  ) {
+    const target = yield* fs.stat(worktreePath);
+    if (!target) return "vacant";
+
+    const removed = yield* fs.removeDebris(root, worktreePath);
+    if (removed) return "vacant";
+    return yield* registeredOrDetached(repoPath, branch, worktreePath);
+  });
+
   const managed = Effect.fn("Worktree.managed")(function* (repoPath: string, config?: WorktreeSettings) {
     const entries = yield* git.listWorktrees(repoPath);
     const prefix = `${worktreeRoot(repoPath, config)}/`;
@@ -206,7 +266,8 @@ export const make = Effect.gen(function* () {
       Effect.catchIf(
         (error) => error.reason !== "timeout",
         (error) =>
-          new WorktreeDivergedError({
+          new WorktreeError({
+            reason: "diverged",
             remote,
             branch,
             message: unresolvableMessage(remote, branch, divergence, error.message),
@@ -234,7 +295,8 @@ export const make = Effect.gen(function* () {
   ) {
     const operation = yield* git.operationInProgress(worktreePath);
     if (!operation) return;
-    return yield* new WorktreeOperationInProgressError({
+    return yield* new WorktreeError({
+      reason: "operation-in-progress",
       branch,
       ...operation,
       message: operationMessage(branch, operation),
@@ -251,24 +313,42 @@ export const make = Effect.gen(function* () {
     const repoPath = workspace.config.checkoutPath;
     const remote = remoteOf(config);
     const branch = options?.branch ?? branchName(item);
-    const worktreePath = pathFor(repoPath, config, branch);
+    if (!safeWorktreeBranch(branch)) {
+      return yield* new WorktreeError({
+        reason: "unsafe-branch",
+        branch,
+        message: `refusing worktree branch "${branch}" because it does not resolve below the worktree root`,
+        retryable: false,
+      });
+    }
+    const root = worktreeRoot(repoPath, config);
+    const worktreePath = worktreePathFor(root, branch);
 
     yield* git.fetch(repoPath, remote);
     const entries = yield* git.listWorktrees(repoPath);
-    const exists = entries.some((entry) => entry.path === worktreePath);
+    const initiallyRegistered = entries.some((entry) => entry.path === worktreePath);
+    const targetState = initiallyRegistered
+      ? "registered"
+      : yield* recoverUnregisteredPath(repoPath, root, branch, worktreePath);
+    const registered = targetState === "registered";
+    const resumesRegisteredWorktree = registered && options?.resume;
 
-    if (exists && options?.resume) {
+    if (resumesRegisteredWorktree) {
+      yield* configurePush(worktreePath, remote, options?.pushOwner);
       return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
     }
 
-    if (exists) yield* refuseOperationInProgress(worktreePath, branch);
+    if (registered) yield* refuseOperationInProgress(worktreePath, branch);
 
     const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
-    if (!exists) {
+    if (!registered) {
       const startPoint = hasRemoteBranch ? `${remote}/${branch}` : `${remote}/${baseBranchOf(config)}`;
       yield* Effect.acquireUseRelease(
         git.addWorktree({ repoPath, worktreePath, branch, startPoint }),
-        () => runSetup(repoPath, worktreePath, config),
+        () =>
+          runSetup(repoPath, worktreePath, config).pipe(
+            Effect.andThen(configurePush(worktreePath, remote, options?.pushOwner)),
+          ),
         (_created, exit) =>
           Exit.isSuccess(exit)
             ? Effect.void
@@ -280,41 +360,75 @@ export const make = Effect.gen(function* () {
     if (hasRemoteBranch) yield* syncBranch(worktreePath, remote, branch);
     else yield* logMissingRemote(remote, branch);
     yield* runSetup(repoPath, worktreePath, config);
+    yield* configurePush(worktreePath, remote, options?.pushOwner);
     return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
   }, Effect.trackDuration(worktreeEnsureDuration));
 
   const pullRequestReadiness = Effect.fn("Worktree.pullRequestReadiness")(function* (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
+    selectedHeadBranch?: string,
   ) {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
     const remote = remoteOf(config);
     const baseBranch = baseBranchOf(config);
-    const headBranch = branchName(item);
-    const worktreePath = pathFor(repoPath, config, headBranch);
-    const entries = yield* git.listWorktrees(repoPath);
-    const actualBranch = entries.find((entry) => entry.path === worktreePath)?.branch ?? null;
-    if (actualBranch !== headBranch) {
-      return declinedPullRequestReadiness(
-        `worktree ${worktreePath} is on ${actualBranch ?? "no branch"}, expected ${headBranch}`,
-      );
-    }
+    const headBranch = selectedHeadBranch ?? branchName(item);
 
-    yield* git.fetch(repoPath, remote);
-    const remoteHeadExists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
-    if (!remoteHeadExists) {
-      return declinedPullRequestReadiness(`head ${headBranch} has not been pushed to ${remote}`);
+    const refreshFailure = yield* git
+      .fetch(repoPath, remote, {
+        branches: [baseBranch],
+      })
+      .pipe(
+        Effect.match({
+          onFailure: (error) => error,
+          onSuccess: () => null,
+        }),
+      );
+    if (refreshFailure) {
+      yield* Effect.logWarning("failed to refresh pull request refs; continuing with cached refs", {
+        command: refreshFailure.command,
+        message: refreshFailure.message,
+      });
     }
-    const headDivergence = yield* git.divergence(worktreePath, remote, headBranch);
-    if (headDivergence.ahead > 0 || headDivergence.behind > 0) {
-      return declinedPullRequestReadiness(`local head ${headBranch} does not match ${remote}/${headBranch}`);
-    }
-    const divergence = yield* git.divergence(worktreePath, remote, baseBranch, headBranch);
+    const confirmedMissing = refreshFailure?.missingBranches?.includes(baseBranch)
+      ? `base ${baseBranch} does not exist on ${remote}`
+      : null;
+    if (confirmedMissing) return declinedPullRequestReadiness(confirmedMissing);
+    const divergence = yield* git.divergence(repoPath, remote, baseBranch, {
+      branch: headBranch,
+    });
     if (divergence.ahead === 0) {
       return declinedPullRequestReadiness(`head ${headBranch} is not ahead of ${remote}/${baseBranch}`);
     }
     return PullRequestReadiness.Ready({ headBranch, baseBranch });
+  });
+
+  const pushBranch = Effect.fn("Worktree.pushBranch")(function* (
+    workspace: RegisteredWorkspace,
+    headBranch: string,
+  ) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const remote = remoteOf(config);
+    const remoteUrl = yield* git.remoteUrl(repoPath, remote);
+    yield* git.pushBranch(repoPath, remoteUrl, headBranch);
+  });
+
+  const pushBranchIfAhead = Effect.fn("Worktree.pushBranchIfAhead")(function* (
+    workspace: RegisteredWorkspace,
+    headBranch: string,
+  ) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const remote = remoteOf(config);
+    const exists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
+    if (exists) {
+      const divergence = yield* git.divergence(repoPath, remote, headBranch, { branch: headBranch });
+      if (divergence.ahead === 0) return false;
+    }
+    yield* pushBranch(workspace, headBranch);
+    return true;
   });
 
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
@@ -356,22 +470,28 @@ export const make = Effect.gen(function* () {
 
   const reconcile = Effect.fn("Worktree.reconcile")(function* (
     workspace: RegisteredWorkspace,
-    activeTicketKeys: ReadonlyArray<string>,
+    retention: ReconcileRetention,
     now: number,
   ) {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
     const entries = yield* managed(repoPath, config);
+    const ownedWorktreePaths = new Set(retention.ownedWorktreePaths);
     const belongsToActiveTicket = (branch: string) =>
-      activeTicketKeys.some((key) => branch === key || branch.startsWith(`${key}-`));
+      retention.activeTicketKeys.some((key) => branchBelongsToTicketSlug(branch, key));
+    const isOwnedWorktree = (entry: WorktreeEntry) => ownedWorktreePaths.has(entry.path);
+    const isActiveWorktree = (entry: WorktreeEntry) =>
+      entry.branch === null || belongsToActiveTicket(entry.branch);
+    const isOrphaned = (entry: WorktreeEntry) => !isOwnedWorktree(entry) && !isActiveWorktree(entry);
+    const isReapCandidate = (entry: WorktreeEntry) => !isOwnedWorktree(entry) && isActiveWorktree(entry);
 
-    const orphaned = entries.filter((entry) => entry.branch !== null && !belongsToActiveTicket(entry.branch));
-    const retained = entries.filter((entry) => entry.branch === null || belongsToActiveTicket(entry.branch));
+    const orphaned = entries.filter(isOrphaned);
+    const reapCandidates = entries.filter(isReapCandidate);
     const reapAfterMillis = config?.reapAfterMillis;
     const idle =
       reapAfterMillis === undefined
         ? []
-        : yield* Effect.filter(retained, (entry) => isIdle(entry, reapAfterMillis, now));
+        : yield* Effect.filter(reapCandidates, (entry) => isIdle(entry, reapAfterMillis, now));
 
     const tornDown = yield* Effect.forEach(orphaned, (entry) => attemptRemoval(repoPath, entry, true));
     const reaped = yield* Effect.forEach(idle, (entry) => attemptRemoval(repoPath, entry, false));
@@ -382,7 +502,17 @@ export const make = Effect.gen(function* () {
     } satisfies ReconcileOutcome;
   });
 
-  return { ensure, pullRequestReadiness, list, remove, reconcile } as const;
+  return {
+    ensure,
+    pullRequestReadiness,
+    pushBranch,
+    pushBranchIfAhead,
+    list,
+    remove,
+    reconcile,
+    withRunOwnershipLock,
+    tryWithMaintenanceLock,
+  };
 });
 
 export type WorktreeManagerService = Effect.Success<typeof make>;

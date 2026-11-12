@@ -1,13 +1,14 @@
 import {
   applyDaemonEvent,
   type Board,
-  ClassifiedItem,
   DaemonEvent,
   initialBoard,
   type RunId,
   type RunStatus,
   type RunSummary,
   type SchedulerStats,
+  type WorkflowId,
+  type WorkflowRecord,
   type WorkItemId,
   type WorkspaceId,
   WorkspaceState,
@@ -18,6 +19,7 @@ import type * as Atom from "effect/unstable/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
 import { recordDaemonEventsApplied } from "../daemon/process-health";
+import { type OperationRun, operationNameOf, runTitle } from "./feed";
 import {
   applyRunPreview,
   previewMap,
@@ -64,7 +66,9 @@ export interface ActiveRun {
   readonly runId: RunId;
   readonly workspace: WorkspaceId;
   readonly workItem: WorkItemId;
-  readonly stage: RunSummary["stage"];
+  readonly subject?: RunSummary["subject"];
+  readonly workflow?: RunSummary["workflow"];
+  readonly operation: RunSummary["operation"];
   readonly status: RunStatus;
   readonly preview: RunActivityPreview | null;
 }
@@ -78,12 +82,14 @@ export interface NowState {
 
 export interface ActivitySession {
   readonly board: Board;
+  readonly workflows: ReadonlyMap<WorkflowId, WorkflowRecord>;
   readonly previews: RunPreviewState;
   readonly log: readonly ActivityRow[];
   readonly engine: EnginePhase;
   readonly hasEngineSample: boolean;
   readonly connection: ConnectionState;
   readonly seed: boolean;
+  readonly workflowInputsRevision: number;
   readonly ordinal: number;
 }
 
@@ -117,18 +123,10 @@ const settledRun = (board: Board, runId: RunId) => {
 };
 const stamp = (event: DaemonEvent, arrival: number) => event.emittedAtMillis ?? arrival;
 
-const classifiedState = (item: ClassifiedItem) =>
-  ClassifiedItem.match<{ readonly text: string; readonly severity: ActivitySeverity }>(item, {
-    Eligible: () => ({ text: "eligible", severity: "info" }),
-    Claimed: () => ({ text: "claimed", severity: "info" }),
-    Blocked: ({ openBlockers }) => ({ text: `blocked · ${openBlockers} open`, severity: "warn" }),
-    NeedsHuman: () => ({ text: "needs a person", severity: "warn" }),
-    ReadyToMerge: () => ({ text: "ready to merge", severity: "warn" }),
-  });
-
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
   running: "info",
   succeeded: "success",
+  declined: "warn",
   failed: "error",
   exhausted: "warn",
   interrupted: "warn",
@@ -143,18 +141,20 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
     ControlStoreChanged: () => null,
     PluginsChanged: () => null,
     ConnectionsChanged: () => null,
+    HarnessesChanged: () => null,
+    WorkflowChanged: () => null,
+    WorkflowDeleted: () => null,
     ItemChanged: ({ item, workspace }) => {
-      const state = classifiedState(item);
       return {
         id: rowId(ordinal),
         kind: "item",
         atMillis,
         label: activityLabels.item,
-        summary: `${item.title} → ${state.text}`,
-        severity: state.severity,
+        summary: `${item.title} → ready to merge`,
+        severity: "warn",
         entity: { type: "item", id: item.id, workspace },
         raw: pretty(item),
-        lowSignal: ClassifiedItem.guards.Eligible(item),
+        lowSignal: false,
       };
     },
     ItemRemoved: ({ workspace, id }) => ({
@@ -173,7 +173,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       kind: "run",
       atMillis,
       label: activityLabels.run,
-      summary: `${run.workItem} · run ${run.status}`,
+      summary: `${runTitle(run)} · run ${run.status}`,
       severity: runStatusSeverity[run.status],
       entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem },
       raw: pretty(run),
@@ -233,21 +233,32 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
 
 export const initialActivitySession: ActivitySession = {
   board: initialBoard,
+  workflows: new Map(),
   previews: new Map(),
   log: [],
   engine: "off",
   hasEngineSample: false,
   connection: "connecting",
   seed: true,
+  workflowInputsRevision: 0,
   ordinal: 0,
 };
 
 export const resetActivityFolds = (session: ActivitySession): ActivitySession => ({
   ...session,
   board: initialBoard,
+  workflows: new Map(),
   previews: new Map(),
   seed: true,
+  workflowInputsRevision: session.workflowInputsRevision + 1,
 });
+
+const workflowInputEventTags: ReadonlyArray<DaemonEvent["_tag"]> = [
+  "WorkspaceChanged",
+  "WorkspaceRemoved",
+  "ConnectionsChanged",
+  "HarnessesChanged",
+];
 
 export const ingestDaemonEvent = (
   session: ActivitySession,
@@ -266,10 +277,33 @@ export const ingestDaemonEvent = (
     DaemonEvent.guards.RunChanged(event) && terminal(event.run.status)
       ? withoutRunPreview(updatedPreviews, event.run.id)
       : updatedPreviews;
+  const workflows = DaemonEvent.match(event, {
+    SeedEnd: () => session.workflows,
+    RunActivity: () => session.workflows,
+    ItemChanged: () => session.workflows,
+    ItemRemoved: () => session.workflows,
+    RunChanged: () => session.workflows,
+    WorkspaceChanged: () => session.workflows,
+    WorkspaceRemoved: () => session.workflows,
+    ControlStoreChanged: () => session.workflows,
+    PluginsChanged: () => session.workflows,
+    ConnectionsChanged: () => session.workflows,
+    HarnessesChanged: () => session.workflows,
+    SchedulerChanged: () => session.workflows,
+    WorkflowChanged: ({ workflow }) => new Map(session.workflows).set(workflow.id, workflow),
+    WorkflowDeleted: ({ id }) => {
+      const next = new Map(session.workflows);
+      next.delete(id);
+      return next;
+    },
+  });
+  const workflowInputsChanged = !session.seed && workflowInputEventTags.some((tag) => tag === event._tag);
   return {
     ...session,
     board,
     previews,
+    workflows,
+    workflowInputsRevision: session.workflowInputsRevision + Number(workflowInputsChanged),
     log: row ? bound([...session.log, row]) : session.log,
     ordinal: row ? nextOrdinal : session.ordinal,
   };
@@ -490,6 +524,11 @@ export function useActivitySession(): ActivitySession {
   const session = use(ActivitySessionContext);
   if (session === null) throw new Error("useActivitySession must render inside ActivitySessionProvider.");
   return session;
+}
+
+export function useOperationName() {
+  const { workflows } = useActivitySession();
+  return (run: OperationRun) => operationNameOf(workflows, run);
 }
 
 export type BoardResult = Data.TaggedEnum<{

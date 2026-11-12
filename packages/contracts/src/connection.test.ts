@@ -52,6 +52,35 @@ describe("Connection", () => {
     assert.throws(() => decode({ system: "linear", source: { _tag: "Stored" } }));
   });
 
+  it("accepts Granola establishments with a typed account", () => {
+    const establishment = Schema.decodeSync(ConnectionEstablishment)({
+      system: "granola",
+      account: "person@example.com",
+      source: { _tag: "ApiKey", key: "grn_secret" },
+    });
+
+    if (establishment.system !== "granola") assert.fail("Expected Granola establishment");
+    assert.strictEqual(connectionIdOf("granola", establishment.account), "granola/person@example.com");
+  });
+
+  it("accepts Slack only through a saved browser grant", () => {
+    const decode = Schema.decodeUnknownSync(ConnectionEstablishment);
+    const establishment = decode({
+      system: "slack",
+      account: "T-STUB",
+      source: { _tag: "Stored" },
+    });
+
+    assert.deepStrictEqual(establishment, {
+      system: "slack",
+      account: "T-STUB",
+      source: { _tag: "Stored" },
+    });
+    assert.throws(() =>
+      decode({ system: "slack", account: "T-STUB", source: { _tag: "ApiKey", key: "secret" } }),
+    );
+  });
+
   it("rejects ids without a known system and account", () => {
     const decode = Schema.decodeSync(ConnectionId);
     assert.throws(() => decode("unbound"));

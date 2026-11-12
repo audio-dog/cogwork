@@ -1,3 +1,5 @@
+export const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
 export const relativeTime = (atMillis: number, now = Date.now()): string => {
   const mins = Math.floor(Math.max(0, now - atMillis) / 60_000);
   if (mins < 1) return "just now";

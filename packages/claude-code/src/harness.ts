@@ -1,7 +1,6 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge, Tools } from "@cogwork/engine";
+import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
 import {
-  CLAUDE_CODE_MODELS,
   type ClaudeCodeModel,
   type ClaudeCodeTextAdapter,
   type ClaudeCodeTextConfig,
@@ -10,10 +9,11 @@ import {
 } from "@tanstack/ai-claude-code";
 import { claudeCodeByok } from "@tanstack/ai-claude-code/byok";
 import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
-import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+import { ClaudeNativeSelectionResult, claudeNativeSelection } from "./model";
+import { claudeModelCatalog } from "./models.generated";
 
 export interface ClaudeCodeRunnerOptions {
   readonly name: HarnessName;
@@ -27,15 +27,19 @@ interface ClaudeCommandResult {
   readonly stderr: string;
 }
 
-const adapterPackageVersion = "0.6.4";
-const fallbackVersion = "claude-code-1";
 const supportedClaudeMajor = 2;
 const minimumClaudeVersion: ReadonlyArray<number> = [2, 1, 83];
 const versionRequirement = `>=${minimumClaudeVersion.join(".")} <${supportedClaudeMajor + 1}.0.0`;
 const commandDeadline = "5 seconds";
-const anthropicEnvironment = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"] as const;
-const sourceControlEnvironment = ["GH_TOKEN", "GITHUB_TOKEN"] as const;
-const claudeEnvironment = [...anthropicEnvironment, ...sourceControlEnvironment];
+const inheritedEnvironment = [
+  ...ExternalHarnessRuntime.defaultInheritedEnvironment,
+  ...ExternalHarnessRuntime.windowsInheritedEnvironment,
+  ...ExternalHarnessRuntime.nodeNetworkInheritedEnvironment,
+  "CLAUDE_CONFIG_DIR",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+];
 type ClaudeAuthenticationMode = ClaudeCodeRunnerOptions["authentication"]["mode"];
 const claudeAuthenticationModes = ["host", "byok"] as const satisfies ReadonlyArray<ClaudeAuthenticationMode>;
 const requiredEnvironmentName = (names: ReadonlyArray<string> | undefined) => {
@@ -62,7 +66,6 @@ const authenticationProfiles = {
     installNextStep: "Install Claude Code, then run `claude auth login`.",
     credentialGuidance: "Claude Code host login is unavailable. Run `claude auth login`, then retry.",
     failurePattern: missingLoginPattern,
-    scrubEnv: claudeEnvironment,
   },
   byok: {
     binding: { mode: "byok", reference: "Anthropic provider key in the Credential store" },
@@ -72,10 +75,8 @@ const authenticationProfiles = {
     credentialGuidance:
       "Claude Code API-key authentication is unavailable. Store an Anthropic key with `cogwork login key --provider anthropic`, then retry.",
     failurePattern: rejectedApiKeyPattern,
-    scrubEnv: ["ANTHROPIC_AUTH_TOKEN", ...sourceControlEnvironment],
   },
 } as const satisfies Record<ClaudeAuthenticationMode, unknown>;
-const modelPattern = /['"]((?:claude-[a-z0-9-]+)|opus|sonnet|haiku|fable)['"]/gi;
 
 const isMissingExecutableCause = (cause: unknown, seen: ReadonlySet<object> = new Set()): boolean => {
   if (typeof cause !== "object" || cause === null || seen.has(cause)) return false;
@@ -112,25 +113,9 @@ const commandCauseError = (cause: unknown) => {
 const commandTimeoutError = (subject: string) =>
   harnessError("launch", true, `Claude Code did not answer ${subject} within ${commandDeadline}`);
 
-const createProbeSandbox = Effect.fn("ClaudeCode.createProbeSandbox")(() =>
-  Effect.tryPromise({
-    try: () => localProcessSandbox({ dir: ".", scrubEnv: [...claudeEnvironment] }).create({}),
-    catch: commandCauseError,
-  }).pipe(
-    Effect.timeout(commandDeadline),
-    Effect.catchTag("TimeoutError", () => commandTimeoutError("sandbox creation")),
-  ),
-);
-
-const destroyProbeSandbox = (sandbox: SandboxHandle) =>
-  Effect.tryPromise({ try: () => sandbox.destroy(), catch: () => null }).pipe(
-    Effect.timeout(commandDeadline),
-    Effect.ignore,
-  );
-
 const withProbeSandbox = <Value, Requirements>(
   use: (sandbox: SandboxHandle) => Effect.Effect<Value, Harness.HarnessError, Requirements>,
-) => Effect.scoped(Effect.acquireUseRelease(createProbeSandbox(), use, destroyProbeSandbox));
+) => ExternalHarnessRuntime.withLocalProcessSandbox(".", inheritedEnvironment, commandCauseError, use);
 
 const claudeCommand = Effect.fn("ClaudeCode.command")(
   (sandbox: SandboxHandle, executable: string, argument: string) =>
@@ -222,9 +207,12 @@ const readinessFromVersion = (
 ) => {
   const compatible = versionCompatible(version);
   const authenticated = authenticationError === null;
+  const catalogMatchesInstalled = version === claudeModelCatalog.generatedAgainst;
   const incompatibilityDiagnostic = `Claude Code ${version || "unknown"} is unsupported. Update Claude Code to ${versionRequirement}.`;
+  const catalogDriftDiagnostic = `Claude catalog was generated against ${claudeModelCatalog.generatedAgainst}, but this Runtime Host has ${version || "an unknown version"}.`;
   const diagnostics = [
     ...(compatible ? [] : [incompatibilityDiagnostic]),
+    ...(catalogMatchesInstalled ? [] : [catalogDriftDiagnostic]),
     ...(authenticated ? [] : [authenticationError.message]),
   ];
   return {
@@ -294,51 +282,11 @@ const claudeReadiness = Effect.fn("ClaudeCode.readinessResult")(
     ),
 );
 
-const modelLabel = (model: string) =>
-  model
-    .split("-")
-    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
-    .join(" ");
-
-const modelChoices = (models: ReadonlyArray<ClaudeCodeModel>) =>
-  [...new Set(models)].map((model) => ({ value: model, label: modelLabel(model) }));
-
-const modelsFromHelp = (help: string) =>
-  [...help.matchAll(modelPattern)].map((match) => match[1]).filter((model) => model !== undefined);
-
-const nativeCatalog = Effect.fn("ClaudeCode.nativeCatalog")((executable: string) =>
-  withProbeSandbox((sandbox) =>
-    Effect.gen(function* () {
-      const version = yield* readVersion(sandbox, executable);
-      const help = yield* successfulCommandOutput(sandbox, executable, "--help", installationExitError);
-      const models = modelChoices(modelsFromHelp(help));
-      if (models.length === 0) return null;
-      return {
-        models,
-        provenance: {
-          source: "native-discovery",
-          runtimeHost: "local-process",
-          harnessVersion: version,
-        },
-      } satisfies Harness.HarnessCatalogSourceResult;
-    }),
-  ).pipe(Effect.orElseSucceed(() => null)),
-);
-
-export const claudeCodeCatalogSources = (
-  executable: string,
-  runtimeModels: ReadonlyArray<ClaudeCodeModel> = CLAUDE_CODE_MODELS,
-) => ({
-  runtime: Harness.staticCatalogSource(
-    { models: modelChoices(runtimeModels) },
-    { source: "tanstack-runtime", packageVersion: adapterPackageVersion },
-  ),
-  native: { catalog: nativeCatalog(executable) },
-  fallback: Harness.staticCatalogSource(
-    { models: modelChoices(["sonnet", "opus", "haiku"]) },
-    { source: "cogwork-fallback", fallbackVersion },
-  ),
-});
+const managedCatalogOptions = {
+  models: claudeModelCatalog.models,
+  generatedAgainst: claudeModelCatalog.generatedAgainst,
+  rawModelIds: claudeModelCatalog.rawModelIds,
+};
 
 const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
   if (isHarnessError(cause)) return cause;
@@ -383,10 +331,12 @@ const nativeSandboxSettings = (policy: Harness.OperationPolicyProfile) =>
 const claudeExecutableFor = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+  effort: string | undefined,
 ) => {
   const mcpConfig = inlineMcpConfig(request.mcp);
   return [
     executable,
+    ...(effort ? ["--effort", effort] : []),
     "--settings",
     inlineSettingsArgument(nativeSandboxSettings(request.policy)),
     ...(mcpConfig ? ["--mcp-config", mcpConfig] : []),
@@ -404,6 +354,7 @@ const disallowedToolsFor = (policy: Harness.OperationPolicyProfile) => [
 const adapterConfig = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+  effort: string | undefined,
 ) => {
   return {
     authMode: nativeAuthenticationMode,
@@ -414,7 +365,7 @@ const adapterConfig = (
     // strings, so the post-run `git -C <cwd> diff` only sees the prepared
     // checkout when cwd already resolves there.
     cwd: ".",
-    claudeExecutable: claudeExecutableFor(executable, request),
+    claudeExecutable: claudeExecutableFor(executable, request, effort),
     disallowedTools: disallowedToolsFor(request.policy),
     ...(request.checkout.gitWritablePaths.length > 0
       ? { addDirs: [...request.checkout.gitWritablePaths] }
@@ -428,13 +379,22 @@ const providerOptions = (request: ExternalHarnessRuntime.ExternalHarnessResolved
     ...(request.identity.resumeHandle ? { sessionId: request.identity.resumeHandle } : {}),
   }) satisfies ClaudeCodeTextProviderOptions;
 
+const nativeSelection = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => {
+  const result = claudeNativeSelection(
+    claudeModelCatalog,
+    request.selection.model,
+    request.selection.options,
+  );
+  if (ClaudeNativeSelectionResult.$is("Success")(result)) return result;
+  throw harnessError("stale-selection", false, result.error);
+};
+
 const descriptor = (
   options: ClaudeCodeRunnerOptions,
-): ExternalHarnessRuntime.ExternalHarnessDescriptor<ClaudeCodeTextAdapter<ClaudeCodeModel>, "host"> => {
+): ExternalHarnessRuntime.ExternalHarnessDescriptor<ClaudeCodeTextAdapter<ClaudeCodeModel>> => {
   const executable = options.claudeExecutable ?? "claude";
   return {
     name: options.name,
-    sessionKind: "opaque-handle",
     capabilities: {
       execution: Harness.fullHarnessExecution,
       profile: {
@@ -448,28 +408,18 @@ const descriptor = (
         journal: true,
         takeover: true,
       },
-      projectedMembers: [
-        "Harness Adapter",
-        "Instructions",
-        "Messages",
-        "MCP",
-        "Middleware",
-        "Sandbox",
-        "Structured Output",
-        "Persistence",
-        "Connections",
-      ],
-      planMiddleware: ["sandbox"],
     },
     authentication: authenticationProfiles[options.authentication.mode].binding,
     signIn: authenticationProfiles[options.authentication.mode].signIn,
-    catalogSources: claudeCodeCatalogSources(executable),
+    catalog: managedCatalogOptions,
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
-    makeAdapter: ({ model, request }) => claudeCodeText(model, adapterConfig(executable, request)),
-    projectModel: (request) => request.selection.model ?? "sonnet",
+    declaredMembers: ["Tools"],
+    inheritedEnvironment,
+    makeAdapter: ({ model, request }) =>
+      claudeCodeText(model, adapterConfig(executable, request, nativeSelection(request).effort)),
+    projectModel: (request) => nativeSelection(request).model,
     projectOptions: providerOptions,
-    projectAuthentication: () => nativeAuthenticationMode,
     transport: { instructionProjection: "system-prompt", mcpProjection: "native" },
     diagnostics: (cause) => turnDiagnostics(options.authentication.mode, cause),
   };
@@ -494,18 +444,8 @@ const resolvedAuthentication = Effect.fn("ClaudeCode.resolveAuthentication")(fun
   } satisfies ExternalHarnessRuntime.ExternalHarnessAuthentication;
 });
 
-const sandboxProviderFor = (mode: ClaudeAuthenticationMode) =>
-  ExternalHarnessRuntime.trustedLocalProcessSandboxProvider({
-    scrubEnv: authenticationProfiles[mode].scrubEnv,
-  });
-
 export const claudeCodeRunner = (options: ClaudeCodeRunnerOptions) => {
   return ExternalHarnessRuntime.externalHarnessRunner(descriptor(options), {
     authentication: () => resolvedAuthentication(options.authentication.mode),
-    sandboxProvider: (request) =>
-      Harness.validateCheckoutDirectory(options.name, request.checkout.path).pipe(
-        Effect.andThen(sandboxProviderFor(request.authentication.mode)(request)),
-      ),
-    sandboxPolicy: (request) => Effect.succeed(Tools.policyForProfile(request.policy)),
   });
 };

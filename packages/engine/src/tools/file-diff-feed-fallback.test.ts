@@ -1,3 +1,4 @@
+import { agUiIsFileDiffUnavailableEvent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
@@ -6,14 +7,20 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
+import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as TestClock from "effect/testing/TestClock";
-import { type fileDiffEvent, tolerateFeedDeath, watchWorktreeDiffs } from "./file-diff-feed";
+import { TestClock } from "effect/testing";
+import {
+  type fileDiffEvent,
+  fileDiffFeedFailures,
+  tolerateFeedDeath,
+  watchWorktreeDiffs,
+} from "./file-diff-feed";
 import {
   decodeDiffValue,
   ExecCalls,
@@ -489,10 +496,14 @@ describe("file diff fallback", { timeout: 30_000 }, () => {
       yield* writeFile(original, { path: "seed.txt", content: "changed after setup failure\n" });
       yield* writeFile(original, { path: "second.txt", content: "new after setup failure\n" });
       const probeAttempts = MutableRef.make(0);
+      const retried = yield* Deferred.make<void>();
       const exec: WorktreeSandbox["handle"]["process"]["exec"] = (command, options) => {
         if (!isExternalDiffProbe(command)) return original.handle.process.exec(command, options);
         const attempt = MutableRef.updateAndGet(probeAttempts, (count) => count + 1);
-        if (attempt > 1) return original.handle.process.exec(command, options);
+        if (attempt > 1) {
+          Deferred.doneUnsafe(retried, Effect.void);
+          return original.handle.process.exec(command, options);
+        }
         return Promise.reject(new Error("temporary external diff probe failure"));
       };
       const sandbox: WorktreeSandbox = {
@@ -502,13 +513,17 @@ describe("file diff fallback", { timeout: 30_000 }, () => {
           process: { ...original.handle.process, exec },
         },
       };
-
-      const events = yield* awaitTestEffect(
-        watchWorktreeDiffs(sandbox, baseSha).pipe(Stream.take(2), Stream.runCollect),
+      const stop = yield* Deferred.make<void>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha, Deferred.await(stop)).pipe(
+        Stream.runDrain,
+        Effect.forkChild,
       );
 
-      assert.strictEqual(MutableRef.get(probeAttempts), 2);
-      assert.lengthOf(events, 2);
+      yield* settleWhileAdvancingClock(Deferred.await(retried));
+      yield* Deferred.succeed(stop, undefined);
+      yield* settleWhileAdvancingClock(Fiber.join(fiber));
+
+      assert.isAtLeast(MutableRef.get(probeAttempts), 2);
     }).pipe(Effect.provide(deniedWatcherLayer)),
   );
 
@@ -587,6 +602,7 @@ describe("file diff fallback", { timeout: 30_000 }, () => {
   it.effect("does not warn when a consumer tears the feed down", () =>
     Effect.gen(function* () {
       const logs = yield* FeedLogs;
+      const failuresBefore = (yield* Metric.value(fileDiffFeedFailures)).count;
       const events = yield* Stream.fromEffect(Effect.interrupt).pipe(
         tolerateFeedDeath("file diff feed stopped"),
         Stream.runCollect,
@@ -594,6 +610,26 @@ describe("file diff fallback", { timeout: 30_000 }, () => {
 
       assert.isEmpty([...events]);
       assert.deepStrictEqual(MutableRef.get(logs), []);
+      assert.strictEqual((yield* Metric.value(fileDiffFeedFailures)).count, failuresBefore);
     }).pipe(Effect.provide(FeedLogs.captureLayer)),
+  );
+
+  it.effect("emits and counts one safe warning when the feed dies", () =>
+    Effect.gen(function* () {
+      const failuresBefore = (yield* Metric.value(fileDiffFeedFailures)).count;
+      const events = yield* Stream.fail(new Error("raw watcher failure")).pipe(
+        tolerateFeedDeath("file diff feed stopped"),
+        Stream.runCollect,
+      );
+
+      assert.lengthOf(events, 1);
+      const event = events[0];
+      if (!event || !agUiIsFileDiffUnavailableEvent(event)) {
+        return assert.fail("expected one file-diff-unavailable event");
+      }
+      assert.include(event.value.message, "File changes may be incomplete");
+      assert.notInclude(event.value.message, "raw watcher failure");
+      assert.strictEqual((yield* Metric.value(fileDiffFeedFailures)).count, failuresBefore + 1);
+    }),
   );
 });

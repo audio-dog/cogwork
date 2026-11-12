@@ -15,7 +15,7 @@ import {
   runner,
 } from "./harness-fixtures";
 
-describe("codexRunner failures", () => {
+describe("codexRunner failures", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("classifies emitted Codex authentication errors after preserving the event", () =>
       Effect.scoped(
@@ -135,13 +135,16 @@ describe("codexRunner failures", () => {
         const loggedOut = yield* runner({
           codexExecutable: fakeCodexExecutable(" --fake-login-failure"),
         }).readiness();
+        const drifted = yield* runner().readiness();
 
         assert.strictEqual(missing.installation.status, "missing");
         assert.include(missing.diagnostics[0] ?? "", "Install Codex CLI");
         assert.strictEqual(outdated.compatibility.status, "incompatible");
         assert.include(outdated.diagnostics[0] ?? "", "Update Codex");
+        assert.include(outdated.diagnostics[1] ?? "", "catalog was generated against Codex 0.154.0");
         assert.strictEqual(loggedOut.authentication.status, "unavailable");
         assert.include(loggedOut.authentication.diagnostic, "codex login");
+        assert.include(drifted.diagnostics[0] ?? "", "catalog was generated against Codex 0.154.0");
       }),
     );
   });

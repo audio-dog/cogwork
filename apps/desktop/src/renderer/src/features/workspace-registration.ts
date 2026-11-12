@@ -1,25 +1,16 @@
-import { WorkspaceRegistration, WorkspaceState } from "@cogwork/contracts";
+import { WorkspaceRegistration } from "@cogwork/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 export type WorkspaceTracker = "github" | "linear";
 
 export interface WorkspaceRegistrationDraft {
-  readonly name: string;
   readonly checkoutPath: string;
   readonly tracker: WorkspaceTracker;
   readonly issueTrackerConnectionId: string;
   readonly linearTeams: string;
   readonly linearOrganization: string;
   readonly sourceControlConnectionId: string;
-}
-
-interface WorkspaceSubmission {
-  readonly submitted: boolean;
-  readonly pending: boolean;
-  readonly error: string | null;
-  readonly outcomeError: string | null;
-  readonly outcome: unknown | null;
 }
 
 const decodeWorkspaceRegistration = Schema.decodeUnknownOption(WorkspaceRegistration);
@@ -34,37 +25,16 @@ export const absoluteCheckoutPathFrom = (value: string) => {
   return /^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path) ? path : null;
 };
 
-export const workspaceSubmissionStatus = ({
-  submitted,
-  pending,
-  error,
-  outcomeError,
-  outcome,
-}: WorkspaceSubmission) => {
-  if (!submitted) return "idle";
-  if (pending) return "submitting";
-  if (error || outcomeError) return "failed";
-  if (outcome !== null) return "complete";
-  return "submitting";
-};
-
-export const workspaceSubmissionIsLocked = (status: ReturnType<typeof workspaceSubmissionStatus>) =>
-  status === "submitting" || status === "complete";
-
-export const workspaceOutcomeError = (outcome: WorkspaceState | null) => {
-  if (!WorkspaceState.guards.Failed(outcome)) return null;
-  return outcome.message;
-};
+const workspaceNameFrom = (checkoutPath: string) => checkoutPath.split(/[\\/]/).filter(Boolean).at(-1) ?? "";
 
 const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
-  const name = trimmed(draft.name);
   const checkoutPath = absoluteCheckoutPathFrom(draft.checkoutPath);
   if (!checkoutPath) return null;
 
   const issueTrackerConnectionId = trimmed(draft.issueTrackerConnectionId);
   if (!issueTrackerConnectionId) return null;
   const registration = {
-    name,
+    name: workspaceNameFrom(checkoutPath),
     checkoutPath,
     linearHistory: false,
   };

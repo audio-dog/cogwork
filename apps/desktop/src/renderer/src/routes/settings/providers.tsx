@@ -1,4 +1,4 @@
-import type { HarnessItem, HarnessName } from "@cogwork/contracts";
+import type { HarnessName } from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
@@ -15,23 +15,31 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
-import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
+import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import { ProviderGlyphIcon } from "../../components/provider-glyph";
 import { useFocusFlash } from "../../components/settings-parts";
-import { harnessesAtom, setHarnessEnabledAtom } from "../../daemon/atoms";
+import {
+  checkHarnessesAtom,
+  harnessCatalogsAtom,
+  harnessReadinessAtom,
+  setHarnessEnabledAtom,
+} from "../../daemon/atoms";
 import { BoardResult, useBoard } from "../../features/activity-session";
+import { daemonFailureMessage } from "../../features/daemon-failure";
 import { relativeTime } from "../../features/format";
 import {
   applyHarnessEnablement,
   type HarnessEnablementOverlay,
+  type HarnessItem,
   type HarnessSummary,
   harnessEnablementView,
+  harnessItems,
   harnessSummary,
   installedVersion,
   versionLabel,
@@ -48,18 +56,33 @@ interface ProvidersValue {
     readonly selected: HarnessItem | undefined;
     readonly checkedAtMillis: number | null;
     readonly load: "loading" | "ready" | "failed";
-    readonly mutationFailure: string | null;
+    readonly mutationFailure: ProviderMutationFailure | null;
   };
   readonly actions: {
     readonly select: (harness: HarnessName) => void;
     readonly check: () => void;
     readonly setEnabled: (harness: HarnessName, enabled: boolean) => void;
   };
-  // A probe spawns every installed harness's CLI; stacking them up must stay impossible.
   readonly meta: { readonly checking: boolean; readonly changing: boolean };
 }
 
 const ProvidersContext = createContext<ProvidersValue | null>(null);
+
+interface HarnessCheckSubmission {
+  readonly baselineCheckedAtMillis: number | null;
+  readonly previousResult: AsyncResult.AsyncResult<unknown, unknown>;
+}
+
+interface ProviderMutationSubmission {
+  readonly kind: "check" | "enablement";
+  readonly failureTitle: string;
+  readonly previousResult: AsyncResult.AsyncResult<unknown, unknown>;
+}
+
+interface ProviderMutationFailure {
+  readonly title: string;
+  readonly message: string;
+}
 
 const useProviders = () => {
   const value = use(ProvidersContext);
@@ -67,11 +90,13 @@ const useProviders = () => {
   return value;
 };
 
-const loadState = (overview: unknown, failed: boolean): ProvidersValue["state"]["load"] => {
-  if (overview) return "ready";
-  if (failed) return "failed";
-  return "loading";
-};
+const providerLoadRules = [
+  { when: (loaded: boolean, _failed: boolean) => loaded, value: "ready" },
+  { when: (_loaded: boolean, failed: boolean) => failed, value: "failed" },
+] as const;
+
+const loadState = (loaded: boolean, failed: boolean): ProvidersValue["state"]["load"] =>
+  providerLoadRules.find(({ when }) => when(loaded, failed))?.value ?? "loading";
 
 const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: number) => {
   if (checking) return "Checking…";
@@ -79,38 +104,88 @@ const checkLabel = (checking: boolean, checkedAtMillis: number | null, now: numb
   return "Check again";
 };
 
+export const harnessCheckState = (
+  checkedAtMillis: number | null,
+  result: AsyncResult.AsyncResult<unknown, unknown>,
+  submission: HarnessCheckSubmission | null,
+) => {
+  const published = submission !== null && checkedAtMillis !== submission.baselineCheckedAtMillis;
+  const requestFailed =
+    submission !== null && result !== submission.previousResult && result._tag === "Failure";
+  const settled = published || requestFailed;
+  const checking = submission === null ? result.waiting : !settled;
+  return { checking, settled };
+};
+
+export const providerMutationFailure = (
+  result: AsyncResult.AsyncResult<unknown, unknown>,
+  submission: ProviderMutationSubmission | null,
+): ProviderMutationFailure | null => {
+  const hasNoNewFailure =
+    submission === null || result === submission.previousResult || result._tag !== "Failure";
+  if (hasNoNewFailure) return null;
+  return { title: submission.failureTitle, message: daemonFailureMessage(result.cause) };
+};
+
 function Providers({ children }: { readonly children: ReactNode }) {
   const boardResult = useBoard();
-  const queried = useAtomValue(harnessesAtom);
-  const refresh = useAtomRefresh(harnessesAtom);
+  const catalogResult = useAtomValue(harnessCatalogsAtom);
+  const readinessResult = useAtomValue(harnessReadinessAtom);
   const [chosen, setChosen] = useState<HarnessName | null>(null);
   const [enablementOverlay, setEnablementOverlay] = useState<HarnessEnablementOverlay | null>(null);
+  const checkHarnesses = useAtomSet(checkHarnessesAtom, { mode: "promiseExit" });
+  const checkResult = useAtomValue(checkHarnessesAtom);
   const setEnabled = useAtomSet(setHarnessEnabledAtom, { mode: "promiseExit" });
   const enablement = useAtomValue(setHarnessEnabledAtom);
+  const [checkSubmission, setCheckSubmission] = useState<HarnessCheckSubmission | null>(null);
+  const [mutationSubmission, setMutationSubmission] = useState<ProviderMutationSubmission | null>(null);
 
-  const overview = queried._tag === "Success" ? queried.value : null;
-  const boardControlStore = BoardResult.$is("Success")(boardResult) ? boardResult.board.controlStore : null;
+  const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
+  const queriedReadiness = readinessResult._tag === "Success" ? readinessResult.value : null;
+  const readiness = board?.harnesses ?? queriedReadiness;
+  const catalogs = catalogResult._tag === "Success" ? catalogResult.value : null;
+  const boardControlStore = board?.controlStore ?? null;
   const { controlStore, settled } = harnessEnablementView(boardControlStore, enablementOverlay);
   if (settled) setEnablementOverlay(null);
-  const providers = applyHarnessEnablement(overview?.harnesses ?? [], controlStore);
+  const providers = applyHarnessEnablement(harnessItems(readiness, catalogs), controlStore);
+  const checkState = harnessCheckState(readiness?.checkedAtMillis ?? null, checkResult, checkSubmission);
+  if (checkState.settled) setCheckSubmission(null);
+  const mutationResult = mutationSubmission?.kind === "check" ? checkResult : enablement;
   const value: ProvidersValue = {
     state: {
       providers,
       selected: providers.find((item) => item.harness === chosen) ?? providers[0],
-      checkedAtMillis: overview?.checkedAtMillis ?? null,
-      load: loadState(overview, queried._tag === "Failure"),
-      mutationFailure: enablement._tag === "Failure" ? Cause.pretty(enablement.cause) : null,
+      checkedAtMillis: readiness?.checkedAtMillis ?? null,
+      load: loadState(catalogs !== null, catalogResult._tag === "Failure"),
+      mutationFailure: providerMutationFailure(mutationResult, mutationSubmission),
     },
     actions: {
       select: setChosen,
-      check: refresh,
-      setEnabled: (harness, enabled) =>
+      check: () => {
+        setCheckSubmission({
+          baselineCheckedAtMillis: readiness?.checkedAtMillis ?? null,
+          previousResult: checkResult,
+        });
+        setMutationSubmission({
+          kind: "check",
+          failureTitle: "Cogwork could not check these providers.",
+          previousResult: checkResult,
+        });
+        checkHarnesses({ payload: undefined });
+      },
+      setEnabled: (harness, enabled) => {
+        setMutationSubmission({
+          kind: "enablement",
+          failureTitle: "Cogwork could not change this provider.",
+          previousResult: enablement,
+        });
         setEnabled({ payload: { harness, enabled } }).then((exit) => {
           if (!Exit.isSuccess(exit)) return;
           setEnablementOverlay({ base: boardControlStore, updated: exit.value });
-        }),
+        });
+      },
     },
-    meta: { checking: queried.waiting, changing: enablement.waiting },
+    meta: { checking: checkState.checking, changing: enablement.waiting },
   };
   return <ProvidersContext value={value}>{children}</ProvidersContext>;
 }
@@ -263,12 +338,26 @@ function ConfigurationTab({ item }: { readonly item: HarnessItem }) {
         </div>
       </div>
       {summary.signIn ? <SignInCommand key={summary.signIn} command={summary.signIn} /> : null}
+      {item.diagnostics.length > 0 ? (
+        <Alert className="mx-4 w-auto">
+          <RiAlertLine />
+          <AlertTitle>Provider diagnostics</AlertTitle>
+          <AlertDescription>
+            <ul className="flex list-disc flex-col gap-1 ps-4">
+              {item.diagnostics.map((entry) => (
+                <li key={entry}>{entry}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }
 
 function ModelsTab({ item }: { readonly item: HarnessItem }) {
-  if (item.models.length === 0) {
+  const models = item.catalog.models.map(({ value }) => value);
+  if (models.length === 0) {
     return (
       <Empty className="py-10">
         <EmptyHeader>
@@ -283,9 +372,9 @@ function ModelsTab({ item }: { readonly item: HarnessItem }) {
   }
   return (
     <div className="flex flex-col gap-2 py-4">
-      <p className="px-4 text-sm">{item.models.length} models available.</p>
+      <p className="px-4 text-sm">{models.length} models available.</p>
       <div className="flex flex-col px-1">
-        {item.models.map((model) => (
+        {models.map((model) => (
           <Item key={model} size="xs">
             <ItemContent>
               <ItemTitle className="font-mono text-xs font-normal">{model}</ItemTitle>
@@ -423,8 +512,8 @@ function ProvidersBody() {
       {mutationFailure ? (
         <Alert variant="destructive">
           <RiAlertLine />
-          <AlertTitle>Cogwork could not change this provider.</AlertTitle>
-          <AlertDescription>{mutationFailure}</AlertDescription>
+          <AlertTitle>{mutationFailure.title}</AlertTitle>
+          <AlertDescription>{mutationFailure.message}</AlertDescription>
         </Alert>
       ) : null}
       <ProvidersFrame />

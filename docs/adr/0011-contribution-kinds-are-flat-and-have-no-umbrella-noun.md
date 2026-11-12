@@ -5,6 +5,7 @@
 - **Amended:** 2026-08-24 — resolution narrows, see [Amendment](#amendment-2026-08-24--resolution-is-per-settings-family-and-merge-by-key-is-retired)
 - **Amended:** 2026-08-25 — the Plugin-supplied settings-blob schema governs an empty set, see [Amendment](#amendment-2026-08-25--the-plugin-supplied-settings-blob-schema-governs-an-empty-set)
 - **Amended:** 2026-08-26 — `local` splits into three, see [Amendment](#amendment-2026-08-26--local-splits-into-three-one-per-authoring-tree)
+- **Amended:** 2026-11-05 — Command is no longer a contribution kind, see [Amendment](#amendment-2026-11-05--commands-are-retired)
 
 ## Context
 
@@ -51,13 +52,13 @@ Supporting decisions:
 - The retired umbrella means prose must name kinds explicitly. That is more words and less ambiguity.
 - `Script` is retired without replacement. Its job — giving Sandbox Policy a stable name instead of a raw command string — returns when Cogwork owns the policy layer.
 - Rules adopt a markdown-plus-frontmatter shape borrowed from Cursor and Claude Code, which arrived at it independently. This is **not** standards compliance and must not be documented as such: `AGENTS.md` specifies a filename and closest-wins and nothing else, and every applicability control in the field is vendor-private.
-- Whether a Plugin may introduce an external system the Engine has never seen is deliberately unanswered. The manifest's Connection-requirements field permits an auth recipe; whether Plugins may use it is [#172](https://github.com/colonylabs/cogwork/issues/172).
+- Whether a Plugin may introduce an external system the Engine has never seen is deliberately unanswered. The manifest's Connection-requirements field permits an auth recipe; whether Plugins may use it is [#172](https://github.com/taylorfsteele/cogwork/issues/172).
 
-Full reasoning: [#132](https://github.com/colonylabs/cogwork/issues/132). Research: `docs/research/plugin-and-connector-versioning.md`, `docs/research/harness-config-scopes-and-rules.md`, `docs/research/tanstack-ai-vocabulary.md`.
+Full reasoning: [#132](https://github.com/taylorfsteele/cogwork/issues/132). Research: `docs/research/plugin-and-connector-versioning.md`, `docs/research/harness-config-scopes-and-rules.md`, `docs/research/tanstack-ai-vocabulary.md`.
 
 ## Amendment (2026-08-24) — resolution is per settings family, and `merge-by-key` is retired
 
-This ADR declared resolution *per contribution kind* and listed five operators. [#134](https://github.com/colonylabs/cogwork/issues/134) enumerated the settings that actually exist and narrowed both claims. See ADR [0013](./0013-two-settings-families-with-different-scope-sets.md).
+This ADR declared resolution *per contribution kind* and listed five operators. [#134](https://github.com/taylorfsteele/cogwork/issues/134) enumerated the settings that actually exist and narrowed both claims. See ADR [0013](./0013-two-settings-families-with-different-scope-sets.md).
 
 **The scope set is per settings family, not per kind.** There are two families — a contribution's on / off, and an Operation setting — and they take different Scopes. Within the first family the set narrows once more, for Hooks and MCP servers only: a repository may ship the file but may never enable it. Nothing else varies by kind.
 
@@ -70,7 +71,7 @@ This does not change the two lists, the identity scheme, the file-pointing manif
 This ADR declared schemas layered: the Engine owns a per-kind envelope and validates it always, and
 the Plugin supplies a JSON Schema for its own settings blob, validated at Run Plan resolution.
 
-[#134](https://github.com/colonylabs/cogwork/issues/134) then enumerated every setting a person can
+[#134](https://github.com/taylorfsteele/cogwork/issues/134) then enumerated every setting a person can
 write and found five of six kinds have exactly one — on / off — and the sixth has one setting and a
 file. On / off is the Engine's envelope. **So the Plugin-supplied blob currently governs an empty
 set:** there is nothing written against it for a schema change to break, and there is no per-Plugin
@@ -97,7 +98,7 @@ provenance rule.
 This ADR left open whether a Plugin may introduce an external system the Engine has never seen, and
 kept the manifest's Connection-requirements field unused so the door stayed unbolted.
 
-[#172](https://github.com/colonylabs/cogwork/issues/172) answers it. **A Plugin may require a
+[#172](https://github.com/taylorfsteele/cogwork/issues/172) answers it. **A Plugin may require a
 Connection by id from the Engine's known set, and may never define one.** The auth-recipe the field
 permits has no caller while every Plugin is first-party, and the capability it would add — the Engine
 performing an OAuth exchange against endpoints a bundle named — is a materially different act from
@@ -113,7 +114,7 @@ than adding another. See ADR [0017](./0017-connections-are-engine-owned-and-pair
 This ADR fixed identity as `<authority>/<kind>/<localName>`, with authority being `plugin:<pluginId>`,
 `engine`, or `local`, and declared **Authority and Scope orthogonal**.
 
-[#204](https://github.com/colonylabs/cogwork/issues/204) found that `local` cannot carry the one
+[#204](https://github.com/taylorfsteele/cogwork/issues/204) found that `local` cannot carry the one
 distinction the trust model turns on. ADR
 [0018](./0018-contribution-files-live-in-three-authoring-trees.md) gave a person three **Authoring
 trees** and made presence enablement for four of the six kinds. A file in any tree is `local`, so two
@@ -208,4 +209,10 @@ and an admin config file. `private` is named here, not borrowed.
 - Nothing is implemented — `authority` appears nowhere in `packages/*/src` — so this is a glossary
   and ADR change with no migration.
 
-Full reasoning: [#204](https://github.com/colonylabs/cogwork/issues/204).
+Full reasoning: [#204](https://github.com/taylorfsteele/cogwork/issues/204).
+
+## Amendment (2026-11-05) — Commands are retired
+
+ADR [0037](./0037-commands-are-retired-and-subagent-files-follow-the-claude-code-shape.md) removes
+**Command** from both lists. The contribution kinds are **MCP server, Skill, Subagent, Rules, Hook**,
+and the Run Plan has no Commands member. Cogwork does not read `commands/` files.

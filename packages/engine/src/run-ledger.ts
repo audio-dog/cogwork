@@ -1,5 +1,7 @@
 import type {
+  BranchName,
   RunEvent,
+  RunHistory,
   RunId,
   RunPlan,
   RunRecord,
@@ -30,7 +32,6 @@ export interface RunUpdate {
   readonly status: RunSummary["status"];
   readonly usage: TokenUsage | null;
   readonly endedAtMillis: number;
-  readonly claimDisposition?: RunRecord["claimDisposition"];
 }
 
 export const acceptRunOperation = "accept Run";
@@ -53,9 +54,12 @@ export class RunLedgerError extends Schema.TaggedError<RunLedgerError>()("RunLed
 const acceptRunError = (message: string) =>
   Effect.fail(RunLedgerError.make({ operation: acceptRunOperation, message, retryable: false }));
 
+const encodeRunPlan = Schema.encodeEffect(RunPlanSchema);
+const decodeRunPlan = Schema.decodeEffect(RunPlanSchema);
+
 const snapshotRunPlan = (plan: RunPlan) =>
-  Schema.encodeEffect(RunPlanSchema)(plan).pipe(
-    Effect.flatMap(Schema.decodeEffect(RunPlanSchema)),
+  encodeRunPlan(plan).pipe(
+    Effect.flatMap(decodeRunPlan),
     Effect.map(freezeRunPlan),
     Effect.mapError((error) =>
       RunLedgerError.make({
@@ -139,14 +143,28 @@ const resolveWatchTargetFrom = (runs: ReadonlyArray<RunRecord>, workItem: WorkIt
   );
 };
 
+export const logRunAccepted = (record: RunRecord) =>
+  Effect.logInfo("accepted Run", { harness: record.harness, branch: record.branch });
+
+export const logRunEventAppended = (event: RunEvent) =>
+  Effect.logInfo("appended Run event", { seq: event.seq });
+
+export const logRunSettled = (status: RunRecord["status"]) => Effect.logInfo("settled Run", { status });
+
+export const logRunsSettled = (runIds: ReadonlyArray<RunId>, status: RunRecord["status"]) =>
+  Effect.forEach(runIds, () => logRunSettled(status), { discard: true });
+
 type MemoryEvents = ReadonlyMap<RunId, ReadonlyArray<RunEvent>>;
 
 const eventCountOf = (events: MemoryEvents, runId: RunId) => events.get(runId)?.length ?? 0;
 
-const summaryOf = (events: MemoryEvents) => (run: RunRecord) => ({
-  ...run,
-  eventCount: eventCountOf(events, run.id),
-});
+const summaryOf =
+  (events: MemoryEvents) =>
+  (run: RunRecord): RunSummary => ({
+    ...run,
+    eventCount: eventCountOf(events, run.id),
+    eventsPrunedAtMillis: null,
+  });
 
 const summarize = (
   runs: ReadonlyArray<RunRecord>,
@@ -222,6 +240,23 @@ export const makeMemory = Effect.gen(function* () {
       return yield* acceptRunError(`Run ${record.id} already has a Plan`);
     }
     yield* Ref.update(runsRef, (runs) => [...runs, record]);
+    yield* logRunAccepted(record);
+  });
+
+  const appendEvent = Effect.fn("RunLedger.appendEvent")(function* (runId: RunId, event: RunEvent) {
+    yield* Ref.update(eventsRef, (events) =>
+      new Map(events).set(runId, [...eventsForRun(events, runId), event]),
+    );
+    yield* logRunEventAppended(event);
+  });
+
+  const updateRun = Effect.fn("RunLedger.updateRun")(function* (runId: RunId, update: RunUpdate) {
+    const updated = yield* Ref.modify(runsRef, (runs) => {
+      if (!runs.some((run) => run.id === runId)) return [false, runs];
+      return [true, patchRun(runs, runId, (run) => applyUpdate(run, update))];
+    });
+    if (!updated) return;
+    yield* logRunSettled(update.status);
   });
 
   return {
@@ -234,32 +269,49 @@ export const makeMemory = Effect.gen(function* () {
         ),
       ),
     insertRun: (record: RunRecord) => Ref.update(runsRef, (runs) => [...runs, record]),
-    appendEvent: (runId: RunId, event: RunEvent) =>
-      Ref.update(eventsRef, (events) => new Map(events).set(runId, [...eventsForRun(events, runId), event])),
-    updateRun: (runId: RunId, update: RunUpdate) =>
-      Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => applyUpdate(run, update))),
+    appendEvent,
+    updateRun,
     setRunSession: (runId: RunId, session: SessionId) =>
       Ref.update(runsRef, (runs) => patchRun(runs, runId, (run) => ({ ...run, session }))),
-    interruptRunning: (startedFromMillis: number, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+    interruptRunning: Effect.fn("RunLedger.interruptRunning")(function* (
+      startedFromMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(
           runs,
           (run) => stillRunning(run, startedFromMillis),
           (run) => interrupted(run, endedAtMillis),
         ),
-      ),
-    interruptRunningBefore: (beforeMillis: number, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+      );
+      yield* logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
+    interruptRunningBefore: Effect.fn("RunLedger.interruptRunningBefore")(function* (
+      beforeMillis: number,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(
           runs,
           (run) => runningBefore(run, beforeMillis),
           (run) => interrupted(run, endedAtMillis),
         ),
-      ),
-    crashRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+      );
+      yield* logRunsSettled(runIds, "interrupted");
+      return runIds;
+    }),
+    crashRunning: Effect.fn("RunLedger.crashRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(runs, runningForItem(workspace, workItem), (run) => crashed(run, endedAtMillis)),
-      ),
+      );
+      yield* logRunsSettled(runIds, "crashed");
+      return runIds;
+    }),
     consecutiveCrashes: (workspace: WorkspaceId, workItem: WorkItemId, sinceMillis: number) =>
       Effect.map(Ref.get(runsRef), (runs) =>
         consecutiveCrashesOf(runs.filter(forItem(workspace, workItem)), sinceMillis),
@@ -272,7 +324,7 @@ export const makeMemory = Effect.gen(function* () {
         const existing = sessions.get(id);
         return existing ? new Map(sessions).set(id, withHandle(existing, handle)) : sessions;
       }),
-    sessionForBranch: (workspace: WorkspaceId, branch: string) =>
+    sessionForBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.map(
         Ref.get(runsRef),
         (runs) =>
@@ -283,13 +335,20 @@ export const makeMemory = Effect.gen(function* () {
       Effect.all([Ref.get(runsRef), Ref.get(eventsRef)]).pipe(
         Effect.map(([runs, events]) => eventsForSession(runs, events, session)),
       ),
-    closeRunning: (workspace: WorkspaceId, workItem: WorkItemId, endedAtMillis: number) =>
-      Ref.modify(runsRef, (runs) =>
+    closeRunning: Effect.fn("RunLedger.closeRunning")(function* (
+      workspace: WorkspaceId,
+      workItem: WorkItemId,
+      endedAtMillis: number,
+    ) {
+      const runIds = yield* Ref.modify(runsRef, (runs) =>
         transition(runs, runningForItem(workspace, workItem), (run) =>
           applyUpdate(run, closeRunningUpdate(endedAtMillis)),
         ),
-      ),
-    latestRunByBranch: (workspace: WorkspaceId, branch: string) =>
+      );
+      yield* logRunsSettled(runIds, "failed");
+      return runIds;
+    }),
+    latestRunByBranch: (workspace: WorkspaceId, branch: BranchName) =>
       Effect.all([Ref.get(runsRef), Ref.get(sessionsRef)]).pipe(
         Effect.map(([runs, sessions]) =>
           latestRunWhere(
@@ -342,7 +401,9 @@ export const makeMemory = Effect.gen(function* () {
 });
 
 export type CoreRunLedgerService = Effect.Success<typeof makeMemory>;
-export type RunLedgerService = Omit<CoreRunLedgerService, "getRunSummary">;
+export type RunLedgerService = Omit<CoreRunLedgerService, "getRunSummary"> & {
+  readonly history: (runId: RunId) => Effect.Effect<RunHistory, RunLedgerError>;
+};
 
 export const handleOf = (ledger: RunLedgerService, session: SessionId | null) =>
   session ? Effect.map(ledger.getSession(session), sessionHandle) : Effect.succeed(null);
@@ -355,8 +416,16 @@ export class CoreRunLedger extends Context.Service<CoreRunLedger, CoreRunLedgerS
   "@cogwork/engine/run-ledger/CoreRunLedger",
 ) {}
 
-const withRunChangedPublishing = (core: CoreRunLedgerService, bus: DaemonEventBusService) => {
+const makeRunLedgerService = (core: CoreRunLedgerService, bus: DaemonEventBusService) => {
   const { getRunSummary, ...ledger } = core;
+  const history = Effect.fn("RunLedger.history")((runId: RunId) =>
+    Effect.all([ledger.events(runId).pipe(Stream.runCollect), getRunSummary(runId)]).pipe(
+      Effect.map(([events, run]) => ({
+        events,
+        eventsPrunedAtMillis: run?.eventsPrunedAtMillis ?? null,
+      })),
+    ),
+  );
   const publish = Effect.fn("RunLedger.publishRunChanged")(function* (runId: RunId) {
     const run = yield* getRunSummary(runId);
     if (run === null) return;
@@ -365,6 +434,7 @@ const withRunChangedPublishing = (core: CoreRunLedgerService, bus: DaemonEventBu
   const publishAll = (runIds: ReadonlyArray<RunId>) => Effect.forEach(runIds, publish, { discard: true });
   return {
     ...ledger,
+    history,
     acceptRun: (record: RunRecord, plan: RunPlan) =>
       Effect.andThen(core.acceptRun(record, plan), publish(record.id)).pipe(Effect.asVoid),
     insertRun: (record: RunRecord) => Effect.andThen(core.insertRun(record), publish(record.id)),
@@ -390,7 +460,7 @@ export const publishingLayer = Layer.effect(
   Effect.gen(function* () {
     const core = yield* CoreRunLedger;
     const bus = yield* DaemonEventBus;
-    return withRunChangedPublishing(core, bus);
+    return makeRunLedgerService(core, bus);
   }),
 );
 

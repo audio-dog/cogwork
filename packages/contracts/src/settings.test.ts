@@ -2,12 +2,16 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import {
   admissibleSettingScope,
+  applyOperationSettingBatch,
   ContributionSettingUpdate,
+  type DefaultSettingLevel,
   defaultContributionEnabled,
+  OperationSettingBatch,
   OperationSettingUpdate,
   resolveContributionEnabled,
   resolveContributionUnion,
   resolveOperationSetting,
+  type SettingsProfileScope,
   settingResolutionCases,
   settingScopeDirection,
 } from "./settings";
@@ -81,7 +85,32 @@ describe("ContributionSettingUpdate", () => {
 });
 
 describe("OperationSettingUpdate", () => {
-  it("rejects an Operation level for an operation the build does not have", () => {
+  it("accepts model option selections and rejects the retired effort setting", () => {
+    assert.isTrue(
+      Schema.is(OperationSettingUpdate)({
+        _tag: "Set",
+        row: {
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          setting: "model-options",
+          value: { effort: "high", speed: true },
+        },
+      }),
+    );
+    assert.isFalse(
+      Schema.is(OperationSettingUpdate)({
+        _tag: "Set",
+        row: {
+          level: { _tag: "Default" },
+          scope: { _tag: "SettingsProfile" },
+          setting: "effort",
+          value: "high",
+        },
+      }),
+    );
+  });
+
+  it("rejects every non-Default level", () => {
     assert.isFalse(
       Schema.is(OperationSettingUpdate)({
         _tag: "Set",
@@ -93,5 +122,51 @@ describe("OperationSettingUpdate", () => {
         },
       }),
     );
+  });
+
+  it("requires a non-empty batch", () => {
+    assert.isFalse(Schema.is(OperationSettingBatch)([]));
+    assert.isTrue(
+      Schema.is(OperationSettingBatch)([
+        {
+          _tag: "Clear",
+          cell: {
+            setting: "model-options",
+            level: { _tag: "Default" },
+            scope: { _tag: "SettingsProfile" },
+          },
+        },
+      ]),
+    );
+    assert.isFalse(
+      Schema.is(OperationSettingBatch)(
+        Array.from({ length: 5 }, () => ({
+          _tag: "Clear",
+          cell: {
+            setting: "model-options",
+            level: { _tag: "Default" },
+            scope: { _tag: "SettingsProfile" },
+          },
+        })),
+      ),
+    );
+  });
+
+  it("applies every update in order", () => {
+    const level = { _tag: "Default" } satisfies DefaultSettingLevel;
+    const scope = { _tag: "SettingsProfile" } satisfies SettingsProfileScope;
+    const rows = applyOperationSettingBatch(
+      [{ setting: "model", level, scope, value: "old" }],
+      [
+        { _tag: "Set", row: { setting: "model", level, scope, value: "new" } },
+        {
+          _tag: "Set",
+          row: { setting: "model-options", level, scope, value: { effort: "high" } },
+        },
+        { _tag: "Clear", cell: { setting: "model-options", level, scope } },
+      ],
+    );
+
+    assert.deepStrictEqual(rows, [{ setting: "model", level, scope, value: "new" }]);
   });
 });

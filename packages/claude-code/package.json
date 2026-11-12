@@ -10,7 +10,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:claude-live": "COGWORK_LIVE_CLAUDE_PROBE=1 vitest run src/harness-host.test.ts"
+    "test:claude-live": "COGWORK_LIVE_CLAUDE_PROBE=1 vitest run src/harness-host.test.ts",
+    "models:sync": "node --experimental-strip-types scripts/sync-models.ts",
+    "models:check": "node --experimental-strip-types scripts/sync-models.ts --check"
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",

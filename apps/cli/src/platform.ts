@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { ContextFs, Git, Worktree, WorktreeFs } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -70,6 +71,16 @@ const parseDivergence = (stdout: string) => {
   return { ahead, behind } satisfies Git.BranchDivergence;
 };
 
+const parseRefObjects = (output: string) =>
+  new Map(
+    output.split("\n").flatMap((line) => {
+      const [objectId, ref] = line.split("\t");
+      const missingRefPart = !objectId || !ref;
+      if (missingRefPart) return [];
+      return [[ref, objectId] as const];
+    }),
+  );
+
 const gitCommandDeadline = "5 minutes";
 
 interface GitOperationState {
@@ -89,7 +100,11 @@ export const gitLayer = Layer.effect(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
-    const runGit = (cwd: string, args: ReadonlyArray<string>) => {
+    const runGit = (
+      cwd: string,
+      args: ReadonlyArray<string>,
+      successfulExitCodes: ReadonlyArray<number> = [0],
+    ) => {
       const command = `git ${args.join(" ")}`;
       const fail = (message: string) => new Git.GitError({ command, message, retryable: true });
       return capture(ChildProcess.make("git", [...args], { cwd })).pipe(
@@ -106,7 +121,7 @@ export const gitLayer = Layer.effect(
             }),
         ),
         Effect.flatMap((result) =>
-          result.exitCode === 0
+          successfulExitCodes.includes(result.exitCode)
             ? Effect.succeed(result.stdout)
             : fail(result.stderr.trim() || `exited with code ${result.exitCode}`),
         ),
@@ -147,8 +162,63 @@ export const gitLayer = Layer.effect(
       return { operation: found.value[0], unmergedPaths } satisfies Git.GitOperationInProgress;
     });
 
-    return {
-      fetch: (repoPath, remote) => runGit(repoPath, ["fetch", "--prune", remote]).pipe(Effect.asVoid),
+    const reconcileConfirmedMissingBranches = Effect.fn("Git.reconcileConfirmedMissingBranches")(function* (
+      repoPath: string,
+      remote: string,
+      branches: readonly [string, ...ReadonlyArray<string>],
+    ) {
+      const branchRefs = branches.map((branch) => `refs/heads/${branch}`);
+      const trackingRefs = branches.map((branch) => `refs/remotes/${remote}/${branch}`);
+      const trackingObjects = yield* runGit(repoPath, [
+        "for-each-ref",
+        "--format=%(objectname)%09%(refname)",
+        ...trackingRefs,
+      ]).pipe(
+        Effect.map(parseRefObjects),
+        Effect.orElseSucceed(() => new Map<string, string>()),
+      );
+      const advertisedOutput = yield* runGit(repoPath, ["ls-remote", "--heads", remote, ...branchRefs]);
+      const advertisedRefs = new Set(parseRefObjects(advertisedOutput).keys());
+      const missingBranches = branches.filter((branch) => !advertisedRefs.has(`refs/heads/${branch}`));
+      const missingTrackingRefs = missingBranches.flatMap((branch) => {
+        const trackingRef = `refs/remotes/${remote}/${branch}`;
+        const objectId = trackingObjects.get(trackingRef);
+        return objectId ? [[trackingRef, objectId] as const] : [];
+      });
+      yield* Effect.forEach(
+        missingTrackingRefs,
+        ([trackingRef, objectId]) => runGit(repoPath, ["update-ref", "-d", trackingRef, objectId]),
+        { discard: true },
+      ).pipe(Effect.ignore);
+      return missingBranches;
+    });
+
+    return Git.withTransitionLogging({
+      fetch: Effect.fn("Git.fetch")(function* (repoPath, remote, options) {
+        if (!options) return yield* runGit(repoPath, ["fetch", "--prune", remote]);
+        const refspecs = options.branches.map(
+          (branch) => `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
+        );
+        return yield* runGit(repoPath, ["fetch", "--no-tags", remote, ...refspecs]).pipe(
+          Effect.catch((failure) =>
+            reconcileConfirmedMissingBranches(repoPath, remote, options.branches).pipe(
+              Effect.matchEffect({
+                onFailure: () => Effect.fail(failure),
+                onSuccess: (missingBranches) =>
+                  Effect.fail(
+                    new Git.GitError({
+                      command: failure.command,
+                      message: failure.message,
+                      retryable: failure.retryable,
+                      ...(failure.reason ? { reason: failure.reason } : {}),
+                      ...(missingBranches.length > 0 ? { missingBranches } : {}),
+                    }),
+                  ),
+              }),
+            ),
+          ),
+        );
+      }),
       remoteBranchExists: (repoPath, remote, branch) =>
         runGit(repoPath, ["rev-parse", "--verify", "--quiet", `refs/remotes/${remote}/${branch}`]).pipe(
           Effect.map(() => true),
@@ -163,7 +233,7 @@ export const gitLayer = Layer.effect(
         const prune = runGit(repoPath, ["worktree", "prune"]);
         return runGit(repoPath, ["worktree", "remove", ...(force ? ["--force"] : []), worktreePath]).pipe(
           Effect.onError(() => Effect.ignore(prune)),
-          Effect.andThen(prune),
+          Effect.andThen(Effect.ignore(prune)),
           Effect.asVoid,
         );
       },
@@ -177,8 +247,9 @@ export const gitLayer = Layer.effect(
         ),
       fastForward: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["merge", "--ff-only", `${remote}/${branch}`]).pipe(Effect.asVoid),
-      divergence: (worktreePath, remote, baseBranch, headBranch = baseBranch) => {
-        const range = `${remote}/${baseBranch}...refs/heads/${headBranch}`;
+      divergence: (worktreePath, remote, baseBranch, head = { branch: baseBranch }) => {
+        const headRef = head.remote ? `${head.remote}/${head.branch}` : `refs/heads/${head.branch}`;
+        const range = `${remote}/${baseBranch}...${headRef}`;
         return runGit(worktreePath, ["rev-list", "--left-right", "--count", range]).pipe(
           Effect.flatMap((stdout) => {
             const parsed = parseDivergence(stdout);
@@ -203,7 +274,30 @@ export const gitLayer = Layer.effect(
         runGit(repoPath, ["config", "--local", "--get", `remote.${remote}.url`]).pipe(
           Effect.map((value) => value.trim()),
         ),
-    } satisfies Git.GitService;
+      blockPush: (worktreePath, remote) =>
+        runGit(worktreePath, ["config", "extensions.worktreeConfig", "true"]).pipe(
+          Effect.andThen(
+            runGit(worktreePath, [
+              "config",
+              "--worktree",
+              `remote.${remote}.pushurl`,
+              "cogwork-invalid://engine-owned-push",
+            ]),
+          ),
+          Effect.asVoid,
+        ),
+      allowPush: (worktreePath, remote) =>
+        runGit(worktreePath, ["config", "extensions.worktreeConfig", "true"]).pipe(
+          Effect.andThen(
+            runGit(worktreePath, ["config", "--worktree", "--unset-all", `remote.${remote}.pushurl`], [0, 5]),
+          ),
+          Effect.asVoid,
+        ),
+      pushBranch: (repoPath, remoteUrl, branch) =>
+        runGit(repoPath, ["push", remoteUrl, `refs/heads/${branch}:refs/heads/${branch}`]).pipe(
+          Effect.asVoid,
+        ),
+    } satisfies Git.GitService);
   }),
 );
 
@@ -219,6 +313,11 @@ export const worktreeFsLayer = Layer.effect(
     const fail = (operation: string) => (cause: unknown) =>
       new WorktreeFs.WorktreeFsError({ operation, message: describe(cause), retryable: true });
 
+    const isWithinRoot = (root: string, target: string) => {
+      const relative = path.relative(root, target);
+      return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    };
+
     return {
       linkFile: (target, linkPath) =>
         fs
@@ -228,6 +327,46 @@ export const worktreeFsLayer = Layer.effect(
             Effect.andThen(fs.symlink(target, linkPath)),
             Effect.mapError(fail(`link ${linkPath}`)),
           ),
+      removeDebris: (root, target) =>
+        Effect.all([fs.realPath(root), fs.realPath(path.dirname(target))]).pipe(
+          Effect.mapError(fail(`resolve ${target}`)),
+          Effect.flatMap(([realRoot, realParent]) => {
+            if (!isWithinRoot(realRoot, realParent)) {
+              return new WorktreeFs.WorktreeFsError({
+                operation: `remove debris ${target}`,
+                message: `${target} resolves outside worktree root ${root}`,
+                retryable: false,
+              });
+            }
+
+            const resolvedTarget = path.join(realParent, path.basename(target));
+            const quarantine = `${resolvedTarget}.cogwork-debris-${randomUUID()}`;
+            const gitEntry = path.join(quarantine, ".git");
+            return Effect.uninterruptible(
+              fs.rename(resolvedTarget, quarantine).pipe(
+                Effect.andThen(
+                  fs.stat(quarantine).pipe(
+                    Effect.flatMap((info) =>
+                      info.type === "Directory"
+                        ? fs.stat(gitEntry).pipe(
+                            Effect.map(() => true),
+                            Effect.catch(recoverNotFound(false, fail(`stat ${gitEntry}`))),
+                          )
+                        : Effect.succeed(false),
+                    ),
+                    Effect.onError(() => fs.rename(quarantine, resolvedTarget).pipe(Effect.ignore)),
+                  ),
+                ),
+                Effect.flatMap((containsGitEntry) =>
+                  containsGitEntry
+                    ? fs.rename(quarantine, resolvedTarget).pipe(Effect.map(() => false))
+                    : fs.remove(quarantine, { recursive: true }).pipe(Effect.map(() => true)),
+                ),
+                Effect.mapError(fail(`remove debris ${target}`)),
+              ),
+            );
+          }),
+        ),
       runCommand: (cwd, command) =>
         capture(
           ChildProcess.make(command, {
@@ -282,10 +421,19 @@ export const contextFsLayer = Layer.effect(
     const fail = (operation: string) => (cause: unknown) =>
       new ContextFs.ContextFsError({ operation, message: describe(cause), retryable: true });
 
-    const readDirectory = (target: string, options?: { readonly recursive?: boolean }) =>
-      fs
-        .readDirectory(target, options)
-        .pipe(Effect.catch(recoverNotFound(noFiles, fail(`read directory ${target}`))));
+    const readFiles = (target: string, options?: { readonly recursive?: boolean }) =>
+      fs.readDirectory(target, options).pipe(
+        Effect.catch(recoverNotFound(noFiles, fail(`read files ${target}`))),
+        Effect.flatMap((entries) =>
+          Effect.filter(entries, (entry) => {
+            const entryPath = path.join(target, entry);
+            return fs.stat(entryPath).pipe(
+              Effect.map((info) => info.type === "File"),
+              Effect.catch(recoverNotFound(false, fail(`stat context entry ${entryPath}`))),
+            );
+          }),
+        ),
+      );
 
     return {
       directoryExists: (target) =>
@@ -295,7 +443,15 @@ export const contextFsLayer = Layer.effect(
         ),
       readFile: (target) =>
         fs.readFileString(target).pipe(Effect.catch(recoverNotFound(null, fail(`read ${target}`)))),
-      readDirectory,
+      readDirectory: readFiles,
+      writeFile: (target, content) =>
+        fs
+          .remove(target, { force: true })
+          .pipe(
+            Effect.andThen(fs.makeDirectory(path.dirname(target), { recursive: true })),
+            Effect.andThen(fs.writeFileString(target, content)),
+            Effect.mapError(fail(`write ${target}`)),
+          ),
       copyDirectory: (source, dest) =>
         fs
           .remove(dest, { recursive: true, force: true })

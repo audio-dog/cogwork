@@ -73,14 +73,14 @@ Supporting decisions:
 - Four conflict classes with three surfaces. *Inadmissible*, *dangling*, and *ambiguous* resolve at load time; only *unsatisfiable* waits for a Run and becomes a Run Plan rejection. A refusal before dispatch costs no tokens.
 - A new contribution kind must be placed in a family deliberately, and must state whether a repository may enable it.
 - ADR 0011's operator list loses `merge-by-key`; see its amendment.
-- `Connection` was to be scoped here and deliberately was not — the concept is undefined until [#172](https://github.com/colonylabs/cogwork/issues/172) and [#125](https://github.com/colonylabs/cogwork/issues/125) land. Its glossary entry is marked provisional. Scoping a concept before defining it is how the retracted "own scope ladder" claim entered the glossary.
+- `Connection` was to be scoped here and deliberately was not — the concept is undefined until [#172](https://github.com/taylorfsteele/cogwork/issues/172) and [#125](https://github.com/taylorfsteele/cogwork/issues/125) land. Its glossary entry is marked provisional. Scoping a concept before defining it is how the retracted "own scope ladder" claim entered the glossary.
 
-Full reasoning: [#134](https://github.com/colonylabs/cogwork/issues/134). Research: `docs/research/harness-config-scopes-and-rules.md`.
+Full reasoning: [#134](https://github.com/taylorfsteele/cogwork/issues/134). Research: `docs/research/harness-config-scopes-and-rules.md`.
 
 ## Amendment (2026-08-25) — a Connection has no Scope
 
 This ADR declined to scope `Connection`, because the concept was undefined, and named
-[#172](https://github.com/colonylabs/cogwork/issues/172).
+[#172](https://github.com/taylorfsteele/cogwork/issues/172).
 
 That ticket defines it, and the answer is that **a Connection has no Scope at all**. It is
 machine-level and engine-owned; a workspace references one by id, and **reference is not scoping**.

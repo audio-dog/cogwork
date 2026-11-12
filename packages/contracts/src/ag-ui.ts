@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import type { TokenUsage } from "./run";
 
 export const FILE_DIFF_EVENT = "sandbox.file.diff";
+export const FILE_DIFF_UNAVAILABLE_EVENT = "sandbox.file.diff.unavailable";
 
 const anyExtraKeys = Schema.Record(Schema.String, Schema.Unknown);
 const SessionHandleValue = Schema.Struct({ sessionId: Schema.String });
@@ -137,6 +138,24 @@ export const agUiIsFileDiffEvent = Schema.is(AgUiFileDiffEvent);
 
 export const agUiFileDiffEvent = (path: string, diff: string) =>
   ({ type: "CUSTOM", name: FILE_DIFF_EVENT, value: { path, diff } }) satisfies AgUiFileDiffEvent;
+
+export const FileDiffUnavailableValue = Schema.Struct({ message: Schema.String });
+export type FileDiffUnavailableValue = typeof FileDiffUnavailableValue.Type;
+
+const AgUiFileDiffUnavailableEvent = eventVariant("CUSTOM", {
+  name: Schema.Literal(FILE_DIFF_UNAVAILABLE_EVENT),
+  value: FileDiffUnavailableValue,
+});
+export type AgUiFileDiffUnavailableEvent = typeof AgUiFileDiffUnavailableEvent.Type;
+
+export const agUiIsFileDiffUnavailableEvent = Schema.is(AgUiFileDiffUnavailableEvent);
+
+export const agUiFileDiffUnavailableEvent = () =>
+  ({
+    type: "CUSTOM",
+    name: FILE_DIFF_UNAVAILABLE_EVENT,
+    value: { message: "The live file-change feed stopped. File changes may be incomplete." },
+  }) satisfies AgUiFileDiffUnavailableEvent;
 
 export const StructuredOutputCompleteValue = Schema.Struct({
   object: Schema.Unknown,

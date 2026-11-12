@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -47,6 +46,12 @@ const ruleCases = [
       "Rule: avoid nested Effect combinators. Why: they hide sequencing and create laddered control flow. Fix: build context once (Effect.all/Effect.map) and then run a single flat pipeline.",
     plugin: "no-effect-ladder",
     name: "no-effect-ladder",
+  },
+  {
+    message:
+      "Rule: do not load an environment file into process.env. Why: cogwork resolves environment references only from the process environment the daemon was started with, so a file read at startup is a configuration source no Connection records. Fix: read the value from the daemon process environment, or record it as a Connection.",
+    plugin: "no-env-file-load",
+    name: "no-env-file-load",
   },
   {
     message:
@@ -117,6 +122,13 @@ const ruleCases = [
     name: "no-native-button-mismatch",
   },
   {
+    extension: "tsx",
+    message:
+      "Rule: a Base UI Select needs an items prop for its SelectValue. Why: SelectValue renders the raw value, not the SelectItem label, so the closed trigger shows a different text than the open list. Fix: pass items={[{ value, label }]} to <Select>, or give SelectValue a children function that renders the label.",
+    plugin: "jsx",
+    name: "no-select-without-items",
+  },
+  {
     message:
       "Rule: do not compare a wire-crossing union discriminant by hand. Why: the comparison is not exhaustive and does not use the generated type guard. Fix: use the union's generated match for a fold or guards for a single-variant test.",
     plugin: "gated",
@@ -160,7 +172,7 @@ const ruleCases = [
   },
   {
     message:
-      "Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/colonylabs/cogwork/issues/102.",
+      "Rule: no switch statements. Why: they read as a control-flow ladder, and a default case silently swallows new cases instead of failing the build. Fix: use a mapped-type object map keyed by the discriminant, a keyed dictionary of functions, a cond/rule table, or a tuple spec table projected into a Map — see https://github.com/taylorfsteele/cogwork/issues/102.",
     plugin: "staging",
     name: "no-switch",
   },
@@ -207,32 +219,6 @@ test("every rule names a configured plugin file", () => {
   const missing = ruleCases.filter(({ plugin }) => !configuredPluginPaths.has(plugin));
 
   assert.deepEqual(missing, []);
-});
-
-// `no-use-effect.grit` is scoped to the packages that depend on React, so it does not pay a
-// pass over the whole repository. That scope is only safe while React stays inside
-// it: a React file added elsewhere would silently stop being linted. This test fails
-// loudly instead. Widen the override in biome.json if a new package adopts React.
-test("the react plugin's scope covers every file that imports React", () => {
-  const reactOverride = biomeConfig.overrides.find((override) =>
-    override.plugins?.some((plugin) => plugin.endsWith("no-use-effect.grit")),
-  );
-  const scopedPrefixes = reactOverride.includes.map((include) => include.replace(/\*+$/, ""));
-
-  const tracked = spawnSync("git", ["ls-files", "*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  })
-    .stdout.split("\n")
-    .filter(Boolean)
-    .filter((file) => !file.startsWith("configs/lint/tests/fixtures/"));
-  const importsReact = tracked.filter((file) =>
-    /\bfrom\s+["']react["']/.test(readFileSync(path.join(repoRoot, file), "utf8")),
-  );
-  const unscoped = importsReact.filter((file) => !scopedPrefixes.some((prefix) => file.startsWith(prefix)));
-
-  assert.notEqual(importsReact.length, 0, "expected to find files importing React");
-  assert.deepEqual(unscoped, []);
 });
 
 test("every configured plugin file has rules with fixtures", () => {

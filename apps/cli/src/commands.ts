@@ -7,12 +7,15 @@ import {
   type DaemonEvent,
   type DaemonStatus,
   initialBoard,
+  ModelOptionSelections,
   type OperationSettingContext,
-  type OperationSettingName,
+  OperationSettingName,
+  type OperationSettingRefused,
   OperationSettingUpdate,
   operationSettingNames,
   type RunActivity,
   type RunEvent,
+  type RunHistory,
   RunId,
   type RunSummary,
   resolveOperationSetting,
@@ -33,6 +36,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Argument from "effect/unstable/cli/Argument";
+import * as CliError from "effect/unstable/cli/CliError";
 import * as Command from "effect/unstable/cli/Command";
 import * as Flag from "effect/unstable/cli/Flag";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
@@ -43,6 +47,7 @@ import { clientLayer, type DaemonOptions, type DaemonRpcTimeout, makeDaemonClien
 import { formatDaemonLimits, formatOfflineStatus, formatStatus, formatStatusWithStore } from "./status";
 import { secondStopSignal } from "./stop-signal";
 import { telemetryLayer } from "./telemetry";
+import { terminalLine } from "./terminal-text";
 import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
 
 const defaultPollInterval = Duration.minutes(1);
@@ -106,23 +111,11 @@ const contributionSettingScopeFlag = Flag.choice("scope", ["profile", "overlay"]
   Flag.withDefault("profile"),
 );
 const contributionSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
-const operationSettingArgument = Argument.choice("setting", [
-  "enabled",
-  "harness",
-  "model",
-  "effort",
-  "permission-profile",
-  "bindings",
-]);
+const operationSettingArgument = Argument.choice("setting", OperationSettingName.literals);
 const operationSettingValueArgument = Argument.string("value");
 const operationSettingScopeFlag = Flag.choice("scope", ["profile", "host", "overlay"]).pipe(
   Flag.withDefault("profile"),
 );
-const operationSettingLevelFlag = Flag.choice("level", ["default", "workflow", "operation"]).pipe(
-  Flag.withDefault("default"),
-);
-const operationSettingWorkflowFlag = Flag.string("workflow").pipe(Flag.withDefault("coding"));
-const operationSettingOperationFlag = Flag.string("operation").pipe(Flag.withDefault("implement"));
 const operationSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
 
 export { formatDaemonLimits } from "./status";
@@ -131,17 +124,36 @@ const isUnavailableDaemonError = (error: unknown) =>
   Schema.is(SocketOpenError)(error) ||
   (Schema.is(RpcClientError)(error) && Schema.is(SocketOpenError)(error.reason));
 
+const isDaemonTransportError = (error: unknown) =>
+  Schema.is(SocketErrorReason)(error) ||
+  (Schema.is(RpcClientError)(error) && Schema.is(SocketErrorReason)(error.reason));
+
 export const daemonOrStore = <A, E, R, E2, R2>(
   daemon: Effect.Effect<A, E | RpcClientError, R>,
   store: Effect.Effect<A, E2, R2>,
 ): Effect.Effect<A, E | E2 | RpcClientError, R | R2> =>
   Effect.catchIf(daemon, isUnavailableDaemonError, () => store);
 
-const formatOperationSettingValue = (value: ReturnType<typeof resolveOperationSetting>) => {
-  if (value === null) return "unset";
-  if (Array.isArray(value)) return value.length === 0 ? "unset" : JSON.stringify(value);
-  return String(value);
-};
+type ResolvedOperationSettingValue = ReturnType<typeof resolveOperationSetting>;
+
+const isEmptyArray = (value: ResolvedOperationSettingValue) =>
+  Array.isArray(value) ? value.length === 0 : false;
+
+const operationSettingFormatRules: ReadonlyArray<{
+  readonly when: (value: ResolvedOperationSettingValue) => boolean;
+  readonly format: (value: ResolvedOperationSettingValue) => string;
+}> = [
+  { when: (value) => value === null, format: () => "unset" },
+  { when: isEmptyArray, format: () => "unset" },
+  {
+    when: (value) => typeof value === "object",
+    format: (value) => JSON.stringify(value),
+  },
+  { when: () => true, format: String },
+];
+
+const formatOperationSettingValue = (value: ResolvedOperationSettingValue) =>
+  operationSettingFormatRules.find(({ when }) => when(value))?.format(value) ?? "unset";
 
 export const formatOperationSettings = (controlStore: ControlStore, context: OperationSettingContext) =>
   operationSettingNames
@@ -155,16 +167,15 @@ export const formatOperationSettings = (controlStore: ControlStore, context: Ope
     )
     .join("\n");
 
-class OperationSettingInputError extends Data.TaggedError("OperationSettingInputError")<{
-  readonly message: string;
-}> {}
-
 class ContributionSettingInputError extends Data.TaggedError("ContributionSettingInputError")<{
   readonly message: string;
 }> {}
 
 const decodeContributionSettingUpdateInput = Schema.decodeUnknownEffect(ContributionSettingUpdate);
 const decodeOperationSettingUpdateInput = Schema.decodeUnknownEffect(OperationSettingUpdate);
+const decodeModelOptionSelections = Schema.decodeUnknownEffect(Schema.fromJsonString(ModelOptionSelections));
+const operationSettingInputError = (message: string, cause: unknown) =>
+  new CliError.UserError({ cause, userMessage: terminalLine(message) });
 
 interface ContributionSettingOptions {
   readonly contribution: string;
@@ -203,9 +214,6 @@ export const makeContributionSettingUpdate = (
 interface OperationSettingOptions {
   readonly setting: OperationSettingName;
   readonly scope: "profile" | "host" | "overlay";
-  readonly level: "default" | "workflow" | "operation";
-  readonly workflow: string;
-  readonly operation: string;
   readonly workspace: Option.Option<string>;
 }
 
@@ -218,48 +226,46 @@ const operationSettingScope = (options: OperationSettingOptions) => {
   };
 };
 
-const operationSettingLevel = (options: OperationSettingOptions) => {
-  if (options.level === "default") return { _tag: "Default" };
-  if (options.level === "workflow") return { _tag: "Workflow", workflow: options.workflow };
-  return { _tag: "Operation", workflow: options.workflow, operation: options.operation };
-};
-
 const operationSettingCell = (options: OperationSettingOptions) => ({
   setting: options.setting,
   scope: operationSettingScope(options),
-  level: operationSettingLevel(options),
+  level: { _tag: "Default" as const },
 });
 
-const bindingValue = (value: string) =>
-  value.split(",").map((entry) => {
-    const [need = "", ...contribution] = entry.split("=");
-    return { need, contribution: contribution.join("=") };
-  });
-
-const operationSettingValue = (setting: OperationSettingName, value: string) => {
-  if (setting === "enabled") {
-    if (value === "on") return true;
-    if (value === "off") return false;
-  }
-  if (setting === "bindings") return bindingValue(value);
-  return value;
+const operationSettingValueParsers: Record<
+  OperationSettingName,
+  (value: string) => Effect.Effect<unknown, CliError.UserError>
+> = {
+  harness: Effect.succeed,
+  model: Effect.succeed,
+  "model-options": (value: string) =>
+    decodeModelOptionSelections(value).pipe(
+      Effect.mapError((error) => operationSettingInputError(error.message, error)),
+    ),
 };
+
+const operationSettingValue = (setting: OperationSettingName, value: string) =>
+  operationSettingValueParsers[setting](value);
 
 const decodeOperationSettingUpdate = (input: unknown) =>
   decodeOperationSettingUpdateInput(input).pipe(
-    Effect.mapError((error) => new OperationSettingInputError({ message: error.message })),
+    Effect.mapError((error) => operationSettingInputError(error.message, error)),
   );
 
 const operationSettingContext = Effect.fn("commands.operationSettingContext")(function* (options: {
-  readonly workflow: string;
-  readonly operation: string;
   readonly workspace: Option.Option<string>;
 }) {
   const workspace = Option.isSome(options.workspace)
     ? yield* Schema.decodeEffect(WorkspaceId)(options.workspace.value)
     : null;
-  return { workflow: options.workflow, operation: options.operation, workspace };
+  return { workspace };
 });
+
+export const formatOperationSettingRefusal = (refusal: OperationSettingRefused) =>
+  `${terminalLine(refusal.source)} refused ${refusal.setting}: ${terminalLine(refusal.reason)}`;
+
+export const operationSettingError = (refusal: OperationSettingRefused) =>
+  operationSettingInputError(formatOperationSettingRefusal(refusal), refusal);
 
 export const makeOperationSettingUpdate = (
   options: OperationSettingOptions,
@@ -267,10 +273,14 @@ export const makeOperationSettingUpdate = (
 ) => {
   const cell = operationSettingCell(options);
   if (Option.isNone(value)) return decodeOperationSettingUpdate({ _tag: "Clear", cell });
-  return decodeOperationSettingUpdate({
-    _tag: "Set",
-    row: { ...cell, value: operationSettingValue(options.setting, value.value) },
-  });
+  return operationSettingValue(options.setting, value.value).pipe(
+    Effect.flatMap((settingValue) =>
+      decodeOperationSettingUpdate({
+        _tag: "Set",
+        row: { ...cell, value: settingValue },
+      }),
+    ),
+  );
 };
 
 export const schedulingActions = {
@@ -298,7 +308,6 @@ const runDaemon = Effect.fn("commands.runDaemon")(
       { discard: true },
     );
     yield* installProcessProfileIpc();
-    yield* Daemon.bootstrap;
     const abort = yield* secondStopSignal;
     yield* Daemon.heartbeats({
       pollIntervalMillis: options.pollIntervalMillis,
@@ -328,7 +337,9 @@ const usageLabel = (usage: RunSummary["usage"]) => {
 
 const formatRun = (run: RunSummary) => {
   const session = run.session ? `  session=${run.session}` : "";
-  return `  ${run.id}  ${run.status}  ${run.stage}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${session}${usageLabel(run.usage)}`;
+  const prunedHistoryLabel =
+    run.eventsPrunedAtMillis === null ? "" : `  history-pruned=${run.eventsPrunedAtMillis}`;
+  return `  ${run.id}  ${run.status}  ${run.operation}  ${run.workItem} [${run.harness}]  events=${run.eventCount}${prunedHistoryLabel}${session}${usageLabel(run.usage)}`;
 };
 
 const formatRuns = (runs: ReadonlyArray<RunSummary>) =>
@@ -337,16 +348,23 @@ const formatRuns = (runs: ReadonlyArray<RunSummary>) =>
 const formatEvent = (event: RunEvent) =>
   `  #${event.seq}  ${event.type}${event.name ? ` ${event.name}` : ""}  ${event.data}`;
 
-const formatEvents = (events: ReadonlyArray<RunEvent>) =>
-  events.length === 0 ? "(no events for this run)" : events.map(formatEvent).join("\n");
+export const formatRunEvents = (history: RunHistory) => {
+  if (history.eventsPrunedAtMillis !== null) return `(run history pruned at ${history.eventsPrunedAtMillis})`;
+  return history.events.length === 0
+    ? "(no events for this run)"
+    : history.events.map(formatEvent).join("\n");
+};
+
+export const reportDaemonTransportError = (socketPath: string, error: unknown) =>
+  isDaemonTransportError(error)
+    ? Console.error(`Could not reach cogwork daemon at ${socketPath}: ${String(error)}`)
+    : Effect.void;
 
 const overSocket = <E, R>(effect: Effect.Effect<void, E, R>, socketPath: string) =>
   effect.pipe(
     Effect.scoped,
     Effect.provide(clientLayer(socketPath)),
-    Effect.tapError((error) =>
-      Console.error(`Could not reach cogwork daemon at ${socketPath}: ${String(error)}`),
-    ),
+    Effect.tapError((error) => reportDaemonTransportError(socketPath, error)),
   );
 
 const runRuns = Effect.fn("commands.runRuns")(
@@ -371,8 +389,8 @@ const runEvents = Effect.fn("commands.runEvents")(
   function* (options: { readonly socketPath: string; readonly id: string }) {
     const client = yield* makeDaemonClient();
     const id = yield* Schema.decodeEffect(RunId)(options.id);
-    const events = yield* client.GetRunEvents({ id });
-    yield* Console.log(formatEvents(events));
+    const history = yield* client.GetRunEvents({ id });
+    yield* Console.log(formatRunEvents(history));
   },
   (effect, options) => overSocket(effect, options.socketPath),
 );
@@ -527,8 +545,6 @@ const setLimit = Effect.fn("commands.setLimit")(
 const showOperationSettings = Effect.fn("commands.showOperationSettings")(function* (options: {
   readonly socketPath: string;
   readonly controlStorePath: string;
-  readonly workflow: string;
-  readonly operation: string;
   readonly workspace: Option.Option<string>;
 }) {
   const context = yield* operationSettingContext(options);
@@ -585,8 +601,11 @@ const changeOperationSetting = Effect.fn("commands.changeOperationSetting")(
   ) {
     const client = yield* makeDaemonClient();
     const update = yield* makeOperationSettingUpdate(options, options.value);
-    const controlStore = yield* client.SetOperationSetting({ update });
-    yield* Console.log(formatOperationSettings(controlStore, yield* operationSettingContext(options)));
+    const context = yield* operationSettingContext(options);
+    yield* client.SetOperationSetting({ updates: [update] }).pipe(
+      Effect.catchTag("OperationSettingRefused", (refusal) => Effect.fail(operationSettingError(refusal))),
+      Effect.flatMap((controlStore) => Console.log(formatOperationSettings(controlStore, context))),
+    );
   },
   (effect, options) => overSocket(effect, options.socketPath),
 );
@@ -678,16 +697,12 @@ export const limitsCommand = Command.make("limits").pipe(
 const operationSettingsShowCommand = Command.make("show", {
   socket: socketFlag,
   controlStore: controlStoreFlag,
-  workflow: operationSettingWorkflowFlag,
-  operation: operationSettingOperationFlag,
   workspace: operationSettingWorkspaceFlag,
 }).pipe(
-  Command.withHandler(({ socket, controlStore, workflow, operation, workspace }) =>
+  Command.withHandler(({ socket, controlStore, workspace }) =>
     showOperationSettings({
       socketPath: socket,
       controlStorePath: controlStore,
-      workflow,
-      operation,
       workspace,
     }),
   ),
@@ -697,9 +712,6 @@ const operationSettingOptions = {
   socket: socketFlag,
   setting: operationSettingArgument,
   scope: operationSettingScopeFlag,
-  level: operationSettingLevelFlag,
-  workflow: operationSettingWorkflowFlag,
-  operation: operationSettingOperationFlag,
   workspace: operationSettingWorkspaceFlag,
 };
 

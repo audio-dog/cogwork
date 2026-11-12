@@ -6,9 +6,9 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
-import * as TestClock from "effect/testing/TestClock";
+import { TestClock } from "effect/testing";
 import { toolError } from "./errors";
-import { resolveBaseSha, type WorktreeSandbox } from "./sandbox";
+import { openWorktreeSandbox, resolveBaseSha, type WorktreeSandbox } from "./sandbox";
 
 const openSandbox = Effect.fn("sandbox.test.openSandbox")(function* (root?: string) {
   const handle = yield* Effect.acquireRelease(
@@ -26,7 +26,7 @@ const openSandbox = Effect.fn("sandbox.test.openSandbox")(function* (root?: stri
   return { handle, root: root ?? handle.id } satisfies WorktreeSandbox;
 });
 
-describe("worktree sandbox", () => {
+describe("worktree sandbox", { timeout: 30_000 }, () => {
   layer(NodeServices.layer)((nodeIt) => {
     nodeIt.effect("returns no base SHA for a repository without commits", () =>
       Effect.gen(function* () {
@@ -39,6 +39,24 @@ describe("worktree sandbox", () => {
         });
         assert.strictEqual(initialized.exitCode, 0);
         assert.strictEqual(yield* resolveBaseSha(sandbox), "");
+      }),
+    );
+
+    nodeIt.effect("passes the host environment to worktree commands", () =>
+      Effect.gen(function* () {
+        const name = "COGWORK_WORKTREE_HOST_VARIABLE";
+        yield* Effect.acquireRelease(
+          Effect.sync(() => Reflect.set(process.env, name, "host-value")),
+          () => Effect.sync(() => Reflect.deleteProperty(process.env, name)),
+        );
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-worktree-env-" });
+        const { handle } = yield* openWorktreeSandbox(root);
+        const result = yield* Effect.tryPromise({
+          try: (signal) => handle.process.exec(`printenv ${name}`, { signal }),
+          catch: (cause) => toolError("exec-failed", String(cause), root),
+        });
+        assert.strictEqual(result.stdout.trim(), "host-value");
       }),
     );
   });

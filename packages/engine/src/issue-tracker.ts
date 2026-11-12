@@ -1,105 +1,117 @@
 import {
-  type AttemptRecord,
-  type Claim,
-  type HandbackRecord,
   IssueTrackerError,
-  type LifecycleStage,
   linearTeams,
   type Priority,
-  type TriageRole,
+  type RunPlanWorkContextProse,
+  type WorkflowActionArtifact,
+  type WorkflowActionOrigin,
   type WorkItemId,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { FollowUpMarker, ObservedPr } from "./follow-up";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
-export type { BaseDivergence, FollowUpMarker, ObservedPr, PrReview } from "./follow-up";
 export { IssueTrackerError };
 
 export const defaultTrackerCooldown = Duration.minutes(1);
 
-export type ClaimRequest = Omit<Claim, "by">;
+export interface TrackerItem {
+  readonly id: WorkItemId;
+  readonly title: string;
+  readonly url: string;
+  readonly assignees: ReadonlyArray<string>;
+  readonly openBlockers: number;
+  readonly priority: Priority;
+  readonly states?: ReadonlyArray<string>;
+  readonly lastTouchedAtMillis?: number;
+}
+
+export interface ListedTrackerItem extends TrackerItem {
+  readonly open: boolean;
+  readonly labels: ReadonlyArray<string>;
+  readonly createdAtMillis: number;
+}
+
+export interface TrackerComment {
+  readonly id: string;
+  readonly author: string | null;
+  readonly authorAssociation: string;
+  readonly authoredByPerson: boolean;
+  readonly body: string;
+  readonly createdAtMillis: number;
+}
+
+export interface TrackerProse {
+  readonly body: string;
+  readonly comments: ReadonlyArray<TrackerComment>;
+}
 
 export interface CreateIssueInput {
   readonly title: string;
   readonly body: string;
   readonly labels: ReadonlyArray<string>;
+  readonly origin: WorkflowActionOrigin;
 }
 
-interface ObservedItemBase {
-  readonly id: WorkItemId;
-  readonly title: string;
-  readonly url: string;
-  readonly roles: ReadonlyArray<TriageRole>;
-  readonly assignees: ReadonlyArray<string>;
-  readonly claimLabeled: boolean;
-  readonly claim: Claim | null;
-  readonly claimedByUs: boolean;
-  readonly attempts: ReadonlyArray<AttemptRecord>;
-  readonly handback: HandbackRecord | null;
-  readonly openBlockers: number;
-  readonly proposal: string | null;
-  readonly priority: Priority;
+export interface IssueTrackerActionService {
+  readonly createIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    input: CreateIssueInput,
+  ) => Effect.Effect<WorkflowActionArtifact, IssueTrackerError>;
+  readonly commentIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    body: string,
+    writeKey: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly addLabels: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    labels: ReadonlyArray<string>,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly removeLabel: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+    label: string,
+  ) => Effect.Effect<void, IssueTrackerError>;
+  readonly closeIssue: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+  ) => Effect.Effect<void, IssueTrackerError>;
 }
 
-export interface TrackerItem extends ObservedItemBase {
-  readonly followUp: FollowUpMarker | null;
-}
+/** Label and close writes carry no marker, so a repeated step reads the state instead. */
+export const convergeTrackerState = Effect.fn("IssueTracker.convergeState")(function* (
+  change: string,
+  applied: Effect.Effect<boolean, IssueTrackerError>,
+  write: Effect.Effect<unknown, IssueTrackerError>,
+) {
+  if (yield* applied) return;
+  yield* write;
+  if (yield* applied) return;
+  return yield* new IssueTrackerError({
+    reason: "unavailable",
+    message: `${change} was not confirmed by read-back`,
+  });
+});
 
-export interface ObservedItem extends ObservedItemBase {
-  readonly pr: ObservedPr | null;
-}
+const unavailableAction = () =>
+  Effect.fail(
+    new IssueTrackerError({
+      reason: "unavailable",
+      message: "the issue tracker does not support Workflow actions",
+    }),
+  );
 
-export interface RoleChanges {
-  readonly add: ReadonlyArray<TriageRole>;
-  readonly remove: ReadonlyArray<TriageRole>;
-}
-
-export interface TriagedOutcome {
-  readonly role: TriageRole;
-  readonly proposal: string;
-  readonly atMillis: number;
-}
-
-export interface ImplementedOutcome {
-  readonly atMillis: number;
-}
-
-export interface FollowedUpOutcome {
-  readonly marker: FollowUpMarker;
-  readonly atMillis: number;
-}
-
-export interface AttemptFailedOutcome {
-  readonly stage: LifecycleStage;
-  readonly atMillis: number;
-  readonly reason?: string;
-}
-
-export interface HandOffOutcome {
-  readonly stage: LifecycleStage;
-  readonly note?: string;
-}
-
-export interface StalledOutcome {
-  readonly marker: FollowUpMarker;
-  readonly atMillis: number;
-  readonly detail: string;
-}
-
-export interface ReclassifyOutcome {
-  readonly changes: RoleChanges;
-  readonly note?: string;
-}
-
-export interface HandBackOutcome {
-  readonly record: HandbackRecord;
-  readonly changes: RoleChanges;
-  readonly note?: string;
-}
+export const unsupportedWorkflowActions: IssueTrackerActionService = {
+  createIssue: unavailableAction,
+  commentIssue: unavailableAction,
+  addLabels: unavailableAction,
+  removeLabel: unavailableAction,
+  closeIssue: unavailableAction,
+};
 
 const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
@@ -112,72 +124,42 @@ const hasRemoteSource = (workspace: WorkspaceIssueTrackerBinding) => {
   return source.type === "linear" ? linearTeams(source).length > 0 : true;
 };
 
-const failWhenRemote = Effect.fn("IssueTracker.guard")(function* (workspace: WorkspaceIssueTrackerBinding) {
-  if (hasRemoteSource(workspace)) {
-    return yield* noAdapter(workspace);
-  }
-  return yield* Effect.void;
-});
+const emptyRead = <A>(value: A) =>
+  Effect.fn("IssueTracker.emptyRead")(function* (workspace: WorkspaceIssueTrackerBinding) {
+    if (hasRemoteSource(workspace)) return yield* noAdapter(workspace);
+    return value;
+  });
 
-const observeEmpty = Effect.fn("IssueTracker.observe")(function* (workspace: WorkspaceIssueTrackerBinding) {
-  if (hasRemoteSource(workspace)) {
-    return yield* noAdapter(workspace);
-  }
-  return [] as ReadonlyArray<TrackerItem>;
-});
+const emptyProse: RunPlanWorkContextProse = { body: "", comments: [] };
+const emptyTriggerProse: TrackerProse = { body: "", comments: [] };
 
 export const makeEmpty = Effect.succeed({
-  rateLimitScope: (_workspace: WorkspaceIssueTrackerBinding): string | null => null,
-  observe: observeEmpty,
-  createIssue: Effect.fn("IssueTracker.createIssue")(
-    (workspace: WorkspaceIssueTrackerBinding, _input: CreateIssueInput) => failWhenRemote(workspace),
-  ),
-  claim: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _claim: ClaimRequest) =>
-    failWhenRemote(workspace),
-  release: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) => failWhenRemote(workspace),
-  note: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _detail: string) =>
-    failWhenRemote(workspace),
-  triaged: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: TriagedOutcome) =>
-    failWhenRemote(workspace),
-  implemented: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: ImplementedOutcome) =>
-    failWhenRemote(workspace),
-  followedUp: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: FollowedUpOutcome) =>
-    failWhenRemote(workspace),
-  attemptFailed: (
-    workspace: WorkspaceIssueTrackerBinding,
-    _itemId: WorkItemId,
-    _outcome: AttemptFailedOutcome,
-  ) => failWhenRemote(workspace),
-  handOff: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: HandOffOutcome) =>
-    failWhenRemote(workspace),
-  handBack: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: HandBackOutcome) =>
-    failWhenRemote(workspace),
-  stalled: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: StalledOutcome) =>
-    failWhenRemote(workspace),
-  reclassify: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _outcome: ReclassifyOutcome) =>
-    failWhenRemote(workspace),
-} as const);
+  observe: emptyRead<ReadonlyArray<TrackerItem>>([]),
+  itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, _sinceMillis: number) =>
+    emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
+  openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, _label: string) =>
+    emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
+  readItem: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead<ListedTrackerItem | null>(null)(workspace),
+  readProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead(emptyProse)(workspace),
+  readTriggerProse: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead(emptyTriggerProse)(workspace),
+  labelAppliedAt: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _label: string) =>
+    emptyRead<number | null>(null)(workspace),
+  listLabels: emptyRead<ReadonlyArray<string>>([]),
+  ...unsupportedWorkflowActions,
+});
 
-export type IssueTrackerService = Effect.Success<typeof makeEmpty>;
+export type IssueTrackerService = Effect.Success<typeof makeEmpty> & {
+  readonly assignees?: (
+    workspace: WorkspaceIssueTrackerBinding,
+    itemId: WorkItemId,
+  ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+};
 
 export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
   "@cogwork/engine/issue-tracker/IssueTracker",
 ) {}
 
 export const emptyLayer = Layer.effect(IssueTracker, makeEmpty);
-
-export const releaseClaim = (tracker: IssueTrackerService) =>
-  Effect.fn("IssueTracker.releaseClaim")(function* (
-    workspace: WorkspaceIssueTrackerBinding,
-    itemId: WorkItemId,
-  ) {
-    yield* tracker.release(workspace, itemId).pipe(
-      Effect.catchTag("IssueTrackerError", (error) =>
-        Effect.logWarning("claim release failed", {
-          workspace: workspace.config.name,
-          item: itemId,
-          message: error.message,
-        }),
-      ),
-    );
-  });

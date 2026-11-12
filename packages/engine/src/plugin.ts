@@ -4,6 +4,7 @@ import {
   type ConnectionSystem as ConnectionSystemType,
   ContentRevision,
   DeclaredVersion,
+  FileContributionKind,
   type PluginContribution,
   PluginFailure,
   type PluginInstall,
@@ -41,7 +42,7 @@ type CatalogEntry = typeof CatalogEntry.Type;
 const CatalogDocument = Schema.Struct({ plugins: Schema.Array(CatalogEntry) });
 
 const ManifestContribution = Schema.Struct({
-  kind: Schema.Literals(["mcp-server", "skill", "subagent", "rules", "command"]),
+  kind: FileContributionKind,
   localName: TrimmedNonEmptyString,
   summary: TrimmedNonEmptyString,
   file: TrimmedNonEmptyString,

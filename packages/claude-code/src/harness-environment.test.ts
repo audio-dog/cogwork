@@ -18,12 +18,14 @@ import {
   makeLiveHarness,
   makeRequest,
   name,
+  networkEnvironmentProbe,
   sessionHandles,
   structuredObjects,
+  windowsEnvironmentProbe,
   withInheritedCredentialEnvironment,
 } from "./harness-fixtures";
 
-describe("Claude Code inherited environment", () => {
+describe("Claude Code inherited environment", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("diagnoses installation, compatibility, and host login separately", () =>
       Effect.gen(function* () {
@@ -62,6 +64,9 @@ describe("Claude Code inherited environment", () => {
         assert.strictEqual(loggedOut.authentication.status, "unavailable");
         assert.include(loggedOut.authentication.diagnostic, "claude auth login");
         assert.strictEqual(scrubbed.operational.status, "ready");
+        assert.isTrue(
+          scrubbed.diagnostics.some((diagnostic) => diagnostic.includes("catalog was generated against")),
+        );
       }),
     );
 
@@ -80,6 +85,9 @@ describe("Claude Code inherited environment", () => {
         assert.strictEqual(capture.permissionMode, "bypassPermissions");
         assert.isNull(capture.apiKey);
         assert.isNull(capture.authToken);
+        assert.strictEqual(capture.claudeConfigDir, "/tmp/cogwork-claude-config");
+        assert.deepStrictEqual(capture.windowsEnvironment, windowsEnvironmentProbe);
+        assert.deepStrictEqual(capture.networkEnvironment, networkEnvironmentProbe);
         assert.notInclude(capture.files, ".mcp.json");
         assert.match(capture.mcpConfigArgument ?? "", /^\{"mcpServers":/);
         assert.notInclude(capture.files, ".cogwork-mcp.json");
@@ -120,9 +128,9 @@ describe("Claude Code inherited environment", () => {
         assert.isFalse(events.some((event) => event.type === "CUSTOM" && event.name === "file.changed"));
         const finished = events.find((event) => event.type === "RUN_FINISHED");
         assert.deepNestedInclude(finished?.usage, {
-          promptTokens: 13,
+          promptTokens: 16,
           completionTokens: 8,
-          totalTokens: 21,
+          totalTokens: 24,
           providerUsageDetails: { totalCostUsd: 0.01 },
         });
         assert.isFalse(yield* Effect.promise(() => handle.fs.exists("/workspace/.mcp.json")));
@@ -175,6 +183,7 @@ describe("Claude Code inherited environment", () => {
         assert.isTrue(capture.apiKeyPresent);
         assert.strictEqual(capture.apiKeyVersion, "one");
         assert.isNull(capture.authToken);
+        assert.strictEqual(capture.claudeConfigDir, "/tmp/cogwork-claude-config");
         assert.strictEqual(capture.mcpBearer, "[redacted]");
         assert.isTrue(capture.mcpBearerPresent);
         assert.isFalse(containsString(events, "anthropic-test-key-one"));

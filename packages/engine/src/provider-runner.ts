@@ -1,4 +1,11 @@
-import type { HarnessName, LifecycleStage, RunId, RunPlan } from "@cogwork/contracts";
+import type {
+  AgUiEvent,
+  HarnessName,
+  RunId,
+  RunPlan,
+  RunPlanPolicyProfile,
+  SessionId,
+} from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -11,6 +18,7 @@ import {
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
+import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import * as Stream from "effect/Stream";
@@ -22,19 +30,18 @@ import {
   type HarnessPreflightInput,
   type HarnessRunner,
   selectionOfPreflightInput,
-  staticCatalogSource,
 } from "./harness";
-import { operationPolicyProfile } from "./operation-policy";
 import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
+import { workContextMessage } from "./run-plan";
 import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
+  mergeFileDiffFeed,
   openWorktreeSandbox,
   policyForProfile,
   resolveBaseSha,
-  tolerateFeedDeath,
   watchWorktreeDiffs,
 } from "./tools";
 
@@ -46,11 +53,16 @@ export interface RunChatOptions {
   readonly agentLoopStrategy: AgentLoopStrategy;
   readonly abortController: AbortController;
   readonly runId: RunId;
-  readonly threadId?: string;
+  readonly threadId: SessionId;
   readonly outputSchema?: JSONSchema;
 }
 
 export type RunChat = (options: RunChatOptions) => AsyncIterable<StreamChunk>;
+
+export const mergeProviderFileDiffs = <E, R>(
+  harnessEvents: Stream.Stream<AgUiEvent, HarnessError>,
+  fileDiffs: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, E, R>,
+) => mergeFileDiffFeed(harnessEvents, fileDiffs, "worktree diff feed stopped");
 
 const defaultRunChat: RunChat = (options) =>
   chat({
@@ -73,20 +85,27 @@ export interface ProviderRunnerOptions {
   readonly runChat?: RunChat;
 }
 
-const usesReadOnlyProfile = (stage: LifecycleStage) => operationPolicyProfile(stage) === "read-only";
-const readOnlyLoopBudget = 12;
-const writingLoopBudget = 40;
-const readOnlyRunBudget = "15 minutes";
-const writingRunBudget = "2 hours";
+const loopBudgets = {
+  "read-only": 12,
+  full: 40,
+} satisfies Record<RunPlanPolicyProfile, number>;
 
-export const defaultLoopBudget = (stage: LifecycleStage) =>
-  usesReadOnlyProfile(stage) ? readOnlyLoopBudget : writingLoopBudget;
+const runBudgets = {
+  "read-only": "15 minutes",
+  full: "2 hours",
+} satisfies Record<RunPlanPolicyProfile, Duration.Input>;
 
-export const defaultRunBudget = (stage: LifecycleStage) =>
-  usesReadOnlyProfile(stage) ? readOnlyRunBudget : writingRunBudget;
+export const defaultLoopBudget = (profile: RunPlanPolicyProfile) => loopBudgets[profile];
+
+export const defaultRunBudget = (profile: RunPlanPolicyProfile) => runBudgets[profile];
 
 const launchError = (retryable: boolean, message: string) =>
   new HarnessError({ reason: "launch", retryable, message });
+
+const requireSession = (session: SessionId | null) =>
+  session
+    ? Effect.succeed(session)
+    : Effect.fail(launchError(false, "provider Harness launch requires a Cogwork Session"));
 
 const contextMiddleware = (instructions: ReadonlyArray<{ readonly content: string }>): ChatMiddleware => ({
   name: "cogwork-context",
@@ -151,20 +170,8 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
     },
     authentication: { mode: "byok", reference: "Cogwork provider key" },
     signIn: "cogwork login key --provider anthropic",
-    catalogSources: {
-      runtime: staticCatalogSource(
-        {
-          models: providerModelRefs.map((model) => ({ value: model, label: model })),
-        },
-        {
-          source: "tanstack-runtime",
-          packageVersion: "ai-anthropic@0.18.5+ai-gemini@0.29.1+ai-openai@0.22.5",
-        },
-      ),
-      fallback: staticCatalogSource(
-        { models: [{ value: defaultModel, label: defaultModel }] },
-        { source: "cogwork-fallback", fallbackVersion: "provider-1" },
-      ),
+    catalog: {
+      models: providerModelRefs.map((model) => ({ value: model, label: model })),
     },
     readiness: Effect.fn("ProviderRunner.readiness")(() =>
       Effect.succeed({
@@ -201,12 +208,11 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           );
 
           const store = yield* SessionStore;
-          const session = request.session;
-          const history = session
-            ? yield* Effect.promise(() => store.persistence.stores.messages.loadThread(session))
-            : [];
+          const session = yield* requireSession(request.session);
+          const history = yield* Effect.promise(() => store.persistence.stores.messages.loadThread(session));
           const messages: ReadonlyArray<ModelMessage> = [
             ...history,
+            workContextMessage(plan.workContext),
             ...plan.messages.map(({ role, content }) => ({ role, content })),
           ];
 
@@ -223,6 +229,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             const tool = toolsByName.get(name);
             return tool ? [tool] : [];
           });
+          const engineTools = request.engineTools?.filter(({ name }) => plan.tools.includes(name)) ?? [];
           const persistence = withPersistence(store.persistence);
           const instructions = providerInstructionContext(plan);
           const middleware = plan.middleware.flatMap((name) =>
@@ -236,22 +243,17 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const chatStream = runChat({
             adapter,
             messages,
-            tools,
+            tools: [...tools, ...engineTools],
             middleware,
-            agentLoopStrategy: maxIterations(defaultLoopBudget(plan.operation)),
+            agentLoopStrategy: maxIterations(defaultLoopBudget(plan.harness.profile)),
             abortController,
             runId: plan.id,
-            threadId: session ?? undefined,
+            threadId: session,
             outputSchema: plan.structuredOutput ?? undefined,
           });
 
-          // Live diffs are a nicety: a dead feed must not end the run, but it
-          // must leave a trace — on Linux a large ignored tree can exhaust
-          // inotify watches, and recursive watching cannot exclude subtrees.
-          return Stream.merge(
-            bridgeChat(chatStream),
-            watchWorktreeDiffs(sandbox, baseSha).pipe(tolerateFeedDeath("worktree diff feed stopped")),
-            { haltStrategy: "left" },
+          return yield* mergeProviderFileDiffs(bridgeChat(chatStream), (stop) =>
+            watchWorktreeDiffs(sandbox, baseSha, stop),
           );
         }),
       ),

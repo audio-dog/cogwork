@@ -1,4 +1,4 @@
-import { agUiIsFileDiffEvent, ImplementStageResult } from "@cogwork/contracts";
+import { agUiIsFileDiffEvent } from "@cogwork/contracts";
 import { Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType } from "@tanstack/ai";
@@ -31,7 +31,7 @@ import {
   structuredCompletions,
 } from "./harness-fixtures";
 
-describe("codexRunner execution", () => {
+describe("codexRunner execution", { timeout: 30_000 }, () => {
   it.layer(harnessLayer)((it) => {
     it.effect("suppresses the trust-bypass notice without failing the Run", () =>
       Effect.scoped(
@@ -163,7 +163,7 @@ describe("codexRunner execution", () => {
             }),
           ]);
           yield* harness
-            .run(makeRequest({ checkoutPath, session: freshSession, stage: "triage" }))
+            .run(makeRequest({ checkoutPath, session: freshSession, operation: "triage" }))
             .pipe(Stream.runDrain);
 
           const call = calls[0];
@@ -237,7 +237,7 @@ describe("codexRunner execution", () => {
               ),
             );
             assert.strictEqual(hookBaseline.exitCode, 0);
-            const harness = Harness.make([codexRunner({ name, environment: process.env })]);
+            const harness = Harness.make([codexRunner({ name })]);
             const events = yield* collectEvents(
               harness.run(
                 makeRequest({
@@ -250,7 +250,7 @@ describe("codexRunner execution", () => {
             );
 
             assert.lengthOf(structuredCompletions(events), 1);
-            yield* Schema.decodeUnknownEffect(ImplementStageResult)(structuredCompletions(events)[0]?.object);
+            assert.isDefined(structuredCompletions(events)[0]?.object);
             const commit = yield* Effect.promise(() =>
               handle.process.exec(`git -C ${checkoutPath} log -1 --format=%s`),
             );

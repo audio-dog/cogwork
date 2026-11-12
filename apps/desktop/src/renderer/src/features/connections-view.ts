@@ -12,8 +12,14 @@ export const workspaceConnectionChoices = (
   bindings: readonly string[],
 ) => overview?.connections.flatMap((item) => workspaceConnectionChoice(item, bindings)) ?? [];
 
-export const connectionSystemLabel = (system: ConnectionSystem) =>
-  system === "github" ? "GitHub" : "Linear";
+const connectionSystemLabels: Record<ConnectionSystem, string> = {
+  github: "GitHub",
+  linear: "Linear",
+  granola: "Granola",
+  slack: "Slack",
+};
+
+export const connectionSystemLabel = (system: ConnectionSystem) => connectionSystemLabels[system];
 
 // Tone travels with the label because the badge that renders it has to agree with the copy: every
 // caller that shows one shows the other.

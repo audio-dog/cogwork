@@ -1,14 +1,17 @@
-import {
-  ClassifiedItem,
-  type LifecycleStage,
-  type RunId,
-  type RunStatus,
-  type RunSummary,
-  type WorkItemId,
-  type WorkspaceId,
+import type {
+  BoardItem,
+  PrSummary,
+  RunId,
+  RunStatus,
+  RunSubject,
+  RunSummary,
+  WorkItemId,
+  WorkspaceId,
 } from "@cogwork/contracts";
+import { type OperationRun, workItemLabel } from "./feed";
+import { runStatusLabel } from "./run-status";
 
-export type StateTone = "live" | "attention" | "ready" | "muted";
+export type StateTone = "live" | "ready" | "muted";
 
 export interface ItemStateDescriptor {
   readonly label: string;
@@ -16,32 +19,58 @@ export interface ItemStateDescriptor {
   readonly running: boolean;
 }
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+export interface ItemTabSubject {
+  readonly id: WorkItemId;
+  readonly label: string;
+  readonly title: string;
+  readonly url: string | null;
+  readonly pr: PrSummary | null;
+}
 
-const calmDescriptor = (verb: "Queued" | "Working", stage: LifecycleStage | null): ItemStateDescriptor => {
-  return { label: stage ? `${verb} · ${stage}` : verb, tone: "muted", running: false };
+export const itemTabSubject = (entry: BoardItem | null, workItem: WorkItemId, subject: RunSubject | null) => {
+  const label = workItemLabel(workItem);
+  if (entry) {
+    return {
+      id: entry.item.id,
+      label,
+      title: entry.item.title,
+      url: entry.item.url ?? subject?.url ?? null,
+      pr: entry.item.pr,
+    } satisfies ItemTabSubject;
+  }
+  return {
+    id: workItem,
+    label,
+    title: subject?.title ?? label,
+    url: subject?.url ?? null,
+    pr: null,
+  } satisfies ItemTabSubject;
 };
 
-export function describeItemState(item: ClassifiedItem, run: RunSummary | null): ItemStateDescriptor {
-  if (run?.status === "running") {
-    return { label: `Running · ${run.stage}`, tone: "live", running: true };
-  }
-  return ClassifiedItem.match(item, {
-    NeedsHuman: ({ reason }) => ({
-      label: `Needs a decision · ${reason}`,
-      tone: "attention",
-      running: false,
-    }),
-    Blocked: ({ openBlockers }) => ({
-      label: `Blocked · ${plural(openBlockers, "open blocker")}`,
-      tone: "muted",
-      running: false,
-    }),
-    ReadyToMerge: () => ({ label: "Ready to merge", tone: "ready", running: false }),
-    Eligible: (eligible) => calmDescriptor("Queued", eligible.stage),
-    Claimed: (claimed) => calmDescriptor("Working", claimed.claim.stage ?? null),
-  });
-}
+export const latestRunSubject = (runs: readonly RunSummary[]) =>
+  runs.toSorted((a, b) => b.startedAtMillis - a.startedAtMillis).find((run) => run.subject)?.subject ?? null;
+
+const settledItemState = (run: RunSummary | null, subject: ItemTabSubject) =>
+  subject.pr
+    ? ({ label: "Ready to merge", tone: "ready", running: false } satisfies ItemStateDescriptor)
+    : ({
+        label: run ? runStatusLabel[run.status] : "No Runs",
+        tone: "muted",
+        running: false,
+      } satisfies ItemStateDescriptor);
+
+export const describeItemState = (
+  run: RunSummary | null,
+  subject: ItemTabSubject,
+  operationName: (run: OperationRun) => string,
+) =>
+  run?.status === "running"
+    ? ({
+        label: `Running · ${operationName(run)}`,
+        tone: "live",
+        running: true,
+      } satisfies ItemStateDescriptor)
+    : settledItemState(run, subject);
 
 export type SubTabKey = "main" | "run" | "pr";
 
@@ -50,13 +79,16 @@ export interface SubTab {
   readonly label: string;
 }
 
-export const subTabs = (hasPr: boolean): readonly SubTab[] => [
+const allSubTabs: readonly SubTab[] = [
   { key: "main", label: "Main" },
   { key: "run", label: "Live run" },
-  ...(hasPr ? [{ key: "pr" as const, label: "Pull request" }] : []),
+  { key: "pr", label: "Pull request" },
 ];
 
-export const resolveSubTab = (active: SubTabKey, tabs: readonly SubTab[]): SubTabKey =>
+export const subTabsFor = (subject: ItemTabSubject) =>
+  allSubTabs.filter(({ key }) => key !== "pr" || subject.pr !== null);
+
+export const resolveSubTab = (active: SubTabKey, tabs: readonly SubTab[]) =>
   tabs.some((tab) => tab.key === active) ? active : "main";
 
 export type AttemptTone = "succeeded" | "failed" | "abandoned";
@@ -64,16 +96,14 @@ export type AttemptTone = "succeeded" | "failed" | "abandoned";
 export const attemptTone: Record<RunStatus, AttemptTone> = {
   running: "abandoned",
   succeeded: "succeeded",
+  declined: "abandoned",
   failed: "failed",
   crashed: "failed",
   exhausted: "abandoned",
   interrupted: "abandoned",
 };
 
-export const previousAttempts = (
-  runs: readonly RunSummary[],
-  focalRunId: RunId | null,
-): readonly RunSummary[] =>
+export const previousAttempts = (runs: readonly RunSummary[], focalRunId: RunId | null) =>
   runs.filter((run) => run.id !== focalRunId).toSorted((a, b) => b.startedAtMillis - a.startedAtMillis);
 
 export const selectedRunForItem = (

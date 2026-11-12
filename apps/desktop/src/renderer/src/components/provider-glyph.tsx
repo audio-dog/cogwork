@@ -7,6 +7,14 @@ import {
 } from "@remixicon/react";
 import type { ProviderGlyph } from "../features/provider-presentation";
 
+const glyphIcons: Record<ProviderGlyph, typeof RiSparklingFill> = {
+  openai: RiOpenaiFill,
+  cursor: RiCursorAiFill,
+  claude: RiClaudeFill,
+  anthropic: RiAnthropicFill,
+  sparkle: RiSparklingFill,
+};
+
 /**
  * `RiCursorFill` is a mouse pointer, not Cursor. The brand marks are `RiCursorAiFill` and
  * `RiClaudeFill`, both shipped by @remixicon/react 4.9.0.
@@ -14,13 +22,12 @@ import type { ProviderGlyph } from "../features/provider-presentation";
 export function ProviderGlyphIcon({
   glyph,
   className,
+  "data-icon": dataIcon,
 }: {
   readonly glyph: ProviderGlyph;
   readonly className?: string;
+  readonly "data-icon"?: "inline-start" | "inline-end";
 }) {
-  if (glyph === "openai") return <RiOpenaiFill className={className} />;
-  if (glyph === "cursor") return <RiCursorAiFill className={className} />;
-  if (glyph === "claude") return <RiClaudeFill className={className} />;
-  if (glyph === "anthropic") return <RiAnthropicFill className={className} />;
-  return <RiSparklingFill className={className} />;
+  const Icon = glyphIcons[glyph];
+  return <Icon className={className} data-icon={dataIcon} />;
 }

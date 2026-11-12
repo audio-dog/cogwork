@@ -1,0 +1,15 @@
+{
+  "pluginId": "granola",
+  "version": "1.0.0",
+  "provenance": "cogwork-0.0.1",
+  "authRecipe": null,
+  "requiredConnections": ["granola"],
+  "contributions": [
+    {
+      "kind": "mcp-server",
+      "localName": "granola",
+      "summary": "Granola's hosted MCP server.",
+      "file": "mcp/granola.json"
+    }
+  ]
+}

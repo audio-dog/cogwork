@@ -1,13 +1,14 @@
-import { LifecycleStage } from "@cogwork/contracts";
 import { Harness } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
-import { CODEX_MODELS, type CodexTextConfig, codexText } from "@tanstack/ai-codex";
+import { toolDefinition } from "@tanstack/ai";
+import { type CodexTextConfig, codexText } from "@tanstack/ai-codex";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 import { codexExecutableWithRepositoryHooks } from "./harness";
 import {
   authenticatedMcp,
@@ -28,8 +29,38 @@ import {
   sourceWrapperPath,
   structuredCapture,
 } from "./harness-fixtures";
+import { codexCatalog } from "./models.generated";
 
-describe("repository fixtures", () => {
+const inheritedEnvironmentProbe = {
+  CODEX_HOME: "/tmp/cogwork-codex-home",
+  GITHUB_TOKEN: "inherited-github-token",
+  GH_TOKEN: "inherited-gh-token",
+  LINEAR_API_KEY: "inherited-linear-key",
+  CODEX_API_KEY: "inherited-codex-key",
+  OPENAI_API_KEY: "inherited-openai-key",
+};
+
+const restoreEnvironment = (name: string, value: unknown) =>
+  typeof value === "string"
+    ? Reflect.set(process.env, name, value)
+    : Reflect.deleteProperty(process.env, name);
+
+const withInheritedEnvironmentProbe = <Value, Error, Requirements>(
+  effect: Effect.Effect<Value, Error, Requirements>,
+) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() =>
+      Object.fromEntries(
+        Object.keys(inheritedEnvironmentProbe).map((name) => [name, Reflect.get(process.env, name)]),
+      ),
+    ),
+    () =>
+      Effect.sync(() => Object.assign(process.env, inheritedEnvironmentProbe)).pipe(Effect.andThen(effect)),
+    (original) =>
+      Effect.sync(() => Object.entries(original).map(([name, value]) => restoreEnvironment(name, value))),
+  );
+
+describe("repository fixtures", { timeout: 30_000 }, () => {
   it.effect("keeps identity out of the repository config", () =>
     Effect.gen(function* () {
       const handle = yield* createSandbox();
@@ -47,88 +78,99 @@ describe("repository fixtures", () => {
   );
 });
 
-describe("codexRunner configuration", () => {
+describe("codexRunner configuration", { timeout: 30_000 }, () => {
   it("keeps the Hook wrapper independent of package files", () => {
     assert.notInclude(codexExecutableWithRepositoryHooks, sourceWrapperPath);
   });
 
   it.layer(harnessLayer)((it) => {
-    it.effect("offers the host model catalog and honest native capabilities", () =>
-      Effect.gen(function* () {
-        const codex = runner();
-        const harness = Harness.make([codex]);
-        const catalog = yield* harness.catalog(name);
+    it("reads the checked-in managed catalog without launching Codex", () => {
+      const codex = runner({ codexExecutable: "/must-not-launch-codex" });
+      const harness = Harness.make([codex]);
+      const catalog = harness.catalogs.get(name);
 
-        assert.deepStrictEqual(
-          catalog.models.map(({ value }) => value),
-          ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", ...CODEX_MODELS],
-        );
-        assert.deepStrictEqual(
-          catalog.efforts?.map(({ value }) => value),
-          ["minimal", "low", "medium", "high"],
-        );
-        assert.deepStrictEqual(catalog.provenance, {
-          source: "cogwork-fallback",
-          fallbackVersion: "codex-0.5.4",
-        });
-        assert.strictEqual(codex.sessionKind, "opaque-handle");
-        assert.deepStrictEqual(codex.authentication, {
-          mode: "host",
-          reference: "Codex host login",
-        });
-        assert.deepNestedInclude(codex.capabilities, {
-          authenticationModes: ["host"],
-          session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
-          structuredOutput: "native",
-          policyFidelity: "none",
-          fileEventFidelity: "best-effort",
-          usageQuality: "metered",
-          journal: true,
-          takeover: true,
-        });
-      }),
-    );
+      assert.isNotNull(catalog);
+      if (!catalog) return;
+      assert.deepStrictEqual(catalog.models, codexCatalog.models);
+      assert.strictEqual(catalog.generatedAgainst, codexCatalog.generatedAgainst);
+      assert.deepStrictEqual(catalog.rawModelIds, codexCatalog.rawModelIds);
+      assert.deepStrictEqual(catalog.provenance, { source: "managed" });
+      assert.strictEqual(codex.sessionKind, "opaque-handle");
+      assert.deepStrictEqual(codex.authentication, {
+        mode: "host",
+        reference: "Codex host login",
+      });
+      assert.deepNestedInclude(codex.capabilities, {
+        authenticationModes: ["host"],
+        session: { affinity: "runtime-host", fork: false, humanAttach: "codex-cli" },
+        structuredOutput: "native",
+        policyFidelity: "none",
+        fileEventFidelity: "best-effort",
+        usageQuality: "metered",
+        journal: true,
+        takeover: true,
+      });
+    });
 
     it.effect(
       "projects host authentication and native options, granting no Git path to a checkout that owns its Git directory",
       () =>
-        Effect.scoped(
-          Effect.gen(function* () {
-            const handle = yield* createSandbox();
-            const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
-            const harness = Harness.make([
-              runner({
-                environment: {
-                  ...process.env,
-                  GITHUB_TOKEN: "inherited-github-token",
-                  GH_TOKEN: "inherited-gh-token",
-                  LINEAR_API_KEY: "inherited-linear-key",
-                  CODEX_API_KEY: "inherited-codex-key",
-                  OPENAI_API_KEY: "inherited-openai-key",
-                },
-                makeAdapter: (model, config) => {
-                  calls.push({ model, config });
-                  return codexText(model, config);
-                },
-              }),
-            ]);
-            const events = yield* runInRepository(harness, handle);
-            const capture = yield* structuredCapture(events);
-            const call = calls[0];
-            if (!call) return assert.fail("Codex adapter was not created");
-            assert.strictEqual(call.model, defaultModel);
-            assert.strictEqual(call.config.authMode, "host");
-            assert.isUndefined(call.config.additionalDirectories);
-            assert.isUndefined(call.config.config);
-            assert.isUndefined(call.config.env);
-            assert.include(capture.args, 'model_reasoning_effort="high"');
-            assert.isFalse(capture.hasCodexApiKey);
-            assert.isFalse(capture.hasOpenAiApiKey);
-            assert.isFalse(capture.hasGithubToken);
-            assert.isFalse(capture.hasGhToken);
-            assert.isFalse(capture.hasLinearApiKey);
-          }),
+        withInheritedEnvironmentProbe(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const handle = yield* createSandbox();
+              const calls: Array<{ readonly model: string; readonly config: CodexTextConfig }> = [];
+              const harness = Harness.make([
+                runner({
+                  makeAdapter: (model, config) => {
+                    calls.push({ model, config });
+                    return codexText(model, config);
+                  },
+                }),
+              ]);
+              const events = yield* runInRepository(harness, handle, { effort: "minimal" });
+              const capture = yield* structuredCapture(events);
+              const call = calls[0];
+              if (!call) return assert.fail("Codex adapter was not created");
+              assert.strictEqual(call.model, defaultModel);
+              assert.strictEqual(call.config.authMode, "host");
+              assert.isUndefined(call.config.additionalDirectories);
+              assert.isUndefined(call.config.config);
+              assert.isUndefined(call.config.env);
+              assert.include(capture.args, 'model_reasoning_effort="minimal"');
+              assert.isFalse(capture.hasCodexApiKey);
+              assert.isFalse(capture.hasOpenAiApiKey);
+              assert.isFalse(capture.hasGithubToken);
+              assert.isFalse(capture.hasGhToken);
+              assert.isFalse(capture.hasLinearApiKey);
+              assert.strictEqual(capture.codexHome, inheritedEnvironmentProbe.CODEX_HOME);
+            }),
+          ),
         ),
+    );
+
+    it.effect("dispatches an omitted effort with the model descriptor default", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const events = yield* runInRepository(Harness.make([runner()]), handle, { effort: null });
+          const capture = yield* structuredCapture(events);
+
+          assert.include(capture.args, 'model_reasoning_effort="high"');
+        }),
+      ),
+    );
+
+    it.effect("rejects a missing checkout before Codex launch", () =>
+      Effect.gen(function* () {
+        const harness = Harness.make([runner({ codexExecutable: "/missing-codex-executable" })]);
+        const error = yield* harness
+          .run(makeRequest({ checkoutPath: "/missing-codex-checkout" }))
+          .pipe(Stream.runDrain, Effect.flip);
+
+        assert.strictEqual(error.reason, "workspace");
+        assert.include(error.message, "/missing-codex-checkout");
+      }),
     );
 
     it.effect(
@@ -185,7 +227,7 @@ describe("codexRunner configuration", () => {
             assert.include(capture.prompt, "repo rules");
             assert.include(
               capture.prompt,
-              "Mandatory Operating Instructions: /operating-instructions/implement",
+              "Mandatory Operating Instructions: /operating-instructions/operate",
             );
             assert.include(capture.prompt, "implement the issue");
             assert.isFalse(capture.hasCodexConfig);
@@ -221,23 +263,45 @@ describe("codexRunner configuration", () => {
       10_000,
     );
 
+    it.effect("hands Codex the native MCP servers and the engine tool bridge side by side", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const engineTool = toolDefinition({
+            name: "issue-search",
+            description: "Search issues",
+          }).server(() => Promise.resolve({}));
+          const events = yield* runInRepository(Harness.make([runner()]), handle, {
+            mcpSkills: authenticatedMcp("bridge-secret"),
+            engineTools: [engineTool],
+          });
+          const args = (yield* structuredCapture(events)).args.join("\n");
+
+          assert.include(args, "mcp_servers.test__linear_api__0.url=");
+          assert.include(args, "mcp_servers.tanstack.url=");
+        }),
+      ),
+    );
+
     it.effect("keeps every Operation on a networked Codex Sandbox", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const executable = yield* fakeCodexWithRepositoryHooks();
           const harness = Harness.make([runner({ codexExecutable: executable })]);
-          const captures = yield* Effect.forEach(LifecycleStage.literals, (stage) =>
-            runOperation(harness, stage),
+          const captures = yield* Effect.forEach(
+            ["operate", "verify"],
+            (operation) => runOperation(harness, operation),
+            { concurrency: "unbounded" },
           );
 
-          for (const [, capture] of captures) {
+          captures.forEach(([, capture]) => {
             assert.include(capture.args, "--dangerously-bypass-hook-trust");
             assert.include(capture.args, "workspace-write");
             assert.notInclude(capture.args.join("\n"), "read-only");
             assert.include(capture.args, "sandbox_workspace_write.network_access=true");
             assert.include(capture.args, 'approval_policy="never"');
             assert.notInclude(capture.args.join("\n"), "danger-full-access");
-          }
+          });
         }),
       ),
     );

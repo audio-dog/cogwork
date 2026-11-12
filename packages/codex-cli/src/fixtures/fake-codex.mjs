@@ -74,6 +74,7 @@ const capture = JSON.stringify({
   hasGithubToken: process.env.GITHUB_TOKEN !== undefined,
   hasGhToken: process.env.GH_TOKEN !== undefined,
   hasLinearApiKey: process.env.LINEAR_API_KEY !== undefined,
+  codexHome: process.env.CODEX_HOME ?? null,
 });
 const outputSchemaPath = () => {
   const index = process.argv.indexOf("--output-schema");
@@ -83,15 +84,7 @@ const outputSchemaPath = () => {
 
 const schemaPath = outputSchemaPath();
 const schema = schemaPath ? JSON.parse(await readFile(schemaPath, "utf8")) : null;
-const stage = schema?.properties?._tag?.enum?.[0];
-const stageResponse = () => {
-  if (stage === "implement")
-    return JSON.stringify({ _tag: "implement", outcome: "opened-pr", summary: capture });
-  if (stage === "follow-up") return JSON.stringify({ _tag: "follow-up", outcome: "noop", summary: capture });
-  if (schema) return JSON.stringify({ _tag: "triage", role: "ready-for-agent", proposal: capture });
-  return capture;
-};
-const response = stageResponse();
+const response = schema ? JSON.stringify({ summary: capture, stuck: false, elements: [] }) : capture;
 const turnError = process.argv.find((argument) => argument.startsWith("--fake-turn-error="));
 const turnErrorMessage = turnError?.slice("--fake-turn-error=".length).replaceAll("-", " ");
 const hookTrustNotice = process.argv.includes("--dangerously-bypass-hook-trust")

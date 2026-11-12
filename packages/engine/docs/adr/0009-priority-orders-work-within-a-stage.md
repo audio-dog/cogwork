@@ -1,5 +1,7 @@
 # Priority orders work within a stage, and a value we can't read defaults to medium
 
+Amended by ADR 0015. Waiting admissions now order by prior action from the same Workflow, priority, then oldest observed revision. Stage order is retired.
+
 The engine ordered eligible work by lifecycle stage alone. Within a stage it fell back to whatever order the tracker listed items in — so two `implement` tickets ran in an order nobody chose. A team that marks one ticket "urgent" and another "low" expects the urgent one to go first, and the engine had no way to honor that.
 
 We add a single canonical **priority** scale — `urgent`, `high`, `medium`, `low` — that every observed item now carries, and we sort by it *after* stage. Stage stays the primary key: a low-priority follow-up still runs before an urgent implement, because the stages are ordered for a reason and priority is not allowed to let a ticket jump its stage. Priority is the secondary key, breaking ties between items of the same stage; the tracker's own stable listing order breaks the remaining ties. Both sorts that matter — the classifier's eligible-work list and the scheduler's cross-workspace candidate list — key on stage, then priority, then stable order, so they agree.

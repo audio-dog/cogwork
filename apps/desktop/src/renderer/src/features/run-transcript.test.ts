@@ -1,4 +1,5 @@
-import type { RunActivity } from "@cogwork/contracts";
+import { agUiFileDiffUnavailableEvent, RunActivity } from "@cogwork/contracts";
+import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
 import { foldTranscript, type TranscriptEntry } from "./run-activity";
 import {
@@ -29,6 +30,24 @@ const shellOutput = (output: string, exitCode = 0) =>
 
 const text = (value: string, key = "text:1") =>
   ({ kind: "text", key, text: value }) satisfies TranscriptEntry;
+
+const decodeActivity = Schema.decodeSync(RunActivity);
+
+const activity = (event: RunActivity["event"], seq: number) =>
+  decodeActivity({
+    runId: "r",
+    workspace: "w",
+    workItem: "i",
+    operation: "implement",
+    seq,
+    atMillis: 0,
+    correlation: {
+      threadId: null,
+      messageId: null,
+      toolCallId: typeof event.toolCallId === "string" ? event.toolCallId : null,
+    },
+    event,
+  });
 
 describe("stageNote", () => {
   it("reads the sentence out of a stage result object", () => {
@@ -159,6 +178,7 @@ describe("stepBody", () => {
 describe("runLine", () => {
   it("reports the terminal state before anything else", () => {
     expect(runLine([], "succeeded")).toBe("Run finished.");
+    expect(runLine([], "declined")).toBe("Pull request creation declined.");
     expect(runLine([], "crashed")).toBe("Run failed.");
     expect(runLine([], "interrupted")).toBe("Run interrupted.");
     expect(runLine([], "running")).toBe("Starting…");
@@ -275,18 +295,6 @@ describe("runLine over notes and errors", () => {
 
 describe("statusLine", () => {
   it("folds raw activities straight to the line", () => {
-    const activity = (event: RunActivity["event"], seq: number): RunActivity =>
-      ({
-        runId: "r",
-        workspace: "w",
-        workItem: "i",
-        stage: "implement",
-        seq,
-        atMillis: 0,
-        correlation: { threadId: null, messageId: null, toolCallId: event.toolCallId ?? null },
-        event,
-      }) as RunActivity;
-
     const activities = [
       activity({ type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "command_execution" }, 0),
       activity(
@@ -297,5 +305,15 @@ describe("statusLine", () => {
 
     expect(statusLine(foldTranscript(activities), "running")).toBe("Running gh pr checks…");
     expect(statusLine([], "succeeded")).toBe("Run finished.");
+  });
+
+  it("shows a nonfatal warning when live file changes stop", () => {
+    expect(transcriptRows(foldTranscript([activity(agUiFileDiffUnavailableEvent(), 0)]), false)).toEqual([
+      {
+        kind: "warning",
+        key: "warning:0",
+        message: "The live file-change feed stopped. File changes may be incomplete.",
+      },
+    ]);
   });
 });

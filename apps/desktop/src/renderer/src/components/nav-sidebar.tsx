@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@cogwo
 import {
   RiAlertLine,
   RiEqualizerLine,
+  RiFocus2Line,
   RiNodeTree,
   RiPlugLine,
   RiPulseLine,
@@ -42,6 +43,7 @@ type FailedWorkspaceWithId = FailedWorkspace & { readonly id: WorkspaceId };
 
 import { useChromeStore } from "../store/chrome";
 import { HistoryNav } from "./history-nav";
+import { RegisterWorkspaceDialog } from "./register-workspace-dialog";
 import { useTheme } from "./theme-provider";
 
 interface View {
@@ -52,6 +54,7 @@ interface View {
 
 const views: ReadonlyArray<View> = [
   { label: "Feed", icon: RiPulseLine, to: "/" },
+  { label: "Attention", icon: RiFocus2Line, to: "/attention" },
   { label: "Workflows", icon: RiNodeTree, to: "/workflows" },
   { label: "Connections", icon: RiPlugLine, to: "/connections" },
   { label: "Customize", icon: RiEqualizerLine, to: "/customize" },
@@ -114,6 +117,7 @@ function WorkspaceFilter() {
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+      <RegisterWorkspaceDialog />
       <SidebarGroupContent>
         <SidebarMenu>
           <SidebarMenuItem>

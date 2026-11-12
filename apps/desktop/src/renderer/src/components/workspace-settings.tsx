@@ -1,7 +1,7 @@
 import {
   type Connection,
   type ControlStore,
-  type OperationSettingName,
+  type HarnessReadiness,
   type WorkspaceId,
   WorkspaceState,
 } from "@cogwork/contracts";
@@ -23,17 +23,17 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@c
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
-import { useAtom, useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { useAtom, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
-import * as Cause from "effect/Cause";
 import { useState } from "react";
-import { harnessesAtom, operationSettingAtomKey, setOperationSettingAtom } from "../daemon/atoms";
+import { harnessCatalogsAtom, harnessReadinessAtom, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
+import { daemonFailureMessage } from "../features/daemon-failure";
 import {
-  type HarnessCatalog,
+  type AvailableHarnessCatalog,
   harnessCatalogLoad,
-  operationSettingUpdate,
+  operationSettingBatch,
 } from "../features/operation-settings";
 import {
   changedFieldCount,
@@ -194,18 +194,6 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
   };
 }
 
-const writableSettings = [
-  "enabled",
-  "harness",
-  "model",
-  "effort",
-  "permission-profile",
-] as const satisfies readonly OperationSettingName[];
-
-/**
- * Each setting writes through its own mutation atom. `Atom.fn` is non-concurrent, so a
- * shared atom would let the model write interrupt the harness write that precedes it.
- */
 function LiveOperationSettings({
   controlStore,
   workspace,
@@ -215,10 +203,14 @@ function LiveOperationSettings({
   readonly workspace: WorkspaceId;
   readonly disabled: boolean;
 }) {
-  const harnesses = useAtomValue(harnessesAtom);
-  const refreshHarnesses = useAtomRefresh(harnessesAtom);
-  const overview = harnesses._tag === "Success" ? harnesses.value : null;
-  const load = harnessCatalogLoad(overview, harnesses._tag === "Failure");
+  const boardResult = useBoard();
+  const catalogResult = useAtomValue(harnessCatalogsAtom);
+  const readinessResult = useAtomValue(harnessReadinessAtom);
+  const catalogs = catalogResult._tag === "Success" ? catalogResult.value : null;
+  const board = BoardResult.$is("Success")(boardResult) ? boardResult.board : null;
+  const queriedReadiness = readinessResult._tag === "Success" ? readinessResult.value : null;
+  const readiness = board?.harnesses ?? queriedReadiness;
+  const load = harnessCatalogLoad(catalogs, catalogResult._tag === "Failure");
 
   if (load.status === "loading") {
     return (
@@ -235,9 +227,6 @@ function LiveOperationSettings({
         <RiAlertLine />
         <AlertTitle>Could not load Harness catalogs</AlertTitle>
         <AlertDescription>Workspace operation settings are unchanged.</AlertDescription>
-        <Button size="sm" variant="outline" onClick={refreshHarnesses}>
-          Try again
-        </Button>
       </Alert>
     );
   }
@@ -247,7 +236,8 @@ function LiveOperationSettings({
       controlStore={controlStore}
       workspace={workspace}
       catalogs={load.catalogs}
-      disabled={disabled || harnesses.waiting}
+      readiness={readiness}
+      disabled={disabled}
     />
   );
 }
@@ -256,47 +246,33 @@ function LoadedOperationSettings({
   controlStore,
   workspace,
   catalogs,
+  readiness,
   disabled,
 }: {
   readonly controlStore: ControlStore | null;
   readonly workspace: WorkspaceId;
-  readonly catalogs: ReadonlyArray<HarnessCatalog>;
+  readonly catalogs: ReadonlyArray<AvailableHarnessCatalog>;
+  readonly readiness: HarnessReadiness | null;
   readonly disabled: boolean;
 }) {
-  const key = (setting: OperationSettingName) =>
-    setOperationSettingAtom(operationSettingAtomKey(workspace, setting));
-  const enabled = useAtom(key("enabled"));
-  const harness = useAtom(key("harness"));
-  const model = useAtom(key("model"));
-  const effort = useAtom(key("effort"));
-  const permission = useAtom(key("permission-profile"));
-  const writers = { enabled, harness, model, effort, "permission-profile": permission };
-  const failure = writableSettings
-    .map((setting) => writers[setting][0])
-    .find((result) => result._tag === "Failure");
+  const [writeResult, write] = useAtom(setOperationSettingAtom(workspace));
 
   return (
     <OperationSettings.Provider
       value={{
-        state: { catalogs, controlStore, workspace },
+        state: { catalogs, controlStore, readiness, workspace },
         actions: {
-          write: (setting, operation, value) => {
-            const writer = writers[setting as (typeof writableSettings)[number]];
-            if (!writer) return;
-            writer[1]({
-              payload: { update: operationSettingUpdate(workspace, operation, setting, value) },
-            });
-          },
+          write: (updates) => write({ payload: { updates: operationSettingBatch(workspace, updates) } }),
         },
-        meta: { disabled: disabled || writableSettings.some((setting) => writers[setting][0].waiting) },
+        meta: { disabled },
       }}
     >
       <OperationSettings.Rows />
-      {failure?._tag === "Failure" && failure.cause ? (
+      {writeResult._tag === "Failure" && writeResult.cause ? (
         <Alert variant="destructive">
           <RiAlertLine />
           <AlertTitle>Could not save that setting</AlertTitle>
-          <AlertDescription>{Cause.pretty(failure.cause)}</AlertDescription>
+          <AlertDescription>{daemonFailureMessage(writeResult.cause)}</AlertDescription>
         </Alert>
       ) : null}
     </OperationSettings.Provider>
@@ -310,8 +286,6 @@ function HealthDot({ tone }: { readonly tone: WorkspaceHealth["tone"] }) {
       className={cn(
         "size-2 shrink-0 rounded-full",
         tone === "ok" && "bg-emerald-500 shadow-[0_0_8px] shadow-emerald-500/60",
-        tone === "pending" && "bg-sky-500",
-        tone === "paused" && "bg-amber-500 shadow-[0_0_8px] shadow-amber-500/60",
         tone === "failed" && "bg-destructive",
       )}
     />
@@ -351,7 +325,7 @@ function PageHeader({ settings }: { readonly settings: WorkspaceSettings }) {
 function HealthAlert({ health }: { readonly health: WorkspaceHealth | null }) {
   if (!health || health.tone === "ok") return null;
   return (
-    <Alert variant={health.tone === "failed" ? "destructive" : "default"}>
+    <Alert variant="destructive">
       <RiAlertLine />
       <AlertTitle>{health.label}</AlertTitle>
       <AlertDescription>{health.detail}</AlertDescription>

@@ -4,24 +4,29 @@ import {
   type GitHubPrioritySource,
   type Priority,
   resolvePriority,
-  type TriageRole,
+  WorkflowActionArtifact,
+  type WorkflowActionOrigin,
   WorkItemId,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type { CommentHost, CoordinationComment } from "../coordination";
-import * as Coordination from "../coordination";
-import type { CoordinationHost, ListedItem } from "../coordination-tracker";
-import { IssueTrackerError } from "../issue-tracker";
+import {
+  type CreateIssueInput,
+  convergeTrackerState,
+  IssueTrackerError,
+  type ListedTrackerItem,
+  type TrackerComment,
+} from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import {
   type GitHubClientService,
   type GitHubRepoRef,
-  type RawComment,
   type RawIssue,
+  type RawIssueComment,
   repoRefFromRepository,
 } from "./client";
-import { claimLabel, hasClaimLabel, roleLabel, rolesFromLabels, wireCodec } from "./markers";
+import { hasCogworkMarker, wireCodec } from "./markers";
+import { type BotAllowlist, sourceControlTargetFor } from "./source-control-target";
 
 export interface GitHubTarget extends GitHubRepoRef {
   readonly priority: GitHubPrioritySource | null;
@@ -35,26 +40,6 @@ export const repoTargetFor = (workspace: WorkspaceIssueTrackerBinding, connectio
   return target;
 };
 
-interface AuthenticatedGitHubTarget extends GitHubTarget {
-  readonly actorLogin: string;
-}
-
-interface GitHubRef {
-  readonly target: AuthenticatedGitHubTarget;
-  readonly number: number;
-}
-
-const claimIdentity = (target: AuthenticatedGitHubTarget) => target.actorLogin;
-
-const toCoordinationComment =
-  (actorLogin: string) =>
-  (comment: RawComment): CoordinationComment<number> => ({
-    id: comment.id,
-    body: comment.body,
-    isBot: comment.authorLogin === actorLogin,
-    createdAtMillis: comment.createdAtMillis,
-  });
-
 export const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
   const source = workspace.config.issueTracker;
   if (source.type !== "github") return null;
@@ -67,6 +52,14 @@ export const targetFor = (workspace: WorkspaceIssueTrackerBinding) => {
 };
 
 const decodeItemId = Schema.decodeUnknownEffect(WorkItemId);
+const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+const authoredByPerson = (comment: RawIssueComment, botAllowlist: BotAllowlist) =>
+  comment.authorLogin !== null &&
+  comment.authorType !== "Bot" &&
+  !botAllowlist.has(comment.authorLogin) &&
+  personAssociations.has(comment.authorAssociation) &&
+  !hasCogworkMarker(comment.body);
 const itemId = (issueNumber: number) => decodeItemId(`#${issueNumber}`).pipe(Effect.orDie);
 
 const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
@@ -86,116 +79,342 @@ const notGitHub = (workspace: WorkspaceIssueTrackerBinding) =>
     message: `workspace ${workspace.config.name} does not use GitHub Issues`,
   });
 
-export const makeHost = (client: GitHubClientService): CoordinationHost<GitHubRef, number> => {
-  const authenticatedTarget = Effect.fn("github.authenticatedTarget")(function* (target: GitHubTarget) {
-    const actorLogin = yield* client.authenticatedLogin(target);
-    return { ...target, actorLogin } satisfies AuthenticatedGitHubTarget;
+const writeMarker = (writeKey: string) =>
+  wireCodec.encode({ name: "write", pairs: `key=${encodeURIComponent(writeKey)}` });
+
+const carriesWriteKey = (body: string, writeKey: string) =>
+  wireCodec
+    .scan(body)
+    .some(({ name, pairs }) => name === "write" && pairs === `key=${encodeURIComponent(writeKey)}`);
+
+const markedBody = (body: string, writeKey: string) => [body.trim(), writeMarker(writeKey)].join("\n\n");
+
+const writeNotConfirmed = (writeKey: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    message: `GitHub write ${writeKey} was not confirmed by read-back`,
   });
 
-  const commentsFor = (target: AuthenticatedGitHubTarget, number: number): CommentHost<number> => ({
-    comments: client
-      .listComments(target, number)
-      .pipe(Effect.map((comments) => comments.map(toCoordinationComment(target.actorLogin)))),
-    edit: (id, body) => client.editComment(target, id, body),
-    create: (body) => client.createComment(target, number, body),
+const ambiguousWriteNotConfirmed = (writeKey: string) =>
+  new IssueTrackerError({
+    reason: "unavailable",
+    retryable: false,
+    writeMayHaveCommitted: true,
+    message: `GitHub write ${writeKey} may have committed but was not confirmed by read-back`,
   });
 
-  const listItem = (target: AuthenticatedGitHubTarget, priorities: ReadonlyMap<number, Priority>) =>
-    Effect.fn("github.listItem")(function* (issue: RawIssue) {
-      const rawComments = yield* client.listComments(target, issue.number);
-      const comments = rawComments.map(toCoordinationComment(target.actorLogin));
-      const id = yield* itemId(issue.number);
-      return {
-        id,
-        title: issue.title,
-        url: issue.url,
-        roles: rolesFromLabels(issue.labels),
-        assignees: issue.assignees,
-        claimLabeled: hasClaimLabel(issue.labels),
-        openBlockers: issue.openBlockers,
-        acceptedClaimants: [target.actorLogin, Coordination.defaultClaimant],
-        priority: priorities.get(issue.number) ?? defaultPriority,
-        comments,
-      } satisfies ListedItem<number>;
-    });
+const issuePriorities = Effect.fn("github.issuePriorities")(function* (
+  client: GitHubClientService,
+  target: GitHubTarget,
+  issues: ReadonlyArray<RawIssue>,
+) {
+  const fallback = new Map<number, Priority>();
+  const source = target.priority;
+  if (!source) return fallback;
+  return yield* client.listPriorityFields(target).pipe(
+    Effect.filterOrFail(
+      (fields) => fields.some((field) => field.id === source.field),
+      () =>
+        new IssueTrackerError({
+          reason: "unavailable",
+          message: `GitHub issue field ${source.field} is not an available single-select field`,
+        }),
+    ),
+    Effect.flatMap(() =>
+      client.listIssueFieldValues(
+        target,
+        issues.map((issue) => issue.nodeId),
+      ),
+    ),
+    Effect.map(
+      (valuesByIssue) =>
+        new Map(
+          issues.map((issue): readonly [number, Priority] => [
+            issue.number,
+            resolvePriority(valuesByIssue.get(issue.number)?.get(source.field)),
+          ]),
+        ),
+    ),
+    Effect.catchTag("IssueTrackerError", (error) =>
+      Effect.logWarning("priority issue field read failed; defaulting every item to medium", {
+        owner: target.owner,
+        name: target.name,
+        field: source.field,
+        message: error.message,
+      }).pipe(Effect.map(() => fallback)),
+    ),
+  );
+});
 
-  const priorityLookup = Effect.fn("github.priorityLookup")(function* (
+export const makeIssueReads = (client: GitHubClientService) => {
+  const issueRef = Effect.fn("github.issueRef")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    id: WorkItemId,
+  ) {
+    const target = targetFor(workspace);
+    if (!target) return yield* notGitHub(workspace);
+    return { target, number: yield* issueNumberOf(id) };
+  });
+  const listedItems = Effect.fn("github.listedItems")(function* (
     target: GitHubTarget,
     issues: ReadonlyArray<RawIssue>,
   ) {
-    const fallback = new Map<number, Priority>();
-    const source = target.priority;
-    if (!source) return fallback;
-    const openIssues = issues.filter((issue) => !issue.isPullRequest);
-    return yield* client.listPriorityFields(target).pipe(
-      Effect.filterOrFail(
-        (fields) => fields.some((field) => field.id === source.field),
-        () =>
-          new IssueTrackerError({
-            reason: "unavailable",
-            message: `GitHub issue field ${source.field} is not an available single-select field`,
-          }),
-      ),
-      Effect.flatMap(() =>
-        client.listIssueFieldValues(
-          target,
-          openIssues.map((issue) => issue.nodeId),
-        ),
-      ),
+    const priorities = yield* issuePriorities(client, target, issues);
+    return yield* Effect.forEach(issues, (issue) =>
       Effect.map(
-        (valuesByIssue) =>
-          new Map(
-            openIssues.map((issue): readonly [number, Priority] => [
-              issue.number,
-              resolvePriority(valuesByIssue.get(issue.number)?.get(source.field)),
-            ]),
-          ),
-      ),
-      Effect.catchTag("IssueTrackerError", (error) =>
-        Effect.logWarning("priority issue field read failed; defaulting every item to medium", {
-          owner: target.owner,
-          name: target.name,
-          field: source.field,
-          message: error.message,
-        }).pipe(Effect.map(() => fallback)),
+        itemId(issue.number),
+        (id): ListedTrackerItem => ({
+          id,
+          title: issue.title,
+          url: issue.url,
+          assignees: issue.assignees,
+          openBlockers: issue.openBlockers,
+          priority: priorities.get(issue.number) ?? defaultPriority,
+          states: issue.labels,
+          open: issue.state === "open",
+          labels: issue.labels,
+          createdAtMillis: issue.createdAtMillis,
+          lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,
+        }),
       ),
     );
   });
-
+  const listItems = Effect.fn("github.listItems")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    query: { readonly state: "open" | "all"; readonly since?: number; readonly label?: string },
+  ) {
+    const target = targetFor(workspace);
+    if (!target) return [];
+    const issues = yield* client.listIssues(target, query);
+    return yield* listedItems(
+      target,
+      issues.filter((issue) => !issue.isPullRequest),
+    );
+  });
   return {
-    codec: wireCodec,
-    rateLimitScope: () => null,
-    list: Effect.fn("github.list")(function* (workspace: WorkspaceIssueTrackerBinding) {
-      const configuredTarget = targetFor(workspace);
-      if (!configuredTarget) return [];
-      const target = yield* authenticatedTarget(configuredTarget);
-      const issues = yield* client.listIssues(target);
-      const priorities = yield* priorityLookup(target, issues);
-      return yield* Effect.forEach(
-        issues.filter((issue) => !issue.isPullRequest),
-        listItem(target, priorities),
-        { concurrency: 10 },
+    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, { state: "open" }),
+    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      listItems(workspace, { state: "all", since: sinceMillis }),
+    openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
+      listItems(workspace, { state: "open", label }),
+    readItem: Effect.fn("github.readItem")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const [item] = yield* listedItems(target, [yield* client.readIssue(target, number)]);
+      return item ?? null;
+    }),
+    readProse: Effect.fn("github.readProse")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const [issue, comments] = yield* Effect.all([
+        client.readIssue(target, number),
+        client.listAllComments(target, number),
+      ]);
+      return {
+        body: issue.body,
+        comments: comments.map((comment) => ({
+          author: comment.authorLogin,
+          authorAssociation: comment.authorAssociation,
+          body: comment.body,
+          createdAtMillis: comment.createdAtMillis,
+        })),
+      };
+    }),
+    readTriggerProse: Effect.fn("github.readTriggerProse")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const [issue, comments] = yield* Effect.all([
+        client.readIssue(target, number),
+        client.listTriggerComments(target, number),
+      ]);
+      const botAllowlist = sourceControlTargetFor(workspace)?.botAllowlist ?? new Map();
+      return {
+        body: issue.body,
+        comments: comments.map(
+          (comment): TrackerComment => ({
+            id: String(comment.id),
+            author: comment.authorLogin,
+            authorAssociation: comment.authorAssociation,
+            authoredByPerson: authoredByPerson(comment, botAllowlist),
+            body: comment.body,
+            createdAtMillis: comment.createdAtMillis,
+          }),
+        ),
+      };
+    }),
+    labelAppliedAt: Effect.fn("github.labelAppliedAt")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      label: string,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const history = yield* client.listIssueEvents(target, number);
+      const applied = history.findLast((event) => event.event === "labeled" && event.labelName === label);
+      return applied?.createdAtMillis ?? null;
+    }),
+    listLabels: Effect.fn("github.listLabels")(function* (workspace: WorkspaceIssueTrackerBinding) {
+      const target = targetFor(workspace);
+      if (!target) return [];
+      return yield* client.listLabels(target);
+    }),
+    assignees: Effect.fn("github.assignees")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const { target, number } = yield* issueRef(workspace, id);
+      const issue = yield* client.readIssue(target, number);
+      return issue.assignees;
+    }),
+  };
+};
+
+export const makeIssueActions = (client: GitHubClientService) => {
+  const target = Effect.fn("github.workflowActionTarget")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+  ) {
+    const resolved = targetFor(workspace);
+    if (!resolved) return yield* notGitHub(workspace);
+    return resolved;
+  });
+  const artifact = Effect.fn("github.workflowActionArtifact")(function* (
+    workspace: WorkspaceIssueTrackerBinding,
+    issue: RawIssue,
+    origin: WorkflowActionOrigin,
+  ) {
+    return WorkflowActionArtifact.make({
+      kind: "IssueCreated",
+      workspace: workspace.config.name,
+      issue: yield* itemId(issue.number),
+      url: issue.url,
+      origin,
+    });
+  });
+  const commentsCarry = (repo: GitHubTarget, number: number, writeKey: string) =>
+    client
+      .listAllComments(repo, number)
+      .pipe(Effect.map((comments) => comments.some(({ body }) => carriesWriteKey(body, writeKey))));
+  const confirmComment = Effect.fn("github.confirmWorkflowComment")(function* (
+    repo: GitHubTarget,
+    number: number,
+    writeKey: string,
+  ) {
+    if (yield* commentsCarry(repo, number, writeKey)) return;
+    return yield* writeNotConfirmed(writeKey);
+  });
+  const repairCreatedIssueLabels = Effect.fn("github.repairWorkflowCreatedIssueLabels")(function* (
+    repo: GitHubTarget,
+    issue: RawIssue,
+    labels: ReadonlyArray<string>,
+  ) {
+    const applied = new Set(issue.labels);
+    yield* Effect.forEach(
+      labels.filter((label) => !applied.has(label)),
+      (label) => client.addLabel(repo, issue.number, label),
+      { discard: true },
+    );
+    return issue;
+  });
+  const recoverCreatedIssue = Effect.fn("github.recoverWorkflowCreatedIssue")(function* (
+    repo: GitHubTarget,
+    writeKey: string,
+    labels: ReadonlyArray<string>,
+    error: IssueTrackerError,
+  ) {
+    if (!error.writeMayHaveCommitted) return yield* error;
+    const recovered = yield* client
+      .findIssueWithMarker(repo, writeMarker(writeKey))
+      .pipe(Effect.catchTag("IssueTrackerError", () => Effect.fail(ambiguousWriteNotConfirmed(writeKey))));
+    if (recovered) return yield* repairCreatedIssueLabels(repo, recovered, labels);
+    return yield* ambiguousWriteNotConfirmed(writeKey);
+  });
+  const confirmCreatedIssue = Effect.fn("github.confirmWorkflowCreatedIssue")(function* (
+    repo: GitHubTarget,
+    issue: RawIssue,
+    writeKey: string,
+  ) {
+    if (carriesWriteKey(issue.body, writeKey)) return issue;
+    const confirmed = yield* client.readIssue(repo, issue.number);
+    if (carriesWriteKey(confirmed.body, writeKey)) return confirmed;
+    return yield* ambiguousWriteNotConfirmed(writeKey);
+  });
+  return {
+    createIssue: Effect.fn("github.workflowCreateIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      input: CreateIssueInput,
+    ) {
+      const repo = yield* target(workspace);
+      const existing = yield* client.findIssueWithMarker(repo, writeMarker(input.origin.writeKey));
+      if (existing) {
+        const repaired = yield* repairCreatedIssueLabels(repo, existing, input.labels);
+        return yield* artifact(workspace, repaired, input.origin);
+      }
+      const created = yield* client
+        .createIssue(repo, {
+          title: input.title,
+          body: markedBody(input.body, input.origin.writeKey),
+          labels: input.labels,
+        })
+        .pipe(Effect.catch((error) => recoverCreatedIssue(repo, input.origin.writeKey, input.labels, error)));
+      const confirmed = yield* confirmCreatedIssue(repo, created, input.origin.writeKey);
+      return yield* artifact(workspace, confirmed, input.origin);
+    }),
+    commentIssue: Effect.fn("github.workflowCommentIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      body: string,
+      writeKey: string,
+    ) {
+      const repo = yield* target(workspace);
+      const number = yield* issueNumberOf(id);
+      if (yield* commentsCarry(repo, number, writeKey)) return;
+      yield* client.createComment(repo, number, markedBody(body, writeKey));
+      yield* confirmComment(repo, number, writeKey);
+    }),
+    addLabels: Effect.fn("github.workflowAddLabels")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      labels: ReadonlyArray<string>,
+    ) {
+      const repo = yield* target(workspace);
+      const number = yield* issueNumberOf(id);
+      yield* convergeTrackerState(
+        `GitHub add labels ${labels.join(", ")} to #${number}`,
+        client
+          .readIssue(repo, number)
+          .pipe(Effect.map((issue) => labels.every((label) => issue.labels.includes(label)))),
+        Effect.forEach(labels, (label) => client.addLabel(repo, number, label), { discard: true }),
       );
     }),
-    createIssue: Effect.fn("github.createIssue")(function* (workspace, input) {
-      const target = targetFor(workspace);
-      if (!target) return yield* notGitHub(workspace);
-      yield* client.createIssue(target, input);
-    }),
-    resolve: Effect.fn("github.resolve")(function* (workspace: WorkspaceIssueTrackerBinding, id: WorkItemId) {
-      const configuredTarget = targetFor(workspace);
-      if (!configuredTarget) return yield* notGitHub(workspace);
-      const target = yield* authenticatedTarget(configuredTarget);
+    removeLabel: Effect.fn("github.workflowRemoveLabel")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+      label: string,
+    ) {
+      const repo = yield* target(workspace);
       const number = yield* issueNumberOf(id);
-      return { target, number } satisfies GitHubRef;
+      yield* convergeTrackerState(
+        `GitHub remove label ${label} from #${number}`,
+        client.readIssue(repo, number).pipe(Effect.map((issue) => !issue.labels.includes(label))),
+        client.removeLabel(repo, number, label),
+      );
     }),
-    comments: (ref) => commentsFor(ref.target, ref.number),
-    claimIdentity: (ref) => claimIdentity(ref.target),
-    addClaim: (ref) => client.addLabel(ref.target, ref.number, claimLabel),
-    removeClaim: (ref) => client.removeLabel(ref.target, ref.number, claimLabel),
-    addRole: (ref, role: TriageRole) => client.addLabel(ref.target, ref.number, roleLabel(role)),
-    removeRole: (ref, role: TriageRole) => client.removeLabel(ref.target, ref.number, roleLabel(role)),
-    // GitHub has no state to sync after a role change; Linear's Canceled write is the counterexample.
-    afterRoleChange: () => Effect.void,
+    closeIssue: Effect.fn("github.workflowCloseIssue")(function* (
+      workspace: WorkspaceIssueTrackerBinding,
+      id: WorkItemId,
+    ) {
+      const repo = yield* target(workspace);
+      const number = yield* issueNumberOf(id);
+      yield* convergeTrackerState(
+        `GitHub close #${number}`,
+        client.readIssue(repo, number).pipe(Effect.map(({ state }) => state === "closed")),
+        client.closeIssue(repo, number),
+      );
+    }),
   };
 };

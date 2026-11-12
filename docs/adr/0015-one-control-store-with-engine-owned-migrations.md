@@ -5,6 +5,8 @@
 - **Amended:** 2026-08-25 — `drizzle-kit` is adopted as a development tool, see [Amendment](#amendment-2026-08-25--drizzle-kit-is-adopted-as-a-development-tool)
 - **Amended:** 2026-08-27 — pre-alpha: no migrations, see [Amendment](#amendment-2026-08-27--pre-alpha-no-migrations-no-cutover-no-backups)
 - **Amended:** 2026-09-01 — migrations return as declarative convergence, see [Amendment](#amendment-2026-09-01--migrations-return-as-declarative-convergence)
+- **Amended:** 2026-09-10 — run-event retention is bounded without breaking owned transcripts, see [Amendment](#amendment-2026-09-10--run-event-retention-is-bounded-without-breaking-owned-transcripts)
+- **Amended:** 2026-10-30 — a table that gains a required column is recreated, see [Amendment](#amendment-2026-10-30--a-table-that-gains-a-required-column-is-recreated)
 
 ## Context
 
@@ -12,9 +14,9 @@ ADR 0013 enumerated the settings a person can write. ADR 0014 made the install r
 for *this Plugin is installed* and machine-local. Neither said where those records physically live,
 how they migrate across an automatic desktop update, or what happens when a migration fails.
 
-[#126](https://github.com/colonylabs/cogwork/issues/126) asked for that. Its research artifact
+[#126](https://github.com/taylorfsteele/cogwork/issues/126) asked for that. Its research artifact
 (`docs/research/desktop-settings-storage-updates.md`, from
-[#129](https://github.com/colonylabs/cogwork/issues/129)) recommended Electron's `userData`
+[#129](https://github.com/taylorfsteele/cogwork/issues/129)) recommended Electron's `userData`
 directory, Drizzle's migrator driven by generated SQL files, and a `SecretStore` port beside the
 settings store. An AFK grilling session worked the ticket across seven rounds; three of those
 recommendations did not survive it, and a fourth decision — the one this ADR leads with — reversed
@@ -53,7 +55,7 @@ so unbounded run history becomes a startup cost.
 
 **No `SecretStore` and no Connection record.** The Credential store already names the first and
 already carries the seam the research proposed. *Connection* is marked *provisional, do not design
-against*; [#172](https://github.com/colonylabs/cogwork/issues/172) owns it.
+against*; [#172](https://github.com/taylorfsteele/cogwork/issues/172) owns it.
 
 ## Considered Options
 
@@ -97,10 +99,10 @@ is the only host.
 - `~/.cogwork/runs.db` becomes the wrong filename, and renaming it is itself a migration step.
 - Because the Control store now spans both families, a foreign key between a run row and a settings
   row becomes possible. Nothing needs one today —
-  [#130](https://github.com/colonylabs/cogwork/issues/130) embeds provenance in the Run Plan rather
+  [#130](https://github.com/taylorfsteele/cogwork/issues/130) embeds provenance in the Run Plan rather
   than referencing it — and wanting one is the signal to revisit this ADR.
 - One store-wide revision was considered and cut: its only consumer went to
-  [#133](https://github.com/colonylabs/cogwork/issues/133), and a counter every write must touch is a
+  [#133](https://github.com/taylorfsteele/cogwork/issues/133), and a counter every write must touch is a
   contention point invented for a consumer that does not exist. Stale-write detection stays per-row.
 
 ## Amendment (2026-08-25) — `drizzle-kit` is adopted as a development tool
@@ -143,7 +145,7 @@ that two committed representations would otherwise leave open.
 Nothing about the boot loop changes. The engine still owns it, still reads an array of statements,
 still never calls Drizzle's `migrate()`, and still does no filesystem read at run time.
 
-Full reasoning: [#126](https://github.com/colonylabs/cogwork/issues/126). Research:
+Full reasoning: [#126](https://github.com/taylorfsteele/cogwork/issues/126). Research:
 `docs/research/desktop-settings-storage-updates.md` on `research/desktop-settings-storage`.
 
 ## Amendment (2026-08-25) — the daemon's runtime limits are a record kind
@@ -179,7 +181,7 @@ daemon cannot read the location of its own store out of that store.
 ## Amendment (2026-08-25) — the Control store gains a Connection record
 
 This ADR decided "no `SecretStore` and no Connection record", noting that *Connection* was marked
-*provisional, do not design against* and that [#172](https://github.com/colonylabs/cogwork/issues/172)
+*provisional, do not design against* and that [#172](https://github.com/taylorfsteele/cogwork/issues/172)
 owned it.
 
 That ticket defines the term, and the record is now needed. **The Control store holds a Connection
@@ -223,7 +225,7 @@ on disk forever with no command to restore one. The compatibility check on appli
 its mirror for shipped ids a store's history would skip. The `authoritative_records` table,
 `writeAuthoritative`, and the expected-revision write: no caller, and *authoritative record* is a noun
 no `CONTEXT.md` glossary carries. The revision-and-stale-write pattern lands with
-[#219](https://github.com/colonylabs/cogwork/issues/219)'s typed table, which wants three named
+[#219](https://github.com/taylorfsteele/cogwork/issues/219)'s typed table, which wants three named
 columns rather than an opaque blob.
 
 **And no legacy cutover.** This ADR's Consequences said `~/.cogwork/runs.db` becomes the wrong
@@ -350,3 +352,42 @@ source of truth, and nothing a machine holds outranks it.
 practice, or a differ regression the pin and the re-diff cannot contain, is the signal to revisit —
 the fallback is the ordered-chain model this amendment declined, whose ingredients (`drizzle-kit
 generate`, Effect's `Migrator.fromRecord`) remain verified and available.
+
+## Amendment (2026-09-10) — run-event retention is bounded without breaking owned transcripts
+
+The required run-event retention existed as a 30-day event cutoff. It deleted individual events from
+every Run. That was unsafe for an owned-transcript Session, whose conversation exists only in those
+events, and it did not stop a recent event flood from filling the store.
+
+**Retention runs once at boot and removes whole Runs of events.** A Run is eligible only when it is
+terminal, has an end time, and belongs to an opaque-handle Session. An eligible Run is pruned when it
+ended more than 30 days ago. The remaining eligible event data has a 256 MiB soft budget, measured as
+the encoded `data` bytes. If it exceeds that budget, the oldest whole Runs are pruned until it fits.
+Running Runs and every owned-transcript Run are exempt. Tracker state is not available at store boot
+and does not create another exemption.
+
+**Pruning removes history, not the Run.** The Run row, immutable Run Plan, and Session remain. The Run
+reports zero retained events and records `eventsPrunedAtMillis`, so a history reader can distinguish
+removed history from a Run that never recorded an event. No folded transcript or other second copy is
+created.
+
+**New stores use incremental auto-vacuum.** Boot enables it before creating a new Control store and
+requests bounded incremental reclamation after pruning. Existing stores keep their current auto-vacuum mode:
+deleted pages can be reused, but boot never runs a blocking full `VACUUM` to retrofit them.
+
+## Amendment (2026-10-30) — a table that gains a required column is recreated
+
+The 2026-09-01 amendment named a rename-shaped diff as the one case the differ cannot resolve. There is
+a second. When a schema change adds a `NOT NULL` column with no default to an existing table, the
+differ emits `ALTER TABLE … ADD … NOT NULL`, and SQLite rejects that statement even on an empty table.
+Before this amendment, boot failed closed on every existing store.
+
+**Boot drops that table and diffs again, inside the converge transaction.** The second diff creates
+the table from the schema. Its rows are discarded, and every other table keeps its rows. Moving the
+whole store aside, as a rename-shaped diff does, would discard every Workspace and setting to remove
+rows that no longer have a value for the new column. The first case was `trigger_admissions`, which
+gained `workflow` and `trigger` key columns. Its old rows were keyed for per-work-item coordination,
+so keeping them would have scheduled Runs again that had already run.
+
+This is pre-release policy, and it flips with the others: before the first release, a required column
+on a table with rows needs a default or a transform, and boot fails closed until one ships.

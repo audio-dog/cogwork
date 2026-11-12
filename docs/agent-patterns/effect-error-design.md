@@ -171,5 +171,6 @@ no `reason` enum with one value that nothing branches on, no `retryable` nobody 
 - `packages/engine/src/linear/client.ts`, `packages/engine/src/github/client.ts`: private
   `Data.TaggedError` wrappers, unwrapped before escaping. `packages/engine/src/control-store.ts`:
   boot-only errors.
-- `packages/engine/src/executor.ts`: union-of-ports signatures, `_tag` and `reason` branching.
+- `packages/engine/src/workflow-run.ts`: union-of-ports signatures and `_tag` branching on plan
+  execution outcomes.
 - `docs/agents/technical-disposition.md`: when to add a typed error channel at all.

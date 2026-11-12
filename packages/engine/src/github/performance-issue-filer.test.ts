@@ -5,11 +5,16 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import { IssueTracker, IssueTrackerError, makeEmpty } from "../issue-tracker";
-import { PerformanceIssueFiler, PerformanceIssueFingerprint } from "../performance-issue-filer";
+import { IssueTrackerError } from "../issue-tracker";
+import {
+  PerformanceIssueFiler,
+  PerformanceIssueFingerprint,
+  type PerformanceVerdict,
+} from "../performance-issue-filer";
 import type { RegisteredWorkspace } from "../projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "../registry";
 import { GitHubClient, type GitHubClientService } from "./client";
+import { makePerformanceIssueFilerTarget } from "./index";
 import { wireCodec } from "./markers";
 import { confirmPerformanceIssue, layer, performanceIssueHistory } from "./performance-issue-filer";
 
@@ -22,12 +27,24 @@ const decodeWorkspaceId = Schema.decodeSync(WorkspaceId);
 const performanceFingerprint = Schema.decodeSync(PerformanceIssueFingerprint)(
   "daemon.event-loop-delay-p99.above",
 );
-const performanceIssueInput = {
-  fingerprint: performanceFingerprint,
-  title: "Daemon event-loop delay p99 exceeded 100 ms",
-  body: "Signal: daemon event-loop delay p99 above threshold",
-  recurrenceBody: "Fired again.",
-};
+const performanceVerdict = {
+  kind: "health-signal",
+  signal: "event-loop-delay-p99",
+  subsystem: "daemon",
+  direction: "above",
+  observed: 125,
+  threshold: 100,
+  unit: "ms",
+  windowMillis: 10_000,
+  consecutiveBreaches: 3,
+  evidence: {
+    path: "/tmp/daemon.event-loop-delay-p99.above.json",
+    appVersion: "0.0.1-test",
+    runsInFlight: 2,
+    workspaceCount: 1,
+    machineLoad: { cpuCount: 8, loadAverage: [1, 0.5, 0.25], freeMemoryBytes: 1_000 },
+  },
+} satisfies PerformanceVerdict;
 const noPullReferences = () => Effect.succeed([]);
 const pullReference = (body: string, merged = true) => ({
   body,
@@ -72,10 +89,29 @@ const performanceWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github" },
   }),
 };
+const linearPerformanceWorkspaceName = decodeWorkspaceId("linear-performance");
+const linearPerformanceWorkspace: RegisteredWorkspace = {
+  ...performanceWorkspace,
+  repository: "colonylabs/cogwork",
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: linearPerformanceWorkspaceName,
+    checkoutPath: "/repos/linear-performance",
+    issueTracker: { type: "linear", teams: ["CGW"] },
+  }),
+};
 
 const unexpectedClientCall = () => Effect.die("unexpected GitHub client call");
+const filerLayer = (workspaceName: WorkspaceId | undefined, workspaces: ReadonlyArray<RegisteredWorkspace>) =>
+  layer(workspaceName).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.mock(GitHubClient, {}),
+        Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces, failures: [] })),
+      ),
+    ),
+  );
 
-it.effect("recovers an open marker-bearing issue whose labels were omitted during creation", () =>
+it.effect("decodes fingerprints once and keeps labeled markerless issues for cap accounting", () =>
   Effect.gen(function* () {
     const references = new Map([
       [1, [pullReference("Refs #1")]],
@@ -84,19 +120,16 @@ it.effect("recovers an open marker-bearing issue whose labels were omitted durin
     ]);
     const client = {
       authenticatedLogin: () => Effect.succeed("cogwork-bot"),
-      listIssues: (_repo: unknown, query?: { readonly state: "open" | "all"; readonly label?: string }) =>
-        Effect.succeed(
-          query?.label
-            ? [issue(1, marker, "closed")]
-            : [
-                issue(2, marker),
-                issue(3, "ordinary issue"),
-                issue(4, marker, "open", "untrusted-user"),
-                issue(1, marker, "closed"),
-                issue(5, marker, "closed"),
-                issue(6, marker, "closed"),
-              ],
-        ),
+      listIssues: () =>
+        Effect.succeed([
+          issue(2, marker),
+          issue(3, "ordinary issue"),
+          issue(4, marker, "open", "untrusted-user"),
+          issue(1, marker, "closed"),
+          issue(5, marker, "closed"),
+          issue(6, marker, "closed"),
+          { ...issue(7, "malformed marker"), labels: ["origin:selfperf"] },
+        ]),
       issuePullReferences: (_repo: unknown, issueNumber: number) =>
         Effect.succeed(references.get(issueNumber) ?? []),
     };
@@ -108,14 +141,80 @@ it.effect("recovers an open marker-bearing issue whose labels were omitted durin
     });
 
     assert.deepStrictEqual(
-      history.map(({ id, state, hasMergedFix }) => ({ id, state, hasMergedFix })),
+      history.map(({ id, state, fingerprint, hasMergedFix }) => ({ id, state, fingerprint, hasMergedFix })),
       [
-        { id: "#1", state: "closed", hasMergedFix: true },
-        { id: "#2", state: "open", hasMergedFix: false },
-        { id: "#5", state: "closed", hasMergedFix: false },
-        { id: "#6", state: "closed", hasMergedFix: false },
+        { id: "#1", state: "closed", fingerprint: performanceFingerprint, hasMergedFix: true },
+        { id: "#2", state: "open", fingerprint: performanceFingerprint, hasMergedFix: false },
+        { id: "#5", state: "closed", fingerprint: performanceFingerprint, hasMergedFix: false },
+        { id: "#6", state: "closed", fingerprint: performanceFingerprint, hasMergedFix: false },
+        { id: "#7", state: "open", fingerprint: undefined, hasMergedFix: false },
       ],
     );
+  }),
+);
+
+it.effect("does not require an authenticated login for origin-labeled history", () =>
+  Effect.gen(function* () {
+    const client = {
+      authenticatedLogin: unexpectedClientCall,
+      listIssues: () =>
+        Effect.succeed([{ ...issue(2, marker), labels: ["needs-triage", "origin:selfperf"] }]),
+      issuePullReferences: noPullReferences,
+    };
+
+    const history = yield* performanceIssueHistory(client, {
+      owner: "colonylabs",
+      name: "cogwork",
+      tokenEnv: "GITHUB_TOKEN",
+    });
+
+    assert.deepStrictEqual(
+      history.map(({ id }) => id),
+      ["#2"],
+    );
+  }),
+);
+
+it.effect("keeps marker-only login failures visible for authenticated targets", () =>
+  Effect.gen(function* () {
+    const failure = new IssueTrackerError({
+      reason: "unavailable",
+      retryable: true,
+      message: "authenticated login is temporarily unavailable",
+    });
+    const client = {
+      authenticatedLogin: () => Effect.fail(failure),
+      listIssues: () => Effect.succeed([issue(2, marker)]),
+      issuePullReferences: unexpectedClientCall,
+    };
+
+    const error = yield* Effect.flip(
+      performanceIssueHistory(client, {
+        owner: "colonylabs",
+        name: "cogwork",
+        tokenEnv: "GITHUB_TOKEN",
+      }),
+    );
+
+    assert.strictEqual(error, failure);
+  }),
+);
+
+it.effect("uses origin labels without actor lookup for installation-token targets", () =>
+  Effect.gen(function* () {
+    const client = {
+      authenticatedLogin: unexpectedClientCall,
+      listIssues: () => Effect.succeed([issue(2, marker)]),
+      issuePullReferences: unexpectedClientCall,
+    };
+
+    const history = yield* performanceIssueHistory(
+      client,
+      { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
+      "origin-label-only",
+    );
+
+    assert.deepStrictEqual(history, []);
   }),
 );
 
@@ -154,15 +253,14 @@ it.effect("repairs labels before confirming a created performance issue", () =>
       addLabel: (_repo: unknown, _number: number, label: string) =>
         Ref.update(labels, (current) => [...current, label]),
       authenticatedLogin: () => Effect.succeed("cogwork-bot"),
-      listIssues: (_repo: unknown, query?: { readonly state: "open" | "all"; readonly label?: string }) =>
-        Effect.succeed(query?.label ? [] : [issue(2, marker)]),
+      listIssues: () => Effect.succeed([issue(2, marker)]),
       issuePullReferences: noPullReferences,
     };
 
     yield* confirmPerformanceIssue(
       client,
       { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
-      marker,
+      performanceFingerprint,
     );
 
     assert.deepStrictEqual(yield* Ref.get(labels), ["needs-triage", "origin:selfperf"]);
@@ -184,7 +282,7 @@ it.effect("confirms the accepted occurrence after it closes", () =>
     yield* confirmPerformanceIssue(
       client,
       { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
-      marker,
+      performanceFingerprint,
       new Set([decodeWorkItemId("#1000")]),
     );
 
@@ -192,13 +290,41 @@ it.effect("confirms the accepted occurrence after it closes", () =>
   }),
 );
 
+it.effect("builds a target from a GitHub client and repository reference", () =>
+  Effect.gen(function* () {
+    const created = yield* CreateIssueCalls;
+    const target = yield* makePerformanceIssueFilerTarget(
+      {
+        addLabel: () => Effect.void,
+        authenticatedLogin: () => Effect.succeed("cogwork-bot"),
+        createIssue: () =>
+          Ref.updateAndGet(created, (count) => count + 1).pipe(Effect.map((number) => issue(number, marker))),
+        createPerformanceComment: unexpectedClientCall,
+        issuePullReferences: noPullReferences,
+        listIssues: () =>
+          Ref.get(created).pipe(Effect.map((count) => (count === 0 ? [] : [issue(2, marker)]))),
+      },
+      { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" },
+    );
+
+    yield* target.create({
+      fingerprint: performanceFingerprint,
+      title: "Daemon event-loop delay p99 exceeded 100 ms",
+      body: marker,
+      labels: ["needs-triage", "origin:selfperf"],
+    });
+
+    assert.strictEqual(yield* Ref.get(created), 1);
+  }).pipe(Effect.provide(CreateIssueCalls.layer)),
+);
+
 it.effect("retries creation after a transient failure that did not report acceptance", () =>
   Effect.gen(function* () {
     const filer = yield* PerformanceIssueFiler;
     const calls = yield* CreateIssueCalls;
 
-    yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
-    const result = yield* filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15));
+    yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
+    const result = yield* filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15));
 
     assert.strictEqual(result, "filed");
     assert.strictEqual(yield* Ref.get(calls), 2);
@@ -215,6 +341,8 @@ it.effect("retries creation after a transient failure that did not report accept
                   authenticatedLogin: () => Effect.succeed("cogwork-bot"),
                   listIssues: () =>
                     Ref.get(calls).pipe(Effect.map((count) => (count >= 2 ? [issue(2, marker)] : []))),
+                  findIssueWithMarker: unexpectedClientCall,
+                  readIssue: unexpectedClientCall,
                   listIssueFieldValues: unexpectedClientCall,
                   listPriorityFields: unexpectedClientCall,
                   issuePullReferences: noPullReferences,
@@ -223,25 +351,12 @@ it.effect("retries creation after a transient failure that did not report accept
                   listPulls: unexpectedClientCall,
                   pullMergeableState: unexpectedClientCall,
                   listComments: unexpectedClientCall,
+                  listIssueEvents: unexpectedClientCall,
+                  listAllComments: unexpectedClientCall,
+                  listTriggerComments: unexpectedClientCall,
                   listReviewComments: unexpectedClientCall,
                   listReviews: unexpectedClientCall,
                   listCheckRuns: unexpectedClientCall,
-                  createIssue: unexpectedClientCall,
-                  createPull: unexpectedClientCall,
-                  removeLabel: unexpectedClientCall,
-                  createComment: unexpectedClientCall,
-                  editComment: unexpectedClientCall,
-                  verifyCredential: unexpectedClientCall,
-                } satisfies GitHubClientService;
-              }),
-            ),
-            Layer.effect(
-              IssueTracker,
-              Effect.gen(function* () {
-                const calls = yield* CreateIssueCalls;
-                const base = yield* makeEmpty;
-                return {
-                  ...base,
                   createIssue: () =>
                     Ref.updateAndGet(calls, (count) => count + 1).pipe(
                       Effect.flatMap((count) =>
@@ -252,10 +367,24 @@ it.effect("retries creation after a transient failure that did not report accept
                                 message: "transient create failure",
                               }),
                             )
-                          : Effect.void,
+                          : Effect.succeed(issue(2, marker)),
                       ),
                     ),
-                };
+                  createPull: unexpectedClientCall,
+                  getPull: unexpectedClientCall,
+                  getPullDiff: unexpectedClientCall,
+                  listPullFiles: unexpectedClientCall,
+                  createReview: unexpectedClientCall,
+                  removeLabel: unexpectedClientCall,
+                  closeIssue: unexpectedClientCall,
+                  createComment: unexpectedClientCall,
+                  listCollaborators: unexpectedClientCall,
+                  listLabels: unexpectedClientCall,
+                  listRequestedReviewers: unexpectedClientCall,
+                  requestReview: unexpectedClientCall,
+                  editComment: unexpectedClientCall,
+                  verifyCredential: unexpectedClientCall,
+                } satisfies GitHubClientService;
               }),
             ),
             Layer.succeed(
@@ -272,21 +401,34 @@ it.effect("retries creation after a transient failure that did not report accept
 it.effect("keeps an unregistered performance workspace retryable", () =>
   Effect.gen(function* () {
     const filer = yield* PerformanceIssueFiler;
-    const error = yield* Effect.flip(filer.submit(performanceIssueInput, Date.UTC(2026, 8, 9, 15)));
+    const error = yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
 
     assert.strictEqual(error.reason, "unavailable");
     assert.isTrue(error.retryable);
-  }).pipe(
-    Effect.provide(
-      layer(performanceWorkspaceName).pipe(
-        Layer.provide(
-          Layer.mergeAll(
-            Layer.mock(GitHubClient, {}),
-            Layer.effect(IssueTracker, makeEmpty),
-            Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [], failures: [] })),
-          ),
-        ),
-      ),
-    ),
-  ),
+  }).pipe(Effect.provide(filerLayer(performanceWorkspaceName, []))),
+);
+
+it.effect("rejects a missing performance workspace configuration permanently", () =>
+  Effect.gen(function* () {
+    const filer = yield* PerformanceIssueFiler;
+    const error = yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
+
+    assert.strictEqual(error.reason, "unavailable");
+    assert.isFalse(error.retryable ?? true);
+    assert.strictEqual(error.message, "performance evidence workspace is not configured");
+  }).pipe(Effect.provide(filerLayer(undefined, []))),
+);
+
+it.effect("rejects a non-GitHub performance workspace permanently", () =>
+  Effect.gen(function* () {
+    const filer = yield* PerformanceIssueFiler;
+    const error = yield* Effect.flip(filer.submit(performanceVerdict, Date.UTC(2026, 8, 9, 15)));
+
+    assert.strictEqual(error.reason, "unavailable");
+    assert.isFalse(error.retryable ?? true);
+    assert.strictEqual(
+      error.message,
+      `performance evidence workspace ${linearPerformanceWorkspaceName} does not use GitHub issues`,
+    );
+  }).pipe(Effect.provide(filerLayer(linearPerformanceWorkspaceName, [linearPerformanceWorkspace]))),
 );

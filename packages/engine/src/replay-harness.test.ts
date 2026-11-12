@@ -1,4 +1,4 @@
-import { HarnessName, RunId } from "@cogwork/contracts";
+import { HarnessName, RunId, RunPlan } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -45,6 +45,51 @@ const fixture = ReplayFixture.make({
       atMillis: 1_600,
     },
   ],
+});
+
+const replayRequest = (speed: ReplaySpeed) => ({
+  plan: Schema.decodeSync(RunPlan)({
+    id: "run-replay-test",
+    operation: "implement",
+    harness: { name: replayHarnessName, model: "fixture", options: { speed }, profile: "read-only" },
+    instructions: [],
+    operatingInstructions: {
+      name: "implement-agent",
+      path: "/operating-instructions/implement-agent",
+      resources: [],
+    },
+    tools: [],
+    skills: [],
+    mcp: [],
+    subagents: [],
+    hooks: [],
+    middleware: [],
+    structuredOutput: null,
+    connections: [],
+    messages: [{ role: "user", content: "replay the fixture" }],
+    workContext: {
+      reference: { workItem: "#690", url: null },
+      prose: { body: "", comments: [] },
+      facts: {
+        assignees: [],
+        openBlockers: 0,
+        claim: null,
+        priority: "medium",
+      },
+      observation: { generation: 1, observedAtMillis: 1 },
+    },
+    sandbox: { workspace: "/repo", policy: "full" },
+    persistence: { sessionKind: "owned-transcript" },
+    provenance: {
+      resolution: [],
+      stamps: [],
+      projectedNames: [],
+      projection: [],
+      observation: { generation: 1, observedAtMillis: 1 },
+    },
+  }),
+  session: null,
+  mcpCredentials: new Map(),
 });
 
 const counts = (eventsProcessed: number) =>
@@ -95,12 +140,29 @@ describe("replay fixture", () => {
     }),
   );
 
-  it.effect("replays at the selected speed", () =>
+  it.effect("publishes and honors the selected fixture speed", () =>
     Effect.gen(function* () {
-      const fiber = yield* replayFixtureEvents(fixture, 2).pipe(
-        Stream.runCollect,
-        Effect.forkChild({ startImmediately: true }),
-      );
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-replay-" });
+      const fixturePath = path.join(directory, "fixture.json");
+      yield* fs.writeFileString(fixturePath, yield* encodeReplayFixture(fixture));
+      const runner = yield* replayRunner({
+        name: replayHarnessName,
+        fixturePath: Effect.succeed(fixturePath),
+      });
+      const speed = runner.catalog.models[0]?.options?.find(({ id }) => id === "speed");
+      assert.deepStrictEqual(speed, {
+        type: "select",
+        id: "speed",
+        label: "Speed",
+        values: ["1x", "2x", "4x", "6x", "8x", "unpaced"].map((value) => ({ value, label: value })),
+        defaultValue: "1x",
+      });
+      assert.strictEqual((yield* runner.readiness()).operational.status, "ready");
+      const fiber = yield* runner
+        .run(replayRequest("2x"))
+        .pipe(Stream.runCollect, Effect.forkChild({ startImmediately: true }));
 
       yield* TestClock.adjust("299 millis");
       assert.isUndefined(fiber.pollUnsafe());
@@ -110,7 +172,7 @@ describe("replay fixture", () => {
         Array.from(yield* Fiber.join(fiber)).map((event) => event.type),
         ["RUN_STARTED", "TEXT_MESSAGE_CONTENT"],
       );
-    }),
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
   it.effect("keeps event counts deterministic across eight concurrent replays", () =>

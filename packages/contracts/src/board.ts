@@ -2,13 +2,14 @@ import * as Stream from "effect/Stream";
 import type { WorkspaceId } from "./base-schemas";
 import type { ConnectionOverview } from "./connection";
 import type { ControlStore, SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
-import { type ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
+import { DaemonEvent, type ReadModelItem, WorkspaceState } from "./daemon-event";
+import type { HarnessReadiness } from "./harness";
 import type { PluginOverview } from "./plugin";
 import type { RunSummary } from "./run";
 
 export interface BoardItem {
   readonly workspace: WorkspaceId;
-  readonly item: ClassifiedItem;
+  readonly item: ReadModelItem;
 }
 
 export interface Board {
@@ -21,6 +22,7 @@ export interface Board {
   readonly pluginNotices: readonly string[];
   readonly connections: ConnectionOverview | null;
   readonly connectionNotices: readonly WorkspaceId[];
+  readonly harnesses: HarnessReadiness | null;
 }
 
 export const initialBoard: Board = {
@@ -33,6 +35,7 @@ export const initialBoard: Board = {
   pluginNotices: [],
   connections: null,
   connectionNotices: [],
+  harnesses: null,
 };
 
 export const settledRunLimit = 20;
@@ -66,9 +69,7 @@ export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
   checkoutPath: info.checkoutPath,
   issueTracker: info.issueTracker,
   record: info.record,
-  poll: info.poll,
   contributions: info.contributions,
-  availability: info.availability,
 });
 
 export const workspaceFailureState = (failure: WorkspaceFailureInfo) => ({
@@ -117,7 +118,10 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
       connections,
       connectionNotices: danglingWorkspaces,
     }),
+    HarnessesChanged: ({ readiness }) => ({ ...board, harnesses: readiness }),
     SchedulerChanged: ({ scheduler }) => ({ ...board, scheduler }),
+    WorkflowChanged: () => board,
+    WorkflowDeleted: () => board,
   });
 
 export const liveOnly = <E, R>(events: Stream.Stream<DaemonEvent, E, R>) =>
