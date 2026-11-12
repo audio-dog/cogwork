@@ -1,0 +1,39 @@
+packages/engine/src/operation-result.ts
+  s_97f2b15f1e4658::t_bfacb1f5c34ca6 23-24,29
+  s_97f2b15f1e4658::t_02dd92c3a10d18 1-8,13-22,25-28,30-71
+  s_97f2b15f1e4658::t_7b75e199e64def 9-12
+packages/engine/src/workflow-run.test.ts
+  s_97f2b15f1e4658::t_eef703656bcad7 663-671
+  s_97f2b15f1e4658::t_d7d98ed612c3fd 1776
+  s_97f2b15f1e4658::t_e96dcaeb5dafe0 2705-2755,2757-2777
+  s_97f2b15f1e4658::t_2c03107dc89b95 1796,1801
+  s_97f2b15f1e4658::t_d8e14844f7ff22 1768-1775,1777,1780,1787,1792-1795,1797-1800,1802-1803
+  s_97f2b15f1e4658::t_e954be07858625 2778-2784
+packages/engine/src/workflow-run.ts
+  s_97f2b15f1e4658::t_3adf04216db670 384,387-390,395,400
+  s_97f2b15f1e4658::t_f53f15ad1a7de5 672,675-680
+  s_97f2b15f1e4658::t_63ed7f024e4569 687,692,694,702-703,764
+  s_97f2b15f1e4658::t_e9932e780fce03 750-751
+  s_97f2b15f1e4658::t_3162d0efebba22 773-778
+  s_97f2b15f1e4658::t_649a85e5d72ad2 796-802
+  s_97f2b15f1e4658::t_a42dab9291f387 42-48
+packages/contracts/CONTEXT.md
+  s_97f2b15f1e4658::t_9ecb06a31ccfb5 589,592-594
+  s_97f2b15f1e4658::t_50c009c57edb8d 595
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d19d56c72fcca6ea77eaf40b71ea9f46b2ac9365",
+  "prompts": {},
+  "sessions": {
+    "s_97f2b15f1e4658": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7e680021-6145-404e-98e6-f91cd325d4c7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
