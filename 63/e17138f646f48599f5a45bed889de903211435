@@ -1,0 +1,35 @@
+packages/engine/src/operation-result.test.ts
+  s_966c675c0e1ef0::t_fc890ce43b5d10 24-25,28
+  s_966c675c0e1ef0::t_bc2b63ba90192b 1-16,18-23,26-27,29-44,46-47,49-59,61-77,79-112
+  s_966c675c0e1ef0::t_5b60a4c14cdaf5 17
+  s_966c675c0e1ef0::t_764f38396d1e68 48
+  s_966c675c0e1ef0::t_b3ed0aebf4c8c6 78
+  s_966c675c0e1ef0::t_3f4bd83050b896 45
+  s_966c675c0e1ef0::t_fa8cca76759877 60
+packages/engine/src/operation-result.ts
+  s_966c675c0e1ef0::t_8a7c30cc9002dd 110-112
+  s_966c675c0e1ef0::t_b68c47304ef79a 128-130
+  s_966c675c0e1ef0::t_0faa0618fdd189 16
+  s_966c675c0e1ef0::t_750ea16c9182bd 38-80,86-90
+  s_966c675c0e1ef0::t_06f326b438efc3 15
+  s_966c675c0e1ef0::t_ea1b5573d8e7ba 113
+packages/contracts/CONTEXT.md
+  s_966c675c0e1ef0::t_8c5347532d5d7b 584
+  s_966c675c0e1ef0::t_9921de6512de8c 588
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "63e17138f646f48599f5a45bed889de903211435",
+  "prompts": {},
+  "sessions": {
+    "s_966c675c0e1ef0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "929e394d-d0bf-44ff-a5d5-c1d8d6a42731",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
