@@ -975,7 +975,10 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
         yield* shell(root, worktree, "echo engine >> work.txt && git commit -qam engine");
 
         const directPush = yield* Effect.exit(shell(root, worktree, `git push -q origin ${branch}`));
-        assert.isTrue(Exit.isFailure(directPush));
+        assert.include(
+          Exit.isFailure(directPush) ? Cause.pretty(directPush.cause) : "pushed",
+          "fixture failed (128)",
+        );
 
         yield* git.pushBranch(worktree, yield* git.remoteUrl(checkout, "origin"), branch);
         yield* git.fetch(checkout, "origin", { branches: [branch] });

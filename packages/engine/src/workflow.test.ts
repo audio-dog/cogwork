@@ -971,8 +971,7 @@ layer(NodeServices.layer)((it) => {
       yield* withWorkflows(storePath, ({ delete: deleteWorkflow }) => deleteWorkflow({ id: created.id }));
       const missing = yield* Effect.exit(withWorkflows(storePath, ({ get }) => get({ id: created.id })));
 
-      assert.isTrue(Exit.isFailure(missing));
-      if (!Exit.isFailure(missing)) return;
+      if (Exit.isSuccess(missing)) return assert.fail("expected the deleted Workflow to be missing");
       const failure = Option.getOrNull(Cause.findErrorOption(missing.cause));
       assert.isTrue(Schema.is(WorkflowNotFound)(failure));
     }),
