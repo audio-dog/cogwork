@@ -187,6 +187,7 @@ const workflowService: WorkflowsService = {
           itemKind: null,
           actsOn: ["*"],
           requiresWorkspace: false,
+          workspaceSource: null,
           permissionProfile: "read-only",
           agentInputs: ["notification"],
           emits: [],
@@ -202,6 +203,7 @@ const workflowService: WorkflowsService = {
           itemKind: null,
           actsOn: ["*"],
           requiresWorkspace: false,
+          workspaceSource: null,
           permissionProfile: "read-only",
           agentInputs: ["hand_off"],
           emits: [],
@@ -233,6 +235,7 @@ const waitForApprovalCatalogEntry = {
   itemKind: null,
   actsOn: ["*"],
   requiresWorkspace: false,
+  workspaceSource: null,
   permissionProfile: "read-only" as const,
   agentInputs: ["approval_request"],
   emits: [],
@@ -582,6 +585,7 @@ const issueSearchService = (baseCatalogResult: Effect.Success<WorkflowsService["
             itemKind: null,
             actsOn: ["*"],
             requiresWorkspace: true,
+            workspaceSource: "agent",
             permissionProfile: "read-only" as const,
             agentInputs: ["issue_title", "issue_body"],
             emits: [],
@@ -808,6 +812,7 @@ describe("WorkflowRun", () => {
         itemKind: null,
         actsOn: ["*"],
         requiresWorkspace: true,
+        workspaceSource: "agent" as const,
         permissionProfile: "read-only" as const,
         agentInputs: inputs,
         emits: [],
@@ -1026,21 +1031,18 @@ describe("WorkflowRun", () => {
         stuck: false,
         answers: { role: "needs-info" },
         inputs: { comment: "Please add the failing logs.", hand_off: "Waiting for logs." },
-        workspace: "none",
       });
       yield* runCodingAdmission(admissionFor("needs-info-comment", issue("#801")), {
         summary: "Ready after reporter reply",
         stuck: false,
         answers: { role: "ready-for-agent" },
         inputs: { comment: "Thanks, this is ready.", hand_off: "" },
-        workspace: workspace.config.name,
       });
       yield* runCodingAdmission(admissionFor("ready-for-agent", issue("#802")), {
         summary: "Implementation complete",
         stuck: false,
         answers: {},
         inputs: { pr_title: "Implement retries", pr_body: "Closes #802" },
-        workspace: workspace.config.name,
       });
       yield* runCodingAdmission(
         admissionFor("checks-failed", {
@@ -1053,7 +1055,6 @@ describe("WorkflowRun", () => {
           stuck: false,
           answers: { reply: "no" },
           inputs: { comment: "" },
-          workspace: workspace.config.name,
         },
       );
 
@@ -1529,6 +1530,7 @@ describe("WorkflowRun", () => {
         itemKind: null,
         actsOn: ["*"],
         requiresWorkspace: true,
+        workspaceSource: "agent",
         permissionProfile: "read-only" as const,
         agentInputs: ["pull_request", "review_body", "review_comments"],
         emits: [],
@@ -1712,6 +1714,7 @@ describe("WorkflowRun", () => {
               itemKind: "issue",
               actsOn: [],
               requiresWorkspace: true,
+              workspaceSource: null,
               permissionProfile: "read-only",
               agentInputs: [],
               emits: [],
@@ -1727,6 +1730,7 @@ describe("WorkflowRun", () => {
               itemKind: null,
               actsOn: ["issue"],
               requiresWorkspace: true,
+              workspaceSource: "item-else-agent",
               permissionProfile: "full",
               agentInputs: ["pr_title", "pr_body"],
               emits: [],
@@ -1762,14 +1766,12 @@ describe("WorkflowRun", () => {
           {
             summary: "Open it",
             stuck: false,
-            workspace: workspace.config.name,
             answers: {},
             inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
           },
           {
             summary: "Open it",
             stuck: false,
-            workspace: workspace.config.name,
             answers: {},
             inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
           },
@@ -2583,6 +2585,7 @@ describe("WorkflowRun", () => {
                   itemKind: null,
                   actsOn: ["*"],
                   requiresWorkspace: false,
+                  workspaceSource: null,
                   permissionProfile: "read-only",
                   agentInputs: ["approval_request"],
                   emits: [],

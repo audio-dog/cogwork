@@ -75,6 +75,7 @@ const triggerContribution: WorkflowCatalogContribution = {
       itemKind: "issue",
       actsOn: [],
       requiresWorkspace: false,
+      workspaceSource: null,
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],

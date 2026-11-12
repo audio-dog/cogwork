@@ -146,7 +146,7 @@ The decision that combines the published Operation, Default settings, Operating 
 _Avoid_: Fixed Operation resolution, stage resolution, prompt assembly, decline (the runner's act on a rejection)
 
 **Action entry**:
-One registered output action: its catalog row, the target it freezes, the write it performs, its phase in the Action plan's fixed order (approval, write, notify, terminal), and the engine Tools a Run needs to use it. Registered once under its full catalog key; the Trigger and action catalog's action rows derive from the registry, so a row cannot exist without its write.
+One registered output action: its catalog row, the target it freezes, the write it performs, its phase in the Action plan's fixed order (approval, write, notify, terminal), and the engine Tools a Run needs to use it. Registered once under its full catalog key; the Trigger and action catalog's action rows derive from the registry, so a row cannot exist without its write. The row also gives the entry's **Workspace source**: where its target's Workspace comes from — the item, else the agent's choice (`item-else-agent`), or the agent's choice only (`agent`). The target producer reads the Workspace through that field, and the Operation result asks the agent for a Workspace only when the field says the agent chooses it.
 _Avoid_: Action executor (one field), catalog row (one field), handler, action definition
 
 **Issue tracker adapter**:
