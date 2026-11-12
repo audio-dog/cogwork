@@ -12,7 +12,6 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
-import type { TriggerSource } from "./trigger-source";
 
 export { IssueTrackerError };
 
@@ -157,7 +156,6 @@ export type IssueTrackerService = Effect.Success<typeof makeEmpty> & {
     workspace: WorkspaceIssueTrackerBinding,
     itemId: WorkItemId,
   ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
-  readonly triggerSources?: ReadonlyArray<TriggerSource>;
 };
 
 export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
