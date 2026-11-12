@@ -1,0 +1,28 @@
+packages/engine/CONTEXT.md
+  s_28c0ea233a3ff3::t_b558e77332769b 61
+packages/engine/docs/adr/0016-run-plan-resolution-and-run-completion-are-modules-of-the-workflow-runner.md
+  s_28c0ea233a3ff3::t_6fe1830a706ec4 13
+  s_28c0ea233a3ff3::t_5507a43da7677a 36
+  s_28c0ea233a3ff3::t_d5fdd38f4ed3b0 56
+  s_28c0ea233a3ff3::t_5a7774e1c16cc1 51-52,55,57
+  s_28c0ea233a3ff3::t_1cc456933f3dbd 40
+  s_28c0ea233a3ff3::t_27efddcd379d3b 29-35,39
+  s_28c0ea233a3ff3::t_d24c01955728ca 37-38
+  s_28c0ea233a3ff3::t_f64225fa9b99f4 53-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "28d98556b7ddbbf6279f07ca419fcd4b0caeebf7",
+  "prompts": {},
+  "sessions": {
+    "s_28c0ea233a3ff3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e3b9734a-f400-46ae-b2a7-3aeb382fd47f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
