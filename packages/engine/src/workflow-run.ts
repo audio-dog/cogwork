@@ -39,6 +39,13 @@ import { Coordination, maxLineageHops } from "./coordination";
 import { Harness, type HarnessRunnerEnv } from "./harness";
 import { makeIssueSearchTool } from "./issue-search-tool";
 import { IssueTracker, IssueTrackerError } from "./issue-tracker";
+import {
+  acceptOperationResult,
+  harnessStreamFailed,
+  RefusedResult,
+  refusalForAgent,
+  refusalForPerson,
+} from "./operation-result";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { makePullRequestTool } from "./pull-request-tool";
@@ -374,20 +381,23 @@ export const make = Effect.gen(function* () {
     admission: TriggerAdmission,
     key: ReturnType<typeof operationKeyOf>,
     run: RunRecord,
-    issues: string,
+    refusal: RefusedResult,
     status: "failed" | "declined" = "failed",
   ) {
-    yield* Ref.update(decodeIssues, (current) => new Map(current).set(keyOf(admission.event.key), issues));
+    const reason = refusalForPerson(refusal);
+    yield* Ref.update(decodeIssues, (current) =>
+      new Map(current).set(keyOf(admission.event.key), refusalForAgent(refusal)),
+    );
     const view = yield* coordination.recordAttempt(admission.event.key, {
       operation: key,
       outcome: "failed",
       lineage: admission.lineage,
-      reason: issues,
+      reason,
     });
     const exhausted = view.counters(key).exhausted;
     yield* settle(run.id, exhausted ? "exhausted" : status);
     if (!exhausted) return "retry" as const;
-    yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason: issues }, key);
+    yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
     yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
     return "completed" as const;
   });
@@ -658,45 +668,30 @@ export const make = Effect.gen(function* () {
       Effect.exit,
     );
     if (Exit.isFailure(eventsExit)) {
-      const reason = String(eventsExit.cause);
       yield* recorder.record(run, failedTerminal);
-      const view = yield* coordination.recordAttempt(admission.event.key, {
-        operation: key,
-        outcome: "failed",
-        lineage: admission.lineage,
-        reason,
-      });
-      const exhausted = view.counters(key).exhausted;
-      yield* settle(run.id, exhausted ? "exhausted" : "failed");
-      if (exhausted) {
-        yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, key);
-        yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
-      }
-      return exhausted ? ("completed" as const) : ("retry" as const);
+      return yield* refuseResult(admission, key, run, harnessStreamFailed(eventsExit.cause));
     }
 
-    const output = Option.getOrUndefined(eventsExit.value);
-    const decoded = Schema.decodeUnknownExit(
-      workflowOperationResultSchema(operation, catalogResult.catalog, outputWorkspaces),
-    )(output?.value.object);
-    if (Exit.isFailure(decoded)) {
-      const issues = String(decoded.cause);
-      return yield* refuseResult(admission, key, run, issues);
-    }
+    const decoded = acceptOperationResult({
+      event: Option.getOrUndefined(eventsExit.value),
+      schema: workflowOperationResultSchema(operation, catalogResult.catalog, outputWorkspaces),
+      capabilities: harness.capabilities(selectedHarness),
+    });
+    if (Result.isFailure(decoded)) return yield* refuseResult(admission, key, run, decoded.failure);
 
     yield* Ref.update(decodeIssues, (current) => {
       const next = new Map(current);
       next.delete(keyOf(admission.event.key));
       return next;
     });
-    if (decoded.value.stuck) {
+    if (decoded.success.stuck) {
       yield* coordination.recordAttempt(admission.event.key, {
         operation: key,
         outcome: "failed",
         lineage: admission.lineage,
-        reason: decoded.value.summary,
+        reason: decoded.success.summary,
       });
-      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.value.summary }, key);
+      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.success.summary }, key);
       yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
       yield* settle(run.id, "failed");
       return "completed" as const;
@@ -704,8 +699,8 @@ export const make = Effect.gen(function* () {
 
     const reviewedPullRequests = yield* Ref.get(pullRequestSnapshots);
 
-    if ("elements" in decoded.value) {
-      const children = decoded.value.elements.map((element, position) => ({
+    if ("elements" in decoded.success) {
+      const children = decoded.success.elements.map((element, position) => ({
         admission: fanOutAdmission(admission, run.id, position, element),
         element,
       }));
@@ -752,7 +747,8 @@ export const make = Effect.gen(function* () {
         }),
       ).pipe(
         Effect.matchEffect({
-          onFailure: (error) => refuseResult(admission, key, run, error.message),
+          onFailure: (error) =>
+            refuseResult(admission, key, run, RefusedResult.ActionPlanRefused({ message: error.message })),
           onSuccess: acceptPlans,
         }),
       );
@@ -765,7 +761,7 @@ export const make = Effect.gen(function* () {
         operation,
         catalog: catalogResult.catalog,
         workspaces: registryState.workspaces,
-        output: decoded.value,
+        output: decoded.success,
         attempt: run.id,
         createdAtMillis: yield* Clock.currentTimeMillis,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
@@ -774,7 +770,12 @@ export const make = Effect.gen(function* () {
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
-      return yield* refuseResult(admission, key, run, actionPlanResult.failure.message);
+      return yield* refuseResult(
+        admission,
+        key,
+        run,
+        RefusedResult.ActionPlanRefused({ message: actionPlanResult.failure.message }),
+      );
     }
     const openPullRequest = actionPlanResult.success.steps.find(
       ({ entry, status, target }) =>
@@ -792,7 +793,13 @@ export const make = Effect.gen(function* () {
           run.branch,
         );
         if (PullRequestReadiness.$is("Declined")(readiness)) {
-          return yield* refuseResult(admission, key, run, readiness.reason, "declined");
+          return yield* refuseResult(
+            admission,
+            key,
+            run,
+            RefusedResult.PullRequestDeclined({ reason: readiness.reason }),
+            "declined",
+          );
         }
       }
     }
