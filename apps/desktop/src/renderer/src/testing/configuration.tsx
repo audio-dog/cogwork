@@ -60,18 +60,6 @@ const contributions: readonly Contribution[] = [
     ],
   },
   {
-    id: "plugin:linear/command/linear-triage",
-    kind: "command",
-    localName: "linear-triage",
-    authority: Authority.plugin({ pluginId: "linear" }),
-    summary: "Prompts for a triage pass over one Linear issue.",
-    file: "~/.cogwork/plugins/linear@1.4.0/commands/linear-triage.md",
-    definedAt: "settings-profile",
-    load: LoadState.loaded({}),
-    rows: [],
-  },
-
-  {
     id: "plugin:gh-review/skill/pr-summary",
     kind: "skill",
     localName: "pr-summary",
@@ -131,12 +119,12 @@ const contributions: readonly Contribution[] = [
   },
 
   {
-    id: "plugin:codex-extras/command/codex-login",
-    kind: "command",
+    id: "plugin:codex-extras/skill/codex-login",
+    kind: "skill",
     localName: "codex-login",
     authority: Authority.plugin({ pluginId: "codex-extras" }),
     summary: "Walks the host-owned Codex CLI login.",
-    file: "~/.cogwork/plugins/codex-extras@0.9.3/commands/codex-login.md",
+    file: "~/.cogwork/plugins/codex-extras@0.9.3/skills/codex-login/SKILL.md",
     definedAt: "settings-profile",
     load: LoadState.loaded({}),
     rows: [],
@@ -172,17 +160,6 @@ const contributions: readonly Contribution[] = [
     authority: Authority.local({ tree: "user" }),
     summary: "How you like commit messages written.",
     file: "~/.agents/skills/commit-style/SKILL.md",
-    definedAt: "settings-profile",
-    load: LoadState.loaded({}),
-    rows: [],
-  },
-  {
-    id: "local:user/command/scratch",
-    kind: "command",
-    localName: "scratch",
-    authority: Authority.local({ tree: "user" }),
-    summary: "Opens a scratch prompt you keep on this machine.",
-    file: "~/.agents/commands/scratch.md",
     definedAt: "settings-profile",
     load: LoadState.loaded({}),
     rows: [],
@@ -268,18 +245,6 @@ const contributions: readonly Contribution[] = [
     load: LoadState.loaded({}),
     rows: [],
   },
-  {
-    id: "local:repo/command/ship",
-    kind: "command",
-    localName: "ship",
-    authority: Authority.local({ tree: "repo" }),
-    summary: "Prompts for a release checklist.",
-    file: ".agents/commands/ship.md",
-    definedAt: "workspace-input",
-    definedIn: clankerWorkspaceId,
-    load: LoadState.loaded({}),
-    rows: [],
-  },
 ];
 
 const plugins: readonly InstalledPlugin[] = [
@@ -293,7 +258,7 @@ const plugins: readonly InstalledPlugin[] = [
     name: "Linear",
     summary: "Track work in Linear and let cogwork read and write its issues.",
     manifestFailure: null,
-    contributionIds: ["plugin:linear/mcp/linear", "plugin:linear/command/linear-triage"],
+    contributionIds: ["plugin:linear/mcp/linear"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
       {
@@ -404,7 +369,7 @@ const plugins: readonly InstalledPlugin[] = [
     name: "Codex harness extras",
     summary: "Notifications and a login walk-through for the host-owned Codex CLI.",
     manifestFailure: null,
-    contributionIds: ["plugin:codex-extras/command/codex-login"],
+    contributionIds: ["plugin:codex-extras/skill/codex-login"],
     permissions: [
       { label: "Non-interactive turn", detail: "Enforced. The turn cannot prompt.", fidelity: "exact" },
       {

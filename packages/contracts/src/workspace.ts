@@ -48,14 +48,7 @@ export const SourceControlConfig = Schema.Struct({
 });
 export type SourceControlConfig = typeof SourceControlConfig.Type;
 
-export const OperationNeedKind = Schema.Literals([
-  "mcp-server",
-  "skill",
-  "subagent",
-  "command",
-  "hook",
-  "connection",
-]);
+export const OperationNeedKind = Schema.Literals(["mcp-server", "skill", "subagent", "hook", "connection"]);
 export type OperationNeedKind = typeof OperationNeedKind.Type;
 
 export const OperationNeed = Schema.Struct({

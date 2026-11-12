@@ -15,7 +15,11 @@ import { type IssueTrackerActionService, IssueTrackerError } from "./issue-track
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import type { RunLedger } from "./run-ledger";
 import type { SlackWrite, SlackWriteError } from "./slack-write";
-import type { SourceControlProvider, SourceControlProviderService } from "./source-control";
+import type {
+  PullRequestContext,
+  SourceControlProvider,
+  SourceControlProviderService,
+} from "./source-control";
 import type { TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import type { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import type { WorkflowNotifications } from "./workflow-notification";
@@ -29,6 +33,11 @@ export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowAc
 export const decodeFailure = (message: string) =>
   Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
 
+export interface PullRequestSnapshot {
+  readonly workspace: string;
+  readonly pullRequest: PullRequestContext;
+}
+
 export interface TargetContext {
   readonly entry: WorkflowCatalogEntry;
   readonly admission: TriggerAdmission;
@@ -37,6 +46,7 @@ export interface TargetContext {
   readonly parameters: ReadonlyArray<WorkflowParameterValue>;
   readonly workspace: string | undefined;
   readonly sourceControl: SourceControlProviderService | undefined;
+  readonly pullRequestSnapshots?: ReadonlyArray<PullRequestSnapshot>;
 }
 
 export type TargetProducer = (
