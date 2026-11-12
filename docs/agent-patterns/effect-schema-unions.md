@@ -134,6 +134,8 @@ Helpers like this exist only because the variant's payload is typed `Schema.Unkn
 
 Choose the decoder by what failure means there: `decodeUnknownEffect` when failure is a typed error the workflow handles, `decodeUnknownOption` when best-effort is correct (a foreign stream chunk that may not be an event), `decodeUnknownSync` only for compile-time constants.
 
+A struct built from fields at run time can be empty, and an empty `Schema.Struct({})` accepts any object or array: its JSON Schema is `anyOf: [object, array]`, and keys pass decode. When "no fields" must mean "no keys", use `Schema.Record(Schema.String, Schema.Never)`, which refuses every key and emits `{ type: "object", additionalProperties: false }` (the Operation result schema, #953).
+
 ## Cogwork conventions
 
 - A union branched on more than once is `Schema.TaggedUnion` (or `Schema.Union` piped through `Schema.toTaggedUnion`) when it is ever encoded, `Data.taggedEnum` when it is process-local. String-literal `kind` unions and bare `_tag` object types are not declared by hand.
