@@ -525,7 +525,8 @@ export const make = Effect.gen(function* () {
     const projectsTools = projectedMembers.includes("Tools");
     const skills = yield* admittedSkills(workspace, operation.requires);
     const requiredSkill = skills.find(({ identity }) => operation.requires.some((need) => need === identity));
-    if (requiredSkill && !projectedMembers.includes("Skills")) {
+    const requiredSkillUnsupplied = requiredSkill !== undefined && !projectedMembers.includes("Skills");
+    if (requiredSkillUnsupplied) {
       return yield* rejectPlan(
         admission,
         `${selectedHarness} does not project Skills, so it cannot supply the required Skill ${requiredSkill.identity}`,
