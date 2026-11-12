@@ -1,0 +1,102 @@
+packages/engine/src/workflow-run.ts
+  s_086949fa51df36::t_61120b04e13f23 824
+  s_086949fa51df36::t_de441a7bdd42f2 846
+  s_086949fa51df36::t_6a23c1804f7b0b 348,365-366,439-440,455-456,466-467,471-472,476,488
+  s_8300938c82659e::t_8df9eebeaf7bea 25,28,49,218-228,344-347,349-364,367-387,437-438,441-452,461,474-475,477-487,489,500,503-516,518,521,525,529-530,532,585,599,643,678,724-728,755,761,770,776,797-798,857,863,866-867,875-889,908
+.cursor/skills/.gitignore
+  s_086949fa51df36::t_4eb811c114b11f 1
+apps/cli/src/login.test.ts
+  s_086949fa51df36::t_dd902b06024a35 216,218
+apps/cli/src/platform.test.ts
+  s_086949fa51df36::t_0b95e6fd179ccd 978-981
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_086949fa51df36::t_024d94c4543643 13,253,469-472
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_086949fa51df36::t_9279e18b4a7bb3 90,139
+biome.json
+  s_086949fa51df36::t_62d3716e64fd0b 93-96
+configs/lint/no-bare-exit-failure.grit
+  s_086949fa51df36::t_1f5ba304e8f632 1-13
+configs/lint/tests/fixtures/no-bare-exit-failure/invalid-example.ts
+  s_086949fa51df36::t_9067b7600fd4e5 1-6
+configs/lint/tests/fixtures/no-bare-exit-failure/valid-example.ts
+  s_086949fa51df36::t_93cda77fda6aa9 1-8
+configs/lint/tests/rules.test.mjs
+  s_086949fa51df36::t_d5e1c163792f66 56-61
+docs/adr/0028-subagent-model-choice-is-a-named-level-not-a-pinned-model.md
+  s_086949fa51df36::t_fdcd868ecea73d 6-13
+docs/agent-patterns/effect-schema-unions.md
+  s_086949fa51df36::t_ab079fbb09a35c 137-138
+packages/contracts/CONTEXT.md
+  s_086949fa51df36::t_011b8201c1ebc9 189
+packages/contracts/src/run-plan.ts
+  s_086949fa51df36::t_f546c514851f83 59-79,227
+packages/contracts/src/workflow.test.ts
+  s_086949fa51df36::t_624d3187ca0718 2-3,770-813
+packages/contracts/src/workflow.ts
+  s_086949fa51df36::t_e781391e8d4e9e 536-538,576-577
+packages/engine/CONTEXT.md
+  s_086949fa51df36::t_ae911dca3e2761 61
+packages/engine/docs/adr/0016-run-plan-resolution-and-run-completion-are-modules-of-the-workflow-runner.md
+  s_086949fa51df36::t_cd0976be571ff3 13,29-40,51-57
+packages/engine/package.json
+  s_086949fa51df36::t_343e9e5bfb58cc 29-30
+packages/engine/src/authoring-tree.test.ts
+  s_086949fa51df36::t_2059a30058ddec 32-35,50,57
+packages/engine/src/authoring-tree.ts
+  s_086949fa51df36::t_0b75ad85afebb9 35
+packages/engine/src/control-store-schema.ts
+  s_086949fa51df36::t_4c74810b91d0cd 269
+packages/engine/src/control-store.test.ts
+  s_086949fa51df36::t_c095adb2ddcb53 134,1087-1113
+packages/engine/src/park-notice.test.ts
+  s_086949fa51df36::t_3f71d952faf120 20,71-73
+packages/engine/src/run-plan.test.ts
+  s_086949fa51df36::t_d71b7dba8b682e 1-96
+packages/engine/src/run-plan.ts
+  s_086949fa51df36::t_b01ce813294360 1-11,22-69
+packages/engine/src/subagent-file.test.ts
+  s_086949fa51df36::t_538db863486c8d 1-89
+packages/engine/src/subagent-file.ts
+  s_086949fa51df36::t_7972330743d503 1-103
+packages/engine/src/testing/temporary-control-store.ts
+  s_086949fa51df36::t_1e24de797bd2f7 1-15
+packages/engine/src/workflow-action-plan.test.ts
+  s_086949fa51df36::t_e494f1c6fedffa 3,6,14,40-44,46,57-61,424-479,575,604,608,905-948,1099,1113-1139,1141-1160
+packages/engine/src/workflow-action-plan.ts
+  s_086949fa51df36::t_f5c0471bba00e8 11,387-388,500
+packages/engine/src/workflow-artifact-store.test.ts
+  s_086949fa51df36::t_7c2990ab1c77e3 1-75
+packages/engine/src/workflow-artifact-store.ts
+  s_086949fa51df36::t_c8e45957058fe3 35-40,69-71,73-74,131-132
+packages/engine/src/workflow-run.test.ts
+  s_086949fa51df36::t_4cbfb90d95834d 5,88,246-303,611,670,716-719,2808-2985
+packages/engine/src/workflow.test.ts
+  s_086949fa51df36::t_33f0eb467bd5c5 974
+pnpm-lock.yaml
+  s_086949fa51df36::t_be73a3880c425f 786-788,10558
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f2e8a336e0bf8826d0950ece9fab01df086163c6",
+  "prompts": {},
+  "sessions": {
+    "s_086949fa51df36": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eb6c3467-9af9-4b89-991d-ffd8a8b55187",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8300938c82659e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c6fd41c1-9ee9-449c-ae22-b5a1bada1635",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
