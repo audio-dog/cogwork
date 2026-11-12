@@ -586,7 +586,7 @@ The projection of an accepted Run Plan handed to one Harness: checkout path, wor
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action needs one, a Workspace. One engine module accepts the result from the final `structured-output.complete` Harness event, or gives a **Refused result**. A refused result is a retryable failed attempt, and the next attempt sees the refusal's agent text.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action needs one, a Workspace. One engine module accepts the result from the final `structured-output.complete` Harness event, or gives a **Refused result**.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Refused result**:

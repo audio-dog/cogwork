@@ -288,7 +288,7 @@ export const make = Effect.gen(function* () {
     worktrees === null
       ? sourceControlExecutionContext
       : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
-  const decodeIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+  const previousResultIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
   const touchpointGate = Semaphore.makeUnsafe(1);
 
   const prepareCheckout = Effect.fn("WorkflowRun.prepareCheckout")(function* (
@@ -385,7 +385,7 @@ export const make = Effect.gen(function* () {
     status: "failed" | "declined" = "failed",
   ) {
     const reason = refusalForPerson(refusal);
-    yield* Ref.update(decodeIssues, (current) =>
+    yield* Ref.update(previousResultIssues, (current) =>
       new Map(current).set(keyOf(admission.event.key), refusalForAgent(refusal)),
     );
     const view = yield* coordination.recordAttempt(admission.event.key, {
@@ -531,7 +531,7 @@ export const make = Effect.gen(function* () {
         harness.sessionKind,
       ));
     const handbackNote = handback?.note?.trim();
-    const priorIssues = (yield* Ref.get(decodeIssues)).get(keyOf(admission.event.key)) ?? null;
+    const priorIssues = (yield* Ref.get(previousResultIssues)).get(keyOf(admission.event.key)) ?? null;
     const assembled = yield* contextAssembler.assemble({
       runId: id,
       workspace: runWorkspace,
@@ -679,7 +679,7 @@ export const make = Effect.gen(function* () {
     });
     if (Result.isFailure(decoded)) return yield* refuseResult(admission, key, run, decoded.failure);
 
-    yield* Ref.update(decodeIssues, (current) => {
+    yield* Ref.update(previousResultIssues, (current) => {
       const next = new Map(current);
       next.delete(keyOf(admission.event.key));
       return next;

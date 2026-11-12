@@ -20,10 +20,13 @@ export type RefusedResult = Data.TaggedEnum<{
 
 export const RefusedResult = Data.taggedEnum<RefusedResult>();
 
+const identifier = /^[A-Za-z_$][\w$]*$/;
+
 const pathSegment = (entry: PathEntry, position: number) => {
   const key = typeof entry === "object" ? entry.key : entry;
-  if (typeof key === "number") return `[${key}]`;
-  return position === 0 ? String(key) : `.${String(key)}`;
+  const named = typeof key === "string" && identifier.test(key);
+  if (!named) return `[${JSON.stringify(typeof key === "symbol" ? String(key) : key)}]`;
+  return position === 0 ? key : `.${key}`;
 };
 
 const pathText = (path: ResultIssue["path"]) => path?.map(pathSegment).join("") || "the result";
@@ -40,13 +43,21 @@ export const acceptOperationResult = <S extends Schema.ConstraintDecoder<unknown
     (error): RefusedResult => RefusedResult.SchemaMismatch({ issues: formatIssues(error.issue).issues }),
   );
 
-const failureDetail = (error: unknown) => {
-  if (Cause.isTimeoutError(error)) return "the Run used all of its time budget";
-  return error instanceof Error ? error.message : String(error);
-};
+const plainFailures = [
+  { matches: Cause.hasInterruptsOnly, detail: "the Run was stopped" },
+  {
+    matches: (cause: Cause.Cause<unknown>) => Cause.isTimeoutError(Cause.squash(cause)),
+    detail: "the Run used all of its time budget",
+  },
+];
+
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+const failureDetail = (cause: Cause.Cause<unknown>) =>
+  plainFailures.find(({ matches }) => matches(cause))?.detail ?? errorMessage(Cause.squash(cause));
 
 export const harnessStreamFailed = (cause: Cause.Cause<unknown>) =>
-  RefusedResult.HarnessStreamFailed({ detail: failureDetail(Cause.squash(cause)) });
+  RefusedResult.HarnessStreamFailed({ detail: failureDetail(cause) });
 
 export const refusalForAgent = RefusedResult.$match({
   SchemaMismatch: ({ issues }) =>
@@ -58,8 +69,8 @@ export const refusalForAgent = RefusedResult.$match({
     `The engine could not build an action plan from your previous result: ${message}. Change the result so that the engine can act on it.`,
   PullRequestDeclined: ({ reason }) =>
     `The engine did not open a pull request from your previous result: ${reason}. Correct the branch before you return the result.`,
-  HarnessStreamFailed: ({ detail }) =>
-    `Your previous Run stopped before it returned a result: ${detail}. Return the result before the Run ends.`,
+  HarnessStreamFailed: () =>
+    "Your previous Run stopped before it returned a result. Return the result before the Run ends.",
 });
 
 export const refusalForPerson = RefusedResult.$match({

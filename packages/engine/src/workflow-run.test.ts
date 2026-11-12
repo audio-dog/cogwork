@@ -2709,15 +2709,17 @@ describe("WorkflowRun", () => {
         summary: "Done",
         stuck: false,
         answers: { done: "maybe" },
+        "x\n- y": 1,
       })),
       behavior: {},
       agentText: [
         "Your previous result did not match the result schema. Correct each issue below, then return the complete result again.",
+        '- ["x\\n- y"]: Expected no excess property',
         '- answers.done: Expected "yes"',
         "- inputs: Missing key",
       ].join("\n"),
       personText:
-        "The agent's result did not match the Operation's result schema (answers.done: Expected \"yes\"; inputs: Missing key).",
+        'The agent\'s result did not match the Operation\'s result schema (["x\\n- y"]: Expected no excess property; answers.done: Expected "yes"; inputs: Missing key).',
     },
     {
       name: "a result the action plan refuses",
@@ -2743,7 +2745,7 @@ describe("WorkflowRun", () => {
           ),
       },
       agentText:
-        "Your previous Run stopped before it returned a result: The model connection closed. Return the result before the Run ends.",
+        "Your previous Run stopped before it returned a result. Return the result before the Run ends.",
       personText: "The Harness stopped before the agent returned a result: The model connection closed.",
     },
   ] satisfies ReadonlyArray<{
@@ -2836,7 +2838,7 @@ describe("WorkflowRun", () => {
   it.effect("records a failed terminal event when a Workflow Run times out", () =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();
-      const { runner } = yield* testProgram([], {
+      const { runner, coordination } = yield* testProgram([], {
         run: () =>
           Stream.fromEffect(Deferred.succeed(started, undefined)).pipe(Stream.flatMap(() => Stream.never)),
       });
@@ -2855,6 +2857,10 @@ describe("WorkflowRun", () => {
       assert.deepInclude(
         activities.map(({ event }) => event),
         { type: "RUN_FINISHED", finishReason: "failed" },
+      );
+      assert.deepStrictEqual(
+        (yield* Ref.get(coordination.attempts)).map(({ reason }) => reason),
+        ["The Harness stopped before the agent returned a result: the Run used all of its time budget."],
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
