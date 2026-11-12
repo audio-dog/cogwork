@@ -1,0 +1,31 @@
+packages/engine/src/run-plan.test.ts
+  s_19f7dcf3d912d3::t_139ec0bf9f2052 75-77,79-89
+  s_19f7dcf3d912d3::t_7120071aa50f63 62
+  s_19f7dcf3d912d3::t_d710bd0440b6da 78
+packages/engine/src/subagent-file.ts
+  s_19f7dcf3d912d3::t_aa55b014f152ef 66
+  s_19f7dcf3d912d3::t_d9485544be4c0f 51,53,55,58-65,67-68
+  s_19f7dcf3d912d3::t_5e7aca29d6deac 5
+  s_19f7dcf3d912d3::t_1c12bd7674bb15 41
+  s_19f7dcf3d912d3::t_a6453b56db50b2 92
+packages/engine/src/subagent-file.test.ts
+  s_19f7dcf3d912d3::t_1c77a9465b566f 71,73-78
+  s_19f7dcf3d912d3::t_3923d345910874 48
+  s_19f7dcf3d912d3::t_467421217ba65c 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "75ace01b7c4cedb08d3c8d23167055c646e10023",
+  "prompts": {},
+  "sessions": {
+    "s_19f7dcf3d912d3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f24b6544-1091-4ef8-8f02-7a37e19c57b7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
