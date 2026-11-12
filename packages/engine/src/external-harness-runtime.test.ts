@@ -526,6 +526,51 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
       }),
     );
 
+    it.effect("supplies Run Plan Skills through chat() only for a descriptor that declares Skills", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-skills-checkout-" });
+        const skillRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-skills-source-" });
+        const skillFile = `${skillRoot}/SKILL.md`;
+        yield* fs.writeFileString(
+          skillFile,
+          "---\nname: release\ndescription: Cut a release.\n---\n# Release\nTag, then publish.",
+        );
+        const plan = RunPlan.make({
+          ...request,
+          skills: [{ identity: "local:repo/skill/release", name: "release", source: skillFile }],
+          sandbox: { ...request.sandbox, workspace: checkout },
+        });
+        const loaded: Array<unknown> = [];
+        const chatOptions = (declaredMembers: ReadonlyArray<"Tools" | "Skills">) => {
+          const probe = new ControlledProbe();
+          probe.inspect = (options) => {
+            const loadSkill = options.tools?.find(({ name }) => name === "load_skill")?.execute;
+            if (!loadSkill) return Promise.resolve();
+            return Promise.resolve(loadSkill({ name: "release" })).then((result) => {
+              loaded.push(result);
+            });
+          };
+          return makeHarness({ ...descriptor(terminalEvents, probe), declaredMembers })
+            .run({ plan, session: freshSession, mcpCredentials: new Map() })
+            .pipe(
+              Stream.runDrain,
+              Effect.map(() => probe.chatOptions[0]),
+            );
+        };
+
+        const supplied = yield* chatOptions(["Tools", "Skills"]);
+        const withheld = yield* chatOptions(["Tools"]);
+
+        assert.include(JSON.stringify(supplied?.systemPrompts), "Cut a release.");
+        assert.lengthOf(loaded, 1);
+        assert.include(JSON.stringify(loaded[0]), "Tag, then publish.");
+        assert.isFalse(withheld?.tools?.some(({ name }) => name === "load_skill") ?? false);
+        assert.notInclude(JSON.stringify(withheld?.systemPrompts), "Cut a release.");
+        assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
+      }),
+    );
+
     it.effect("ends a Run whose checkout feed never sees an event", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
