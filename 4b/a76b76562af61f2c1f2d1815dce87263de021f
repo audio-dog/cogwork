@@ -1,0 +1,22 @@
+packages/engine/src/park-notice.test.ts
+  s_1803e31a831287::t_1b23582ee6840e 71-73
+  s_1803e31a831287::t_2aeefe667c37eb 20
+packages/engine/src/testing/temporary-control-store.ts
+  s_1803e31a831287::t_f6f8f4b27df588 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4ba76b76562af61f2c1f2d1815dce87263de021f",
+  "prompts": {},
+  "sessions": {
+    "s_1803e31a831287": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "40ee7b32-e5f0-4e64-b703-afa6882ed9ff",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
