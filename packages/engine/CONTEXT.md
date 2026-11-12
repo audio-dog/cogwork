@@ -58,7 +58,7 @@ The step between claim and dispatch that ensures the checkout, chooses the Sessi
 _Avoid_: Setup, bootstrap, Run Plan resolution (the decision this step feeds)
 
 **Run completion**:
-The decision, taken from a Run's result and the item's coordination view, of what follows: retry, exhaust, park stuck, fan out, complete, or hand off. One decision serves a fresh Run, a resumed Action plan, and a review-plan refresh, so the failure counters and park reasons are applied in one place.
+The decision, taken from a Run's result and the item's coordination view, of what follows: retry, exhaust, park stuck, fan out, complete, or hand off. One decision serves a fresh Run, a resumed Action plan, and a review-plan refresh, so the failure counters and park reasons are applied in one place. An accepted Run always settles. A typed failure or a defect after the Claim is an input to this decision. It records one failed attempt and settles the Run `failed` or `exhausted`. An interruption settles the Run `interrupted` and records no attempt (ADR 0016).
 _Avoid_: Outcome handling, completion closure, failure policy (one input to it), disposition
 
 **Run recorder**:

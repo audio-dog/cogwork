@@ -789,6 +789,9 @@ importers:
       proper-lockfile:
         specifier: 4.1.2
         version: 4.1.2
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
     devDependencies:
       '@cogwork/test-config':
         specifier: workspace:*
@@ -10558,8 +10561,7 @@ snapshots:
 
   yallist@5.0.0: {}
 
-  yaml@2.9.0:
-    optional: true
+  yaml@2.9.0: {}
 
   yargs-parser@21.1.1: {}
 

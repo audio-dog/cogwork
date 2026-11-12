@@ -7,7 +7,6 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Latch from "effect/Latch";
@@ -214,9 +213,9 @@ describe("browser opener", () => {
   it.effect("rejects a non-HTTPS authorization URL before spawning", () =>
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;
-      const outcome = yield* Effect.exit(opener.open("http://example.com/authorize"));
+      const error = yield* Effect.flip(opener.open("http://example.com/authorize"));
 
-      assert.isTrue(Exit.isFailure(outcome));
+      assert.include(error.message, "non-HTTPS URL");
     }).pipe(
       Effect.provide(
         browserOpenerLayer.pipe(
