@@ -55,6 +55,12 @@ const ruleCases = [
   },
   {
     message:
+      "Rule: do not assert only that an Exit failed. Why: a failure from a different guard also passes, so the test does not prove the reason (docs/agent-patterns/test-value.md). Fix: assert the reason with the failure, for example Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause), the failure's _tag, or the expected text in Cause.pretty(exit.cause).",
+    plugin: "no-bare-exit-failure",
+    name: "no-bare-exit-failure",
+  },
+  {
+    message:
       "Rule: avoid Effect.orElse around sequencing chains. Why: it hides error handling and splits the flow. Fix: move error handling to a single terminal decision after the pipeline.",
     plugin: "effect-calls",
     name: "no-effect-orElse-ladder",
