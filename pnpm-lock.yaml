@@ -200,6 +200,9 @@ catalogs:
     '@tanstack/ai-sandbox-local-process':
       specifier: 1.0.0
       version: 1.0.0
+    '@tanstack/ai-skills':
+      specifier: 1.0.0
+      version: 1.0.0
     '@tanstack/highlight':
       specifier: ^1.2.0
       version: 1.2.0
@@ -765,6 +768,9 @@ importers:
       '@tanstack/ai-sandbox-local-process':
         specifier: 'catalog:'
         version: 1.0.0(@tanstack/ai-sandbox@1.0.0(@cfworker/json-schema@4.1.1)(@tanstack/ai-persistence@1.0.0(@tanstack/ai@1.0.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))))(@tanstack/ai@1.0.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(supports-color@7.2.0)(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4))
+      '@tanstack/ai-skills':
+        specifier: 'catalog:'
+        version: 1.0.0(@tanstack/ai@1.0.0(@opentelemetry/api@1.9.1)(zod@4.5.4))(vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(zod@4.5.4)
       '@vscode/ripgrep':
         specifier: 1.18.0
         version: 1.18.0
