@@ -1,0 +1,1033 @@
+.agents/skills/.gitignore
+  s_79c4fbdbb6d957::t_0c84f11b581d79 1
+.agents/skills/tanstack-ai/SKILL.md
+  s_79c4fbdbb6d957::t_a96c71e95e770f 1-151
+.agents/skills/test-audit/SKILL.md
+  s_79c4fbdbb6d957::t_0d45e209be6dc4 1-91
+.codex/hooks.json
+  s_79c4fbdbb6d957::t_13d1ab8c2d9e1b 3-14
+.github/workflows/lint-rule-fixtures.yml
+  s_79c4fbdbb6d957::t_17630de33baba6 1-29
+.github/workflows/pull-request.yml
+  s_79c4fbdbb6d957::t_105af938d4129a 34-35,50-54,57-81,84
+.github/workflows/test-suite-budget.yml
+  s_79c4fbdbb6d957::t_e41baac7b3d9bb 1-80
+.github/workflows/test-suite-comparison.yml
+  s_79c4fbdbb6d957::t_3b016df29e3258 38-42
+.github/workflows/test-suite-seed.yml
+  s_79c4fbdbb6d957::t_13009485fcbaab 1-75
+.gitignore
+  s_79c4fbdbb6d957::t_17632e7dbddee8 40-43
+.pre-commit-config.yaml
+  s_79c4fbdbb6d957::t_8192883e27b799 1-11
+AGENTS.md
+  s_79c4fbdbb6d957::t_e7543633f49797 12-22,56-74,118
+CODING_STANDARDS.md
+  s_79c4fbdbb6d957::t_b0aec5fe2e76d7 1-89
+CONTEXT-MAP.md
+  s_79c4fbdbb6d957::t_32f158de7ae51d 17,25-28
+apps/cli/CONTEXT.md
+  s_79c4fbdbb6d957::t_8e7193cabe1388 27,43,50-52
+apps/cli/package.json
+  s_79c4fbdbb6d957::t_3f19b0c3660780 24,42
+apps/cli/src/cli.test.ts
+  s_79c4fbdbb6d957::t_506733239c1f2d 1-3,6,9-63,65-72,75-89
+apps/cli/src/cli.ts
+  s_79c4fbdbb6d957::t_44b450a05f8837 20,44
+apps/cli/src/commands.test.ts
+  s_79c4fbdbb6d957::t_fbd8a0dad5ff5d 3,17,25,27,49-61,115,180-207,227,237,239,244-272,277,281,287,289-313
+apps/cli/src/commands.ts
+  s_79c4fbdbb6d957::t_b16e20234e6d00 10,12-13,18,39,50,114,127-130,137-156,176-178,232,235-244,247-249,252,261,264-269,276-283,340-342,351-361,367,392-393,604-608,702
+apps/cli/src/connection-commands.test.ts
+  s_79c4fbdbb6d957::t_8e1ac2532d59c6 6,16-17,43,45-50,53,57,67,127-168
+apps/cli/src/connection-commands.ts
+  s_79c4fbdbb6d957::t_6059f1426be823 40,57-63,80,100,104,143,152-158,164
+apps/cli/src/credentials.test.ts
+  s_79c4fbdbb6d957::t_f92be0a7ff2bf4 11,144-269,468-528
+apps/cli/src/credentials.ts
+  s_79c4fbdbb6d957::t_8eef9701487219 1,8,11-12,33,95-106,109-115,121-124,130-138,145,150,158,163-177,189,202-206,211-219
+apps/cli/src/external-harness.test.ts
+  s_79c4fbdbb6d957::t_e572f42481d46e 3-4,42-52,54-56,58-80
+apps/cli/src/granola-login.test.ts
+  s_79c4fbdbb6d957::t_2b37b7d7faeccd 1-167
+apps/cli/src/granola-login.ts
+  s_79c4fbdbb6d957::t_b115cf06b1ac95 1-232
+apps/cli/src/hand-back-command.test.ts
+  s_79c4fbdbb6d957::t_b96164dc7ce211 1,16,25-29,32,44-48,55,62,64,68,73-76
+apps/cli/src/hand-back-command.ts
+  s_79c4fbdbb6d957::t_b7c03b7e10b0a8 3,5,7,32,54-57,60,64-65,71-72
+apps/cli/src/harness-commands.test.ts
+  s_79c4fbdbb6d957::t_883d4d707c0f86 4-5,14,23,28
+apps/cli/src/harness-commands.ts
+  s_79c4fbdbb6d957::t_e3341fe05ae284 1,26-27,45
+apps/cli/src/ledger.test.ts
+  s_79c4fbdbb6d957::t_27151ec72e2c43 3,11,38-59,68,88,101,110,122,140,164,192-196,215-242,260,295,314-322,361,381,442,445-446,452-454,461,482-484,560,562,564-565,567-568,577-578,580,590,599-601,617,644-660,831-841,882,884-885,887,897-910
+apps/cli/src/ledger.ts
+  s_79c4fbdbb6d957::t_8e63b93ffc0d40 2,62-65,119-122,138,145-148,163-165,176-179,183,375,377,379,389-391,411-416,421-425,432-441,448-451,476,528-533,540-550,557-560,582,591,616-619,621,632
+apps/cli/src/login-commands.ts
+  s_79c4fbdbb6d957::t_59aa84bc521732 1,81-102,130-132
+apps/cli/src/login.test.ts
+  s_79c4fbdbb6d957::t_ddc4a19570502b 10,19,214-249,259
+apps/cli/src/login.ts
+  s_79c4fbdbb6d957::t_480ea1845d5b5b 44-45,49-59,66-67,78,95,105-110,113-117,120-163,168-172,176
+apps/cli/src/platform.test.ts
+  s_79c4fbdbb6d957::t_0452a1551920ae 10,15-16,102-115,139-158,194-195,245-275,318,403-494,520-550,575-660,856-886,952,954-1009,1163-1176,1209,1243-1279,1294-1301,1306,1324-1356
+apps/cli/src/platform.ts
+  s_79c4fbdbb6d957::t_7a4481d94fdb94 1,74-83,103-107,124,165-221,236,250-252,277-300,316-320,330-369,424-436,446-454
+apps/cli/src/read-model-item.ts
+  s_79c4fbdbb6d957::t_92c346468cd3a7 1,7-8
+apps/cli/src/replay-commands.ts
+  s_79c4fbdbb6d957::t_8451ddbc7a3ce7 39,42-43,88-89
+apps/cli/src/rpc.test.ts
+  s_79c4fbdbb6d957::t_783cd5c12684b3 18
+apps/cli/src/rpc.ts
+  s_79c4fbdbb6d957::t_4fa7cfb1804278 31,36,90,97,100,103-110,363-364
+apps/cli/src/slack-login.test.ts
+  s_79c4fbdbb6d957::t_0650ba359b3bca 1-134
+apps/cli/src/slack-login.ts
+  s_79c4fbdbb6d957::t_accbd5007e9f67 1-278
+apps/cli/src/status.ts
+  s_79c4fbdbb6d957::t_16e5a3e31c5e55 1-2
+apps/cli/src/watch.test.ts
+  s_79c4fbdbb6d957::t_495cf9c2adcbbb 1,24,32,139-143,153,201-218,224,249-251,259-260,262,268,270-271,276-277,297
+apps/cli/src/watch.ts
+  s_79c4fbdbb6d957::t_ba8c3315cbb76b 10,161,202,206
+apps/cli/src/workflow-commands.ts
+  s_79c4fbdbb6d957::t_8fea32947f5982 1-220
+apps/desktop/CONTEXT.md
+  s_79c4fbdbb6d957::t_30d1f8dbe29ede 139,157,182,195-210
+apps/desktop/app-identity.json
+  s_79c4fbdbb6d957::t_862ff7b93a81c3 1-3
+apps/desktop/electron-builder.yml
+  s_79c4fbdbb6d957::t_c5996d02cf7ff3 1,3-6
+apps/desktop/package.json
+  s_79c4fbdbb6d957::t_7ffb8beb990b7e 42,73,76
+apps/desktop/src/main/desktop-notifications.test.ts
+  s_79c4fbdbb6d957::t_11a06edb4da556 1-181
+apps/desktop/src/main/desktop-notifications.ts
+  s_79c4fbdbb6d957::t_abd9b47cc7027f 1-208
+apps/desktop/src/main/index.ts
+  s_79c4fbdbb6d957::t_0fb697a9145f2f 10-11,14-18,21-27,54-105,157-167,178,193-200,205,208,221-222,233-241,253-256,263-272
+apps/desktop/src/main/ipc.test.ts
+  s_79c4fbdbb6d957::t_76cccf7b95580f 60-71,80-81,151-215
+apps/desktop/src/main/ipc.ts
+  s_79c4fbdbb6d957::t_130c8fefe9f22e 18-20,28,42-43,46-65,225-243,309-329
+apps/desktop/src/preload/index.ts
+  s_79c4fbdbb6d957::t_c3220cabc27541 18,39-48
+apps/desktop/src/renderer/src/app.tsx
+  s_79c4fbdbb6d957::t_0126cbcfa8f4b3 1,3,7-11
+apps/desktop/src/renderer/src/components/activity-transcript.tsx
+  s_79c4fbdbb6d957::t_a0492bd4a921c0 33,35,133-134,141,150-153
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_79c4fbdbb6d957::t_7f5f4f3a1db2dc 1-1059
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_79c4fbdbb6d957::t_5761742c600aa4 5,7-8,13,33-34,56,65,75,99,109,113,127-128,145
+apps/desktop/src/renderer/src/components/badges.tsx
+  s_79c4fbdbb6d957::t_6e968501967788 4,8-15,19
+apps/desktop/src/renderer/src/components/buffered-field.tsx
+  s_79c4fbdbb6d957::t_21396475752f6b 1-103
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_79c4fbdbb6d957::t_c772e1b795c046 9,28,58-63
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_79c4fbdbb6d957::t_ee78e1e0e51102 107-120,130,164,199,226-237
+apps/desktop/src/renderer/src/components/connections-surface.test.tsx
+  s_79c4fbdbb6d957::t_e97be953c8ff41 1-48
+apps/desktop/src/renderer/src/components/connections-surface.tsx
+  s_79c4fbdbb6d957::t_26e8a27668ecdb 34-42,44-45,54,56-63,65,67,71-72,84,88,99-100,118,125,128-138,144-145,158-159,167,204-262,295-296,380,393-450,502,504
+apps/desktop/src/renderer/src/components/customize-empty.test.tsx
+  s_79c4fbdbb6d957::t_834d8ed9dd6dec 3
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_79c4fbdbb6d957::t_52c2b4f79f31a1 7,9-11,14,34,119,121,130,132,137-139,177,187,189,199,208-209,222,228-229,231-232,273,276,278,321,329
+apps/desktop/src/renderer/src/components/harness-alerts.tsx
+  s_79c4fbdbb6d957::t_19754407523c76 1-75
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_79c4fbdbb6d957::t_922e27fe79bf70 1,13-17,23-25,31,34,37,47-48,69,88,93,101-102,113,115-116,128,136,216,227,232,234,261-262,264,317,342,348,350,502-503,505,512,516,518-519,544,546-549,558,562,564
+apps/desktop/src/renderer/src/components/markdown.tsx
+  s_79c4fbdbb6d957::t_4f7658ad472aab 1,5
+apps/desktop/src/renderer/src/components/mcp-facet.test.tsx
+  s_79c4fbdbb6d957::t_cb6fd615052d49 5
+apps/desktop/src/renderer/src/components/mcp-server-row.test.tsx
+  s_79c4fbdbb6d957::t_93e962e37496f4 5-9,20,24
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_79c4fbdbb6d957::t_95005f168ba7b9 29,46,57,120
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_79c4fbdbb6d957::t_4767c3cf927a08 1-797
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_79c4fbdbb6d957::t_dcc67fd471f81f 1-5,18,20-21,23,26-30,32,36-37,41-42,48-49,54,58,70,72,76-86,92-93,95,98-151,158
+apps/desktop/src/renderer/src/components/plugin-detail.test.tsx
+  s_79c4fbdbb6d957::t_12f760f9747d26 10
+apps/desktop/src/renderer/src/components/plugins-facet.test.tsx
+  s_79c4fbdbb6d957::t_60a4171b800beb 10
+apps/desktop/src/renderer/src/components/provider-glyph.tsx
+  s_79c4fbdbb6d957::t_b5e2eeacc416a4 10-17,25,29,31-32
+apps/desktop/src/renderer/src/components/provider-picker.test.tsx
+  s_79c4fbdbb6d957::t_934e14126633bf 2-6,9-16,18-57,59-83,85-88,90
+apps/desktop/src/renderer/src/components/provider-picker.tsx
+  s_79c4fbdbb6d957::t_a8d8e9f93c9985 1-337
+apps/desktop/src/renderer/src/components/register-workspace-dialog.tsx
+  s_79c4fbdbb6d957::t_69b276b54e7b3a 1-203
+apps/desktop/src/renderer/src/components/render-trigger.test.tsx
+  s_79c4fbdbb6d957::t_fd2850d523f14e 5-9,21,25
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_79c4fbdbb6d957::t_c5dc346ed21b92 26-27,87,92,225-236,240,295,299-311,398,411
+apps/desktop/src/renderer/src/components/traits-menu.test.tsx
+  s_79c4fbdbb6d957::t_451dff496a6e78 1-89
+apps/desktop/src/renderer/src/components/traits-menu.tsx
+  s_79c4fbdbb6d957::t_2818db0af44ad9 1-160
+apps/desktop/src/renderer/src/components/workflow-catalog-menu.tsx
+  s_79c4fbdbb6d957::t_cf07860de32736 1-499
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_79c4fbdbb6d957::t_b1ed05feddcb6b 1-988
+apps/desktop/src/renderer/src/components/workflow-problems.tsx
+  s_79c4fbdbb6d957::t_8d0c2b1e7a03a4 1-150
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_79c4fbdbb6d957::t_112c26fdac76a8 1-171
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_79c4fbdbb6d957::t_a1c696b46910a0 21,277,298,313-317,402-404,481-483
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_79c4fbdbb6d957::t_e49ac177b538d9 4,26,29,32,34,36,206-213,239-240,249,254-255,258,263,265,267,271,275,328
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_79c4fbdbb6d957::t_ec102476861d18 10,12,14,57
+apps/desktop/src/renderer/src/daemon/atom-registry.test.ts
+  s_79c4fbdbb6d957::t_327d367050f77d 3-6,8-9,11-15,18-27
+apps/desktop/src/renderer/src/daemon/atom-registry.ts
+  s_79c4fbdbb6d957::t_c68a1a32891d26 1-16
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_79c4fbdbb6d957::t_44d5bba4f6cc2d 4,6-8,12,14,28-43,91-96,103-107,126-129,141-182
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_79c4fbdbb6d957::t_0ad49d590d8845 20
+apps/desktop/src/renderer/src/features/activity-session.test.ts
+  s_79c4fbdbb6d957::t_0585a543b8af1c 1-8,22-23,25-38,45,64,73-100,118,124,141-149
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_79c4fbdbb6d957::t_632aa116947f36 10-11,22,69-71,85,92,129,144-146,153-154,157,176,236,243,250,253,256-262,280-300,305-306,529-533
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_79c4fbdbb6d957::t_f7be4e13b9aa80 1-446
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_79c4fbdbb6d957::t_5c02e0611b23fb 1-427
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_79c4fbdbb6d957::t_d792cd55f48279 4,22,38,53-56
+apps/desktop/src/renderer/src/features/attention.ts
+  s_79c4fbdbb6d957::t_af66a87f86310e 1,3,5,10-11,16
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_79c4fbdbb6d957::t_45478472783baa 24
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_79c4fbdbb6d957::t_06e7e6d836a09f 69
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_79c4fbdbb6d957::t_1c08a2cb15377b 2,42,127,140,144
+apps/desktop/src/renderer/src/features/connection-form.test.ts
+  s_79c4fbdbb6d957::t_5a9a52cfbce7c6 46-48
+apps/desktop/src/renderer/src/features/connection-form.ts
+  s_79c4fbdbb6d957::t_e5781ab3e3bf99 9-16,21,30,34-35
+apps/desktop/src/renderer/src/features/connections-view.ts
+  s_79c4fbdbb6d957::t_81a034b53f58bd 15-22
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_79c4fbdbb6d957::t_e01a008a8f5d46 7-8,125,135-137,209
+apps/desktop/src/renderer/src/features/daemon-failure.test.ts
+  s_79c4fbdbb6d957::t_a0fba44ed4b2e3 2-15,18-21,24-27
+apps/desktop/src/renderer/src/features/daemon-failure.ts
+  s_79c4fbdbb6d957::t_3532a1bbbfed7f 1-11
+apps/desktop/src/renderer/src/features/desktop-notifications.test.ts
+  s_79c4fbdbb6d957::t_2110a4b9495c38 1-46
+apps/desktop/src/renderer/src/features/desktop-notifications.tsx
+  s_79c4fbdbb6d957::t_5baca1010133f8 1-148
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_79c4fbdbb6d957::t_d745a45eedda56 1-9,12,15,17-18,20,22-35,40-90
+apps/desktop/src/renderer/src/features/feed.ts
+  s_79c4fbdbb6d957::t_75ee08f789f074 5-7,9,16,20-33,35-44,48,58-62,108,115
+apps/desktop/src/renderer/src/features/format.ts
+  s_79c4fbdbb6d957::t_33f551d2073b65 1-2
+apps/desktop/src/renderer/src/features/harness-alerts.test.ts
+  s_79c4fbdbb6d957::t_9138ba50cbdffe 3-5,7-8,12-30,33-54,56,59-60,63-86,88-91,95-101,103,106-129,131-149
+apps/desktop/src/renderer/src/features/harness-alerts.ts
+  s_79c4fbdbb6d957::t_7a28c1936e98e4 2-7,9,11-18,20-24,26-42,44-53,55-88,90-91
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_79c4fbdbb6d957::t_f3b362ed5aa61b 3,5-6,14,16,22-23,28,31-36,85,102-132
+apps/desktop/src/renderer/src/features/harnesses-view.ts
+  s_79c4fbdbb6d957::t_efc1a605f4fe18 1-27
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_79c4fbdbb6d957::t_19aa46a5b1e478 1,4,6,8-9,12-14,18-20,22,25-40,43-44,46-50,52-57,59,62-63,66-74
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_79c4fbdbb6d957::t_ee32312fb666c7 1-9,11-12,14,22-28,30-47,50-73,82,85,88-91,99,106
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_79c4fbdbb6d957::t_3f739eeeae927e 3,5,8-9,11-13,16,21,24,26-30,32-33,36-40,42-47,49-50,52-64,66-74,76,78-87,90-135,155-161,175-224,233,236,239-240,242,247,257,259,261,263-385,387,391-403,407,410-411,413,422-423,425,427-429,431-436
+apps/desktop/src/renderer/src/features/plugin-configuration.test.ts
+  s_79c4fbdbb6d957::t_59fe5d9165201b 12
+apps/desktop/src/renderer/src/features/plugin-configuration.ts
+  s_79c4fbdbb6d957::t_21cfad69cd324b 5,94-95
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_79c4fbdbb6d957::t_bb29880be8b83b 2
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_79c4fbdbb6d957::t_5f588206e2cfe2 30
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_79c4fbdbb6d957::t_53a8f339a03e0b 4,166,277-284
+apps/desktop/src/renderer/src/features/run-status.test.ts
+  s_79c4fbdbb6d957::t_275db4bcd14968 1-8
+apps/desktop/src/renderer/src/features/run-status.ts
+  s_79c4fbdbb6d957::t_e5de02775bfeda 1-11
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_79c4fbdbb6d957::t_fb8b8291019760 1-2,34-51,181,309-318
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_79c4fbdbb6d957::t_5edf50243408b5 20,130,133,225,247,263,289
+apps/desktop/src/renderer/src/features/safe-href.ts
+  s_79c4fbdbb6d957::t_8e0b5ab9aa6a29 1-15
+apps/desktop/src/renderer/src/features/workflow-catalog.ts
+  s_79c4fbdbb6d957::t_64f5a85a441962 1-9
+apps/desktop/src/renderer/src/features/workflow-daemon-provider.test.tsx
+  s_79c4fbdbb6d957::t_a8998a79dcba00 1-3,5-6,8,10-18,20,22-27,33-35,39-41,43-47,50-73,75,77,79,81-88,90-92,95-110,112-115,117-119,122-123,126-141,143-146,148-150,153-154
+apps/desktop/src/renderer/src/features/workflow-defaults.ts
+  s_79c4fbdbb6d957::t_1f7f584b652acc 1-43
+apps/desktop/src/renderer/src/features/workflow-edits.test.ts
+  s_79c4fbdbb6d957::t_5b4724221b2112 1-74
+apps/desktop/src/renderer/src/features/workflow-edits.ts
+  s_79c4fbdbb6d957::t_e78d6507c4a2ca 1-118
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_79c4fbdbb6d957::t_b2bebcc883c896 1-9,12-22,24,26-33,36-44,47-49,52-55,58-60,63-84,86-103,105-115,117,119-123,125-171,174,176-179,181-182,184,186-187,189-207,209-213,216-237
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_79c4fbdbb6d957::t_11f121fe2e87f4 1-944
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_79c4fbdbb6d957::t_9c19402a627fa3 1-238
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_79c4fbdbb6d957::t_0cc89c8447f56f 1,216,230
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_79c4fbdbb6d957::t_212c7f0ec84240 2-11,21,23,25-26,32-37,63-65
+apps/desktop/src/renderer/src/features/workspace-registration.ts
+  s_79c4fbdbb6d957::t_1f585dc367c33d 1,28,37
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_79c4fbdbb6d957::t_88c6eb9c2d4382 15,26-28,46-50,101-115,133,142-143,146,150,160-161,164,172,182-183,186,195,204-205,208,212,222-223,226,233,243-244,247,279-285,356-376,411,414-415,417,422,425-426,428
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_79c4fbdbb6d957::t_779490f5be12e5 9-10,50-53
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_79c4fbdbb6d957::t_5f9338adc43d59 1-89
+apps/desktop/src/renderer/src/routes/_app/index.tsx
+  s_79c4fbdbb6d957::t_5ddf32c6d74521 4,10-15
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_79c4fbdbb6d957::t_3654c8e7ff1aaf 14,143-152
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_79c4fbdbb6d957::t_c674dd48ebf6bc 1-2,4-6,8-9,12-29,37,39-43
+apps/desktop/src/renderer/src/routes/_app/workflows/index.tsx
+  s_79c4fbdbb6d957::t_04adb4e7ce0b7c 1-6
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_79c4fbdbb6d957::t_1b1f96028604f2 1-10
+apps/desktop/src/renderer/src/routes/settings/-providers.test.ts
+  s_79c4fbdbb6d957::t_cb3600d13a9565 1-2,4,6-9,11-19,22-24,26-29,33-47
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_79c4fbdbb6d957::t_e94f6f7dccf4ca 1,18,23,27-32,34,39,42,59,71-86,93-99,107-129,132-133,136-137,140-141,143-147,150-153,158-160,164-181,185-186,188,341-353,359-360,375,377,515-516
+apps/desktop/src/renderer/src/routes/settings/scheduling.tsx
+  s_79c4fbdbb6d957::t_b0bc1be0b49671 14,85
+apps/desktop/src/renderer/src/store/harness-alerts.ts
+  s_79c4fbdbb6d957::t_76371a342d7e92 2-3,5-7,10-18
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_79c4fbdbb6d957::t_5cadbd6fd4cdca 1-2,13,122-123,127,261,372,410-419
+apps/desktop/src/shared/ipc.ts
+  s_79c4fbdbb6d957::t_e0998b479d7cc6 8-46,51,62-69,112,117,119-129
+biome.json
+  s_79c4fbdbb6d957::t_33fe371ef65eca 47
+configs/lint/AGENTS.md
+  s_79c4fbdbb6d957::t_b5207197613020 1-7
+configs/lint/jsx.grit
+  s_79c4fbdbb6d957::t_5c9d3b1ca028e6 21-26,29-37
+configs/lint/no-env-file-load.grit
+  s_79c4fbdbb6d957::t_79fb1e9ff4172c 1-13
+configs/lint/package.json
+  s_79c4fbdbb6d957::t_2af9ef3740b5b3 7-8
+configs/lint/staging.grit
+  s_79c4fbdbb6d957::t_289cb052059fd0 27
+configs/lint/tests/fixtures/no-env-file-load/invalid-example.ts
+  s_79c4fbdbb6d957::t_382768b65e8e05 1-5
+configs/lint/tests/fixtures/no-env-file-load/valid-example.ts
+  s_79c4fbdbb6d957::t_252cef69161736 1
+configs/lint/tests/fixtures/no-select-without-items/invalid-example.tsx
+  s_79c4fbdbb6d957::t_ad62cfd2308616 1-22
+configs/lint/tests/fixtures/no-select-without-items/valid-example.tsx
+  s_79c4fbdbb6d957::t_1b83139d6508a7 1-35
+configs/lint/tests/react-lint-scope.test.mjs
+  s_79c4fbdbb6d957::t_d6910daf398b5e 1-31
+configs/lint/tests/rules.test.mjs
+  s_79c4fbdbb6d957::t_51d0760932fe20 50-55,124-130,175
+configs/lint/tests/test-count-reporter.mjs
+  s_79c4fbdbb6d957::t_cd25abd367d2a0 1-8,19-20,22
+configs/lint/tests/test-count-reporter.test.mjs
+  s_79c4fbdbb6d957::t_16fb2a056f23d0 10,14,21-30
+configs/lint/turbo.json
+  s_79c4fbdbb6d957::t_24787829d9d79c 5-6
+configs/sensor/CONTEXT.md
+  s_79c4fbdbb6d957::t_177f90c338e8bb 1-42
+configs/sensor/count-worktree-git-invocations.ts
+  s_79c4fbdbb6d957::t_4a60b1231e52e1 14-20,85-93,97,117-118
+configs/sensor/legacy-test-count-reporter.ts
+  s_79c4fbdbb6d957::t_5c61192043afc3 1
+configs/sensor/package.json
+  s_79c4fbdbb6d957::t_13352b5f54c7ca 1-31
+configs/sensor/perf-campaign.mjs
+  s_79c4fbdbb6d957::t_95be97dbc83684 6-7,9,16,42-46,48-49,172,186,205,247,273,364-368,539-553,569,588-595,603-608
+configs/sensor/process-pressure-sampler.mjs
+  s_79c4fbdbb6d957::t_cfd851f41ea12b 5,129-132,134,139-140,158-180,183,187-191,193,196
+configs/sensor/test-compare.mjs
+  s_79c4fbdbb6d957::t_1395d83800cb93 6-8,16-47,149-159,162-171,175-179,183-184,194,199,212,215,268-269,275-277,283-308,311-312,315-316,321-325,329,332,335-339,349
+configs/sensor/test-compare.test.mjs
+  s_79c4fbdbb6d957::t_0fc0b6eec0ad36 2-10,12-18,47,50,98-99,106-115,131-209,212-213,220-237
+configs/sensor/test-measure-summary.mjs
+  s_79c4fbdbb6d957::t_164287ec7f4ea8 8-17,19-72
+configs/sensor/test-measure-summary.test.mjs
+  s_79c4fbdbb6d957::t_4705e2b0c8175b 2-17,19-36,38-66,69-74,76-84,86-93,96-104,106,109-114
+configs/sensor/test-measure.mjs
+  s_79c4fbdbb6d957::t_599b0c0ad1533c 4,6,9-15,37,42-44,52-74,76,78,82-84,87-90,92-93,95-114,117-130,132-140,142-162,165-170,172-174,176-195,198-218,220-221,225-233,235,239,243-244,251-253,255
+configs/sensor/test-measure.test.mjs
+  s_79c4fbdbb6d957::t_bbd99d9f3a494f 2,4,7-17,20-29,32,42-64,77,82,98-103,105,107,110,113,118,122,124,126,128-129,133-136,140-148,150-185,188-204,206-213,215-233,235-250,252-262,265-276,278-289,291-296,298-300,303-346
+configs/sensor/test-performance-filer.test.ts
+  s_79c4fbdbb6d957::t_d1787099e5ffc8 1-3,5,7,10-25,27-38,40-46,48-49,51-57,59-60,63-72,74-104,106-118,121-132,135,137-146,149,151-158,160-166,168-170,173,175-180,182,184-187,190,192-193,195-198,201,203-209,212,214-225,228,230-246,249,251-257,259-262,265-268,270-272,274-276,279,281,283-288,291,293-298,300-304,307,309-315,317-326,329,331-337,340-342,345,347-356,358-362,365,367-373,375,377-379
+configs/sensor/test-performance-filer.ts
+  s_79c4fbdbb6d957::t_28b21c3a5f209e 1-5,7-12,15,17-44,47-64,67-70,72-73,75-76,78-81,83-86,88-89,91-94,96-176,179-217,221-233,235-243,246-258,260-261,263-276,278-285,288-297,299-330,333-341,343,346-356,359-369,371-390
+configs/sensor/tsconfig.json
+  s_79c4fbdbb6d957::t_2fa2bf04d61166 1-16
+configs/sensor/vitest.config.ts
+  s_79c4fbdbb6d957::t_7ba9f2fff9e5dd 1-12
+configs/test/base.ts
+  s_79c4fbdbb6d957::t_52ceb808ad08da 1,5-6,11
+configs/test/package.json
+  s_79c4fbdbb6d957::t_f6cf62f9118d0e 14
+configs/test/src/test-count-reporter.test.ts
+  s_79c4fbdbb6d957::t_4db4f8b9e4b2b5 2-9,19-23,33-71
+configs/test/test-count-reporter.ts
+  s_79c4fbdbb6d957::t_dd63c79e4a765b 4,7-12,19-35,37-38,40-46,49-50
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_79c4fbdbb6d957::t_da8c180830a866 3
+docs/adr/0003-work-source-as-coordination-substrate.md
+  s_79c4fbdbb6d957::t_5de8d9b9cc98c0 3
+docs/adr/0005-trust-boundary-is-authentication-not-payload-redaction.md
+  s_79c4fbdbb6d957::t_01ca9a4d365ee5 60
+docs/adr/0007-autonomous-with-override-triage-self-halts.md
+  s_79c4fbdbb6d957::t_905d80a510aaef 6-10,13-14
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_79c4fbdbb6d957::t_4634ef25b86a82 8,55,57,61,74,101,117,212-218
+docs/adr/0013-two-settings-families-with-different-scope-sets.md
+  s_79c4fbdbb6d957::t_2634565da589a7 76,78,83
+docs/adr/0014-plugin-install-is-machine-local-and-the-only-plugin-level-state.md
+  s_79c4fbdbb6d957::t_e4ba891f846ad4 44,114,116,125-126,136,143,169,222,227,237-239,272
+docs/adr/0015-one-control-store-with-engine-owned-migrations.md
+  s_79c4fbdbb6d957::t_47b640de1e6546 8-9,17,19,58,102,105,148,184,228,355-393
+docs/adr/0016-one-management-contract-for-the-app-and-the-cli.md
+  s_79c4fbdbb6d957::t_c1b9cdaf653459 10,27,81,103,119,140,150
+docs/adr/0017-connections-are-engine-owned-and-pair-with-one-plugin.md
+  s_79c4fbdbb6d957::t_293b196b5db114 11,123,157,203,208,232
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_79c4fbdbb6d957::t_d3e171171de7bb 6,10,58,92,128,166,195-201
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_79c4fbdbb6d957::t_dcc5f1ebcd6c14 5,14
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  s_79c4fbdbb6d957::t_8ff30daf903cb5 5,17,61,63
+docs/adr/0024-harness-catalogs-are-managed-not-probed.md
+  s_79c4fbdbb6d957::t_65b6a393b5961c 1-50
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  s_79c4fbdbb6d957::t_81ac5ea2e291d9 1-45
+docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md
+  s_79c4fbdbb6d957::t_0b5e8b29a0b217 1-142
+docs/adr/0027-headless-review-is-one-bounded-round-of-report-only-reviewers.md
+  s_79c4fbdbb6d957::t_3d2d227c7ea97b 1-80
+docs/adr/0028-subagent-model-choice-is-a-named-level-not-a-pinned-model.md
+  s_79c4fbdbb6d957::t_63b87e348ac320 1-73
+docs/adr/0029-triage-owns-context-acquisition.md
+  s_79c4fbdbb6d957::t_6df4e49e75a47b 1-47
+docs/adr/0030-work-context-carries-the-work-item-prose.md
+  s_79c4fbdbb6d957::t_616e4ffad07f87 1-78
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  s_79c4fbdbb6d957::t_dfbff1f0385de1 1-123
+docs/adr/0032-resource-references-make-their-reader-a-required-need.md
+  s_79c4fbdbb6d957::t_77d9d51878f7c4 1-73
+docs/adr/0033-work-items-without-a-tracker-are-coordinated-in-the-control-store.md
+  s_79c4fbdbb6d957::t_819b7cdc681ac0 1-63
+docs/adr/0034-trigger-observation-is-level-triggered.md
+  s_79c4fbdbb6d957::t_bcc420ceb45c24 1-24
+docs/adr/0035-freeze-output-actions-before-writing.md
+  s_79c4fbdbb6d957::t_f8975296580a23 1-31
+docs/adr/0036-every-work-item-is-coordinated-in-the-control-store.md
+  s_79c4fbdbb6d957::t_d345b45e380219 1-56
+docs/adr/0037-commands-are-retired-and-subagent-files-follow-the-claude-code-shape.md
+  s_79c4fbdbb6d957::t_27dd705f38142d 1-71
+docs/agent-patterns/effect-control-flow.md
+  s_79c4fbdbb6d957::t_78ec4da6425ae7 159
+docs/agent-patterns/effect-error-design.md
+  s_79c4fbdbb6d957::t_0834dff97794bd 174-175
+docs/agent-patterns/effect-fiber-lifecycle.md
+  s_79c4fbdbb6d957::t_905b81bc6f14d5 134
+docs/agent-patterns/effect-observability.md
+  s_79c4fbdbb6d957::t_9222165a4073d5 135-138
+docs/agent-patterns/effect-schema-unions.md
+  s_79c4fbdbb6d957::t_0a92c3a03d6ff5 154
+docs/agent-patterns/effect-service-layers.md
+  s_79c4fbdbb6d957::t_db03257fb6c77e 56-58,194
+docs/agent-patterns/effect-test-layers.md
+  s_79c4fbdbb6d957::t_ff707626625263 3,125-126
+docs/agent-patterns/effect-time-bounds.md
+  s_79c4fbdbb6d957::t_ce175a92dfa240 87
+docs/agent-patterns/test-value.md
+  s_79c4fbdbb6d957::t_1e7a7156f7257e 1-48
+docs/agents/domain.md
+  s_79c4fbdbb6d957::t_7cf89b84ed52d7 8,53-60
+docs/agents/product.md
+  s_79c4fbdbb6d957::t_763d57281962cc 26,104-107,120-122,142
+docs/agents/technical-disposition.md
+  s_79c4fbdbb6d957::t_29dd1602a5e500 7-9,46,48,92,99,157,203-206,232-235,269-270,290-297,323,372
+docs/research/cursor-acp-versus-cursor-sdk.md
+  s_79c4fbdbb6d957::t_954ca750600ceb 1-304
+docs/research/harness-model-selection-and-run-speed.md
+  s_79c4fbdbb6d957::t_a8ff113f8625a0 1-398
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_79c4fbdbb6d957::t_f17063adb23ee1 8,32-33,36,40,42,104-108
+docs/research/provider-auth-landscape.md
+  s_79c4fbdbb6d957::t_cb074a7ecb7d7a 3
+docs/research/review-pipeline-design.md
+  s_79c4fbdbb6d957::t_9e1fff0822de84 1-531
+docs/research/six-to-eight-agent-measurement-campaign.md
+  s_79c4fbdbb6d957::t_9db6ce4d566301 4
+docs/research/tanstack-ai-audit.md
+  s_79c4fbdbb6d957::t_1e429dec139b15 3
+docs/spec/customizable-workflows.md
+  s_79c4fbdbb6d957::t_3522dd1102bea7 1-165,167-374,376,378,380-390,392,394,396-397,399,401-407,409,411,413,415,417,419,421,423-429,431-436,438-480,482-521,523-532,534-535,537-540,542,544,546-552,554-563,565-566,568-571,573,575,577,579-580,582,584-590,592,594,596,598-611,613,615-619
+docs/spec/desktop-shell-revamp.md
+  s_79c4fbdbb6d957::t_3efdd6e2babb28 3
+docs/spec/next-phase.md
+  s_79c4fbdbb6d957::t_ab013fdc2d1194 4,13,20,63-64,106,112,117,126,156,183,200,225,244,258,267,365,391-401
+docs/spec/per-workspace-operating-instructions.md
+  s_79c4fbdbb6d957::t_dec26ac1b8a0ce 109,122,124
+docs/spec/settings-and-plugins.md
+  s_79c4fbdbb6d957::t_fe5cae29b9e1e2 5,37,170,181,184-185,200,204,241,251,268,301-305,316,350,358-359,411,435,482,515,517,587,593,597,606,617-620,628,651-668
+docs/spec/trusted-bot-wake-signal.md
+  s_79c4fbdbb6d957::t_b04dfaf6f399e2 1-159
+package.json
+  s_79c4fbdbb6d957::t_c03c6d744b813a 7,12,25,28-29,35
+packages/claude-code/package.json
+  s_79c4fbdbb6d957::t_9db2304000f5c5 13-15
+packages/claude-code/scripts/sync-models.ts
+  s_79c4fbdbb6d957::t_992aa45ce6c847 2-99,102-107,109-121
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_79c4fbdbb6d957::t_2197bc0e9c899f 90-107
+packages/claude-code/src/harness-byok.test.ts
+  s_79c4fbdbb6d957::t_674479ca1b5f44 21,40,43-45,47-48,50-51,127
+packages/claude-code/src/harness-environment.test.ts
+  s_79c4fbdbb6d957::t_b117e939fdc9d9 21,24,28,67-69,88-90,131,133,186
+packages/claude-code/src/harness-fixtures.ts
+  s_79c4fbdbb6d957::t_af9f56f10b0f78 8,24,54-55,84-116,205,207-208,234-235,241-246,272,321-328,360-377,425,429,432,450-452,495,507
+packages/claude-code/src/harness-host.test.ts
+  s_79c4fbdbb6d957::t_22a617bc5ae527 1,31,33,65-86,88-98,100-103,107,109-115,165-198
+packages/claude-code/src/harness.ts
+  s_79c4fbdbb6d957::t_b92a9829600efc 2,15-16,34-42,118,210,212,215,285-289,334,339,357,368,382-391,394,414,417-421
+packages/claude-code/src/index.ts
+  s_79c4fbdbb6d957::t_427b80842373b5 2-3
+packages/claude-code/src/model.test.ts
+  s_79c4fbdbb6d957::t_8c52008256ead3 1,3-5,7-27,29-31,35-53,55-61,63,65-68,71-72,75,77-78,81-82,85-86,90,92-99
+packages/claude-code/src/model.ts
+  s_79c4fbdbb6d957::t_642056998004b2 1-4,8,10-12,15-17,19,21-26,29-35,37-59,61-72,74,76-77,79-87
+packages/claude-code/src/models.generated.ts
+  s_79c4fbdbb6d957::t_999c1daa6c56f4 1-71
+packages/codex-cli/CONTEXT.md
+  s_79c4fbdbb6d957::t_0280a53672288f 15,20-26,39
+packages/codex-cli/src/fixtures/fake-codex.mjs
+  s_79c4fbdbb6d957::t_5436f6a500db0a 77,87
+packages/codex-cli/src/harness-configuration.test.ts
+  s_79c4fbdbb6d957::t_f7d2470ebb14a8 5-6,11,32,34-63,81,87-113,118-148,152-175,230,266-285,291-294,297,304
+packages/codex-cli/src/harness-execution.test.ts
+  s_79c4fbdbb6d957::t_56e14965cd5d85 1,34,166,240,253
+packages/codex-cli/src/harness-failures.test.ts
+  s_79c4fbdbb6d957::t_20f979055b729e 18,138,144,147
+packages/codex-cli/src/harness-fixtures.ts
+  s_79c4fbdbb6d957::t_0aaee9e15a4725 10,14,33,80,82,85,92-93,95,107-113,116-117,120,131,151,280,296-300,303,306,308,324,326-333
+packages/codex-cli/src/harness.ts
+  s_79c4fbdbb6d957::t_cd04d796dfb9d3 2,12-13,131-146,149,151-155,158-185,207-210,223-227,234-236,239-245,300,321-322,324-326,329,331,343-349
+packages/codex-cli/src/index.ts
+  s_79c4fbdbb6d957::t_eb8a7d0d271f4f 2-3
+packages/codex-cli/src/model.test.ts
+  s_79c4fbdbb6d957::t_8f7741c0d15a1a 1-42
+packages/codex-cli/src/model.ts
+  s_79c4fbdbb6d957::t_1b0c1d13e5a9d1 1-11
+packages/codex-cli/src/models.generated.ts
+  s_79c4fbdbb6d957::t_95306a15ea8e1a 1-50
+packages/contracts/CONTEXT.md
+  s_79c4fbdbb6d957::t_02ad5fc433a63c 20-22,34-35,39,43-51,56,97,111,122-123,131,144-145,149-151,155,160,164,186,196,199-281,284-285,287-289,292-294,297,300-327,329,333-334,337-340,344-361,377,386,389-396,401-425,430,434,438,442-443,446-458,462,468,475-476,479-480,491,514-515,533-552,556,584,588,606,611,620
+packages/contracts/src/ag-ui.test.ts
+  s_79c4fbdbb6d957::t_1199c2f482e938 6,8,110-127,136-151
+packages/contracts/src/ag-ui.ts
+  s_79c4fbdbb6d957::t_f5a3eb0fc41809 5,142-159
+packages/contracts/src/base-schemas.ts
+  s_79c4fbdbb6d957::t_b9fa72e56f0d9d 13-15,19-21,30-41
+packages/contracts/src/board.test.ts
+  s_79c4fbdbb6d957::t_e1a4595564a4fd 9-10,15,21,40-42,44-53,56,78,80-82,87-88,94-95,101,106-107,113,123-124,128-129,136,143,154,157,167,169,189,315-333,342,362,474
+packages/contracts/src/board.ts
+  s_79c4fbdbb6d957::t_c12a75a917529d 5-6,12,25,38,121,123-124
+packages/contracts/src/connection.test.ts
+  s_79c4fbdbb6d957::t_b78f02133a621a 55-83
+packages/contracts/src/connection.ts
+  s_79c4fbdbb6d957::t_2a1d286adfdd5e 4,7-9,40-49,95
+packages/contracts/src/contribution.ts
+  s_79c4fbdbb6d957::t_529e619675e405 7
+packages/contracts/src/coordination.test.ts
+  s_79c4fbdbb6d957::t_af533f1ca8a908 1-35
+packages/contracts/src/coordination.ts
+  s_79c4fbdbb6d957::t_e879e7d842b4b3 1,3-110,115-116,124,126,128-129,136,139-169
+packages/contracts/src/daemon-event.ts
+  s_79c4fbdbb6d957::t_9e4b39531058d4 2,5-6,9,12,15,38,54,56-57
+packages/contracts/src/daemon.test.ts
+  s_79c4fbdbb6d957::t_8b1905f75a256e 3
+packages/contracts/src/daemon.ts
+  s_79c4fbdbb6d957::t_26ceedb6b74734 9,188-194,201-204
+packages/contracts/src/harness.test.ts
+  s_79c4fbdbb6d957::t_a0316994ad5fdf 4-11,28,37-172
+packages/contracts/src/harness.ts
+  s_79c4fbdbb6d957::t_703915aeac3ed5 4,36,39-44,46-53,55-60,62-65,67-183,185-190,194-196,198-203,206,215-217,221-222
+packages/contracts/src/index.ts
+  s_79c4fbdbb6d957::t_e933da5ce7e05c 21
+packages/contracts/src/rpc.ts
+  s_79c4fbdbb6d957::t_23e6d13b52bd26 4,13,24-25,29,33,36-52,80-85,99,118-159,166-167,174-181,197,201,203,206-207,210-221,223-224,227-244,257-258,266,313-323,348-377,380-383,387,397-398,403-407
+packages/contracts/src/run-plan.ts
+  s_79c4fbdbb6d957::t_73e67edffe7f11 7-8,13-16,76-81,88-103,113,183,198
+packages/contracts/src/run.test.ts
+  s_79c4fbdbb6d957::t_b10571d25a50b8 2-3,5-22,24-25
+packages/contracts/src/run.ts
+  s_79c4fbdbb6d957::t_18340014bd5887 1,4-11,64,81-86,91-93,95,107-109,113-118,123
+packages/contracts/src/settings.test.ts
+  s_79c4fbdbb6d957::t_d0609d7865262a 5,7,9,14,88-113,126-171
+packages/contracts/src/settings.ts
+  s_79c4fbdbb6d957::t_acbb2c1de5d0e4 38,45-54,57,69,71,75,81,91-121,225,232,249-254,308,319,446,449,451,454,458,461,465,471
+packages/contracts/src/work-item.ts
+  s_79c4fbdbb6d957::t_47e3d3a94b93a8 10-21
+packages/contracts/src/workflow.test.ts
+  s_79c4fbdbb6d957::t_ade625d48b8cbe 3,5-59,61-66,69,71-73,76,79,81-82,84-97,100-113,116-117,119-120,123,125-130,133-168,170-422,424-426,429-441,443,446-448,451-455,457-460,463-467,470-471,475-476,478-480,482-506,508-511,515-519,521-526,530-534,536-537,541-556,558-559,561-564,567-584,586-591,593-600,602-603,605-606,608,611-617,620-623,625-628,631-634,636-642,645-647,650-653,656-662,664,666-682,684-685,687-722,724-736,738-739,743-746,748-751,754-777,779-780,783-809,811,813-817,819-832,834-860
+packages/contracts/src/workflow.ts
+  s_79c4fbdbb6d957::t_e55be9649d2795 1-1749
+packages/contracts/src/workspace.ts
+  s_79c4fbdbb6d957::t_8eed43a6077aab 51
+packages/cursor-acp/CONTEXT.md
+  s_79c4fbdbb6d957::t_80011844147a83 20-22,36-38
+packages/cursor-acp/FINDINGS-RESUME.md
+  s_79c4fbdbb6d957::t_a60dc40af8a552 28-29,213,215-216
+packages/cursor-acp/FINDINGS.md
+  s_79c4fbdbb6d957::t_1cf868514ed85d 31,204-210
+packages/cursor-acp/package.json
+  s_79c4fbdbb6d957::t_ed0e0be81fbdc8 13-14
+packages/cursor-acp/scripts/sync-models.ts
+  s_79c4fbdbb6d957::t_a14fbfe4531f21 4-5,9,11,13-33,36-59,64-68,70-72,74,78-79,83-85,90-92
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_79c4fbdbb6d957::t_9a166d27aad958 21-27,31,38-71,73,119-121
+packages/cursor-acp/src/harness.test.ts
+  s_79c4fbdbb6d957::t_65fa80780ff3f0 9,28,39,48-65,70-125,162-163,171,186,191-192,212-225,240-244,249,253-259,263-264,290-296,311-313,475,478-491,494-550,553,556-569,571-572,575-594,596,598-601,604-612,614-619,621-635,638-659,661-668,670-692,695-706,708,710-713,716-750,752-778,780-782,785-793,795,797-800,806,810
+packages/cursor-acp/src/harness.ts
+  s_79c4fbdbb6d957::t_ee65da6faaab50 2,16,19-25,40-47,58-67,78-82,84,86-96,179,187,307,329-338,340-358,378,397-398,402,405,414,417-419,429,433,435-436,438-444,449-454
+packages/cursor-acp/src/index.ts
+  s_79c4fbdbb6d957::t_ce88e632f3fd83 6,9
+packages/cursor-acp/src/model.test.ts
+  s_79c4fbdbb6d957::t_3f072af0aef832 2-11,14-15,33-188
+packages/cursor-acp/src/model.ts
+  s_79c4fbdbb6d957::t_35f18a5ec4aa4e 1-8,12-60,62-238,240-373,377
+packages/cursor-acp/src/models.generated.ts
+  s_79c4fbdbb6d957::t_897748561c0af7 3-256,277-297,299-308,337-338,343-354,369-370,373-392,401-413,426-438,503-512,524,529-533,536-1366
+packages/engine/CONTEXT.md
+  s_79c4fbdbb6d957::t_fcbaefa6168a88 7,13,16-18,21,28-30,33-34,37,44-46,49,52-62,69,73,81,89,93,113,125,144-150,153-158,161,165,197-198,200-202,205,213,228-236,238
+packages/engine/docs/adr/0001-scheduler-acts-once-per-snapshot-generation.md
+  s_79c4fbdbb6d957::t_58874491ec91a8 3-4
+packages/engine/docs/adr/0002-diverged-worktree-branches-rebase-then-hand-off.md
+  s_79c4fbdbb6d957::t_7e7a1045fdc134 5
+packages/engine/docs/adr/0002-restart-recovery-resumes-sessions.md
+  s_79c4fbdbb6d957::t_2b2d05e503407b 3-4
+packages/engine/docs/adr/0004-issue-tracker-and-source-control-provider-are-separate-ports.md
+  s_79c4fbdbb6d957::t_700b00a83faff4 7,20
+packages/engine/docs/adr/0006-first-party-runtime-behind-the-harness-seam.md
+  s_79c4fbdbb6d957::t_fffe5b789eeab6 3-7,10
+packages/engine/docs/adr/0009-priority-orders-work-within-a-stage.md
+  s_79c4fbdbb6d957::t_77d6ead6438d3e 3-4
+packages/engine/docs/adr/0012-operation-resolution-is-a-module-and-outcomes-are-data.md
+  s_79c4fbdbb6d957::t_fd143e304dac0f 3-4,67-77
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_79c4fbdbb6d957::t_8df8cc16d701c8 1-40
+packages/engine/docs/adr/0014-mutations-acknowledge-the-write-and-the-snapshot-converges-behind-a-coalescing-refresh.md
+  s_79c4fbdbb6d957::t_c05ea1717f7491 1-15
+packages/engine/docs/adr/0015-workflows-replace-the-fixed-pipeline.md
+  s_79c4fbdbb6d957::t_5b963b69e382d7 1-21
+packages/engine/docs/adr/0016-run-plan-resolution-and-run-completion-are-modules-of-the-workflow-runner.md
+  s_79c4fbdbb6d957::t_e3ed4eff93e19c 1-49
+packages/engine/docs/adr/0017-an-action-entry-is-registered-once.md
+  s_79c4fbdbb6d957::t_2bbff1b2eae913 1-34
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_79c4fbdbb6d957::t_125770df7bf8ca 10-12,21,26,41,43,66,68,70,74,77-88,111,115,121,123
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_79c4fbdbb6d957::t_428c879faa447a 8,10,20-21,25,40,49,51-60,66-70,73-91,93-107,118,120,122,124,126,128,130,132-133,140,148,151-155,158-159,164
+packages/engine/operating-instructions/shared/test-value/TEST-VALUE.md
+  s_79c4fbdbb6d957::t_9686859f41f7f2 1-45
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_79c4fbdbb6d957::t_314d3658d10782 8,12,16-19,23,31-32,35,44,50,55,57-59,63-65,67-69,75,82-85,90,92,94,96,103,109-114
+packages/engine/package.json
+  s_79c4fbdbb6d957::t_2643c3264b9f2f 6-7,24,28
+packages/engine/plugins/bundles/granola/mcp/granola.json
+  s_79c4fbdbb6d957::t_89332227a33502 1-3
+packages/engine/plugins/bundles/granola/plugin.json
+  s_79c4fbdbb6d957::t_d27581aaa58b3e 1-15
+packages/engine/plugins/bundles/slack/mcp/slack.json
+  s_79c4fbdbb6d957::t_88cab9430c447e 1-3
+packages/engine/plugins/bundles/slack/plugin.json
+  s_79c4fbdbb6d957::t_eabd49cc98b68b 1-15
+packages/engine/plugins/catalog.json
+  s_79c4fbdbb6d957::t_34f839f4776a47 14-25
+packages/engine/replay/README.md
+  s_79c4fbdbb6d957::t_efd7425a76e1ea 30
+packages/engine/src/ci.test.ts
+  s_79c4fbdbb6d957::t_a2f9b03cdaf57a 2,56-62
+packages/engine/src/ci.ts
+  s_79c4fbdbb6d957::t_71c224f5d53bcf 8,13-14,27,31-35
+packages/engine/src/clock-source.test.ts
+  s_79c4fbdbb6d957::t_93da68a75c1f7c 1,3,5-11,13-28,31-36,38-45,47,49-53,55-56,59-60,62,65-68,71,73-80,82-123,127,129-140,144,146-177
+packages/engine/src/clock-source.ts
+  s_79c4fbdbb6d957::t_cd701c83b92b90 1-404
+packages/engine/src/commands.ts
+  s_79c4fbdbb6d957::t_274d92c4be6ea8 19,29,44-45,47,51,55-56,60-61,118-130,135,138,167-172,174,177,181,184,192,196,277,294-296,305-321,340-347,368,370-381,437-443,452,469-492,511-512,521-628,631-634,678-683
+packages/engine/src/connection-verify.test.ts
+  s_79c4fbdbb6d957::t_8da364330b5a8d 7,28-42,53,95-145
+packages/engine/src/connection-verify.ts
+  s_79c4fbdbb6d957::t_0d7f31d467c662 1,5-7,10,29-68,73-82,84
+packages/engine/src/connection.test.ts
+  s_79c4fbdbb6d957::t_c0c2d800f91f51 18,22,91,179-182,184-391
+packages/engine/src/connection.ts
+  s_79c4fbdbb6d957::t_27766114b667af 9,11,16,26-40,61,84-99,106-107,133,224-253,255-267,298-307,313-315,319-320
+packages/engine/src/context-assembler.test.ts
+  s_79c4fbdbb6d957::t_ce234ef151e30b 6,21-25,29,46,56,75,77-85,88-89,366-369,387-537
+packages/engine/src/context-assembler.ts
+  s_79c4fbdbb6d957::t_31c017a89f6e0f 1,18,27-31,37,85-138,240-241,243-244,253,255,279-309,312-313,315-316,327,330,332-342,358,361,363
+packages/engine/src/context-fs.ts
+  s_79c4fbdbb6d957::t_7a992611b5e274 18
+packages/engine/src/control-store-schema.ts
+  s_79c4fbdbb6d957::t_a5f3ca2c758eae 1-6,8,46,83,102-338,347-350,362
+packages/engine/src/control-store.test.ts
+  s_79c4fbdbb6d957::t_44f98e8bbf60b0 26,28,34,37,60,65-78,124-129,132-135,138-143,152-156,186-197,223-237,296-298,330,332-334,345,347,364,366,426-466,756-766,820-848,854-859,863-870,872,876,883,890,892-893,899-902,905-908,1120,1126-1135,1138-1141,1146-1164,1166-1288,1293-1339
+packages/engine/src/control-store.ts
+  s_79c4fbdbb6d957::t_d7fe8d8b9708f4 1,21,66-67,123-132,139-140,161-198,214-221,352-353,361,370,372,504-506,659-660,664-672,738-739,793,796,799-804,813-817,826-830,833-884,911,926-929,1042-1050,1052-1055,1073,1105-1107
+packages/engine/src/coordination-contract.ts
+  s_79c4fbdbb6d957::t_ea2d34ca5e7cfd 1-58
+packages/engine/src/coordination-control-store.test.ts
+  s_79c4fbdbb6d957::t_0e6e5b82b4e1f9 1-145
+packages/engine/src/coordination-control-store.ts
+  s_79c4fbdbb6d957::t_7a4511da914b12 1-12,14-17,19-22,25-36,38-41,43-51,53-57,59-64,66-109,112-121,123-130,133-144,147-149,152-156,159-183,186-199,201,204-235,238-250,253-274,277-292,295-307,310-324,327-336,339-352,355-367,370-382,385-402,405-414,416-421
+packages/engine/src/coordination-fold.test.ts
+  s_79c4fbdbb6d957::t_fa6be0a29ae2fa 1,3,5-65,68-82,84-94,96,99-105,107-122,125-141,144-146
+packages/engine/src/coordination.ts
+  s_79c4fbdbb6d957::t_8d8fffdfafa31a 1-17,19,22-34,37-41,44-59,62-63,65-79,82-86,88-91,93-99,101-105,108-119,122-125,128-178,180-197,199-222,225-248,250-282,284-312,314-331,333-343,345-354,356-366,369-371,373
+packages/engine/src/crash-recovery.ts
+  s_79c4fbdbb6d957::t_711acd3f50d6ca 1-46
+packages/engine/src/credential-store.test.ts
+  s_79c4fbdbb6d957::t_5b042226e7d4a8 6,8,218-247,461-581,772-804
+packages/engine/src/credential-store.ts
+  s_79c4fbdbb6d957::t_90ed075b4f34cd 54-55,145,162,164-165,208-211,254-267,328-348,430-437,461,541-576,581,602-605
+packages/engine/src/daemon-composition.test.ts
+  s_79c4fbdbb6d957::t_8ce7b100bdbc15 1-14,17,20,22,24,27-28,33,35,39,42-48,50-95,97-99,102-103,106-107,110,124-126,129-132,134-136,138-144,150,161,164-173,176-280,282-288,290-294,303,305-388,393-395,400-403,405,407-408,411,414-415,417,419-423,429-433,436,438-448,450-469,471-526,541-542,546,549-550,552,554-557,563-566,569,571-575,577,579-590,592-608,610-618,620-691,694,696-744,747,749-911
+packages/engine/src/daemon-event-bus.test.ts
+  s_79c4fbdbb6d957::t_70e38efaaea307 130
+packages/engine/src/daemon-event-bus.ts
+  s_79c4fbdbb6d957::t_b1572e9068b8d6 54,62
+packages/engine/src/daemon.ts
+  s_79c4fbdbb6d957::t_8cf9d5ee5f8d9d 8,21,35-36,44-45,62-64,71,73,75,77-78,82,90-91,103-126,202-203,210-211,214,233-245,248,253-254,256,280,282,289-292,316-320,323,332,341-349,351-355,361-363,373-374,379-385,397-398,411,414-434,440-441,445,463-466,489-575,581-582,589-598,601,610-614,616,649-659,678-685
+packages/engine/src/event-publisher.test.ts
+  s_79c4fbdbb6d957::t_95c5899b06f065 2-3,11,15-25,28-30,34-45,48,50,52,54-65,68,71-78,80-81,83-84,86-87,91,93-95
+packages/engine/src/event-publisher.ts
+  s_79c4fbdbb6d957::t_caf4f1b09f6cf3 5,7,16,47,81,83-88,90-95,98-102,105-112,114-116,119-122,125-127,129,131,136-137,139-142,145-149,152
+packages/engine/src/external-harness-runtime.test.ts
+  s_79c4fbdbb6d957::t_6159fe6333731d 4,24,30,45,48,50-52,54,60,65,120,202,224-234,243,257,274-275,294,300-308,336,357-430,432-456,461-462,464-468,472,475-487,492-528,534,556-573,597,604,606-611,705,750-774,790,794,797-817,821,827,840,844-845,867,874,915,925,930-932,936,942,954,958,960-965,992,997,1002,1008,1015,1020,1026,1033,1041,1050,1071,1076,1079-1080,1087,1094,1105-1106,1117,1123,1172,1186,1205-1209,1211,1226,1232,1246,1262,1280,1325
+packages/engine/src/external-harness-runtime.ts
+  s_79c4fbdbb6d957::t_08ea4a53f627ec 7,10,17,34,51,62,65,67-68,87,111,119,141,146,149-150,153,158,170-219,266-267,353-354,359-367,369,371,373-374,379,401,478-485,487,489,494,497,504-505,507,514,518,521-522,524-527,597-598,607-610,614,648,652-655,657,659,662-663,670-671,677,690-691,703-704,709,711-712,717,719,740-742,753-814,816-865
+packages/engine/src/git.test.ts
+  s_79c4fbdbb6d957::t_1316935de9b9ae 1-55
+packages/engine/src/git.ts
+  s_79c4fbdbb6d957::t_7d117ed0b85f84 2,8,30-34,42-45,47,69,76-78,81-117
+packages/engine/src/github/adapter.ts
+  s_79c4fbdbb6d957::t_ca4b0bf9f9f879 5,7-8,10
+packages/engine/src/github/cli-credential.test.ts
+  s_79c4fbdbb6d957::t_3d7e313305bb02 10
+packages/engine/src/github/client.test.ts
+  s_79c4fbdbb6d957::t_f4c71ee280a19f 7,9,26-69,203-325,363,369-420,663-704,707,712,718-719,771-883,942,976,1053,1067-1068,1076-1085,1118,1130-1199
+packages/engine/src/github/client.ts
+  s_79c4fbdbb6d957::t_e2fb8ae869640c 28,38-43,64,68-74,83,89-90,97-118,122,127-137,139,142,174,184,195,204,210-215,219-233,235,237,243-250,255-277,280-281,285,287,290-294,303,540-541,548,550-551,664,676-685,748-754,788,791-795,806-808,843-846,884-885,933-936,940,943,945-947,950,952-954,956,959-970,974-1129,1134-1148,1197,1208-1212,1218,1339-1451,1468,1478-1482,1549-1569,1587,1592,1598,1601,1607-1623,1628-1631,1636-1687,1691-1698,1700,1706,1709-1713,1727-1730,1732-1736,1755-1758
+packages/engine/src/github/feedback.ts
+  s_79c4fbdbb6d957::t_a608ed27fd8cfc 1-19
+packages/engine/src/github/host.test.ts
+  s_79c4fbdbb6d957::t_e23bc89d1840c7 1,4-5,7-44,46-63,65-66,68-69,71,73-75,77-78,82,84,86,88-89,92,94-95,97-108,110-127,129-140,143,145-146,148-155,159-163,165-179
+packages/engine/src/github/host.ts
+  s_79c4fbdbb6d957::t_22d251d5fa7aec 7-8,13-19,25,28-29,55-62,82-95,98-103,106-147,149-158,162-163,165-178,182-275,277-345,347-391,394-405,407-411,413-417
+packages/engine/src/github/index.ts
+  s_79c4fbdbb6d957::t_faf2859edffdfe 3-13
+packages/engine/src/github/markers.ts
+  s_79c4fbdbb6d957::t_a01ac6138c8384 1-12,22,27,39-40
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_79c4fbdbb6d957::t_87ba1c0264d125 8-13,17,30-47,92-101,104-112,114,123-132,144,146-150,156-220,256,263,285,293-320,326-327,344-345,354-356,370,373-387,404,408-433
+packages/engine/src/github/performance-issue-filer.ts
+  s_79c4fbdbb6d957::t_148efc6d43b872 7,11,23,28,36,43,70,72-91,94,97,99,151-152,157,159,161,163,171,173,175,197-199,202-214,216-220,222-232,236-237,240-241,245,247,250-251,254,256,258-262,264-265,268,271,274,282,289-299,303-311,332-333,347
+packages/engine/src/github/provider.ts
+  s_79c4fbdbb6d957::t_d3c7ac671be8fc 1-9,12,15-29,38-172,190,192,199-201,204-207,209-213,215-217,219-222,231,303-325,327-332,335-352,354-442,444-473,475-481,484,487-552,555-561,563,565-589,591,593-595,597-598,600-606,608-612,616-623
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_79c4fbdbb6d957::t_7eddc6f4b92a0d 1-329
+packages/engine/src/github/ready-to-merge.test.ts
+  s_79c4fbdbb6d957::t_315ba89402b5fb 1,4-6,8-20,22-53,56-66
+packages/engine/src/github/source-control-target.ts
+  s_79c4fbdbb6d957::t_8e4407b783ad4f 1-3,5-6,9-12,15-48,51-54
+packages/engine/src/github/trigger-source.test.ts
+  s_79c4fbdbb6d957::t_56f0b0aaf9a545 1-14,16,18,20,22-43,45-46,49-51,54-55,57-62,64-66,68-70,73-95,97-110,112-129,131-158,160-166,168-188,190-192,194,196-211,213,215-217,222-277,283,285-300,303-311,317-320,322-329,332-333,335,338,340-388,391,393-402,405-408,414,416-439,442-447,453,455-469,472-478,484,486-498,501-508,514-528,530-557,560-580,582-604,607,609-623,625-629,633-690,696,698-720,722-725,729-742,748,750-844,847-922,928,930-942,945,947-976,979,981-1003
+packages/engine/src/granola-http.ts
+  s_79c4fbdbb6d957::t_35900f57b8f580 1-80
+packages/engine/src/granola-login.ts
+  s_79c4fbdbb6d957::t_0a302655e4bcb4 1-24
+packages/engine/src/granola-source.test.ts
+  s_79c4fbdbb6d957::t_bd23f451e4b2a3 2-6,8,13,15,18-37,39-61,63-73,75-114,116-118,121-124,127-140,143-147,150-151,153-186,188,191-211,213-240,242-247,249-259,261,263-265,268-277,279-281,283-285,287-294,296-298,300-304,306-309,311-313,315-329,331-336,338-346,348-355,357-385,387-395,397-429,431-436,438-464,466-473,475-477,479-484,486-491,493-498,500-524,527-533,535-578,580-593,595-598,600-624,626-629,631-656,658-661
+packages/engine/src/granola-source.ts
+  s_79c4fbdbb6d957::t_61981d54c773ea 1-598
+packages/engine/src/harness-overview.test.ts
+  s_79c4fbdbb6d957::t_85bae52d4ed3d8 1,3-4
+packages/engine/src/harness-overview.ts
+  s_79c4fbdbb6d957::t_998ab912fe3e8a 1-2
+packages/engine/src/harness-readiness.test.ts
+  s_79c4fbdbb6d957::t_5e67e9ec255488 1-146
+packages/engine/src/harness-readiness.ts
+  s_79c4fbdbb6d957::t_66d385b5938474 2-7,18-31,33-35,38-40,43-46,49,51-56,59-64,66-89,91,93-97,100-101,103-109,111-112,114-119,122-124,126-132,135,137-139,141-153,155-165,168-175,177-180,182-184,187-195,198,200,203,205-208,210
+packages/engine/src/harness.test.ts
+  s_79c4fbdbb6d957::t_23f36c75b614ff 21,70-71,82,88,106,129,133,138-152,154-168,170-182,184-198,200-204,206,216-217,229,235,454-471
+packages/engine/src/harness.ts
+  s_79c4fbdbb6d957::t_c9633404978bec 6,10,13-14,16-17,21,36,42,66,119,130-140,142-152,155-159,194,196-202,231,242,245,253,258,280-283,286-306,315,319,327,332-344,349,353,420-432,439-440,449-466,469,474,479,488,491-494
+packages/engine/src/index.ts
+  s_79c4fbdbb6d957::t_3189cf14bd6183 1,7-8,16,37,39-40,43-47
+packages/engine/src/interrupt-store.test.ts
+  s_79c4fbdbb6d957::t_65173eda07d4a7 4,86-96
+packages/engine/src/issue-search-tool.test.ts
+  s_79c4fbdbb6d957::t_0122ba571a59a7 2,5,7-8,12,15-16,21-61,63-75,77-116,118-122
+packages/engine/src/issue-search-tool.ts
+  s_79c4fbdbb6d957::t_0f5b78c69a40e4 1-57
+packages/engine/src/issue-tracker-router.test.ts
+  s_79c4fbdbb6d957::t_695ac9dd103fa8 1,6-9,16-17,21-22,25,28-41,43-61,63-66,68-73,75-77,80-117,119-122,124-144,147,149-185,187-197,200,203,205-249,251-260
+packages/engine/src/issue-tracker-router.ts
+  s_79c4fbdbb6d957::t_3b3b4622655932 15-29,36-38
+packages/engine/src/issue-tracker.ts
+  s_79c4fbdbb6d957::t_efbb3097c1125d 5-7,20,27-28,31-34,37-43,46-48,51-55,58-82,85-98,100-114,127-131,133-134,137-155,157-159
+packages/engine/src/issue-workflow-catalog.ts
+  s_79c4fbdbb6d957::t_b5d17ff1303eb5 1-338
+packages/engine/src/json-event-stream.ts
+  s_79c4fbdbb6d957::t_bba5f7b4fac744 1,5,7-9,11-14,16,18-41,43-46,48-69,71-94,97-98,100-108
+packages/engine/src/linear/adapter.ts
+  s_79c4fbdbb6d957::t_897f6b00237852 5,7-8,10
+packages/engine/src/linear/client.ts
+  s_79c4fbdbb6d957::t_3ba4c8058d351d 3,47,54-55,62-63,66-67,96-110,116-142,148,150-151,160,184,198-209,213-222,227-256,258-261,263-265,270-284,289,362,370-374,381-388,398-399,402-403,406-409,415,417-418,422,454-459,461-463,467,475-479,488-499,501,503-504,509,511-580,632-640,642-661,668,673,678,680-720,723-728,821-848,867-929,952-968,994-1020,1028,1041-1053,1058,1068-1185,1193-1195,1198-1248,1256
+packages/engine/src/linear/host.test.ts
+  s_79c4fbdbb6d957::t_a31c5a32c647da 4,6-9,11,13-15,19-20,22-23,25-44,46-48,51-57,61,63-64,66-94,96-98,100-114
+packages/engine/src/linear/host.ts
+  s_79c4fbdbb6d957::t_f90d8e4ebc4c5e 1,3,5-11,14-15,18,27,38-49,59-82,85-90,93-103,105-107,109-133,135,137-184,186-197,200-265,268-332
+packages/engine/src/linear/markers.ts
+  s_79c4fbdbb6d957::t_4caf99c932237d 1,18-19
+packages/engine/src/linear/oauth.test.ts
+  s_79c4fbdbb6d957::t_760314115f7584 7,172
+packages/engine/src/linear/trigger-source.test.ts
+  s_79c4fbdbb6d957::t_65e7d3bb7378b2 1-330
+packages/engine/src/model-catalog.test.ts
+  s_79c4fbdbb6d957::t_32887b13282119 6
+packages/engine/src/park-notice.test.ts
+  s_79c4fbdbb6d957::t_6137bf087e74bf 1-7,10-11,14,16-22,24-120,122-127
+packages/engine/src/park-notice.ts
+  s_79c4fbdbb6d957::t_148f028725f08c 1-77
+packages/engine/src/performance-issue-filer.test.ts
+  s_79c4fbdbb6d957::t_2a785ffdb2d396 10-11,14,18,22-24,29,32,37-101,153,161-165,168-169,176-185,193,198,209,220,225,237,245,253,265,270,281,287,297-328,332-344,347-385
+packages/engine/src/performance-issue-filer.ts
+  s_79c4fbdbb6d957::t_4bc34bd9fe6cba 3,7,9-10,16,25-41,50,56-149,156,185-335,339,341-351,369,372,376,378,380,383-384,389-390,395-396,402,406,408,410
+packages/engine/src/performance-regression-sensor.test.ts
+  s_79c4fbdbb6d957::t_c62941c82f76b9 12-16,68,80,102-109,205-210,213-230,380-381
+packages/engine/src/performance-regression-sensor.ts
+  s_79c4fbdbb6d957::t_26aa8773841500 18-20,26-27,41-42,81,92-94,114-115,130-131,148,171-187,195-196,199,205,212,224,229,243-244,247,249,256,263,274,276,327
+packages/engine/src/plugin.ts
+  s_79c4fbdbb6d957::t_b34178fd7bf0d0 7,45
+packages/engine/src/projector.ts
+  s_79c4fbdbb6d957::t_99ef486bafc4e2 11
+packages/engine/src/provider-runner.test.ts
+  s_79c4fbdbb6d957::t_a8f0e47f44ec3b 1-8,12-18,28,33,40-45,49,56,80-88,162,174,176,181-183,187-188,206-217,220-223,233,259,271-277,319-324,334-466,492-524,565-567,575,627-628,633-635
+packages/engine/src/provider-runner.ts
+  s_79c4fbdbb6d957::t_68327445f86084 1-8,21,37,41,56,62-66,88-96,98,100,105-109,173-174,211-212,215,232,246,248,251,255-256
+packages/engine/src/provider-trigger-source.ts
+  s_79c4fbdbb6d957::t_80ef6fed2824be 1-7,10-32,34-68,71-101,103-110,113-115,118-132,134-147,149-154,157-173,175-176,178-181,184-186,188-189,191-194,196-199,202-209,211-281
+packages/engine/src/pull-request-tool.test.ts
+  s_79c4fbdbb6d957::t_2c6ea041722f91 1,4,7-8,11-12,15-16,21,23-53,55-58
+packages/engine/src/pull-request-tool.ts
+  s_79c4fbdbb6d957::t_f11838f2a228ca 1-41
+packages/engine/src/read-model.ts
+  s_79c4fbdbb6d957::t_9a7e408819f2ae 1,3,6-7,9-38,55,63,66-74
+packages/engine/src/replay-harness.test.ts
+  s_79c4fbdbb6d957::t_d2a3f03497db26 1,50-94,143,145-165,175
+packages/engine/src/replay-harness.ts
+  s_79c4fbdbb6d957::t_68c5e8d58132eb 13,21-24,353-357,389,402-403,405-416,418,437
+packages/engine/src/resume-policy.ts
+  s_79c4fbdbb6d957::t_b97e2d735a2c96 1,12-15
+packages/engine/src/run-ledger.test.ts
+  s_79c4fbdbb6d957::t_8ca4fb73dae513 2,25,30,38-56,72,75,85,103,127,181-218,300,303-304,310-312,323-326,328-331,347-348,359,363-367,369,372,374,383,387,389,392,394,562,564,574,585-586,602
+packages/engine/src/run-ledger.ts
+  s_79c4fbdbb6d957::t_bef1d230a47d6e 2,4,57-59,61-62,146-156,161-167,243-259,272-273,276-280,286-294,300-309,311-314,327,338-343,347-351,404-406,419,421-428,437,463
+packages/engine/src/run-plan.ts
+  s_79c4fbdbb6d957::t_d398bc222a0e90 1,3-9,12,15-16,18
+packages/engine/src/run-recorder.test.ts
+  s_79c4fbdbb6d957::t_8faaa29d7a1a0e 36
+packages/engine/src/scheduler.ts
+  s_79c4fbdbb6d957::t_0d4e2b3f32ec3f 1,16-17,20,49-59,96-97,99-101,104-107,109-146,151-155,159-162,165-166,171,174-176,179-188,190,192-195,198-210,219,229-230,237-256,259-263,270-286,289,291,293-300,317-319,321-323,327
+packages/engine/src/scripted-source.ts
+  s_79c4fbdbb6d957::t_ac135aad2a3e2c 1-41
+packages/engine/src/session-choice.test.ts
+  s_79c4fbdbb6d957::t_dba0e626e93920 16,42-43,77-86,92,96,100,110,124,158
+packages/engine/src/session-choice.ts
+  s_79c4fbdbb6d957::t_dcb275f51dc705 24-25,46-50,52-60,62
+packages/engine/src/session-store.test.ts
+  s_79c4fbdbb6d957::t_0c1a825386b15f 3,22,130,132
+packages/engine/src/slack-login.ts
+  s_79c4fbdbb6d957::t_e223b6b72af2ff 1-22
+packages/engine/src/slack-source.test.ts
+  s_79c4fbdbb6d957::t_b57efc58e68376 1-10,13,17,20-26,28-52,55-72,75-83,85-105,107-119,122-132,134-164,166,168-174,177-182,185,188,190-195,197-202,204-216,219,221-234,236-240,243,245-339,341-342,345,347-380,382-386,389,391-398,400-415,417-426,428-429,431,433-434,436,439,441-483,486,488-515,517-518,520,523,525-615,617-618,620-622,625,627-634,636-658,660,662-684,687-689,692,694-737,739,741-742,745,747-761,763-764,767,769-790,792-793,795-803,806,808-819,821-822,825,827-839,842-855,857,859-862,864-894,897-902,904-907,910,912-927,930,932-933,936,938-952,954-958,961,963-1000,1002-1010
+packages/engine/src/slack-source.ts
+  s_79c4fbdbb6d957::t_1c42e1871b4b6e 1-1057
+packages/engine/src/slack-write.test.ts
+  s_79c4fbdbb6d957::t_d846dc8e6724b5 1-7,10-27,29-72,75-78,81-92,95-109,111-131,134-135,137-176,180,182-194,197-199,204-210,212-214,216-219,221-240,242-243,245-248,250-277,279-287,289-301,303-305,307-310,312-318,320-322,324-327,329-348,350-351,353-356
+packages/engine/src/slack-write.ts
+  s_79c4fbdbb6d957::t_ebf980a5223f4d 1-438
+packages/engine/src/source-control.ts
+  s_79c4fbdbb6d957::t_ff29759f8f0ca7 1-8,14-15,17,31-72,74-76,78-95,97-102,104-106,108-112,114-130,138-159,162
+packages/engine/src/testing/engine-test-layer.test.ts
+  s_79c4fbdbb6d957::t_3f20168379af2f 22
+packages/engine/src/testing/engine-test-layer.ts
+  s_79c4fbdbb6d957::t_b2afe0d2e5033e 7,32-36
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_79c4fbdbb6d957::t_68580fe7614c48 18-20,45-47,60-62,78-80
+packages/engine/src/testing/git-invocation-counting.ts
+  s_79c4fbdbb6d957::t_4fbb5608dd2953 30-32,63,79-82
+packages/engine/src/testing/harness-probe-layer.ts
+  s_79c4fbdbb6d957::t_32df170c9259c5 23-29,32
+packages/engine/src/testing/log-probe.ts
+  s_79c4fbdbb6d957::t_76573f3994b1d4 4-6,8-10,13-16,18-25,28-34
+packages/engine/src/tools/file-diff-feed-content.test.ts
+  s_79c4fbdbb6d957::t_7fb76cda036366 9
+packages/engine/src/tools/file-diff-feed-fallback.test.ts
+  s_79c4fbdbb6d957::t_500000a97a1d17 1,10,17-23,499,503-506,516-519,522-526,605,613,616-634
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_79c4fbdbb6d957::t_c82876eef2e9ca 11
+packages/engine/src/tools/file-diff-feed.ts
+  s_79c4fbdbb6d957::t_04276bfbd02834 2-7,12,39-41,773-781,784-826
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_79c4fbdbb6d957::t_1cb59039a8f5c3 14
+packages/engine/src/tools/index.ts
+  s_79c4fbdbb6d957::t_84446f66f08ad2 7
+packages/engine/src/tools/owned-tools.test.ts
+  s_79c4fbdbb6d957::t_bd3d360b763c43 14,57-138,189,414-745
+packages/engine/src/tools/owned-tools.ts
+  s_79c4fbdbb6d957::t_e2d32d734eae10 2-4,8,10,24-29,68,70-121,123-363,366-419,531,533-547,564,566-584,586-592,595-610,612-616
+packages/engine/src/tools/policy.ts
+  s_79c4fbdbb6d957::t_bcbfacfb2ff31b 7,45-48,98-99,101
+packages/engine/src/tools/sandbox.test.ts
+  s_79c4fbdbb6d957::t_ef623f0515a62c 9,11,29,44-61
+packages/engine/src/tools/sandbox.ts
+  s_79c4fbdbb6d957::t_7a7cc0c7f50695 19-23,34
+packages/engine/src/tracker-trigger-source.test.ts
+  s_79c4fbdbb6d957::t_a7876e660b46a6 1-210
+packages/engine/src/tracker-trigger-source.ts
+  s_79c4fbdbb6d957::t_230beff0d01fdb 1-2,4-31,33-39,41-43,45-53,55,57,59-67,69-71,73-98,100-108,110-180,182-214,217-226
+packages/engine/src/trigger-observation.test.ts
+  s_79c4fbdbb6d957::t_f37c93e8d668e9 2,4-5,7-13,15,19-20,24-26,30-91,93-103,106-129,132-134,137-139,141-156,158-175,177-185,187-191,194-204,207-209,212-223,226-239,241-253,255-284,287-289,291-300,303,305-349,351-376,378-413,416-421,423-432,434,437-448,451-481,484-521,523-524,526-541,543-547,550-572,574-578,580,583,585-646,648-754,756-775,778,780-800,802-810,812-818,820,822-828,830,832-860,862-888,890-895,898,900-924,926-928,930-931,933-934,936-945,947-954,956-964,967,969-979,981-986,989,991-1009,1011-1012,1014-1022,1025-1026,1028,1031,1033-1035,1037,1039-1041,1043-1044,1047,1049-1057,1059-1066,1069,1071-1105,1108,1110-1141,1144,1146-1204,1207-1211,1214,1216-1241,1244-1251,1254,1256-1270,1273-1284,1286-1295,1298,1300-1337,1340,1342-1393,1395-1405,1408,1410-1413,1415-1442,1444-1455,1457-1466,1468-1469,1471-1472,1474-1480,1482-1483,1485-1516,1519-1520,1522-1534,1536-1538,1540,1542-1543,1545-1591,1593-1595,1597-1599,1601-1604,1607-1625,1627-1643,1646-1649,1651-1676,1678-1683,1685-1701,1703-1712,1714-1719,1721-1735,1737,1739-1742,1744-1763,1766-1770,1772,1775-1785,1787-1792,1794-1796,1798-1802,1804-1818,1820-1821
+packages/engine/src/trigger-observation.ts
+  s_79c4fbdbb6d957::t_8de6741b00d7da 1-1073
+packages/engine/src/trigger-source.ts
+  s_79c4fbdbb6d957::t_98598ca32730a5 1-163
+packages/engine/src/watch-activity.test.ts
+  s_79c4fbdbb6d957::t_28e67eefd38067 2,17,28,30
+packages/engine/src/workflow-action-entry.test.ts
+  s_79c4fbdbb6d957::t_5fa66ce4a0b8e9 1-33
+packages/engine/src/workflow-action-entry.ts
+  s_79c4fbdbb6d957::t_cc01daf43e12ee 1-11,14-39,42-50,53-72,74-76,78-79,81,83-89,91-93,96-124
+packages/engine/src/workflow-action-plan-store.ts
+  s_79c4fbdbb6d957::t_31aef25411ee2e 1-243
+packages/engine/src/workflow-action-plan.test.ts
+  s_79c4fbdbb6d957::t_ba423c5218725e 2-18,27,29-36,38-66,69-71,74-104,107-116,118-133,135-152,155-174,176-187,189-214,216-236,238-242,244-258,260-271,276-279,281-313,315-345,347-404,406-408,410-417,419-420,422-450,452-508,512-518,520-532,534-567,571,575,577-605,607-611,613-623,625-650,652,655,657-668,670,672-680,683,685-703,706-730,733,735-754,757,759-777,780,782-800,803-824,827,829-834,836,838-839,842,844-845,847-848,850-855,858-886,889,891-913,916,918-949,952,954-973,976-979,981-982,985,987-1000,1002,1004-1007,1010,1012-1025,1028-1040,1042-1045,1047-1067,1070,1072,1074-1082,1084-1091,1094-1116,1119-1120,1122-1135,1137-1154,1156,1159
+packages/engine/src/workflow-action-plan.ts
+  s_79c4fbdbb6d957::t_b274fd4d3069b7 1-556
+packages/engine/src/workflow-action-registry.ts
+  s_79c4fbdbb6d957::t_860a19162fde38 1-22
+packages/engine/src/workflow-actions-cogwork.ts
+  s_79c4fbdbb6d957::t_2c23a7125250db 1-9,11-21,23-39,41,43-55,57-67,71-72,77-84,86-163
+packages/engine/src/workflow-actions-issue.test.ts
+  s_79c4fbdbb6d957::t_f17b5ae1d66231 2-7,12-15,17-19,21-51,54-56,60-88,90-101,103-110,112-145,148-183,186-203,205-247,249
+packages/engine/src/workflow-actions-issue.ts
+  s_79c4fbdbb6d957::t_4f3764740b054c 1-10,12-13,15-26,28-29,31-34,36-53,55-60,62-71,73,75-76,78-79,81-87,89-106,108-113,115-121,123-145,147-150,152-155,157-158,160-173,175,177-187,189-196,198-205,207-212,214-226,228-269
+packages/engine/src/workflow-actions-source-control.test.ts
+  s_79c4fbdbb6d957::t_80638321784053 1-183
+packages/engine/src/workflow-actions-source-control.ts
+  s_79c4fbdbb6d957::t_d2efaea7b4b620 1-449
+packages/engine/src/workflow-artifact-store.ts
+  s_79c4fbdbb6d957::t_aa5000317ef9ab 1-132
+packages/engine/src/workflow-attention.test.ts
+  s_79c4fbdbb6d957::t_bc5170ef12d288 1-214
+packages/engine/src/workflow-attention.ts
+  s_79c4fbdbb6d957::t_12ff1b147d238a 1-166
+packages/engine/src/workflow-catalog.ts
+  s_79c4fbdbb6d957::t_72d210e1e3d9c4 1-50
+packages/engine/src/workflow-machine-readiness.test.ts
+  s_79c4fbdbb6d957::t_b7bef43be52b37 2-3,5-6,8,13,17,20-21,23-26,28-30,32-39,41-46,48,50-72,74-79,82-94,97-101,103-107,109-112,115-121,124-130,134,136-144,147-156,158-163,165-167,169-184
+packages/engine/src/workflow-machine-readiness.ts
+  s_79c4fbdbb6d957::t_8f77fa1417e325 2-17,23,25-29,32-60,62,65-100,102-112,114-121,125-130,132-139,142-143,145-160,163,166-171,173-179
+packages/engine/src/workflow-notification.ts
+  s_79c4fbdbb6d957::t_f195acbef1b85d 1-109
+packages/engine/src/workflow-options.ts
+  s_79c4fbdbb6d957::t_7a9977ebaa0e90 1-56
+packages/engine/src/workflow-run.test.ts
+  s_79c4fbdbb6d957::t_d3d5495a75e64c 2-24,26,28,30,33,35,38,40-47,49-152,154-164,166-225,227-242,244-255,258-271,274-278,280-281,283-300,302-317,320-327,329-343,345-348,350,352-427,430-433,436-440,442-539,541-555,557-567,569-592,594-597,599-651,653-716,718-723,725-729,732,734-763,765,767-771,774,776-783,786,788-865,867-918,920,922-923,925-928,930,933-1051,1053-1078,1080,1082-1115,1118,1120-1134,1136-1139,1142-1151,1154,1156-1179,1182,1184-1195,1198,1200-1212,1215,1217-1226,1229,1231-1237,1240,1242-1267,1270,1272-1315,1318,1320-1349,1352,1354-1360,1362-1371,1374,1376-1423,1425-1433,1435-1441,1443-1456,1458,1461,1463-1492,1495,1497-1504,1506-1596,1599,1601-1615,1618,1620-1636,1639-1677,1679-1681,1684-1737,1739-1743,1745-1746,1749-1839,1842,1844-1859,1861-1873,1876,1878-1911,1913-1925,1927-1930,1933,1935-1953,1955-1986,1989,1991-2042,2044-2054,2056-2123,2125-2129,2131-2148,2151,2153-2194,2197,2199-2243,2245-2254,2257,2259-2306,2309,2311-2354,2356-2367,2369-2391,2394,2396-2423,2425-2495,2498,2500-2529,2532,2534-2539,2542,2544-2593,2595-2647,2650-2690,2692-2699,2701,2703-2718,2721,2723-2746,2749,2751-2767,2770,2772-2793
+packages/engine/src/workflow-run.ts
+  s_79c4fbdbb6d957::t_88650c7a043b86 3,5-10,12-23,31-33,35,38-41,44-46,49-97,99-119,122-130,132,134-153,156-159,161-173,175-178,180-198,201-208,210-213,215-222,225-245,247-248,250,254-275,277-291,293-308,311-313,315,318-321,323-324,326-327,329-330,333-335,337-341,344-351,353-355,357-363,366-372,374-379,381-393,396-399,401-452,454-480,482-485,487-539,541-628,630-639,641-668,670-686,688-693,695-711,713,715-765,769-781,783-794,796-803,805-828,830-835,838-874,876-877,879-880,882-889,892-902,904-907,910-915,918-952,956-961,963-990,992-1015,1018-1021,1023-1028,1032-1035,1037-1047,1049,1052-1057,1059-1062,1064-1073,1075-1113,1116-1123,1125-1143,1146-1154,1156-1157,1159-1164,1166-1174,1176-1177,1180-1186,1188-1189,1192-1199,1201-1212,1214-1229,1231-1232
+packages/engine/src/workflow.test.ts
+  s_79c4fbdbb6d957::t_f74273c16be973 1,3-15,17-20,22-24,26-27,29,32-33,35-37,39-44,46-62,65-84,87-90,93-95,98-127,129,132-136,138-148,153-164,166-199,202-205,207-212,215-216,218-221,223-224,227-231,233,236,238-239,242-331,334-365,367-369,371-579,581-585,588,590-592,594-601,603-606,609,611-613,616-618,620-623,625-628,631,633-648,651-657,660,662-677,679-680,682-683,685,688,690-703,705-706,709-711,714-748,752-757,759-783,787,789-792,794-795,797-800,802-809,812,814-822,825-826,828-830,833,835-844,847,849-851,855-856,859-887,889,892,894-905,907,910,912-927,930,932-937,939-963,967,969-978
+packages/engine/src/workflow.ts
+  s_79c4fbdbb6d957::t_65bf026c9f33e1 1,3-34,40,42-78,81-84,87-103,105-107,110-112,114-162,164-174,177-181,183-189,191-198,201-210,212-214,216-233,236-239,241-244,247-262,264-265,268-270,273-291,296-316,318-323,326-331,333,336-338,340-368,371-377,381-383,385-390,393-401,403,406-412,415-418,420-427,429-442,444
+packages/engine/src/workspace-registry.test.ts
+  s_79c4fbdbb6d957::t_430e43d4a85680 42-44,834,839,841-842
+packages/engine/src/worktree-fs.ts
+  s_79c4fbdbb6d957::t_3c0ef19ad314d7 17
+packages/engine/src/worktree-maintenance.ts
+  s_79c4fbdbb6d957::t_c2b759e5cafdb3 1-103
+packages/engine/src/worktree-naming.test.ts
+  s_79c4fbdbb6d957::t_936bb4eaf38386 31-35
+packages/engine/src/worktree.test.ts
+  s_79c4fbdbb6d957::t_1a5d8fa5f8e883 1,10,16-17,24,29,48-53,58-62,69,73-74,81-82,84,87-88,102,108,110-114,119-133,137-140,143-144,156-161,165-169,173-186,195-199,203,207,210,212,225-227,235,240-242,246-360,448,500,516-518,576-583,688,691,695-697,699,701-720,723-731,736,738-739,743-755,758,760-781,789-790,800,803,808,810-814,824,826-853,860,864-871,874-875,879-880,889-894,897,909-972,974-977,997-998,1000-1001,1020,1038,1045-1060,1072,1077-1131
+packages/engine/src/worktree.ts
+  s_79c4fbdbb6d957::t_7c9338c4bebb50 1,8,10,19-28,52-58,65,74-77,85,92-93,101-105,159-177,206-247,269-270,298-299,316-325,329-337,341,344,348-351,363,370,376-386,388-392,394-400,407-433,473,479,481-489,494,505-515
+packages/ui/package.json
+  s_79c4fbdbb6d957::t_a076dbd4bbf8ab 18,22
+packages/ui/src/components/code-block.tsx
+  s_79c4fbdbb6d957::t_fa519d07f4045e 1-254
+packages/ui/src/components/dropdown-menu.tsx
+  s_79c4fbdbb6d957::t_48b9955e21e199 2,4,224-267,285-286,288,291
+packages/ui/src/components/input.tsx
+  s_79c4fbdbb6d957::t_b65c7be4f9a8f3 2,7-28,33-34,40
+packages/ui/src/components/textarea.tsx
+  s_79c4fbdbb6d957::t_fa779bdedc6541 1,6-26,30-31,37
+packages/ui/src/components/trace.tsx
+  s_79c4fbdbb6d957::t_fd4db7ba40ddcb 1-149
+packages/ui/src/lib/highlighter.ts
+  s_79c4fbdbb6d957::t_d29d038dc74824 1-7,9,11,13-18,20,22-26
+packages/ui/src/styles/globals.css
+  s_79c4fbdbb6d957::t_3b927d38c32562 155-188
+pnpm-lock.yaml
+  s_79c4fbdbb6d957::t_32aaa9cde1ae69 1-158,174-175,177-178,180-181,183-184,186-187,189-190,192-193,195-196,198-199,201-205,207-208,224-229,272-274,277,282-283,285,288,323-325,368,371,373,380,413,416,424-425,446,456,462,465,468,480,483,489,498,504,507,510-513,521,528,531,535-571,574-576,579,595,598,601,604,617,620,626,638,641,644,647,660,663,669,682,688,703,706,709,712,722,725,734,749,752,755,758,761,764,767-770,780-782,795,804,820,823,829,834-835,845-847,865,875,878,894-895,907-913,1117-1118,1134-1135,1201-1202,1761-1823,2003,2010,2522-2523,2525-2530,2532-2533,2536,2541-2542,2544-2545,2547-2548,2550-2551,2553-2554,2556-2557,2559,2561-2562,2564,2566-2567,2569,2575-2576,2578,2580-2581,2584-2586,2591-2592,2598-2599,2602-2603,2607-2608,2612-2613,2615-2616,2702-2703,2721-2722,2724,2926-2927,2949-2951,3124-3186,3346-3349,3898-3901,4018-4020,4210-4213,4276-4279,4839,4847,4849,4857,4859,4867,4869,4877,4879,4887,4889,4897,4899,4907,4909,4918,4920,4928-4929,4931,4939-4940,4942,4950,4952,4961,4963,4968,5031-5033,5038-5040,5049-5052,5303-5304,5681-5682,5759-5763,5872-5875,6001,6009-6013,6015,6036,6041,6045,6049,6112,6114,6116,6118-6120,6129,6131,6136,6138,6143,6145-6146,6148,6158,6160-6161,6163,6167,6169,6204,6206,6209,6211,6214,6216,6219,6221-6222,6227,6229,6231,6233-6234,6238,6240,6243-6245,6263,6271,6295,6298,6303,6307,6313-6314,6353,6484,6487,6491,6493,6495,6497,6511,6513,6519,6525,6527,6532,6538,6540,6546,6549,6557,6560,6564,6568,6572,6580,6583,6782,6784,6789,6807-6845,6879,6881,6888,6892,6898-6899,6907-6908,6912,6916,6922-6923,6931-6932,7270,7277,7395,7400,7402,7404-7406,7410,7412-7414,7418,7420-7421,7423,7425-7426,7428,7432,7434-7436,7444,7446-7449,7454-7455,7459,7461-7462,7464,7466,7468-7469,7471,7473-7476,7478-7479,7485,7487,7490,7492,7494,7496-7497,7499-7501,7562,7568,7615,7623,7625-7627,7632-7633,7706,7708,7729,7733,7742,7744,7748-7749,7751,7755,7766,7772,7839,7857,7867,7875,7877,7893,7899-7900,7903,7967,7970,7972,7984,7990,8016-8066,8078-8079,8082-8083,8105,8109-8114,8121-8122,8125-8126,8130-8131,8179,8181,8183,8204,8208,8250,8252-8256,8261,8264,8267,8269-8270,8389,8450,8453-8454,8507,8509-8510,8569,8571-8573,8578,8580-8582,8585,8596,8600-8601,8612,8614-8615,8620,8629,8632,8637,8641,8644,8671-8672,8813,8815-8816,8821,8824,8829,8834,8845-8847,8870-8871,8901,8903,8978,8981,8986,8988,9068,9072-9073,9103-9115,9149,9152,9161,9164,9178-9179,9610,9669,9671-9672,9856,9907,9909,9952,10010,10012,10051,10053,10084,10089,10095,10097,10099-10100,10102,10260,10262,10395,10411,10419,10439-10442,10451,10459,10466,10469,10486,10490-10491,10507-10508,10592,10596
+pnpm-workspace.yaml
+  s_79c4fbdbb6d957::t_69bc39415a64e6 22-32,34,39-40,52-69
+scripts/install-commit-hook.mjs
+  s_79c4fbdbb6d957::t_e3a7553a73dd55 1-34
+scripts/refuse-pull-request-creation.mjs
+  s_79c4fbdbb6d957::t_cdfcceb937ce2d 1-84
+scripts/vendor.mjs
+  s_79c4fbdbb6d957::t_3eab9250ffebce 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "15c06bb8faba19a3f4042d6b7994187818cf235a",
+  "prompts": {},
+  "sessions": {
+    "s_79c4fbdbb6d957": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4fd2f170-88b2-4e3e-8aa5-74701433df2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
