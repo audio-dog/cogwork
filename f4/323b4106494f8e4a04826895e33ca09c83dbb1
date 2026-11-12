@@ -1,0 +1,38 @@
+packages/engine/src/workflow-action-plan.test.ts
+  s_1803e31a831287::t_6af4933a124b98 39-43
+  s_1803e31a831287::t_b85280a6bc4234 45
+  s_1803e31a831287::t_ee98c208ad85f3 1098,1112
+  s_1803e31a831287::t_be94b75402b064 1115-1138,1140-1158
+  s_1803e31a831287::t_6698b855b61cf2 434,447-449,451-458,460-466,468-478
+  s_1803e31a831287::t_0d8d11c4d36f7e 14
+  s_1803e31a831287::t_b4b041db33fb25 904-947
+  s_1803e31a831287::t_e52637d8379eb1 1159
+  s_1803e31a831287::t_cc5a45e2739335 423-433,435-444,1113
+  s_1803e31a831287::t_e010a376980373 56-60
+  s_1803e31a831287::t_4757c5c373fda7 3,6
+  s_1803e31a831287::t_9324f20dff723e 459,603,607
+  s_1803e31a831287::t_f993540a51142e 467
+  s_1803e31a831287::t_83f87bcf04700b 574
+  s_1803e31a831287::t_8ee3f3016f47b0 445-446,450
+  s_1803e31a831287::t_53c93868fa9da5 1114
+packages/engine/src/workflow-action-plan.ts
+  s_1803e31a831287::t_43f85b3f00f69f 11
+  s_1803e31a831287::t_da88645889697c 504
+  s_1803e31a831287::t_5bdb1e00f87319 391-392
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f4323b4106494f8e4a04826895e33ca09c83dbb1",
+  "prompts": {},
+  "sessions": {
+    "s_1803e31a831287": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "40ee7b32-e5f0-4e64-b703-afa6882ed9ff",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
