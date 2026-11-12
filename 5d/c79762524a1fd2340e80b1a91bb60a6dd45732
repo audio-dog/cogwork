@@ -1,0 +1,159 @@
+.cursor/skills/.gitignore
+  s_8300938c82659e::t_f219625b588d90 1
+apps/cli/src/login.test.ts
+  s_8300938c82659e::t_835ecbe3c07d5c 216,218
+apps/cli/src/platform.test.ts
+  s_8300938c82659e::t_00ca2c2255b5d6 978-981
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_8300938c82659e::t_1cd1dff9613970 13,253,469-472
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_8300938c82659e::t_23c1dd018de3cd 599
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_8300938c82659e::t_92f9288c4f828f 89,105
+apps/desktop/src/renderer/src/features/configuration-model.ts
+  s_8300938c82659e::t_d489a73ddd01c6 24
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_8300938c82659e::t_ac8d3661562558 42,127,140,144
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_8300938c82659e::t_741d3d6a49a75e 125,135-137,209
+apps/desktop/src/renderer/src/features/workflow-edits.test.ts
+  s_8300938c82659e::t_bf47e3b2d564f0 22
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_8300938c82659e::t_3e4d7ddfb80249 108,124,145
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_8300938c82659e::t_236a6a0e1111f6 60
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_8300938c82659e::t_0bb72fba4713c7 90,122-123,127,139,261,372
+biome.json
+  s_8300938c82659e::t_626969b7e70ca4 93-96
+configs/lint/no-bare-exit-failure.grit
+  s_8300938c82659e::t_f1290c6ff7806b 1-13
+configs/lint/tests/fixtures/no-bare-exit-failure/invalid-example.ts
+  s_8300938c82659e::t_788e36217a196d 1-6
+configs/lint/tests/fixtures/no-bare-exit-failure/valid-example.ts
+  s_8300938c82659e::t_41de90939c0d58 1-8
+configs/lint/tests/rules.test.mjs
+  s_8300938c82659e::t_ce1f9fd9ddef66 56-61
+docs/adr/0011-contribution-kinds-are-flat-and-have-no-umbrella-noun.md
+  s_8300938c82659e::t_d3e7e78a1e839f 8,213-218
+docs/adr/0018-contribution-files-live-in-three-authoring-trees.md
+  s_8300938c82659e::t_bbf51423262b51 6,195-201
+docs/adr/0028-subagent-model-choice-is-a-named-level-not-a-pinned-model.md
+  s_8300938c82659e::t_3d43209faa3e77 6-13
+docs/adr/0037-commands-are-retired-and-subagent-files-follow-the-claude-code-shape.md
+  s_8300938c82659e::t_6f91e86fabeac5 1-71
+docs/agent-patterns/effect-schema-unions.md
+  s_8300938c82659e::t_8553409b55ba06 137-138
+docs/spec/customizable-workflows.md
+  s_8300938c82659e::t_f78ec51e44510f 273
+docs/spec/settings-and-plugins.md
+  s_8300938c82659e::t_bd68ce29e88872 37,184-185,251,358-359,587
+packages/contracts/CONTEXT.md
+  s_04ed4cb35b60f9::t_fd12dcbfd8ea69 97,111,131,144-145,160,164,186,189,301,468,584
+packages/contracts/src/contribution.ts
+  s_8300938c82659e::t_db03f2c620726d 7
+packages/contracts/src/run-plan.ts
+  s_8300938c82659e::t_de3eed64b2f2de 59-79,227
+packages/contracts/src/workflow.test.ts
+  s_8300938c82659e::t_05dd804b615190 2-3,96,112,154,728-786,788-811
+packages/contracts/src/workflow.ts
+  s_8300938c82659e::t_533b71edef2596 487-489,501,536-538,563-567,572,576-577,580-586,591,618,621
+packages/contracts/src/workspace.ts
+  s_8300938c82659e::t_32d71673becaca 51
+packages/engine/CONTEXT.md
+  s_8300938c82659e::t_97a5c9627f3855 61,149
+packages/engine/docs/adr/0016-run-plan-resolution-and-run-completion-are-modules-of-the-workflow-runner.md
+  s_8300938c82659e::t_acc978d202d8ba 13,29-40,51-57
+packages/engine/package.json
+  s_8300938c82659e::t_812bdac7685802 29-30
+packages/engine/src/authoring-tree.test.ts
+  s_8300938c82659e::t_7414f7c2f2a84f 32-35,50,57
+packages/engine/src/authoring-tree.ts
+  s_8300938c82659e::t_4cd9eddca1ad8e 35
+packages/engine/src/clock-source.ts
+  s_8300938c82659e::t_411f3cc69c238e 60
+packages/engine/src/control-store-schema.ts
+  s_8300938c82659e::t_c72a71cf04adbf 269
+packages/engine/src/control-store.test.ts
+  s_8300938c82659e::t_19b46618d54f05 134,1087-1113
+packages/engine/src/daemon-composition.test.ts
+  s_8300938c82659e::t_5c8c66d049bfeb 53,58-63,66,94-95,205,552
+packages/engine/src/daemon.ts
+  s_8300938c82659e::t_7a8d954d128095 427
+packages/engine/src/granola-source.ts
+  s_8300938c82659e::t_c9c4329c9bb395 449
+packages/engine/src/issue-tracker-router.test.ts
+  s_8300938c82659e::t_f917db9789cf6e 119
+packages/engine/src/issue-tracker-router.ts
+  s_8300938c82659e::t_0848f9a0bb8a9d 10,38
+packages/engine/src/linear/trigger-source.test.ts
+  s_8300938c82659e::t_c8dd01560d6d73 18-19,24-27,116,132,181,211,223,264,298,323
+packages/engine/src/park-notice.test.ts
+  s_8300938c82659e::t_8660c6bdc5edf3 20,71-73
+packages/engine/src/plugin.ts
+  s_8300938c82659e::t_f1ce7576b515c5 7,45
+packages/engine/src/provider-trigger-source.ts
+  s_8300938c82659e::t_6d513596dfcdc6 60,84
+packages/engine/src/run-plan.test.ts
+  s_8300938c82659e::t_bca2828b734e77 1-3,5-6,8,10-11,13-20,22-23,25-33,35-40,42-56,58-62,64-95
+packages/engine/src/run-plan.ts
+  s_8300938c82659e::t_831d411fadbe08 1-11,22-69
+packages/engine/src/slack-source.ts
+  s_8300938c82659e::t_a9df1dd4aa4c39 144
+packages/engine/src/slack-write.ts
+  s_8300938c82659e::t_8d15d68846318f 425
+packages/engine/src/subagent-file.test.ts
+  s_8300938c82659e::t_45a3a0f128dd02 1-89
+packages/engine/src/subagent-file.ts
+  s_8300938c82659e::t_fc2fc826115883 1-103
+packages/engine/src/testing/temporary-control-store.ts
+  s_8300938c82659e::t_0a51bd3bd5a98e 1-15
+packages/engine/src/workflow-action-entry.ts
+  s_8300938c82659e::t_2a5563ee2faa59 9,115-124
+packages/engine/src/workflow-action-plan.test.ts
+  s_8300938c82659e::t_a9a35e913f02c4 3,6,14,39-43,45,56-60,423-478,574,603,607,904-947,1098,1112-1138,1140-1159
+packages/engine/src/workflow-action-plan.ts
+  s_8300938c82659e::t_5d7aa50bb8749b 11,391-392,504
+packages/engine/src/workflow-actions-cogwork.ts
+  s_8300938c82659e::t_f6d5274ed61dcd 35
+packages/engine/src/workflow-actions-issue.ts
+  s_8300938c82659e::t_08ac65269daf2d 7,24,75-76,78-79,82,109,145,214-215,217,220,222,229-230,243,249
+packages/engine/src/workflow-actions-source-control.ts
+  s_8300938c82659e::t_f970991829fb20 9,27,70-71,76,92,144,375-377,380,383,385,387-388,390-391,407
+packages/engine/src/workflow-artifact-store.test.ts
+  s_8300938c82659e::t_c6ca05d58df87b 1-75
+packages/engine/src/workflow-artifact-store.ts
+  s_8300938c82659e::t_e2c2a4febc863b 35-40,69-71,73-74,131-132
+packages/engine/src/workflow-run.test.ts
+  s_04ed4cb35b60f9::t_57cc62418e7fed 5,88,192,208,240,246-303,611,649,670,716-719,890,1739,1755,2609,2884-3061
+packages/engine/src/workflow-run.ts
+  s_8300938c82659e::t_1344bfbd733c60 25,28,56,64,225-235,344-387,437-452,455-456,463-474,478-481,492,495-508,510,513,517,521-522,524,552-558,577,591,635,670,673-678,716-720,747,752,755,763,769,790-791,818-823,847-848,870-871,887,893,896-897,905-919,938
+packages/engine/src/workflow.test.ts
+  s_8300938c82659e::t_906685743d1f4f 78,179,974
+pnpm-lock.yaml
+  s_8300938c82659e::t_a6a238fe3dc553 786-788,10558
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5dc79762524a1fd2340e80b1a91bb60a6dd45732",
+  "prompts": {},
+  "sessions": {
+    "s_04ed4cb35b60f9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f65cfa51-b040-4fe2-a917-5d40795a0aec",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8300938c82659e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c6fd41c1-9ee9-449c-ae22-b5a1bada1635",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
