@@ -1,3 +1,4 @@
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionId } from "./connection";
@@ -17,6 +18,7 @@ export const WorkItemRef = Schema.TaggedUnion({
     team: TrimmedNonEmptyString,
     channel: TrimmedNonEmptyString,
     ts: TrimmedNonEmptyString,
+    threadTs: Schema.optional(TrimmedNonEmptyString),
   },
   SlackConversation: {
     team: TrimmedNonEmptyString,
@@ -50,6 +52,39 @@ const keyProducers = {
 
 export const keyOf = (ref: WorkItemRef) => WorkItemKey.make(keyProducers[ref._tag](ref as never));
 
+const keyParsers = new Map<string, (segments: ReadonlyArray<string>) => unknown>([
+  ["issue", ([workspace, id]) => ({ _tag: "Issue", workspace, id })],
+  ["pull-request", ([workspace, number]) => ({ _tag: "PullRequest", workspace, number: Number(number) })],
+  ["granola-note", ([connection, noteId]) => ({ _tag: "GranolaNote", connection, noteId })],
+  ["slack-message", ([team, channel, ts]) => ({ _tag: "SlackMessage", team, channel, ts })],
+  [
+    "slack-conversation",
+    ([team, channel, threadTs]) => ({ _tag: "SlackConversation", team, channel, threadTs }),
+  ],
+  [
+    "schedule",
+    ([workflow, instant]) => ({ _tag: "ScheduleInstant", workflow, instantMillis: Number(instant) }),
+  ],
+  [
+    "fan-out",
+    ([parent, run, position]) => ({ _tag: "FanOutChild", parent, run, position: Number(position) }),
+  ],
+]);
+
+const decodeKeySegment = Option.liftThrowable(decodeURIComponent);
+const decodeRef = Schema.decodeUnknownOption(WorkItemRef);
+
+export const refOfKey = (key: string) => {
+  const [kind = "", ...encoded] = key.split(":");
+  const parse = keyParsers.get(kind);
+  if (parse === undefined) return null;
+  return Option.all(encoded.map(decodeKeySegment)).pipe(
+    Option.flatMap((segments) => decodeRef(parse(segments))),
+    Option.filter((ref) => keyOf(ref) === key),
+    Option.getOrNull,
+  );
+};
+
 export const OperationKey = Schema.Struct({
   workflow: TrimmedNonEmptyString,
   operation: TrimmedNonEmptyString,
@@ -58,8 +93,6 @@ export type OperationKey = typeof OperationKey.Type;
 
 export const AttemptReason = TrimmedNonEmptyString.check(Schema.isMaxLength(800));
 export type AttemptReason = typeof AttemptReason.Type;
-
-export const codingOperation = (operation: string) => ({ workflow: "coding", operation });
 
 export const Lineage = Schema.Struct({
   root: LineageId,
@@ -70,7 +103,8 @@ export type Lineage = typeof Lineage.Type;
 
 export const Cause = Schema.TaggedUnion({
   Person: {},
-  Cogwork: { origin: WorkItemKey },
+  Cogwork: { origin: WorkItemKey, lineage: Lineage },
+  Clock: {},
   Unknown: {},
 });
 export type Cause = typeof Cause.Type;
@@ -110,6 +144,7 @@ export const ParkReason = Schema.TaggedUnion({
   MissingOperation: {},
   PlanRejected: { reason: TrimmedNonEmptyString, entry: Schema.optional(TrimmedNonEmptyString) },
   WriteFailed: { step: TrimmedNonEmptyString, error: TrimmedNonEmptyString },
+  DraftOutcomeUnknown: { step: TrimmedNonEmptyString },
   NoWorkspaceRecognized: { plan: TrimmedNonEmptyString },
   AwaitingApproval: {
     plan: TrimmedNonEmptyString,

@@ -12,6 +12,7 @@ import {
   validateWorkflow,
   validateWorkflowInput,
   type WorkflowCatalog,
+  WorkflowCatalogKey,
   WorkflowCatalog as WorkflowCatalogSchema,
   type WorkflowDiagnosticCode,
   type WorkflowDocument,
@@ -28,7 +29,10 @@ const decodeMachine = Schema.decodeUnknownSync(MachineReadiness);
 const decodeHarness = Schema.decodeUnknownSync(HarnessName);
 const decodeNeed = Schema.decodeUnknownSync(NeedIdentity);
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
+const decodeCatalogKey = Schema.decodeUnknownSync(WorkflowCatalogKey);
 const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
+const jsonMember = (value: unknown, key: string) =>
+  typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
 const cogworkWorkspace = decodeWorkspaceId("cogwork");
 
 const baseDocument = decodeDocument({
@@ -87,6 +91,7 @@ const baseCatalog = decodeCatalog({
       itemKind: "issue",
       actsOn: [],
       requiresWorkspace: true,
+      workspaceSource: null,
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],
@@ -102,6 +107,7 @@ const baseCatalog = decodeCatalog({
       itemKind: null,
       actsOn: ["issue"],
       requiresWorkspace: true,
+      workspaceSource: "item-else-agent",
       permissionProfile: "full",
       agentInputs: ["comment"],
       emits: [],
@@ -131,6 +137,36 @@ if (!transition) throw new Error("missing base Transition");
 
 const documentWith = (change: Partial<WorkflowDocument>) => decodeDocument({ ...baseDocument, ...change });
 const catalogWith = (change: Partial<WorkflowCatalog>) => decodeCatalog({ ...baseCatalog, ...change });
+
+const filterEntry = (system: string, itemKind: string) => ({
+  key: `${system}.${itemKind}-not-blocked`,
+  name: "Not blocked",
+  kind: "filter",
+  system,
+  connection: system,
+  requires: [],
+  parameters: [],
+  itemKind,
+  actsOn: [],
+  requiresWorkspace: true,
+  workspaceSource: null,
+  permissionProfile: "read-only",
+  agentInputs: [],
+  emits: [],
+});
+const filterCatalog = decodeCatalog({
+  ...baseCatalog,
+  entries: [
+    ...baseCatalog.entries,
+    filterEntry("github", "issue"),
+    filterEntry("linear", "issue"),
+    filterEntry("github", "pull-request"),
+  ],
+});
+const filteredDocument = (entry: string) =>
+  documentWith({
+    triggers: [{ ...baseDocument.triggers[0], filters: [{ entry: decodeCatalogKey(entry) }] }],
+  });
 const machineWith = (change: Partial<typeof baseMachine>) => decodeMachine({ ...baseMachine, ...change });
 const replaceOperation = (change: Partial<(typeof baseDocument.operations)[number]>) =>
   documentWith({ operations: [{ ...operation, ...change }] });
@@ -357,6 +393,10 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
     },
   },
   {
+    code: "filter-not-applicable",
+    produce: () => codesOf(filteredDocument("linear.issue-not-blocked"), filterCatalog),
+  },
+  {
     code: "hand-off-and-trigger",
     produce: () => {
       const next = decodeDocument({ ...baseDocument, operations: [operation, { ...operation, id: "next" }] });
@@ -439,6 +479,22 @@ describe("Workflow validator", () => {
     assert.isAbove(adviseReadiness(baseDocument, baseCatalog, machine).length, 0);
   });
 
+  it("does not advise on a live value when the catalog lists no values for its parameter", () => {
+    const entries = decodeCatalog({
+      ...baseCatalog,
+      entries: baseCatalog.entries.map((entry) =>
+        entry.kind === "trigger"
+          ? { ...entry, parameters: [{ id: "label", required: true, source: "live", values: [] }] }
+          : entry,
+      ),
+    }).entries;
+    const document = documentWith({
+      triggers: [{ ...baseDocument.triggers[0], parameters: [{ id: "label", value: "needs-triage" }] }],
+    });
+
+    assert.notInclude(readinessCodesOf(document, catalogWith({ entries })), "option-not-listed");
+  });
+
   it("reports how many selected Workspaces bind a Trigger app", () => {
     const second = decodeWorkspaceId("second");
     const document = documentWith({
@@ -480,6 +536,19 @@ describe("Workflow validator", () => {
     documents.forEach((document) => {
       assert.include(codesOf(document), "duplicate-id");
     });
+  });
+
+  it("accepts a filter from the Trigger's app and item kind", () => {
+    assert.isEmpty(codesOf(filteredDocument("github.issue-not-blocked"), filterCatalog));
+  });
+
+  it.each([
+    { case: "another app", entry: "linear.issue-not-blocked", code: "filter-not-applicable" },
+    { case: "another item kind", entry: "github.pull-request-not-blocked", code: "filter-not-applicable" },
+    { case: "no catalog entry", entry: "github.issue-missing", code: "unknown-catalog-entry" },
+    { case: "a Trigger entry", entry: "github.issue-opened", code: "unknown-catalog-entry" },
+  ])("reports a Trigger filter from $case", ({ entry, code }) => {
+    assert.deepStrictEqual(codesOf(filteredDocument(entry), filterCatalog), [code]);
   });
 
   it("produces every section 5 code", () => {
@@ -594,6 +663,29 @@ describe("Workflow edits", () => {
     });
   });
 
+  it("adds a Trigger filter once, removes it, and clears filters when the entry changes", () => {
+    const trigger = decodeNodeId("issue-opened");
+    const filter = { entry: decodeCatalogKey("github.issue-not-blocked") };
+    const added = applyWorkflowEdits(baseDocument, [
+      { _tag: "AddTriggerFilter", trigger, filter },
+      { _tag: "AddTriggerFilter", trigger, filter },
+    ]);
+    assert.strictEqual(added._tag, "Ok");
+    if (added._tag !== "Ok") return;
+    const filtersAfter = (edit: WorkflowEditBatch[number]) => {
+      const result = applyWorkflowEdits(added.value, [edit]);
+      return result._tag === "Ok" ? result.value.triggers[0]?.filters : null;
+    };
+
+    assert.deepStrictEqual(baseDocument.triggers[0]?.filters, []);
+    assert.deepStrictEqual(added.value.triggers[0]?.filters, [filter]);
+    assert.deepStrictEqual(filtersAfter({ _tag: "RemoveTriggerFilter", trigger, entry: filter.entry }), []);
+    assert.deepStrictEqual(
+      filtersAfter({ _tag: "SetTriggerEntry", trigger, entry: decodeCatalogKey("github.issue-closed") }),
+      [],
+    );
+  });
+
   it("decodes documents as data", () => {
     assert.strictEqual(decodeWorkflowDocument(baseDocument)._tag, "Ok");
     assert.strictEqual(decodeWorkflowDocument({ ...baseDocument, extra: true })._tag, "Refused");
@@ -602,9 +694,15 @@ describe("Workflow edits", () => {
 
 describe("Workflow Operation result", () => {
   const schema = workflowOperationResultSchema(operation, baseCatalog, [cogworkWorkspace]);
+  const element = {
+    summary: "Ready to continue",
+    answers: { decision: decodeNodeId("yes") },
+    inputs: { comment: "Proceed." },
+    workspace: cogworkWorkspace,
+  };
 
   it("decodes the flat result and refuses missing answers", () => {
-    const decoded = Schema.decodeSync(schema)({
+    const decoded = Schema.decodeUnknownSync(schema)({
       summary: "Ready to continue",
       stuck: false,
       answers: { decision: decodeNodeId("yes") },
@@ -612,9 +710,10 @@ describe("Workflow Operation result", () => {
       workspace: cogworkWorkspace,
     });
 
+    if (!("answers" in decoded)) return assert.fail("expected a once result");
     assert.strictEqual(decoded.answers.decision, "yes");
     assert.throws(() =>
-      Schema.decodeSync(schema)({
+      Schema.decodeUnknownSync(schema)({
         summary: "Ready to continue",
         stuck: false,
         answers: {},
@@ -624,13 +723,122 @@ describe("Workflow Operation result", () => {
     );
   });
 
-  it("builds one strict object with required fields", () => {
-    const json = workflowOperationResultJsonSchema(operation, baseCatalog, [cogworkWorkspace])[
+  it("builds one strict object that requires a Workspace only when the agent chooses it", () => {
+    const agentWorkspaceEntry = {
+      ...baseCatalog.entries[1],
+      key: decodeCatalogKey("github.create-issue"),
+      workspaceSource: "agent" as const,
+      agentInputs: [],
+    };
+    const mixedCatalog = catalogWith({ entries: [...baseCatalog.entries, agentWorkspaceEntry] });
+    const mixedOperation = {
+      ...operation,
+      transitions: [
+        {
+          ...transition,
+          actions: [...transition.actions, { entry: agentWorkspaceEntry.key, parameters: [] }],
+        },
+      ],
+    };
+    const resultFields = ["summary", "stuck", "answers", "inputs"];
+    const cases = [
+      { operation, catalog: baseCatalog, itemWorkspace: undefined, required: [...resultFields, "workspace"] },
+      { operation, catalog: baseCatalog, itemWorkspace: cogworkWorkspace, required: resultFields },
+      {
+        operation: mixedOperation,
+        catalog: mixedCatalog,
+        itemWorkspace: cogworkWorkspace,
+        required: [...resultFields, "workspace"],
+      },
+    ];
+
+    cases.forEach((row) => {
+      const json = workflowOperationResultJsonSchema(
+        row.operation,
+        row.catalog,
+        [cogworkWorkspace],
+        row.itemWorkspace,
+      )["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+      assert.strictEqual(json.type, "object");
+      assert.deepStrictEqual(json.required, row.required);
+      assert.strictEqual(json.additionalProperties, false);
+    });
+  });
+
+  it("builds review comments as one required list shape", () => {
+    const reviewEntry = {
+      ...baseCatalog.entries[1],
+      key: decodeCatalogKey("github.post-review"),
+      agentInputs: ["pull_request", "review_body", "review_comments"],
+    };
+    const reviewCatalog = { ...baseCatalog, entries: [reviewEntry] };
+    const reviewOperation = {
+      ...operation,
+      transitions: [
+        {
+          ...transition,
+          actions: [{ entry: reviewEntry.key, parameters: [] }],
+        },
+      ],
+    };
+    const json = workflowOperationResultJsonSchema(reviewOperation, reviewCatalog)[
       "~standard"
     ].jsonSchema.input({ target: "draft-2020-12" });
+    const inputs = jsonMember(jsonMember(json, "properties"), "inputs");
 
-    assert.strictEqual(json.type, "object");
-    assert.deepStrictEqual(json.required, ["summary", "stuck", "answers", "inputs", "workspace"]);
+    assert.isObject(inputs);
+    if (typeof inputs !== "object" || inputs === null || !("properties" in inputs)) {
+      return assert.fail("expected input properties");
+    }
+    assert.deepStrictEqual(jsonMember(inputs, "required"), [
+      "pull_request",
+      "review_body",
+      "review_comments",
+    ]);
+    assert.deepStrictEqual(jsonMember(jsonMember(inputs, "properties"), "review_comments"), {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          line: { type: "integer", exclusiveMinimum: 0 },
+          body: { type: "string" },
+        },
+        required: ["path", "line", "body"],
+        additionalProperties: false,
+      },
+    });
+  });
+
+  it("decodes at most 50 for-each elements", () => {
+    const forEachSchema = workflowOperationResultSchema(
+      { ...operation, forEach: "commitment" },
+      baseCatalog,
+      [cogworkWorkspace],
+    );
+    const decoded = Schema.decodeSync(forEachSchema)({
+      summary: "Found commitments",
+      stuck: false,
+      elements: Array.from({ length: 50 }, () => element),
+    });
+
+    if (!("elements" in decoded)) return assert.fail("expected a for-each result");
+    assert.lengthOf(decoded.elements, 50);
+    assert.throws(() =>
+      Schema.decodeSync(forEachSchema)({
+        summary: "Found too many commitments",
+        stuck: false,
+        elements: Array.from({ length: 51 }, () => element),
+      }),
+    );
+  });
+
+  it("builds a strict for-each envelope", () => {
+    const json = workflowOperationResultJsonSchema({ ...operation, forEach: "commitment" }, baseCatalog, [
+      cogworkWorkspace,
+    ])["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+
+    assert.deepStrictEqual(json.required, ["summary", "stuck", "elements"]);
     assert.strictEqual(json.additionalProperties, false);
   });
 

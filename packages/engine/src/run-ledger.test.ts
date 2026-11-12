@@ -93,7 +93,6 @@ const runPlan = (id: string) =>
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,
@@ -103,12 +102,10 @@ const runPlan = (id: string) =>
       reference: { workItem, url: "https://example.test/issues/7" },
       prose: { body: "", comments: [] },
       facts: {
-        roles: ["needs-triage"],
         assignees: [],
         openBlockers: 0,
         claim: null,
         priority: "medium",
-        pr: null,
       },
       observation: { generation: 3, observedAtMillis: 1000 },
     },
@@ -127,7 +124,7 @@ const record = (id: string, startedAtMillis: number, over: Partial<RunRecord> = 
   id: runId(id),
   workspace,
   workItem,
-  stage: "triage",
+  operation: "triage",
   harness,
   branch: null,
   session: null,
@@ -192,7 +189,7 @@ describe("accepted Run Plan", () => {
         yield* recordLoggedTransitions(ledger, id).pipe(Effect.annotateLogs({ runId: id }));
         yield* ledger.insertRun(record("batch-first", 2001));
         yield* ledger.insertRun(record("batch-second", 2002));
-        yield* ledger.interruptRunning(0, 3000).pipe(Effect.annotateLogs({ stage: "recovery" }));
+        yield* ledger.interruptRunning(0, 3000).pipe(Effect.annotateLogs({ phase: "recovery" }));
 
         assert.deepStrictEqual(yield* logs.entries, [
           {
@@ -208,11 +205,11 @@ describe("accepted Run Plan", () => {
             message: ["settled Run", { status: "succeeded" }],
           },
           {
-            annotations: { stage: "recovery" },
+            annotations: { phase: "recovery" },
             message: ["settled Run", { status: "interrupted" }],
           },
           {
-            annotations: { stage: "recovery" },
+            annotations: { phase: "recovery" },
             message: ["settled Run", { status: "interrupted" }],
           },
         ]);

@@ -8,6 +8,7 @@ import {
   type Session,
   SessionId,
   sessionHandle,
+  WorkflowId,
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
@@ -64,7 +65,7 @@ const runRow = (run: RunRecord) =>
     run.id,
     run.workspace,
     run.workItem,
-    run.stage,
+    run.operation,
     run.harness,
     run.branch,
     run.session,
@@ -84,7 +85,7 @@ const insertRunsBulk = (storePath: string, records: ReadonlyArray<RunRecord>) =>
         sqlite.exec("BEGIN");
         const insert = sqlite.prepare(`
           INSERT INTO runs (
-            id, workspace, work_item, stage, harness, branch, session,
+            id, workspace, work_item, operation, harness, branch, session,
             input_tokens, output_tokens, total_tokens, status, started_at, ended_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
@@ -106,6 +107,7 @@ const resolveItem = Schema.decodeSync(WorkItemId)("#202");
 const bareResolveItem = Schema.decodeSync(WorkItemId)("202");
 const resolveOther = Schema.decodeSync(WorkItemId)("#303");
 const missingResolveItem = Schema.decodeSync(WorkItemId)("#404");
+const triageWorkflow = Schema.decodeSync(WorkflowId)("triage-workflow");
 const session = Schema.decodeSync(SessionId)("sess-abc");
 const replacementSession = Schema.decodeSync(SessionId)("sess-replaced");
 const midSession = Schema.decodeSync(SessionId)("sess-mid");
@@ -128,7 +130,6 @@ const runPlan = (id: string, message = "Triage #7") =>
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,
@@ -138,12 +139,10 @@ const runPlan = (id: string, message = "Triage #7") =>
       reference: { workItem, url: "https://example.test/issues/7" },
       prose: { body: "", comments: [] },
       facts: {
-        roles: ["needs-triage"],
         assignees: [],
         openBlockers: 0,
         claim: null,
         priority: "medium",
-        pr: null,
       },
       observation: { generation: 3, observedAtMillis: 1000 },
     },
@@ -162,7 +161,7 @@ const record = (id: string, startedAtMillis: number, overrides: Partial<RunRecor
   id: runId(id),
   workspace,
   workItem,
-  stage: "triage",
+  operation: "triage",
   harness,
   branch: null,
   session: null,
@@ -639,6 +638,23 @@ describe("sqlite RunLedger", () => {
         const summary = summaries.find((row) => row.id === id);
         assert.isDefined(summary);
         assert.deepStrictEqual(summary?.usage, { inputTokens: 5 });
+      }),
+    );
+
+    it.effect("round-trips a Run's subject and Workflow and keeps them absent when none was given", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const subject = { title: "Fix login", url: "https://github.com/acme/web/issues/7" };
+        yield* ledger.insertRun({ ...record("subject-titled", 9200), subject, workflow: triageWorkflow });
+        yield* ledger.insertRun(record("subject-absent", 9300));
+
+        const summaries = yield* ledger.listRuns(10);
+        const titled = summaries.find((row) => row.id === runId("subject-titled"));
+        const absent = summaries.find((row) => row.id === runId("subject-absent")) ?? {};
+        assert.deepStrictEqual(titled?.subject, subject);
+        assert.strictEqual(titled?.workflow, triageWorkflow);
+        assert.isFalse("subject" in absent);
+        assert.isFalse("workflow" in absent);
       }),
     );
 

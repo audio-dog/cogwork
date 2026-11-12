@@ -1,11 +1,4 @@
-import {
-  type Board,
-  McpSkill,
-  PollState,
-  type WorkspaceId,
-  WorkspaceState,
-  WorkspaceUpdate,
-} from "@cogwork/contracts";
+import { type Board, McpSkill, type WorkspaceId, WorkspaceState, WorkspaceUpdate } from "@cogwork/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
@@ -18,11 +11,6 @@ export interface WorkspaceRecordDraft {
   readonly organization: string;
   readonly assigneeAllowlist: string;
   readonly trackerBotAllowlist: string;
-  readonly needsTriageLabel: string;
-  readonly readyForAgentLabel: string;
-  readonly needsInfoLabel: string;
-  readonly readyForHumanLabel: string;
-  readonly wontfixLabel: string;
   readonly priorityFieldId: string;
   readonly linearHistory: boolean;
   readonly sourceControlType: "none" | "github";
@@ -47,11 +35,6 @@ export const emptyDraft: WorkspaceRecordDraft = {
   organization: "",
   assigneeAllowlist: "",
   trackerBotAllowlist: "",
-  needsTriageLabel: "",
-  readyForAgentLabel: "",
-  needsInfoLabel: "",
-  readyForHumanLabel: "",
-  wontfixLabel: "",
   priorityFieldId: "",
   linearHistory: false,
   sourceControlType: "none",
@@ -90,11 +73,6 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     organization: tracker.organization ?? "",
     assigneeAllowlist: joined(tracker.assigneeAllowlist),
     trackerBotAllowlist: joined(tracker.botAllowlist),
-    needsTriageLabel: tracker.roleLabels?.["needs-triage"] ?? "",
-    readyForAgentLabel: tracker.roleLabels?.["ready-for-agent"] ?? "",
-    needsInfoLabel: tracker.roleLabels?.["needs-info"] ?? "",
-    readyForHumanLabel: tracker.roleLabels?.["ready-for-human"] ?? "",
-    wontfixLabel: tracker.roleLabels?.wontfix ?? "",
     priorityFieldId: tracker.priority?.field.toString() ?? "",
     linearHistory: record.linearHistory,
     sourceControlType: sourceControl?.type === "github" ? "github" : "none",
@@ -162,13 +140,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
   if (!connectionsAreBound(draft)) return null;
   const mcpSkills = Option.getOrUndefined(decodeMcpSkills(draft.mcpSkills.trim() || "[]"));
   if (!mcpSkills) return null;
-  const roleLabels = {
-    "needs-triage": optional(draft.needsTriageLabel),
-    "ready-for-agent": optional(draft.readyForAgentLabel),
-    "needs-info": optional(draft.needsInfoLabel),
-    "ready-for-human": optional(draft.readyForHumanLabel),
-    wontfix: optional(draft.wontfixLabel),
-  };
   const worktrees = {
     root: optional(draft.worktreeRoot),
     remote: optional(draft.worktreeRemote),
@@ -188,7 +159,6 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
         organization: optional(draft.organization),
         assigneeAllowlist: list(draft.assigneeAllowlist),
         botAllowlist: list(draft.trackerBotAllowlist),
-        roleLabels: Object.values(roleLabels).some(Boolean) ? roleLabels : undefined,
         priority: priorityFrom(draft),
       },
       sourceControl:
@@ -243,7 +213,7 @@ export const workspaceLabelById = (board: Board, workspace: WorkspaceId) => {
 };
 
 export interface WorkspaceHealth {
-  readonly tone: "ok" | "pending" | "paused" | "failed";
+  readonly tone: "ok" | "failed";
   readonly label: string;
   readonly detail: string;
 }
@@ -257,26 +227,5 @@ export const workspaceHealth = (workspace: WorkspaceState, dangling: boolean): W
       label: "Connection removed",
       detail: "Establish it again on Connections to start polling.",
     };
-  if (PollState.guards.paused(workspace.poll))
-    return {
-      tone: "paused",
-      label: `Polling paused · ${workspace.poll.reason}`,
-      detail: workspace.poll.message,
-    };
-  if (PollState.guards.pending(workspace.poll))
-    return {
-      tone: "pending",
-      label: "Waiting for the first poll",
-      detail: "The reconcile worker has not answered yet.",
-    };
-  const blocked = workspace.availability.filter((entry) => !entry.available);
-  if (blocked.length > 0)
-    return {
-      tone: "pending",
-      label: `${blocked.length} operation${blocked.length === 1 ? "" : "s"} cannot run`,
-      detail: blocked
-        .map((entry) => `${entry.operation}: ${entry.causes.map((cause) => cause.message).join(", ")}`)
-        .join(" · "),
-    };
-  return { tone: "ok", label: "Polling", detail: "The reconcile worker is reading this workspace." };
+  return { tone: "ok", label: "Registered", detail: "Trigger sources read this workspace." };
 };

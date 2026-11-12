@@ -7,13 +7,13 @@ import {
   type RunPlan,
   type RunPlanMember,
   type RunPlanMiddlewareName,
+  type RunPlanPolicyProfile,
   type SessionId,
   type SessionKind,
-  type StageResultJsonSchema,
   selectedHarnessCatalogModel,
-  stageResultJsonSchema,
   unsupportedHarnessModelOption,
 } from "@cogwork/contracts";
+import type { AnyTool } from "@tanstack/ai";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -29,20 +29,17 @@ import type * as HttpClient from "effect/unstable/http/HttpClient";
 import type { ContextAssembler } from "./context-assembler";
 import type { CredentialStore } from "./credential-store";
 import type { ResolvedMcpSkill } from "./mcp-skill";
-import type { OperationPolicyProfile } from "./operation-policy";
 import type { SessionStore } from "./session-store";
 
 export type { AgUiEvent } from "@cogwork/contracts";
 export type { ResolvedMcpSkill } from "./mcp-skill";
-export type { OperationPolicyProfile } from "./operation-policy";
-
-export const stageResultSchema = stageResultJsonSchema;
-export type StageResultSchema = StageResultJsonSchema;
+export type OperationPolicyProfile = RunPlanPolicyProfile;
 
 export interface HarnessRequest {
   readonly plan: RunPlan;
   readonly session: SessionId | null;
   readonly mcpCredentials: ReadonlyMap<string, Redacted.Redacted<string>>;
+  readonly engineTools?: ReadonlyArray<AnyTool>;
 }
 
 export const resolvedMcpSkills = (request: HarnessRequest): ReadonlyArray<ResolvedMcpSkill> =>

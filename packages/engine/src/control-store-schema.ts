@@ -1,4 +1,9 @@
-import { maxSchedulerLimit, type WorkflowActionPlan, type WorkflowDocument } from "@cogwork/contracts";
+import {
+  maxSchedulerLimit,
+  type WorkflowActionArtifact,
+  type WorkflowActionPlan,
+  type WorkflowDocument,
+} from "@cogwork/contracts";
 import { desc, sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -70,22 +75,12 @@ export const operationSettings = sqliteTable(
   "operation_settings",
   {
     setting: text("setting").notNull(),
-    level: text("level").notNull(),
-    workflow: text("workflow").notNull(),
-    operation: text("operation").notNull(),
     scope: text("scope").notNull(),
     workspace: text("workspace").notNull(),
     value: text("value").notNull(),
   },
   (table) => [
-    // Storage tags deliberately duplicate SettingLevel and OperationSettingScope; update both together.
-    primaryKey({
-      columns: [table.setting, table.level, table.workflow, table.operation, table.scope, table.workspace],
-    }),
-    check(
-      "operation_settings_level",
-      sql`(${table.level} = 'default' AND ${table.workflow} = '' AND ${table.operation} = '') OR (${table.level} = 'workflow' AND ${table.workflow} <> '' AND ${table.operation} = '') OR (${table.level} = 'operation' AND ${table.workflow} <> '' AND ${table.operation} <> '')`,
-    ),
+    primaryKey({ columns: [table.setting, table.scope, table.workspace] }),
     check(
       "operation_settings_scope",
       sql`(${table.scope} IN ('settings-profile', 'runtime-host') AND ${table.workspace} = '') OR (${table.scope} = 'private-workspace-overlay' AND ${table.workspace} <> '')`,
@@ -260,6 +255,24 @@ export const workflowActionPlans = sqliteTable(
   ],
 );
 
+export const workflowActionArtifacts = sqliteTable(
+  "workflow_action_artifacts",
+  {
+    root: text("root").notNull(),
+    writeKey: text("write_key").primaryKey(),
+    workspace: text("workspace").notNull(),
+    issue: text("issue").notNull(),
+    artifact: text("artifact", { mode: "json" }).$type<WorkflowActionArtifact>().notNull(),
+  },
+  (table) => [
+    index("workflow_action_artifacts_lineage").on(table.root),
+    uniqueIndex("workflow_action_artifacts_issue").on(table.workspace, table.issue),
+    check("workflow_action_artifacts_root", sql`length(trim(${table.root})) > 0`),
+    check("workflow_action_artifacts_write_key", sql`length(trim(${table.writeKey})) > 0`),
+    check("workflow_action_artifacts_json", sql`json_valid(${table.artifact})`),
+  ],
+);
+
 export const coordinationAttempts = sqliteTable(
   "coordination_attempts",
   {
@@ -331,7 +344,10 @@ export const runs = sqliteTable(
     id: text("id").primaryKey(),
     workspace: text("workspace").notNull(),
     workItem: text("work_item").notNull(),
-    stage: text("stage").notNull(),
+    subjectTitle: text("subject_title"),
+    subjectUrl: text("subject_url"),
+    workflow: text("workflow"),
+    operation: text("operation").notNull(),
     harness: text("harness").notNull(),
     branch: text("branch"),
     session: text("session"),

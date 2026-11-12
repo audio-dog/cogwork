@@ -1,8 +1,8 @@
-import { WorkflowCatalogKey, type WorkflowOption, WorkItemId, type WorkItemRef } from "@cogwork/contracts";
+import { WorkflowCatalogKey, type WorkItemRef } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type { RegistryState } from "../projector";
+import type { RegisteredWorkspace, RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
@@ -13,7 +13,9 @@ import {
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
   providerPollingStream,
+  providerSubject,
   triggerEntry,
+  workspaceOptionReader,
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
@@ -38,6 +40,7 @@ export const githubPullRequestEntries = [
     "Pull request checks failed",
     "github",
     "pull-request",
+    "condition",
     [],
   ),
   triggerEntry(
@@ -45,6 +48,7 @@ export const githubPullRequestEntries = [
     "Pull request conflicts with its base",
     "github",
     "pull-request",
+    "condition",
     [],
   ),
   triggerEntry(
@@ -52,18 +56,22 @@ export const githubPullRequestEntries = [
     "New review comment from a person",
     "github",
     "pull-request",
+    "occurrence",
     [catchUpParameter],
   ),
-  triggerEntry("github.new-finding-from-bot", "New finding from a bot", "github", "pull-request", [
-    liveParameter("bot"),
-    catchUpParameter,
-  ]),
+  triggerEntry(
+    "github.new-finding-from-bot",
+    "New finding from a bot",
+    "github",
+    "pull-request",
+    "occurrence",
+    [liveParameter("bot"), catchUpParameter],
+  ),
 ];
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const conditionEntries = new Set([checksFailedKey, conflictsKey]);
-const workItemId = Schema.decodeSync(WorkItemId);
 
 interface Feedback {
   readonly id: string;
@@ -121,23 +129,11 @@ const feedbackOf = (
   ),
 ];
 
-const linkedItemByTracker: Readonly<Record<string, (pull: RawPull) => WorkItemId | null>> = {
-  github: (pull) => {
-    const closing = pull.closingIssueNumbers.at(0);
-    return closing === undefined ? null : workItemId(`#${closing}`);
-  },
-  linear: (pull) => {
-    const linear = /^([A-Z][A-Z0-9]+-\d+)(?:-|$)/.exec(pull.headRef)?.[1];
-    return linear ? workItemId(linear) : null;
-  },
-};
-
-const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull): WorkItemRef => {
-  const linked = linkedItemByTracker[workspace.config.issueTracker.type]?.(pull) ?? null;
-  return linked
-    ? { _tag: "Issue", workspace: workspace.config.name, id: linked }
-    : { _tag: "PullRequest", workspace: workspace.config.name, number: pull.number };
-};
+const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull): WorkItemRef => ({
+  _tag: "PullRequest",
+  workspace: workspace.config.name,
+  number: pull.number,
+});
 
 const proseOf = (pull: RawPull, feedback: ReadonlyArray<Feedback>) => ({
   body: `Pull request #${pull.number}`,
@@ -167,6 +163,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   const feedback = feedbackOf(issueComments, reviewComments, reviews);
   const ref = itemRef(workspace, pull);
   const prose = proseOf(pull, feedback);
+  const subject = providerSubject(pull.title, pull.url);
   const failed = checks
     .filter(({ conclusion }) => conclusion !== null && failingConclusions.has(conclusion))
     .map(({ name, conclusion }) => `${name}:${conclusion}`)
@@ -181,6 +178,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             atMillis: pull.updatedAtMillis,
             entry: checksFailedKey,
             workspace: workspace.config.name,
+            subject,
             workContext: prose,
           },
         ]
@@ -194,6 +192,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             atMillis: pull.updatedAtMillis,
             entry: conflictsKey,
             workspace: workspace.config.name,
+            subject,
             workContext: prose,
           },
         ]
@@ -221,6 +220,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
               entry: reviewCommentKey,
               workspace: workspace.config.name,
               target: { workflow: subscription.workflow, trigger: subscription.trigger },
+              subject,
               workContext: prose,
             }) satisfies TriggerEvent,
         );
@@ -241,6 +241,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             workspace: workspace.config.name,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "bot", value: bot ?? "" }],
+            subject,
             workContext: prose,
           }) satisfies TriggerEvent,
       );
@@ -301,6 +302,11 @@ const read = Effect.fn("GitHubPullRequestTriggerSource.read")(function* (
   };
 });
 
+const configuredBots = ({ config }: RegisteredWorkspace) =>
+  config.sourceControl?.botAllowlist ??
+  (config.issueTracker.type === "github" ? config.issueTracker.botAllowlist : undefined) ??
+  [];
+
 export const makeGitHubPullRequestTriggerSource = (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
@@ -308,20 +314,16 @@ export const makeGitHubPullRequestTriggerSource = (
   id: "github",
   entries: githubPullRequestEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: (_entry, parameter, workspace) =>
-    Effect.map(registry, (state) => {
-      if (parameter !== "bot" || workspace === undefined) return [];
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
-      const configured =
-        registered?.config.sourceControl?.botAllowlist ??
-        (registered?.config.issueTracker.type === "github"
-          ? registered.config.issueTracker.botAllowlist
-          : undefined) ??
-        [];
-      return configured.map(
-        (bot) => ({ value: bot, name: bot, listedIn: [workspace] }) satisfies WorkflowOption,
-      );
-    }),
+  options: [
+    {
+      system: "github",
+      readers: {
+        bot: workspaceOptionReader("github", registry, (workspace) =>
+          Effect.succeed(configuredBots(workspace)),
+        ),
+      },
+    },
+  ],
   observe: (subscriptions) =>
     providerPollingStream("github", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
 });

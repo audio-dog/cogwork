@@ -43,6 +43,7 @@ type FailedWorkspaceWithId = FailedWorkspace & { readonly id: WorkspaceId };
 
 import { useChromeStore } from "../store/chrome";
 import { HistoryNav } from "./history-nav";
+import { RegisterWorkspaceDialog } from "./register-workspace-dialog";
 import { useTheme } from "./theme-provider";
 
 interface View {
@@ -116,6 +117,7 @@ function WorkspaceFilter() {
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+      <RegisterWorkspaceDialog />
       <SidebarGroupContent>
         <SidebarMenu>
           <SidebarMenuItem>

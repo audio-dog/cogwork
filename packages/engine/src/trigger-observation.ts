@@ -1,11 +1,16 @@
 import {
+  type ControlStoreFailure,
   DaemonEvent,
+  defaultPriority,
   keyOf,
   Lineage,
   LineageId,
   type ParkReason,
+  priorityRank,
   type TriggerSourceHealth,
   type WorkflowCatalog,
+  type WorkflowCatalogKey,
+  type WorkflowDocument,
   type WorkflowRecord,
   type WorkItemId,
   type WorkspaceId,
@@ -24,15 +29,20 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlError from "effect/unstable/sql/SqlError";
-import { matchesScheduledInstant } from "./clock-source";
+import { matchesScheduledInstant, sweepKey } from "./clock-source";
 import { ControlStore } from "./control-store";
 import { Coordination } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker } from "./issue-tracker";
+import { providerSubject } from "./provider-trigger-source";
 import { WorkspaceRegistry } from "./registry";
 import {
-  type SourceFailure,
+  ownsEntry,
+  Recheck,
+  SourceFailure,
+  type SweepCandidate,
   TriggerEvent,
+  type TriggerReadPort,
   type TriggerSource,
   TriggerSources,
   TriggerSubscription,
@@ -73,11 +83,17 @@ interface StoredAdmissionCount {
 
 export interface TriggerObservationStoreService {
   readonly admissions: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
+  readonly processed: Effect.Effect<ReadonlyArray<TriggerAdmission>, TriggerObservationStoreError>;
   readonly putAll: (
     admissions: ReadonlyArray<TriggerAdmission>,
   ) => Effect.Effect<void, TriggerObservationStoreError>;
   readonly complete: <E, R>(
     admission: TriggerAdmission,
+    closeRevision: Effect.Effect<void, E, R>,
+  ) => Effect.Effect<void, TriggerObservationStoreError | E, R>;
+  readonly fanOut: <E, R>(
+    admission: TriggerAdmission,
+    children: ReadonlyArray<TriggerAdmission>,
     closeRevision: Effect.Effect<void, E, R>,
   ) => Effect.Effect<void, TriggerObservationStoreError | E, R>;
   readonly activate: (
@@ -93,6 +109,7 @@ export class TriggerObservationStore extends Context.Service<
 
 const admissionJson = Schema.fromJsonString(TriggerAdmission);
 const encodeAdmission = Schema.encodeSync(admissionJson);
+const decodeTriggerEvent = Schema.decodeUnknownEffect(TriggerEvent);
 const decodeAdmission = Schema.decodeUnknownEffect(admissionJson);
 const storeError = (error: unknown) => new TriggerObservationStoreError({ message: String(error) });
 const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
@@ -116,13 +133,56 @@ const oldestRevisionAdmissions = (admissions: ReadonlyArray<TriggerAdmission>) =
     return oldest !== undefined && sameRevision(admission, oldest);
   });
 };
+
+interface WaitingAdmission {
+  readonly admission: TriggerAdmission;
+  readonly actedOn: boolean;
+}
+
+const waitingAdmissionOrder = (left: WaitingAdmission, right: WaitingAdmission) =>
+  Number(right.actedOn) - Number(left.actedOn) ||
+  priorityRank.indexOf(left.admission.event.priority ?? defaultPriority) -
+    priorityRank.indexOf(right.admission.event.priority ?? defaultPriority) ||
+  left.admission.event.atMillis - right.admission.event.atMillis;
+
+const revisionAdvancedParks = new Set<ParkReason["_tag"]>([
+  "AwaitingApproval",
+  "MissingOperation",
+  "PlanRejected",
+]);
+
+const sameSubscription = (left: TriggerAdmission, right: TriggerAdmission) =>
+  keyOf(left.event.key) === keyOf(right.event.key) &&
+  left.subscription.workflow === right.subscription.workflow &&
+  left.subscription.trigger === right.subscription.trigger;
 const checkpointOf = (admission: TriggerAdmission) =>
   admission.event.key._tag === "ScheduleInstant"
     ? admission.event.key.instantMillis
     : admission.event.atMillis;
 const assigneeSnapshotTtl = 60_000;
+const trackerSystems = ["github", "linear"] as const;
 const freshAssignees = (snapshot: AssigneeSnapshot | undefined, now: number) =>
   snapshot && now - snapshot.atMillis < assigneeSnapshotTtl ? snapshot.assignees : null;
+
+const trackerSystemsOf = (document: WorkflowDocument | null) =>
+  new Set(
+    document?.operations.flatMap(({ transitions }) =>
+      transitions.flatMap(({ actions }) =>
+        actions.flatMap(({ entry }) => trackerSystems.filter((system) => entry.startsWith(`${system}.`))),
+      ),
+    ) ?? [],
+  );
+
+const subscriptionParameter = (subscription: TriggerSubscription, id: string) =>
+  subscription.parameters.find((parameter) => parameter.id === id)?.value;
+
+const sweepFailure = (error: unknown) =>
+  new SourceFailure({
+    source: "clock",
+    reason: "unavailable",
+    retryAfterMillis: null,
+    message: error instanceof Error ? error.message : String(error),
+  });
 
 const activateSubscriptions = (
   subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -130,6 +190,7 @@ const activateSubscriptions = (
   atMillis: number,
 ) =>
   subscriptions.map((subscription) => {
+    if (subscription.catchUp === null) return subscription;
     const checkpoint = checkpoints.get(subscriptionKey(subscription));
     const since = checkpoint?.active ? checkpoint.checkpointMillis : atMillis;
     return { ...subscription, catchUp: { since } };
@@ -138,8 +199,8 @@ const activateSubscriptions = (
 export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
   const admissions = yield* Ref.make<{
     readonly pending: ReadonlyMap<string, TriggerAdmission>;
-    readonly processed: ReadonlySet<string>;
-  }>({ pending: new Map(), processed: new Set() });
+    readonly processed: ReadonlyMap<string, TriggerAdmission>;
+  }>({ pending: new Map(), processed: new Map() });
   const checkpoints = yield* Ref.make<
     ReadonlyMap<string, { readonly active: boolean; readonly checkpointMillis: number }>
   >(new Map());
@@ -171,10 +232,11 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
       const key = admissionKey(admission);
       const pending = new Map(current.pending);
       pending.delete(key);
-      return { pending, processed: new Set(current.processed).add(key) };
+      return { pending, processed: new Map(current.processed).set(key, admission) };
     });
   return {
     admissions: Effect.map(Ref.get(admissions), (current) => [...current.pending.values()]),
+    processed: Effect.map(Ref.get(admissions), (current) => [...current.processed.values()]),
     putAll: (batch) => completionGate.withPermit(putAll(batch)),
     complete: (admission, closeRevision) =>
       completionGate.withPermit(
@@ -187,6 +249,21 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
             const beforeFinish = hasSibling ? Effect.void : closeRevision;
             return beforeFinish.pipe(Effect.andThen(finish(admission)));
           }),
+        ),
+      ),
+    fanOut: (admission, children, closeRevision) =>
+      completionGate.withPermit(
+        Effect.uninterruptible(
+          Ref.get(admissions).pipe(
+            Effect.flatMap((current) => {
+              const hasSibling = [...current.pending.values()].some(
+                (candidate) =>
+                  admissionKey(candidate) !== admissionKey(admission) && sameRevision(candidate, admission),
+              );
+              const beforeFinish = hasSibling ? Effect.void : closeRevision;
+              return putAll(children).pipe(Effect.andThen(beforeFinish), Effect.andThen(finish(admission)));
+            }),
+          ),
         ),
       ),
     activate: (subscriptions, atMillis) =>
@@ -219,14 +296,11 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const controlStore = yield* ControlStore;
   const completionGate = Semaphore.makeUnsafe(1);
-  const putAll = (admissions: ReadonlyArray<TriggerAdmission>) =>
-    controlStore
-      .withWrite(
-        sql.withTransaction(
-          Effect.forEach(
-            admissions,
-            (admission) =>
-              sql`
+  const putStatements = (admissions: ReadonlyArray<TriggerAdmission>) =>
+    Effect.forEach(
+      admissions,
+      (admission) =>
+        sql`
                 INSERT INTO trigger_admissions (work_item, revision, payload)
                 VALUES (
                   ${keyOf(admission.event.key)},
@@ -236,17 +310,18 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
                 ON CONFLICT (work_item, revision, workflow, trigger)
                 DO UPDATE SET payload = excluded.payload
               `.pipe(
-                Effect.andThen(sql`
+          Effect.andThen(sql`
                   UPDATE trigger_subscription_checkpoints
                   SET checkpoint_millis = MAX(checkpoint_millis, ${checkpointOf(admission)})
                   WHERE workflow = ${admission.subscription.workflow}
                     AND trigger = ${admission.subscription.trigger}
                 `),
-              ),
-            { discard: true },
-          ),
         ),
-      )
+      { discard: true },
+    );
+  const putAll = (admissions: ReadonlyArray<TriggerAdmission>) =>
+    controlStore
+      .withWrite(sql.withTransaction(putStatements(admissions)))
       .pipe(Effect.asVoid, Effect.mapError(storeError));
   const finishStatement = (admission: TriggerAdmission) =>
     sql`
@@ -264,6 +339,12 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
       .pipe(Effect.mapError((error) => (SqlError.isSqlError(error) ? storeError(error) : error)));
   return {
     admissions: sql<StoredAdmission>`SELECT payload FROM trigger_admissions WHERE processed = 0`.pipe(
+      Effect.mapError(storeError),
+      Effect.flatMap((rows) =>
+        Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
+      ),
+    ),
+    processed: sql<StoredAdmission>`SELECT payload FROM trigger_admissions WHERE processed = 1`.pipe(
       Effect.mapError(storeError),
       Effect.flatMap((rows) =>
         Effect.forEach(rows, ({ payload }) => decodeAdmission(payload).pipe(Effect.mapError(storeError))),
@@ -288,6 +369,32 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
             const hasSibling = (rows[0]?.remaining ?? 0) > 0;
             return hasSibling ? finish(admission) : closeAndFinish(admission, closeRevision);
           }),
+        ),
+      ),
+    fanOut: (admission, children, closeRevision) =>
+      completionGate.withPermit(
+        sql<StoredAdmissionCount>`
+          SELECT COUNT(*) AS remaining
+          FROM trigger_admissions
+          WHERE work_item = ${keyOf(admission.event.key)}
+            AND revision = ${admission.event.revision}
+            AND processed = 0
+            AND NOT (
+              workflow = ${admission.subscription.workflow}
+              AND trigger = ${admission.subscription.trigger}
+            )
+        `.pipe(
+          Effect.flatMap((rows) => {
+            const hasSibling = (rows[0]?.remaining ?? 0) > 0;
+            const beforeFinish = hasSibling ? Effect.void : closeRevision;
+            return sql.withTransaction(
+              putStatements(children).pipe(
+                Effect.andThen(beforeFinish),
+                Effect.andThen(finishStatement(admission)),
+              ),
+            );
+          }),
+          Effect.mapError((error) => (SqlError.isSqlError(error) ? storeError(error) : error)),
         ),
       ),
     activate: (subscriptions, atMillis) =>
@@ -354,6 +461,7 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
       subscription.parameters.some((parameter) => parameter.id === id && parameter.value === value),
     );
     const afterCatchUp = subscription.catchUp === null || event.atMillis >= subscription.catchUp.since;
+    const passesFilters = subscription.filters.every((filter) => event.passes?.includes(filter));
     return (
       subscription.entry === event.entry &&
       sameScheduleWorkflow &&
@@ -361,7 +469,8 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
       sameSchedule &&
       sameTarget &&
       sameParameters &&
-      afterCatchUp
+      afterCatchUp &&
+      passesFilters
     );
   });
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
@@ -370,6 +479,7 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
 const subscriptionsOf = (
   records: ReadonlyArray<WorkflowRecord>,
   everyWorkspace: ReadonlyArray<TriggerSubscription["workspaces"][number]>,
+  conditionEntries: ReadonlySet<WorkflowCatalogKey>,
 ) =>
   records.flatMap((record) => {
     const document = record.publishedCopy;
@@ -384,11 +494,18 @@ const subscriptionsOf = (
           operation: trigger.start,
           entry: trigger.entry,
           parameters: trigger.parameters,
+          filters: trigger.filters.map(({ entry }) => entry),
           workspaces,
-          catchUp: { since: 0 },
+          catchUp: conditionEntries.has(trigger.entry) ? null : { since: 0 },
         }) satisfies TriggerSubscription,
     );
   });
+
+const startsSamePublishedTrigger = (published: TriggerSubscription, { subscription }: TriggerAdmission) =>
+  published.workflow === subscription.workflow &&
+  published.trigger === subscription.trigger &&
+  published.entry === subscription.entry &&
+  published.operation === subscription.operation;
 
 const sourceSubscriptions = (source: TriggerSource, subscriptions: ReadonlyArray<TriggerSubscription>) => {
   const entries = new Set(source.entries.map(({ key }) => key));
@@ -401,26 +518,33 @@ const subscriptionIdentity = ({
   operation,
   entry,
   parameters,
+  filters,
   workspaces,
-}: TriggerSubscription) => JSON.stringify({ workflow, trigger, operation, entry, parameters, workspaces });
+}: TriggerSubscription) =>
+  JSON.stringify({ workflow, trigger, operation, entry, parameters, filters, workspaces });
 
 const fingerprintOf = (subscriptions: ReadonlyArray<TriggerSubscription>) =>
   JSON.stringify(
-    subscriptions.map(({ workflow, trigger, operation, entry, parameters, workspaces }) => ({
+    subscriptions.map(({ workflow, trigger, operation, entry, parameters, filters, workspaces }) => ({
       workflow,
       trigger,
       operation,
       entry,
       parameters,
+      filters,
       workspaces,
     })),
   );
 
 const lineageOf = (event: TriggerEvent): Lineage => {
-  const current = Schema.decodeSync(LineageId)(keyOf(event.key));
+  const root = event.cause._tag === "Clock" ? `${keyOf(event.key)}:${event.revision}` : keyOf(event.key);
+  const current = Schema.decodeSync(LineageId)(root);
   if (event.cause._tag !== "Cogwork") return { root: current, parent: null, hop: 0 };
-  const origin = Schema.decodeSync(LineageId)(event.cause.origin);
-  return { root: origin, parent: origin, hop: 1 };
+  return {
+    root: event.cause.lineage.root,
+    parent: Schema.decodeSync(LineageId)(event.cause.origin),
+    hop: event.cause.lineage.hop + 1,
+  };
 };
 
 const planRejectionOf = (event: TriggerEvent) =>
@@ -444,6 +568,7 @@ const waitForRetry = (failure: SourceFailure) => {
 
 export interface TriggerObservationService {
   readonly eligible: Effect.Effect<ReadonlyArray<TriggerAdmission>>;
+  readonly recheck: (admission: TriggerAdmission) => Effect.Effect<Recheck, ControlStoreFailure>;
   readonly changes: Stream.Stream<TriggerAdmission>;
   readonly health: Effect.Effect<ReadonlyArray<TriggerSourceHealth>>;
   readonly catalog: WorkflowCatalog["entries"];
@@ -456,6 +581,11 @@ export const make = Effect.gen(function* () {
   const bus = yield* DaemonEventBus;
   const store = yield* TriggerObservationStore;
   const sources = yield* TriggerSources;
+  const conditionEntries = new Set(
+    sources.flatMap(({ entries }) =>
+      entries.filter(({ triggerKind }) => triggerKind === "condition").map(({ key }) => key),
+    ),
+  );
   const tracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
   const fibers = yield* FiberMap.make<TriggerSource["id"]>();
@@ -467,6 +597,142 @@ export const make = Effect.gen(function* () {
   const refreshGate = Semaphore.makeUnsafe(1);
   const assigneeGate = Semaphore.makeUnsafe(1);
   const assigneeSnapshots = yield* Ref.make<ReadonlyMap<WorkspaceId, AssigneeSnapshot>>(new Map());
+
+  const lastSweepTimes = Effect.fn("TriggerObservation.lastSweepTimes")(function* (
+    subscription: TriggerSubscription,
+  ) {
+    const admissions = yield* Effect.all([store.admissions, store.processed]).pipe(
+      Effect.map((all) => all.flat()),
+    );
+    return admissions
+      .filter(
+        (admission) =>
+          admission.event.entry === sweepKey &&
+          admission.subscription.workflow === subscription.workflow &&
+          admission.subscription.trigger === subscription.trigger,
+      )
+      .reduce((times, admission) => {
+        const item = keyOf(admission.event.key);
+        return new Map(times).set(item, Math.max(times.get(item) ?? 0, admission.event.atMillis));
+      }, new Map<string, number>());
+  });
+
+  const trackerSweepCandidates = Effect.fn("TriggerObservation.trackerSweepCandidates")(function* (
+    subscription: TriggerSubscription,
+    tickInstant: number,
+    state: string,
+    sweptAt: ReadonlyMap<string, number>,
+  ) {
+    const registryState = yield* registry.state;
+    const listedWorkflows = yield* workflows.list;
+    const document =
+      listedWorkflows.workflows.find(({ id }) => id === subscription.workflow)?.publishedCopy ?? null;
+    const systems = trackerSystemsOf(document);
+    const workspaces = registryState.workspaces.filter(({ config }) => {
+      const isSelected = subscription.workspaces.includes(config.name);
+      const matchesSystem =
+        systems.size === 0 ||
+        trackerSystems.some((system) => systems.has(system) && config.issueTracker.type === system);
+      return isSelected && matchesSystem;
+    });
+    const listed = yield* Effect.forEach(workspaces, (workspace) =>
+      tracker.observe(workspace).pipe(
+        Effect.flatMap((items) =>
+          Effect.forEach(items, (item) => {
+            const key = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
+            return coordination.read(key).pipe(Effect.map((view) => ({ item, key, view, workspace })));
+          }),
+        ),
+      ),
+    );
+    return listed.flat().flatMap(({ item, key, view, workspace }): ReadonlyArray<SweepCandidate> => {
+      const matchesState = state === "parked" ? view.park !== null : (item.states ?? []).includes(state);
+      if (!matchesState) return [];
+      const lastTouchedAtMillis = Math.max(
+        item.lastTouchedAtMillis ?? tickInstant,
+        view.park?.atMillis ?? 0,
+        sweptAt.get(keyOf(key)) ?? 0,
+      );
+      return [
+        {
+          key,
+          workspace: workspace.config.name,
+          subject: providerSubject(item.title, item.url),
+          lastTouchedAtMillis,
+          loadWorkContext: tracker.readProse(workspace, item.id).pipe(Effect.mapError(sweepFailure)),
+        },
+      ];
+    });
+  });
+
+  const workflowSweepCandidates = Effect.fn("TriggerObservation.workflowSweepCandidates")(function* (
+    subscription: TriggerSubscription,
+    state: string,
+    sweptAt: ReadonlyMap<string, number>,
+  ) {
+    const admissions = yield* Effect.all([store.admissions, store.processed]).pipe(
+      Effect.map((all) => all.flat()),
+    );
+    const latest = admissions
+      .filter(
+        (admission) =>
+          admission.subscription.workflow === subscription.workflow &&
+          admission.event.entry !== sweepKey &&
+          admission.event.key._tag !== "Issue",
+      )
+      .reduce((items, admission) => {
+        const item = keyOf(admission.event.key);
+        const current = items.get(item);
+        return current === undefined || current.event.atMillis < admission.event.atMillis
+          ? new Map(items).set(item, admission)
+          : items;
+      }, new Map<string, TriggerAdmission>());
+    return yield* Effect.forEach([...latest.values()], (admission) =>
+      coordination.read(admission.event.key).pipe(
+        Effect.map((view): SweepCandidate | null => {
+          const matchesState = state === "parked" && view.park !== null;
+          if (!matchesState) return null;
+          return {
+            key: admission.event.key,
+            workspace: admission.event.workspace,
+            subject: admission.event.subject,
+            lastTouchedAtMillis: Math.max(
+              admission.event.atMillis,
+              view.park?.atMillis ?? 0,
+              sweptAt.get(keyOf(admission.event.key)) ?? 0,
+            ),
+            loadWorkContext: Effect.succeed(admission.event.workContext),
+          };
+        }),
+      ),
+    ).pipe(Effect.map((candidates) => candidates.filter((candidate) => candidate !== null)));
+  });
+
+  const sweep = Effect.fn("TriggerObservation.sweep")(function* (
+    subscription: TriggerSubscription,
+    tickInstant: number,
+  ) {
+    const source = subscriptionParameter(subscription, "source");
+    const state = subscriptionParameter(subscription, "state");
+    if (state === undefined) return yield* sweepFailure("Sweep state is missing");
+    const sweptAt = yield* lastSweepTimes(subscription);
+    const reader = [
+      {
+        source: "trackers",
+        read: () => trackerSweepCandidates(subscription, tickInstant, state, sweptAt),
+      },
+      {
+        source: "workflow",
+        read: () => workflowSweepCandidates(subscription, state, sweptAt),
+      },
+    ].find((candidate) => candidate.source === source);
+    if (reader === undefined) return yield* sweepFailure("Sweep source is invalid");
+    return yield* reader.read();
+  });
+  const sweepReadPort: TriggerReadPort = {
+    sweep: (subscription, tickInstant) =>
+      sweep(subscription, tickInstant).pipe(Effect.mapError(sweepFailure)),
+  };
 
   const setHealth = (
     source: TriggerSource["id"],
@@ -529,6 +795,15 @@ export const make = Effect.gen(function* () {
     return assignees.some((assignee) => allowlist.includes(assignee));
   });
 
+  const publishedSubscriptions = Effect.fn("TriggerObservation.publishedSubscriptions")(function* () {
+    const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
+    return subscriptionsOf(
+      listed.workflows,
+      registryState.workspaces.map(({ config }) => config.name),
+      conditionEntries,
+    );
+  });
+
   const admit = Effect.fn("TriggerObservation.admit")(function* (
     source: TriggerSource,
     subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -544,10 +819,8 @@ export const make = Effect.gen(function* () {
       ),
     );
     if (!passesGate) return;
-    const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
-    const workspaceIds = registryState.workspaces.map(({ config }) => config.name);
     const current = new Set(
-      sourceSubscriptions(source, subscriptionsOf(listed.workflows, workspaceIds)).map(subscriptionIdentity),
+      sourceSubscriptions(source, yield* publishedSubscriptions()).map(subscriptionIdentity),
     );
     const active = subscriptions.filter((subscription) => current.has(subscriptionIdentity(subscription)));
     if (active.length === 0) return;
@@ -579,8 +852,20 @@ export const make = Effect.gen(function* () {
     subscriptions: ReadonlyArray<TriggerSubscription>,
     fingerprint: string,
   ) =>
-    source.observe(subscriptions).pipe(
-      Stream.runForEach((event) => admit(source, subscriptions, event)),
+    source.observe(subscriptions, sweepReadPort).pipe(
+      Stream.runForEach((event) =>
+        decodeTriggerEvent(event).pipe(
+          Effect.matchEffect({
+            onFailure: (error) =>
+              Effect.logWarning("Trigger event does not decode; skipping it", {
+                source: source.id,
+                item: keyOf(event.key),
+                message: error.message,
+              }),
+            onSuccess: (decoded) => admit(source, subscriptions, decoded),
+          }),
+        ),
+      ),
       Effect.catchTag("SourceFailure", (error: SourceFailure) =>
         setHealth(source.id, "failed", error.message).pipe(Effect.andThen(waitForRetry(error))),
       ),
@@ -627,6 +912,7 @@ export const make = Effect.gen(function* () {
                 subscriptionsOf(
                   listed.workflows,
                   registryState.workspaces.map(({ config }) => config.name),
+                  conditionEntries,
                 ),
                 atMillis,
               ),
@@ -683,48 +969,86 @@ export const make = Effect.gen(function* () {
     ),
   );
 
+  const recheck = Effect.fn("TriggerObservation.recheck")(function* (admission: TriggerAdmission) {
+    const source = sources.find((candidate) => ownsEntry(candidate, admission.event.entry));
+    if (!source?.recheck) return Recheck.Matches();
+    const published = (yield* publishedSubscriptions()).find((candidate) =>
+      startsSamePublishedTrigger(candidate, admission),
+    );
+    if (published === undefined) return Recheck.Matches();
+    return yield* source
+      .recheck(admission.event, published)
+      .pipe(
+        Effect.catchTag("SourceFailure", (error) =>
+          Effect.logWarning("Trigger recheck failed; the item counts as matching", { error }).pipe(
+            Effect.map(() => Recheck.Matches()),
+          ),
+        ),
+      );
+  });
+
   return {
     eligible: Effect.all([workflows.list, store.admissions]).pipe(
       Effect.flatMap(([listed, current]) => {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
-        const oldest = oldestRevisionAdmissions(current);
-        const active = oldest.filter(({ subscription }) => enabled.has(subscription.workflow));
-        const inactive = oldest.filter(({ subscription }) => !enabled.has(subscription.workflow));
-        return Effect.forEach(
-          inactive,
-          (admission) =>
-            store.complete(
-              admission,
-              coordination.markProcessed(admission.event.key, admission.event.revision),
-            ),
-          { discard: true },
-        ).pipe(
-          Effect.andThen(
-            Effect.forEach(active, (admission) =>
-              coordination.read(admission.event.key).pipe(
-                Effect.map((view) => ({
-                  admission,
-                  isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
-                  gate: view.gate(
-                    {
-                      workflow: admission.subscription.workflow,
-                      operation: admission.subscription.operation,
-                    },
-                    admission.event.revision,
-                  ),
-                })),
-              ),
-            ),
+        return Effect.forEach(oldestRevisionAdmissions(current), (admission) =>
+          coordination.read(admission.event.key).pipe(
+            Effect.flatMap((view) => {
+              const canAdvance = view.park !== null && revisionAdvancedParks.has(view.park.reason._tag);
+              if (!canAdvance) return Effect.succeed(admission);
+              const next = current
+                .filter((candidate) => sameSubscription(candidate, admission))
+                .filter((candidate) => admissionIsOlder(admission, candidate))
+                .toSorted((left, right) => (admissionIsOlder(left, right) ? -1 : 1))
+                .at(0);
+              if (next === undefined) return Effect.succeed(admission);
+              return store.complete(admission, Effect.void).pipe(Effect.map(() => next));
+            }),
           ),
+        ).pipe(
+          Effect.flatMap((oldest) => {
+            const active = oldest.filter(({ subscription }) => enabled.has(subscription.workflow));
+            const inactive = oldest.filter(({ subscription }) => !enabled.has(subscription.workflow));
+            return Effect.forEach(
+              inactive,
+              (admission) =>
+                store.complete(
+                  admission,
+                  coordination.markProcessed(admission.event.key, admission.event.revision),
+                ),
+              { discard: true },
+            ).pipe(
+              Effect.andThen(
+                Effect.forEach(active, (admission) =>
+                  coordination.read(admission.event.key).pipe(
+                    Effect.map((view) => ({
+                      admission,
+                      actedOn: view.actedOn(admission.subscription.workflow),
+                      isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
+                      gate: view.gate(
+                        {
+                          workflow: admission.subscription.workflow,
+                          operation: admission.subscription.operation,
+                        },
+                        admission.event.revision,
+                      ),
+                    })),
+                  ),
+                ),
+              ),
+            );
+          }),
         );
       }),
       Effect.map((states) =>
         states
           .filter(({ gate, isUnprocessedRevision }) => isUnprocessedRevision && gate._tag === "Open")
+          .toSorted(waitingAdmissionOrder)
           .map(({ admission }) => admission),
       ),
       Effect.catchCause(() => Effect.succeed([])),
     ),
+    recheck,
     changes: Stream.fromPubSub(changes),
     health: Effect.map(Ref.get(health), (current) => [...current.values()]),
     catalog: sources.flatMap(({ entries }) => entries),
@@ -734,6 +1058,7 @@ export const make = Effect.gen(function* () {
 
 const unavailableObservation: TriggerObservationService = {
   eligible: Effect.succeed([]),
+  recheck: () => Effect.succeed(Recheck.Matches()),
   changes: Stream.empty,
   health: Effect.succeed([]),
   catalog: [],

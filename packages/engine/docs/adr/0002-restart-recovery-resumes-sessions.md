@@ -1,5 +1,7 @@
 # A daemon restart resumes the agent session and does not count as an attempt
 
+Amended by ADR [0036](../../../../docs/adr/0036-every-work-item-is-coordinated-in-the-control-store.md). A Workflow Run the daemon left `running` is marked `crashed` at boot and its Claim is released, so the item is admitted again; three crashed Runs in a row park it `exhausted`. Holding the Claim to resume the Session does not apply to Workflow Runs.
+
 When the daemon stops with a run in flight, claim recovery today marks the run `failed` and records a failed **attempt** — three restarts march an item to `exhausted` → `ready-for-human`, and the next run cold-starts because the **session** is only written to `RunRecord.session` when a run finishes, even though it was streamed as a run event all along. We instead treat a restart as its own outcome rather than an outcome of the work: a graceful stop marks its runs `interrupted`, an ungraceful death is detected as a run still `running` at startup and marked `crashed`, and neither records an attempt. Both keep their **claim** and resume the persisted session (written eagerly the moment the harness emits it), while a small per-item cap on consecutive `crashed` runs still tips a genuine poison-pill to `exhausted`. Resume is machine-local, because the session lives only in this daemon's run ledger.
 
 ## Considered Options

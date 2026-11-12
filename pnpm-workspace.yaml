@@ -31,7 +31,7 @@ catalog:
   '@tanstack/ai-persistence': '1.0.0'
   '@tanstack/highlight': '^1.2.0'
   '@tailwindcss/vite': '^4.3.3'
-  '@types/node': '^24.13.3'
+  '@types/node': '^26.6.6'
   '@types/react': '^19.2.7'
   '@types/react-dom': '^19.2.5'
   react: '^19.2.6'
@@ -49,3 +49,21 @@ catalogs:
     '@effect/platform-node': '4.0.0-rc.112'
     '@effect/sql-sqlite-node': '4.0.0-rc.112'
     '@effect/vitest': '4.0.0-rc.112'
+
+permissions:
+  '@tanstack/ai':
+    skills: true
+  '@tanstack/ai-persistence':
+    skills: true
+  '@tanstack/ai-sandbox':
+    skills: true
+  '@tanstack/devtools-vite':
+    skills: true
+  '@tanstack/highlight':
+    skills: true
+  '@tanstack/markdown':
+    skills: true
+  '@tanstack/router-plugin':
+    skills: true
+  drizzle-kit:
+    skills: true

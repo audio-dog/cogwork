@@ -51,7 +51,7 @@ class ObservedSlidingStrategy<A> extends PubSub.SlidingStrategy<A> {
 }
 
 export const activityOf = (
-  record: Pick<RunRecord, "id" | "workspace" | "workItem" | "stage">,
+  record: Pick<RunRecord, "id" | "workspace" | "workItem" | "operation">,
   seq: number,
   atMillis: number,
   event: AgUiEvent,
@@ -59,7 +59,7 @@ export const activityOf = (
   runId: record.id,
   workspace: record.workspace,
   workItem: record.workItem,
-  stage: record.stage,
+  operation: record.operation,
   seq,
   atMillis,
   correlation: agUiCorrelation(event),

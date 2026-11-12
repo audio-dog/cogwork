@@ -1,8 +1,5 @@
 import {
-  applyOperationSettingBatch,
   CancelRunError,
-  CancelRunResult,
-  type ClassifiedItem,
   type Connection,
   type ConnectionBindingId,
   ConnectionEstablishment,
@@ -16,17 +13,10 @@ import {
   type ControlStoreFailure,
   type ControlStore as ControlStorePicture,
   type DaemonLimitUpdate,
-  HarnessName,
+  type HarnessName,
   HarnessNotRegistered,
   IssueTrackerError,
-  LifecycleStage,
-  ModelOptionSelections,
   type OperationSettingBatch,
-  type OperationSettingCell,
-  type OperationSettingName,
-  OperationSettingRefused,
-  OperationSettingScope,
-  OperationSettingUpdate,
   type PluginFailure,
   type PluginId,
   type PluginMutationResult,
@@ -36,11 +26,7 @@ import {
   pluginRequiringConnection,
   type RunId,
   type RunStatus,
-  resolveOperationSetting,
-  SettingLevel,
-  type TriageRole,
-  type WorkItemId,
-  WorkItemNotFound,
+  type WorkItemRef,
   type WorkspaceId,
   type WorkspaceRegistration,
   WorkspaceRegistrationError,
@@ -58,34 +44,21 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
-import { fold } from "./coordination";
 import { CredentialStore } from "./credential-store";
-import { DaemonEventBus } from "./daemon-event-bus";
 import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { repoTargetFor as githubRepoTargetFor } from "./github/host";
 import { GranolaLogin } from "./granola-login";
-import { Harness, type HarnessService } from "./harness";
-import { IssueTracker, type ObservedItem, releaseClaim } from "./issue-tracker";
-import {
-  catalogMembershipRefusal,
-  modelOptionsMembershipRefusal,
-  operationSettingRefusal,
-} from "./operation-policy";
+import { Harness } from "./harness";
 import { PluginManager } from "./plugin";
 import type { RegistryState } from "./projector";
-import { classifiedItemWithPr, workspaceInfoOf } from "./read-model";
-import { type ReconcileSnapshot, ReconcileWorker } from "./reconcile";
-import {
-  findWorkspaceIssueTrackerBinding,
-  WorkspaceManagement,
-  type WorkspaceRegistrationChange,
-  WorkspaceRegistry,
-} from "./registry";
+import { workspaceInfoOf } from "./read-model";
+import { WorkspaceManagement, type WorkspaceRegistrationChange, WorkspaceRegistry } from "./registry";
 import { RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
 import { SlackLogin } from "./slack-login";
+import { WorkflowRun } from "./workflow-run";
 
 const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
@@ -128,59 +101,6 @@ const samePluginMembership = (left: PluginOverview, right: PluginOverview) => {
   );
 };
 
-const observedFor = (snapshot: ReconcileSnapshot, workspace: WorkspaceId, workItem: WorkItemId) =>
-  snapshot.workspaces
-    .find((state) => state.name === workspace)
-    ?.observed.find((item) => item.id === workItem) ?? null;
-
-const roleChanges = (roles: ReadonlyArray<TriageRole>, role: TriageRole) => ({
-  remove: roles.filter((current) => current !== role),
-  add: roles.includes(role) ? [] : [role],
-});
-
-const resolveObserved = Effect.fn("Daemon.resolveObserved")(function* (
-  workspaceId: WorkspaceId,
-  workItem: WorkItemId,
-) {
-  const registry = yield* (yield* WorkspaceRegistry).state;
-  const workspace = workspaceById(registry, workspaceId);
-  if (workspace === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
-  const snapshot = yield* (yield* ReconcileWorker).snapshot;
-  const observed = observedFor(snapshot, workspaceId, workItem);
-  if (observed === null) return yield* new WorkItemNotFound({ workspace: workspaceId, workItem });
-  return { workspace, observed };
-});
-
-const publishChangedItem = Effect.fn("Daemon.publishChangedItem")(function* (
-  workspace: WorkspaceId,
-  item: ClassifiedItem | null,
-) {
-  if (item === null) return;
-  const bus = yield* DaemonEventBus;
-  yield* bus.publish({ _tag: "ItemChanged", workspace, item });
-});
-
-const parkedNeedsHuman = (id: WorkItemId, title: string): ClassifiedItem => ({
-  _tag: "NeedsHuman",
-  id,
-  title,
-  reason: "ready-for-human",
-  proposal: null,
-  url: null,
-});
-
-const parkedItem = (observed: ObservedItem | null) => {
-  if (observed === null) return null;
-  const roles = [...observed.roles.filter((role) => role !== "ready-for-human"), "ready-for-human" as const];
-  return classifiedItemWithPr({
-    ...observed,
-    roles,
-    claim: null,
-    claimHeld: false,
-    claimedByUs: false,
-  });
-};
-
 const cancelDrainDeadline = "5 seconds";
 
 const runNotFound = (runId: RunId) => new CancelRunError({ reason: "not-found", runId });
@@ -195,127 +115,27 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   const ledger = yield* RunLedger;
   const run = yield* ledger.getRun(payload.runId);
   if (run === null) return yield* runNotFound(payload.runId);
-  if (run.status !== "running") {
-    return yield* runAlreadyFinished(payload.runId, run.status);
-  }
-
-  const runControl = yield* RunControl;
-  return yield* Effect.uninterruptible(
-    Effect.gen(function* () {
-      const cancellation = yield* runControl.cancel(payload.runId);
-      const controlledWorkspace =
-        cancellation._tag === "Interrupting" ? cancellation.workspace : Option.none();
-      const drained =
-        cancellation._tag === "NotFound"
-          ? true
-          : yield* cancellation.awaitTermination.pipe(
-              Effect.timeoutOption(cancelDrainDeadline),
-              Effect.map(Option.isSome),
-            );
-
-      const snapshot = yield* (yield* ReconcileWorker).snapshot;
-      const observed = observedFor(snapshot, run.workspace, run.workItem);
-      if (!drained) yield* Effect.logWarning("run cancellation still draining", { runId: payload.runId });
-
-      const registry = yield* (yield* WorkspaceRegistry).state;
-      const currentWorkspace = findWorkspaceIssueTrackerBinding(registry, run.workspace);
-      const workspace = Option.getOrUndefined(controlledWorkspace) ?? currentWorkspace;
-      const trackerClaim = workspace === undefined ? null : { workspace, issueTracker: yield* IssueTracker };
-      const releaseRunClaim =
-        trackerClaim === null
-          ? Effect.void
-          : releaseClaim(trackerClaim.issueTracker)(trackerClaim.workspace, run.workItem);
-      const releaseAbandonedClaim = cancellation._tag === "NotFound" ? releaseRunClaim : Effect.void;
-
-      const endedAtMillis = yield* Clock.currentTimeMillis;
-      const settled = yield* ledger.getRun(payload.runId);
-      if (settled === null) return yield* runNotFound(payload.runId);
-      if (settled.status !== "running") {
-        yield* releaseAbandonedClaim;
-        return yield* runAlreadyFinished(payload.runId, settled.status);
-      }
-      yield* ledger.updateRun(payload.runId, {
-        status: "interrupted",
-        usage: run.usage,
-        endedAtMillis,
-      });
-
-      if (trackerClaim !== null) {
-        yield* trackerClaim.issueTracker
-          .handOff(trackerClaim.workspace, run.workItem, { stage: run.stage, note: payload.note })
-          .pipe(
-            Effect.catchTag("IssueTrackerError", (error) =>
-              Effect.logWarning("run hand-off failed", { message: error.message }),
-            ),
-          );
-      }
-      yield* releaseAbandonedClaim;
-
-      const item = parkedItem(observed) ?? parkedNeedsHuman(run.workItem, run.workItem);
-      if (currentWorkspace !== undefined) {
-        const bus = yield* DaemonEventBus;
-        yield* bus.publish({ _tag: "ItemChanged", workspace: run.workspace, item });
-      }
-      return drained
-        ? CancelRunResult.cases.Cancelled.make({ item })
-        : CancelRunResult.cases.StillDraining.make({ item });
-    }),
-  );
-});
-
-export const reclassify = Effect.fn("Daemon.Reclassify")(function* (payload: {
-  readonly workspace: WorkspaceId;
-  readonly workItem: WorkItemId;
-  readonly role: TriageRole;
-  readonly note?: string;
-}) {
-  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
-
-  const issueTracker = yield* IssueTracker;
-  yield* issueTracker.reclassify(workspace, payload.workItem, {
-    changes: roleChanges(observed.roles, payload.role),
-    note: payload.note,
+  if (run.status !== "running") return yield* runAlreadyFinished(payload.runId, run.status);
+  const cancellation = yield* (yield* RunControl).cancel(payload.runId);
+  const drained =
+    cancellation._tag === "NotFound" ||
+    Option.isSome(yield* cancellation.awaitTermination.pipe(Effect.timeoutOption(cancelDrainDeadline)));
+  if (!drained) yield* Effect.logWarning("run cancellation still draining", { runId: payload.runId });
+  const settled = yield* ledger.getRun(payload.runId);
+  if (settled === null) return yield* runNotFound(payload.runId);
+  if (settled.status !== "running") return;
+  yield* ledger.updateRun(payload.runId, {
+    status: "interrupted",
+    usage: settled.usage,
+    endedAtMillis: yield* Clock.currentTimeMillis,
   });
-
-  const item = classifiedItemWithPr({ ...observed, roles: [payload.role] });
-  yield* publishChangedItem(payload.workspace, item);
-  return item;
 });
 
 export const handBack = Effect.fn("Daemon.HandBack")(function* (payload: {
-  readonly workspace: WorkspaceId;
-  readonly workItem: WorkItemId;
-  readonly role: TriageRole;
+  readonly item: WorkItemRef;
   readonly note?: string;
 }) {
-  const { workspace, observed } = yield* resolveObserved(payload.workspace, payload.workItem);
-  const principal = yield* Principal;
-  const record = { by: principal.id, atMillis: yield* Clock.currentTimeMillis };
-  const issueTracker = yield* IssueTracker;
-  yield* issueTracker.handBack(workspace, payload.workItem, {
-    record,
-    changes: roleChanges(observed.roles, payload.role),
-    note: payload.note,
-  });
-
-  const handedBack = {
-    ...observed,
-    roles: [payload.role],
-    handback: record,
-    coordination: fold(
-      {
-        claim: observed.claim,
-        attempts: observed.attempts,
-        handbacks: [{ ...record, note: payload.note ?? null }],
-        parks: [],
-        revision: observed.coordination?.revision ?? null,
-      },
-      "cogwork",
-    ),
-  };
-  const item = classifiedItemWithPr(handedBack);
-  yield* publishChangedItem(payload.workspace, item);
-  return item;
+  yield* (yield* WorkflowRun).handBack(payload);
 });
 
 export const setScheduling = Effect.fn("Daemon.SetScheduling")(function* (payload: {
@@ -344,241 +164,24 @@ export const setDaemonLimit = Effect.fn("Daemon.SetDaemonLimit")(function* (payl
   );
 });
 
-const signalSnapshotRefreshAfter = Effect.fn("Daemon.signalSnapshotRefreshAfter")(function* <
-  A,
-  E,
-  R,
-  B,
-  E2,
-  R2,
->(write: Effect.Effect<A, E, R>, publish: (written: A) => Effect.Effect<B, E2, R2>) {
-  const publisher = yield* DaemonEventPublisher;
-  return yield* Effect.uninterruptibleMask((restore) =>
-    restore(write).pipe(
-      Effect.flatMap((written) => publish(written).pipe(Effect.ensuring(publisher.requestSnapshotRefresh()))),
-    ),
-  );
-});
+const publishAfter = Effect.fn("Daemon.publishAfter")(
+  <A, E, R, B, E2, R2>(write: Effect.Effect<A, E, R>, publish: (written: A) => Effect.Effect<B, E2, R2>) =>
+    Effect.uninterruptibleMask((restore) => restore(write).pipe(Effect.flatMap(publish))),
+);
 
-const publishSnapshotMutation = Effect.fn("Daemon.publishSnapshotMutation")(function* <E, R>(
+const publishControlStoreMutation = Effect.fn("Daemon.publishControlStoreMutation")(function* <E, R>(
   store: ControlStoreService,
   update: Effect.Effect<ControlStorePicture, ControlStoreFailure | E, R>,
 ) {
   const publisher = yield* DaemonEventPublisher;
-  const worker = yield* ReconcileWorker;
-  return yield* store.withWrite(
-    signalSnapshotRefreshAfter(
-      update.pipe(Effect.tap(() => worker.invalidateAvailability())),
-      publisher.publishControlStore,
-    ),
-  );
-});
-
-type CatalogSettingName = Extract<OperationSettingName, "model" | "model-options" | "permission-profile">;
-
-const catalogSettingNames = [
-  "model",
-  "model-options",
-  "permission-profile",
-] satisfies ReadonlyArray<CatalogSettingName>;
-
-const isCatalogSettingName = (setting: OperationSettingName): setting is CatalogSettingName =>
-  catalogSettingNames.some((candidate) => candidate === setting);
-
-interface OperationSelectionChange {
-  readonly workflow: string;
-  readonly operation: LifecycleStage;
-  readonly workspace: WorkspaceId | null;
-  readonly setting: "harness" | CatalogSettingName;
-  readonly requestedSet: boolean;
-}
-
-const selectionChangesForUpdate = (update: OperationSettingUpdate) => {
-  const candidate = OperationSettingUpdate.match(update, {
-    Clear: ({ cell }) => ({ cell, requestedSet: false }),
-    Set: ({ row }) => ({ cell: row, requestedSet: true }),
-  });
-  const { cell, requestedSet } = candidate;
-  const setting = cell.setting;
-  const selectionSetting = setting === "harness" || isCatalogSettingName(setting);
-  if (!selectionSetting) return [];
-  const workspace = OperationSettingScope.match(cell.scope, {
-    SettingsProfile: () => null,
-    RuntimeHost: () => null,
-    PrivateWorkspaceOverlay: ({ workspace }) => workspace,
-  });
-  const contexts = SettingLevel.match(cell.level, {
-    Default: () => LifecycleStage.literals.map((operation) => ({ workflow: "coding", operation })),
-    Workflow: ({ workflow }) => LifecycleStage.literals.map((operation) => ({ workflow, operation })),
-    Operation: ({ workflow, operation }) => [{ workflow, operation }],
-  });
-  return contexts.map(
-    (context) => ({ ...context, workspace, setting, requestedSet }) satisfies OperationSelectionChange,
-  );
-};
-
-const operationSettingPositionKey = (cell: OperationSettingCell) => JSON.stringify([cell.level, cell.scope]);
-
-const operationSettingCellOf = (update: OperationSettingUpdate) =>
-  OperationSettingUpdate.match(update, {
-    Clear: ({ cell }) => cell,
-    Set: ({ row }) => row,
-  });
-
-const selectionAtPosition = (rows: ControlStorePicture["operationSettings"], cell: OperationSettingCell) => {
-  const position = operationSettingPositionKey(cell);
-  const selectionMatchesPosition = (row: ControlStorePicture["operationSettings"][number]) => {
-    const matches = row.setting === cell.setting && operationSettingPositionKey(row) === position;
-    return matches;
-  };
-  return rows.find(selectionMatchesPosition)?.value ?? null;
-};
-
-const modelOptionResetScopes = (
-  rows: ControlStorePicture["operationSettings"],
-  scope: OperationSettingCell["scope"],
-) => {
-  const privateScopes = rows
-    .filter(({ setting }) => setting === "model-options")
-    .flatMap((row) =>
-      OperationSettingScope.match(row.scope, {
-        SettingsProfile: () => [],
-        RuntimeHost: () => [],
-        PrivateWorkspaceOverlay: (privateScope) => [privateScope],
-      }),
-    )
-    .filter(
-      (privateScope, index, scopes) =>
-        scopes.findIndex(({ workspace }) => workspace === privateScope.workspace) === index,
-    );
-  return OperationSettingScope.match(scope, {
-    SettingsProfile: (profileScope) => [profileScope],
-    RuntimeHost: () => [
-      { _tag: "SettingsProfile" } satisfies OperationSettingCell["scope"],
-      ...privateScopes,
-    ],
-    PrivateWorkspaceOverlay: (privateScope) => [privateScope],
-  });
-};
-
-const withModelContextOptionResets = (
-  rows: ControlStorePicture["operationSettings"],
-  updates: OperationSettingBatch,
-) => {
-  const explicitModelOptionCells = new Set(
-    updates
-      .map(operationSettingCellOf)
-      .filter(({ setting }) => setting === "model-options")
-      .map(operationSettingPositionKey),
-  );
-  const updatedRows = applyOperationSettingBatch(rows, updates);
-  return updates.flatMap((update) => {
-    const cell = operationSettingCellOf(update);
-    const changesModelContext = cell.setting === "harness" || cell.setting === "model";
-    if (!changesModelContext) return [update];
-    const keepsOptions = selectionAtPosition(rows, cell) === selectionAtPosition(updatedRows, cell);
-    if (keepsOptions) return [update];
-    const resetCells = modelOptionResetScopes(rows, cell.scope)
-      .map(
-        (scope) =>
-          ({
-            level: cell.level,
-            setting: "model-options",
-            scope,
-          }) satisfies OperationSettingCell,
-      )
-      .filter((optionCell) => !explicitModelOptionCells.has(operationSettingPositionKey(optionCell)));
-    const resets = resetCells.map((optionCell) =>
-      OperationSettingUpdate.match(update, {
-        Clear: () =>
-          ({
-            _tag: "Clear",
-            cell: optionCell,
-          }) satisfies OperationSettingUpdate,
-        Set: () =>
-          ({
-            _tag: "Set",
-            row: { ...optionCell, value: {} },
-          }) satisfies OperationSettingUpdate,
-      }),
-    );
-    return [update, ...resets];
-  });
-};
-
-const isModelOptionSelections = Schema.is(ModelOptionSelections);
-
-const validateSelectionContext = Effect.fn("Daemon.validateSelectionContext")(function* (
-  harness: HarnessService,
-  rows: ControlStorePicture["operationSettings"],
-  change: OperationSelectionChange,
-) {
-  if (!change.requestedSet) return;
-  const effectiveValue = resolveOperationSetting(rows, change.setting, change);
-  const selectedHarness =
-    change.setting === "harness" ? effectiveValue : resolveOperationSetting(rows, "harness", change);
-  if (selectedHarness === null) {
-    return yield* OperationSettingRefused.make({
-      setting: change.setting,
-      source: "Harness selection",
-      reason: "No Harness is selected for this setting",
-    });
-  }
-  const registeredHarness = Schema.is(HarnessName)(selectedHarness)
-    ? { name: selectedHarness, catalog: harness.catalogs.get(selectedHarness) }
-    : null;
-  if (!registeredHarness?.catalog) {
-    return yield* OperationSettingRefused.make({
-      setting: "harness",
-      source: "Harness registry",
-      reason: `Unknown Harness ${selectedHarness}`,
-    });
-  }
-  const { name, catalog } = registeredHarness;
-  if (change.setting === "harness") return;
-  const selectedValue = effectiveValue;
-  const effectiveModel = resolveOperationSetting(rows, "model", change);
-  const selectedModel = typeof effectiveModel === "string" ? effectiveModel : null;
-  const hasModelOptionsSelection =
-    change.setting === "model-options" && isModelOptionSelections(selectedValue);
-  const modelOptionsRefusal = hasModelOptionsSelection
-    ? modelOptionsMembershipRefusal(selectedValue, selectedModel, name, catalog)
-    : null;
-  if (modelOptionsRefusal !== null) return yield* modelOptionsRefusal;
-  const skipsCatalogMembership = change.setting === "model-options" || typeof selectedValue !== "string";
-  if (skipsCatalogMembership) return;
-  const refusal = catalogMembershipRefusal(change.setting, selectedValue, name, catalog);
-  if (refusal !== null) return yield* refusal;
-});
-
-const validateOperationSettingBatch = Effect.fn("Daemon.validateOperationSettingBatch")(function* (
-  store: ControlStoreService,
-  requestedUpdates: OperationSettingBatch,
-) {
-  const picture = yield* store.picture;
-  const harness = yield* Harness;
-  const updates = withModelContextOptionResets(picture.operationSettings, requestedUpdates);
-  const rows = applyOperationSettingBatch(picture.operationSettings, updates);
-  yield* Effect.forEach(
-    requestedUpdates.flatMap(selectionChangesForUpdate),
-    (change) => validateSelectionContext(harness, rows, change),
-    { discard: true },
-  );
-  return updates;
+  return yield* store.withWrite(update.pipe(Effect.tap(publisher.publishControlStore)));
 });
 
 export const setOperationSetting = Effect.fn("Daemon.SetOperationSetting")(function* (payload: {
   readonly updates: OperationSettingBatch;
 }) {
-  const refusal = payload.updates.map(operationSettingRefusal).find((candidate) => candidate !== null);
-  if (refusal !== undefined) return yield* refusal;
   const store = yield* ControlStore;
-  return yield* publishSnapshotMutation(
-    store,
-    validateOperationSettingBatch(store, payload.updates).pipe(
-      Effect.flatMap((updates) => store.updateOperationSettings(updates)),
-    ),
-  );
+  return yield* publishControlStoreMutation(store, store.updateOperationSettings(payload.updates));
 });
 
 export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function* (payload: {
@@ -590,7 +193,7 @@ export const setHarnessEnabled = Effect.fn("Daemon.SetHarnessEnabled")(function*
     return yield* HarnessNotRegistered.make({ harness: payload.harness });
   }
   const store = yield* ControlStore;
-  return yield* publishSnapshotMutation(store, store.setHarnessEnabled(payload.harness, payload.enabled));
+  return yield* publishControlStoreMutation(store, store.setHarnessEnabled(payload.harness, payload.enabled));
 });
 
 const workspaceStateFromChange = (change: WorkspaceRegistrationChange) => {
@@ -671,7 +274,7 @@ export const setContributionSetting = Effect.fn("Daemon.SetContributionSetting")
   const refusal = contributionSettingRefusal(payload.update, registry);
   if (refusal) return yield* refusal;
   const store = yield* ControlStore;
-  return yield* publishSnapshotMutation(store, store.updateContributionSetting(payload.update));
+  return yield* publishControlStoreMutation(store, store.updateContributionSetting(payload.update));
 });
 
 export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function* (payload: {
@@ -688,7 +291,7 @@ export const registerWorkspace = Effect.fn("Daemon.RegisterWorkspace")(function*
   }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
-  return yield* signalSnapshotRefreshAfter(management.register(payload.registration), (change) =>
+  return yield* publishAfter(management.register(payload.registration), (change) =>
     publisher.publishWorkspaces().pipe(Effect.map(() => workspaceStateFromChange(change))),
   );
 });
@@ -699,7 +302,7 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const store = yield* ControlStore;
-  return yield* signalSnapshotRefreshAfter(management.deregister(payload.workspace), (workspace) =>
+  return yield* publishAfter(management.deregister(payload.workspace), (workspace) =>
     Effect.gen(function* () {
       yield* publisher.publishWorkspaceRemoved(workspace);
       const controlStore = yield* store.picture.pipe(
@@ -734,7 +337,7 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
   }
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
-  return yield* signalSnapshotRefreshAfter(management.update(payload.workspace, payload.update), (change) =>
+  return yield* publishAfter(management.update(payload.workspace, payload.update), (change) =>
     Effect.gen(function* () {
       const state = workspaceStateFromChange(change);
       const published = yield* publisher.publishWorkspaces();
@@ -762,8 +365,7 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
   const publisher = yield* DaemonEventPublisher;
   const plugins = yield* PluginManager;
   const store = yield* ControlStore;
-  const worker = yield* ReconcileWorker;
-  return yield* signalSnapshotRefreshAfter(mutation, (completed) =>
+  return yield* publishAfter(mutation, (completed) =>
     Effect.gen(function* () {
       const result = yield* store.withWrite(
         plugins.overview.pipe(
@@ -771,7 +373,6 @@ const publishPluginMutation = Effect.fn("Daemon.publishPluginMutation")(function
             overview,
             notices: samePluginMembership(completed.overview, overview) ? completed.notices : [],
           })),
-          Effect.tap(() => worker.invalidateAvailability()),
         ),
       );
       yield* publisher.publishPlugins(result.overview, result.notices);
@@ -865,7 +466,6 @@ export const establishConnection = Effect.fn("Daemon.EstablishConnection")(funct
       "Connection already exists. Use re-connect for the same account, or remove it before connecting to a different account.",
     );
   }
-  const publisher = yield* DaemonEventPublisher;
   return yield* Effect.uninterruptibleMask((restore) =>
     restore(
       connections.establish(establishment).pipe(mapConnectionFailure("establish Connection", null)),
@@ -877,15 +477,7 @@ export const establishConnection = Effect.fn("Daemon.EstablishConnection")(funct
               ? Effect.void
               : connections
                   .remove(connection.id)
-                  .pipe(
-                    Effect.ignore,
-                    Effect.andThen(
-                      publishConnectionMutation([]).pipe(
-                        Effect.ensuring(publisher.requestSnapshotRefresh()),
-                        Effect.ignore,
-                      ),
-                    ),
-                  ),
+                  .pipe(Effect.ignore, Effect.andThen(publishConnectionMutation([]).pipe(Effect.ignore))),
           ),
           Effect.andThen(
             Effect.logInfo("Connection established", {
@@ -894,9 +486,7 @@ export const establishConnection = Effect.fn("Daemon.EstablishConnection")(funct
               account: connection.account,
             }),
           ),
-          Effect.andThen(
-            publishConnectionMutation([]).pipe(Effect.ensuring(publisher.requestSnapshotRefresh())),
-          ),
+          Effect.andThen(publishConnectionMutation([])),
         ),
       ),
     ),
@@ -928,7 +518,7 @@ export const reconnectConnection = Effect.fn("Daemon.ReconnectConnection")(funct
       `Connection is established for "${existing.account}". Remove it before connecting to "${requestedAccount}".`,
     );
   }
-  return yield* signalSnapshotRefreshAfter(
+  return yield* publishAfter(
     connections
       .establish(payload.establishment, existing.account)
       .pipe(mapConnectionFailure("re-connect Connection", existing.id)),
@@ -1085,7 +675,7 @@ export const removeConnection = Effect.fn("Daemon.RemoveConnection")(function* (
   });
   const registry = yield* (yield* WorkspaceRegistry).state;
   const danglingWorkspaces = boundWorkspaceIds(registry, payload.connectionId);
-  return yield* signalSnapshotRefreshAfter(
+  return yield* publishAfter(
     connections
       .remove(payload.connectionId)
       .pipe(mapConnectionFailure("remove Connection", payload.connectionId)),

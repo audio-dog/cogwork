@@ -1,4 +1,7 @@
 import {
+  type SlackChannelId,
+  type SlackMessageTs,
+  type SlackWriteKey,
   type WorkflowAvailability,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
@@ -19,12 +22,15 @@ import * as Stream from "effect/Stream";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
+import { readJsonEventStream } from "./json-event-stream";
 import {
   SourceFailure,
+  type TriggerEntry,
   type TriggerEvent,
   type TriggerSource,
   type TriggerSubscription,
 } from "./trigger-source";
+import type { SystemOptions } from "./workflow-options";
 
 export interface SlackSession {
   readonly team: string;
@@ -33,7 +39,8 @@ export interface SlackSession {
 }
 
 export interface SlackMetadata {
-  readonly eventPayload: unknown;
+  readonly eventType: string;
+  readonly writeKey: string | null;
 }
 
 export interface SlackReaction {
@@ -55,6 +62,12 @@ export interface SlackMessage {
 export interface SlackChannel {
   readonly id: string;
   readonly name: string;
+}
+
+export interface SlackWriteLookup {
+  readonly channel: SlackChannelId;
+  readonly threadTs: SlackMessageTs | null;
+  readonly writeKey: SlackWriteKey;
 }
 
 export interface SlackClientService {
@@ -81,6 +94,10 @@ export interface SlackClientService {
     channel: string,
     threadTs: string,
   ) => Effect.Effect<ReadonlyArray<SlackMessage>, SourceFailure>;
+  readonly findWrite: (
+    session: SlackSession,
+    lookup: SlackWriteLookup,
+  ) => Effect.Effect<SlackMessage | null, SourceFailure>;
   readonly channels: (session: SlackSession) => Effect.Effect<ReadonlyArray<SlackChannel>, SourceFailure>;
   readonly emojis: (session: SlackSession) => Effect.Effect<ReadonlyArray<string>, SourceFailure>;
   readonly channelName: (session: SlackSession, channel: string) => Effect.Effect<string, SourceFailure>;
@@ -112,10 +129,11 @@ const entry = (
   name: string,
   itemKind: "slack-message" | "slack-conversation",
   parameters: WorkflowCatalogEntry["parameters"],
-): WorkflowCatalogEntry => ({
+): TriggerEntry => ({
   key,
   name,
   kind: "trigger",
+  triggerKind: "occurrence",
   system: "slack",
   connection: "slack",
   requires: [],
@@ -123,6 +141,7 @@ const entry = (
   itemKind,
   actsOn: [],
   requiresWorkspace: false,
+  workspaceSource: null,
   permissionProfile: "read-only",
   agentInputs: [],
   emits: [],
@@ -135,7 +154,7 @@ const catchUpParameter = parameter("catch-up-at-most", false, "fixed", [
   "2592000000",
 ]);
 
-export const slackEntries: ReadonlyArray<WorkflowCatalogEntry> = [
+export const slackEntries: ReadonlyArray<TriggerEntry> = [
   entry(mentionedKey, "I am mentioned", "slack-message", [
     parameter("channel", false, "live", []),
     catchUpParameter,
@@ -187,15 +206,10 @@ const withCatchUpWindow = (subscription: TriggerSubscription, startedAtMillis: n
 
 const catchUpSince = (subscription: TriggerSubscription, now: number) => subscription.catchUp?.since ?? now;
 
-const payloadHasWriteKey = (payload: unknown) => {
-  if (typeof payload !== "object" || payload === null) return false;
-  const hasWriteKey =
-    "write_key" in payload && typeof payload.write_key === "string" && payload.write_key.length > 0;
-  return hasWriteKey;
-};
-
 const isCogworkMessage = (message: SlackMessage) =>
-  message.appId === cogworkAppId && payloadHasWriteKey(message.metadata?.eventPayload);
+  message.appId === cogworkAppId &&
+  message.metadata?.eventType === "cogwork_write" &&
+  typeof message.metadata.writeKey === "string";
 
 const rootTimestampOf = (message: SlackMessage) => message.threadTs ?? message.ts;
 
@@ -218,7 +232,7 @@ const RawReaction = Schema.Struct({
 
 const RawMetadata = Schema.Struct({
   event_type: Schema.String,
-  event_payload: Schema.Unknown,
+  event_payload: Schema.Record(Schema.String, Schema.Unknown),
 });
 
 const RawMessage = Schema.Struct({
@@ -306,7 +320,15 @@ const normalizeMessage = (message: RawMessageValue, channel: string): SlackMessa
   text: message.text ?? "",
   user: message.user ?? null,
   appId: message.app_id ?? null,
-  metadata: message.metadata ? { eventPayload: message.metadata.event_payload } : null,
+  metadata: message.metadata
+    ? {
+        eventType: message.metadata.event_type,
+        writeKey:
+          typeof message.metadata.event_payload.write_key === "string"
+            ? message.metadata.event_payload.write_key
+            : null,
+      }
+    : null,
   reactions: (message.reactions ?? []).map((reaction) => ({
     name: reaction.name,
     users: reaction.users ?? [],
@@ -315,6 +337,7 @@ const normalizeMessage = (message: RawMessageValue, channel: string): SlackMessa
 
 const slackApi = "https://slack.com/api";
 const slackRequestDeadline = "30 seconds";
+const slackResponseByteLimit = 16 * 1024 * 1024;
 
 const retryAfterMillis = (value: string | undefined) => {
   const seconds = Number(value);
@@ -348,13 +371,9 @@ function callSlack(
       HttpClientRequest.bearerToken(Redacted.value(session.token)),
       HttpClientRequest.setHeader("accept", "application/json"),
     );
-    const response = yield* client.execute(request).pipe(
-      Effect.mapError((error) => sourceFailure("unavailable", error.message)),
-      Effect.timeout(slackRequestDeadline),
-      Effect.catchTag("TimeoutError", () =>
-        sourceFailure("unavailable", `Slack request timed out after ${slackRequestDeadline}`),
-      ),
-    );
+    const response = yield* client
+      .execute(request)
+      .pipe(Effect.mapError((error) => sourceFailure("unavailable", error.message)));
     const statusFailures = {
       401: () => sourceFailure("auth", "Slack rejected the Connection token"),
       403: () => sourceFailure("auth", "Slack rejected the Connection token"),
@@ -372,8 +391,8 @@ function callSlack(
       return yield* statusFailure?.() ??
         sourceFailure("unavailable", `Slack request failed (${response.status})`);
     }
-    const body = yield* response.json.pipe(
-      Effect.mapError(() => sourceFailure("decode", "Slack returned an unreadable response")),
+    const body = yield* readJsonEventStream(response, "Slack response", slackResponseByteLimit).pipe(
+      Effect.mapError((error) => sourceFailure("decode", error.message)),
     );
     const envelope = yield* decodeSlack(SlackEnvelope)(body);
     if (envelope.ok) return body;
@@ -391,10 +410,16 @@ function callSlack(
       : sourceFailure("unavailable", `Slack API error: ${error}`);
     const apiFailure = (apiFailures as Readonly<Record<string, () => SourceFailure>>)[error];
     return yield* apiFailure?.() ?? authFailure;
-  });
+  }).pipe(
+    Effect.timeout(slackRequestDeadline),
+    Effect.catchTag("TimeoutError", () =>
+      sourceFailure("unavailable", `Slack request timed out after ${slackRequestDeadline}`),
+    ),
+  );
 }
 
 export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientService => {
+  const writeLookupPageLimit = 10;
   const cursorPages = <A>(
     session: SlackSession,
     method: string,
@@ -409,6 +434,43 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         Effect.map(([messages, next]) => [messages, next ? Option.some(next) : Option.none()] as const),
       ),
     ).pipe(Stream.runCollect);
+
+  const findWrite = Effect.fn("SlackClient.findWrite")(function* (
+    session: SlackSession,
+    lookup: SlackWriteLookup,
+  ) {
+    const method = lookup.threadTs ? "conversations.replies" : "conversations.history";
+    const params = {
+      channel: lookup.channel,
+      include_all_metadata: "true",
+      limit: "200",
+      ...(lookup.threadTs ? { ts: lookup.threadTs } : {}),
+    };
+    const pages = yield* Stream.paginate({ cursor: "", page: 0 }, ({ cursor, page }) =>
+      callSlack(client, session, method, cursor ? { ...params, cursor } : params).pipe(
+        Effect.flatMap(decodeSlack(HistoryResponse)),
+        Effect.map((response) => {
+          const messages = response.messages.map((message) => normalizeMessage(message, lookup.channel));
+          const message = messages.find(
+            ({ metadata }) =>
+              metadata?.eventType === "cogwork_write" && metadata.writeKey === lookup.writeKey,
+          );
+          const nextCursor = response.response_metadata?.next_cursor ?? "";
+          const shouldContinue = !message && nextCursor !== "" && page + 1 < writeLookupPageLimit;
+          return [
+            [{ message: message ?? null, nextCursor }],
+            shouldContinue ? Option.some({ cursor: nextCursor, page: page + 1 }) : Option.none(),
+          ] as const;
+        }),
+      ),
+    ).pipe(Stream.runCollect);
+    const message = pages.find((page) => page.message)?.message ?? null;
+    if (message) return message;
+    const truncated = pages.at(-1)?.nextCursor;
+    return truncated
+      ? yield* sourceFailure("unavailable", "Slack write lookup exceeded the page limit")
+      : null;
+  });
 
   const searchMessages = (session: SlackSession, query: string, oldestMillis: number) =>
     Stream.paginate(1, (page) =>
@@ -502,6 +564,7 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
         ],
       ),
     ),
+    findWrite,
     channels: Effect.fn("SlackClient.channels")((session) =>
       Stream.paginate("", (cursor) =>
         callSlack(client, session, "conversations.list", {
@@ -555,7 +618,7 @@ export const makeHttpClient = (client: HttpClient.HttpClient): SlackClientServic
 
 export const httpClientLayer = Layer.effect(SlackClient, Effect.map(HttpClient.HttpClient, makeHttpClient));
 
-const slackSession = Effect.fn("SlackSource.session")(function* (connections: ConnectionStoreService) {
+export const slackSession = Effect.fn("SlackSource.session")(function* (connections: ConnectionStoreService) {
   const found = yield* connections
     .findSystem("slack")
     .pipe(Effect.mapError((error) => sourceFailure("connection-not-ready", error.message)));
@@ -659,7 +722,13 @@ const messageEvent = (
   message: SlackMessage,
   workContext: NonNullable<TriggerEvent["workContext"]>,
 ): TriggerEvent => ({
-  key: { _tag: "SlackMessage", team: session.team, channel: message.channel, ts: message.ts },
+  key: {
+    _tag: "SlackMessage",
+    team: session.team,
+    channel: message.channel,
+    ts: message.ts,
+    threadTs: rootTimestampOf(message),
+  },
   revision: message.ts,
   cause: { _tag: "Person" },
   atMillis: timestampMillis(message.ts),
@@ -917,26 +986,22 @@ export const make = Effect.gen(function* () {
     return nested.flat();
   });
 
-  const optionsReaders = {
-    channel: (connected: SlackSession) =>
-      client
-        .channels(connected)
-        .pipe(
-          Effect.map((channels) =>
-            channels.map(({ id: value, name }) => ({ value, name, listedIn: [] }) satisfies WorkflowOption),
-          ),
+  const readers: SystemOptions["readers"] = {
+    channel: () =>
+      session.pipe(
+        Effect.flatMap((connected) => client.channels(connected)),
+        Effect.map((channels) =>
+          channels.map(({ id: value, name }) => ({ value, name, listedIn: [] }) satisfies WorkflowOption),
         ),
-    emoji: (connected: SlackSession) =>
-      client
-        .emojis(connected)
-        .pipe(
-          Effect.map((emojis) =>
-            emojis.map((value) => ({ value, name: `:${value}:`, listedIn: [] }) satisfies WorkflowOption),
-          ),
+      ),
+    emoji: () =>
+      session.pipe(
+        Effect.flatMap((connected) => client.emojis(connected)),
+        Effect.map((emojis) =>
+          emojis.map((value) => ({ value, name: `:${value}:`, listedIn: [] }) satisfies WorkflowOption),
         ),
-  } satisfies Readonly<
-    Record<string, (connected: SlackSession) => Effect.Effect<ReadonlyArray<WorkflowOption>, SourceFailure>>
-  >;
+      ),
+  };
 
   return {
     id: "slack",
@@ -954,20 +1019,7 @@ export const make = Effect.gen(function* () {
           () => ({ _tag: "Unavailable", reason: "Slack Connection unavailable" }) as const,
         ),
       ),
-    listOptions: (_entry, parameterId) =>
-      session.pipe(
-        Effect.flatMap((connected) => {
-          const reader = (
-            optionsReaders as Readonly<
-              Record<
-                string,
-                (connected: SlackSession) => Effect.Effect<ReadonlyArray<WorkflowOption>, SourceFailure>
-              >
-            >
-          )[parameterId];
-          return reader?.(connected) ?? Effect.succeed([]);
-        }),
-      ),
+    options: [{ system: "slack", readers }],
     observe: (subscriptions) =>
       subscriptions.length === 0
         ? Stream.empty

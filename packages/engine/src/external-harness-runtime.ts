@@ -7,12 +7,14 @@ import {
   type ModelOptionSelections,
   type RunId,
   type RunPlanInstruction,
+  type RunPlanMember,
   type RunPlanMessage,
   type RunPlanOperatingInstructions,
   type SessionId,
 } from "@cogwork/contracts";
 import {
   type AnyTextAdapter,
+  type AnyTool,
   type ChatMiddleware,
   chat,
   type JSONSchema,
@@ -106,6 +108,7 @@ export interface ExternalHarnessResolvedRequest {
   readonly checkout: ExternalHarnessCheckout;
   readonly prompt: ReadonlyArray<RunPlanMessage>;
   readonly outputSchema: JSONSchema | null;
+  readonly tools: ReadonlyArray<AnyTool>;
 }
 
 export interface ExternalHarnessCapabilities {
@@ -143,6 +146,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter> {
   readonly catalog: HarnessCatalogOptions;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
+  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Tools">>;
   readonly inheritedEnvironment: ReadonlyArray<string>;
   readonly makeAdapter: (input: {
     readonly model: AdapterModel<Adapter>;
@@ -471,8 +475,16 @@ const gitWritablePaths = (
   return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
 };
 
+const projectedTools = (
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "declaredMembers">,
+  request: HarnessRequest,
+) =>
+  descriptor.declaredMembers?.includes("Tools")
+    ? (request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [])
+    : [];
+
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
-  descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "sharedGit" | "declaredMembers">,
   request: HarnessRequest,
   checkoutPath: string,
   session: SessionId,
@@ -492,6 +504,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     checkout: { path: checkoutPath, gitWritablePaths: writablePaths },
     prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
+    tools: projectedTools(descriptor, request),
   } satisfies ExternalHarnessResolvedRequest;
 });
 
@@ -598,6 +611,7 @@ const makeChatStream = <Adapter extends AnyTextAdapter>(
     abortController,
     modelOptions: descriptor.projectOptions(request),
     outputSchema: request.outputSchema ?? undefined,
+    tools: request.tools,
     threadId: request.identity.session,
     runId: request.identity.run,
     stream: true,
@@ -687,6 +701,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
   return {
     name: descriptor.name,
     ...externalHarnessDeclaration,
+    projectedMembers: [...externalHarnessDeclaration.projectedMembers, ...(descriptor.declaredMembers ?? [])],
     execution: descriptor.capabilities.execution,
     capabilities: descriptor.capabilities.profile,
     authentication: descriptor.authentication,

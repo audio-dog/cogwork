@@ -1,8 +1,8 @@
-import { LifecycleStage } from "@cogwork/contracts";
 import { Harness } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
+import { toolDefinition } from "@tanstack/ai";
 import { type CodexTextConfig, codexText } from "@tanstack/ai-codex";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -227,7 +227,7 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
             assert.include(capture.prompt, "repo rules");
             assert.include(
               capture.prompt,
-              "Mandatory Operating Instructions: /operating-instructions/implement",
+              "Mandatory Operating Instructions: /operating-instructions/operate",
             );
             assert.include(capture.prompt, "implement the issue");
             assert.isFalse(capture.hasCodexConfig);
@@ -263,25 +263,45 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
       10_000,
     );
 
+    it.effect("hands Codex the native MCP servers and the engine tool bridge side by side", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const engineTool = toolDefinition({
+            name: "issue-search",
+            description: "Search issues",
+          }).server(() => Promise.resolve({}));
+          const events = yield* runInRepository(Harness.make([runner()]), handle, {
+            mcpSkills: authenticatedMcp("bridge-secret"),
+            engineTools: [engineTool],
+          });
+          const args = (yield* structuredCapture(events)).args.join("\n");
+
+          assert.include(args, "mcp_servers.test__linear_api__0.url=");
+          assert.include(args, "mcp_servers.tanstack.url=");
+        }),
+      ),
+    );
+
     it.effect("keeps every Operation on a networked Codex Sandbox", () =>
       Effect.scoped(
         Effect.gen(function* () {
           const executable = yield* fakeCodexWithRepositoryHooks();
           const harness = Harness.make([runner({ codexExecutable: executable })]);
           const captures = yield* Effect.forEach(
-            LifecycleStage.literals,
-            (stage) => runOperation(harness, stage),
+            ["operate", "verify"],
+            (operation) => runOperation(harness, operation),
             { concurrency: "unbounded" },
           );
 
-          for (const [, capture] of captures) {
+          captures.forEach(([, capture]) => {
             assert.include(capture.args, "--dangerously-bypass-hook-trust");
             assert.include(capture.args, "workspace-write");
             assert.notInclude(capture.args.join("\n"), "read-only");
             assert.include(capture.args, "sandbox_workspace_write.network_access=true");
             assert.include(capture.args, 'approval_policy="never"');
             assert.notInclude(capture.args.join("\n"), "danger-full-access");
-          }
+          });
         }),
       ),
     );

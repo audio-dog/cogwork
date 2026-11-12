@@ -5,18 +5,21 @@ import * as Schema from "effect/Schema";
 import {
   HarnessName,
   IssueTrackerType,
+  makeBrand,
+  SlackChannelId,
+  SlackMessageTs,
+  SlackTeamId,
+  SourceControlType,
   TrimmedNonEmptyString,
+  WorkflowId,
   WorkItemId,
   WorkspaceId,
 } from "./base-schemas";
-import { WorkItemKey } from "./coordination";
+import { Lineage, ParkReason, WorkItemKey, WorkItemRef } from "./coordination";
 import { PrincipalId } from "./principal";
 import { RunId } from "./run";
 import { RunPlanPolicyProfile } from "./settings";
-import { IssueTrackerConfig } from "./workspace";
-
-export const WorkflowId = TrimmedNonEmptyString.pipe(Schema.brand("WorkflowId"));
-export type WorkflowId = typeof WorkflowId.Type;
+import { IssueTrackerConfig, SourceControlConfig } from "./workspace";
 
 export const WorkflowNodeId = TrimmedNonEmptyString.check(
   Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -41,10 +44,19 @@ export const WorkflowWorkspaceSelection = Schema.Union([
 ]).pipe(Schema.toTaggedUnion("_tag"));
 export type WorkflowWorkspaceSelection = typeof WorkflowWorkspaceSelection.Type;
 
+export const WorkflowTriggerFilter = Schema.Struct({
+  entry: WorkflowCatalogKey,
+});
+export type WorkflowTriggerFilter = typeof WorkflowTriggerFilter.Type;
+
 export const WorkflowTrigger = Schema.Struct({
   id: WorkflowNodeId,
   entry: WorkflowCatalogKey,
   parameters: Schema.Array(WorkflowParameterValue),
+  filters: Schema.Array(WorkflowTriggerFilter).pipe(
+    Schema.withConstructorDefault(Effect.succeed([])),
+    Schema.withDecodingDefaultKey(Effect.succeed([])),
+  ),
   start: WorkflowNodeId,
 });
 export type WorkflowTrigger = typeof WorkflowTrigger.Type;
@@ -89,12 +101,37 @@ const workflowActionTargetBinding = {
   repository: Schema.NullOr(TrimmedNonEmptyString),
 } as const;
 
+const sourceControlActionTargetBinding = {
+  workspace: WorkspaceId,
+  app: SourceControlType,
+  issueTracker: IssueTrackerConfig,
+  sourceControl: Schema.optional(SourceControlConfig),
+  repository: Schema.NullOr(TrimmedNonEmptyString),
+} as const;
+
 export const WorkflowActionTarget = Schema.TaggedUnion({
   Cogwork: {},
   NoWorkspace: {},
+  SlackChannel: { channel: SlackChannelId },
+  SlackMessage: {
+    team: SlackTeamId,
+    channel: SlackChannelId,
+    ts: SlackMessageTs,
+    threadTs: SlackMessageTs,
+  },
   CurrentIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   ExistingIssue: { ...workflowActionTargetBinding, issue: WorkItemId },
   NewIssue: workflowActionTargetBinding,
+  NewPullRequest: { ...sourceControlActionTargetBinding, issue: WorkItemId },
+  CurrentPullRequest: { ...sourceControlActionTargetBinding, item: WorkItemRef },
+  NamedPullRequest: {
+    ...sourceControlActionTargetBinding,
+    number: Schema.Int.check(Schema.isGreaterThan(0)),
+    url: TrimmedNonEmptyString,
+    headBranch: TrimmedNonEmptyString,
+    baseBranch: TrimmedNonEmptyString,
+    headSha: TrimmedNonEmptyString,
+  },
 });
 export type WorkflowActionTarget = typeof WorkflowActionTarget.Type;
 
@@ -103,25 +140,58 @@ export class WorkflowActionOrigin extends Schema.Class<WorkflowActionOrigin>("Wo
   workflow: WorkflowId,
   attempt: RunId,
   writeKey: TrimmedNonEmptyString,
+  lineage: Lineage,
 }) {}
 
 export class WorkflowActionArtifact extends Schema.Class<WorkflowActionArtifact>("WorkflowActionArtifact")({
+  kind: Schema.Literals(["IssueCreated", "PullRequestOpened", "PullRequestUpdated"]),
   workspace: WorkspaceId,
   issue: WorkItemId,
   url: TrimmedNonEmptyString,
   origin: WorkflowActionOrigin,
 }) {}
 
+export class WorkflowSlackActionArtifact extends Schema.Class<WorkflowSlackActionArtifact>(
+  "WorkflowSlackActionArtifact",
+)({
+  team: SlackTeamId,
+  channel: SlackChannelId,
+  ts: SlackMessageTs,
+  threadTs: Schema.NullOr(SlackMessageTs),
+  origin: WorkflowActionOrigin,
+}) {}
+
+export const WorkflowActionPlanArtifact = Schema.Union([WorkflowActionArtifact, WorkflowSlackActionArtifact]);
+export type WorkflowActionPlanArtifact = typeof WorkflowActionPlanArtifact.Type;
+
+export const WorkflowReviewComment = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  line: Schema.Int.check(Schema.isGreaterThan(0)),
+  body: TrimmedNonEmptyString,
+}).annotate({ parseOptions: { onExcessProperty: "error" } });
+export type WorkflowReviewComment = typeof WorkflowReviewComment.Type;
+
+export const WorkflowAgentInputValue = Schema.Union([Schema.String, Schema.Array(WorkflowReviewComment)]);
+export type WorkflowAgentInputValue = typeof WorkflowAgentInputValue.Type;
+
+export const WorkflowOperationElement = Schema.Struct({
+  summary: TrimmedNonEmptyString,
+  answers: Schema.Record(Schema.String, Schema.String),
+  inputs: Schema.Record(Schema.String, WorkflowAgentInputValue),
+  workspace: Schema.optional(Schema.String),
+});
+export type WorkflowOperationElement = typeof WorkflowOperationElement.Type;
+
 export class WorkflowActionPlanStep extends Schema.Class<WorkflowActionPlanStep>("WorkflowActionPlanStep")({
   position: Schema.Natural,
   entry: WorkflowCatalogKey,
   parameters: Schema.Array(WorkflowParameterValue),
-  inputs: Schema.Record(Schema.String, TrimmedNonEmptyString),
+  inputs: Schema.Record(Schema.String, WorkflowAgentInputValue),
   target: WorkflowActionTarget,
   writeKey: TrimmedNonEmptyString,
-  status: Schema.Literals(["pending", "completed", "failed"]),
+  status: Schema.Literals(["pending", "executing", "completed", "failed"]),
   failures: Schema.Natural,
-  artifact: Schema.NullOr(WorkflowActionArtifact),
+  artifact: Schema.NullOr(WorkflowActionPlanArtifact),
 }) {}
 
 export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("WorkflowActionPlan")({
@@ -133,11 +203,84 @@ export class WorkflowActionPlan extends Schema.Class<WorkflowActionPlan>("Workfl
   createdAtMillis: Schema.Natural,
   consumedHandbackAtMillis: Schema.Natural.pipe(Schema.withDecodingDefaultKey(Effect.succeed(0))),
   digest: TrimmedNonEmptyString,
+  workflowRevision: Schema.Int.pipe(
+    Schema.withConstructorDefault(Effect.succeed(0)),
+    Schema.withDecodingDefaultKey(Effect.succeed(0)),
+  ),
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
+  inputs: Schema.Record(Schema.String, WorkflowAgentInputValue).pipe(
+    Schema.withConstructorDefault(Effect.succeed({})),
+    Schema.withDecodingDefaultKey(Effect.succeed({})),
+  ),
+  workspace: Schema.NullOr(Schema.String).pipe(
+    Schema.withConstructorDefault(Effect.succeed(null)),
+    Schema.withDecodingDefaultKey(Effect.succeed(null)),
+  ),
+  lineage: Lineage,
   handOff: Schema.NullOr(WorkflowNodeId),
   steps: Schema.Array(WorkflowActionPlanStep),
 }) {}
+
+export const WorkflowParkCommand = Schema.Literals([
+  "approve",
+  "reject",
+  "choose-answer",
+  "hand-back",
+  "open-workflow",
+]);
+export type WorkflowParkCommand = typeof WorkflowParkCommand.Type;
+
+export const WorkflowPark = Schema.Struct({
+  item: WorkItemRef,
+  workflow: WorkflowId,
+  publishedRevision: Schema.Int,
+  operation: WorkflowNodeId,
+  lineage: Lineage,
+  summary: TrimmedNonEmptyString,
+  changedSinceParked: Schema.Boolean,
+  commands: Schema.Array(WorkflowParkCommand),
+  reason: ParkReason,
+  attempt: Schema.NullOr(RunId),
+  parkedAtMillis: Schema.Natural,
+  plan: Schema.NullOr(WorkflowActionPlan),
+});
+export type WorkflowPark = typeof WorkflowPark.Type;
+
+export const WorkflowSkippedRecord = Schema.Struct({
+  summary: TrimmedNonEmptyString,
+  reason: TrimmedNonEmptyString,
+  atMillis: Schema.Natural,
+});
+export type WorkflowSkippedRecord = typeof WorkflowSkippedRecord.Type;
+
+export const WorkflowAttention = Schema.Struct({
+  parks: Schema.Array(WorkflowPark),
+  skipped: Schema.Array(
+    Schema.Struct({
+      workflow: WorkflowId,
+      steps: Schema.Array(WorkflowSkippedRecord),
+      events: Schema.Array(WorkflowSkippedRecord),
+    }),
+  ),
+});
+export type WorkflowAttention = typeof WorkflowAttention.Type;
+
+export class WorkflowTouchpointFailure extends Schema.TaggedError<WorkflowTouchpointFailure>()(
+  "WorkflowTouchpointFailure",
+  {
+    reason: Schema.Literals([
+      "not-found",
+      "stale-attempt",
+      "stale-digest",
+      "not-awaiting-approval",
+      "not-handed-to-you",
+      "invalid-edits",
+      "unavailable",
+    ]),
+    message: TrimmedNonEmptyString,
+  },
+) {}
 
 export const WorkflowTransition = Schema.Struct({
   when: Schema.Array(WorkflowTransitionAnswer),
@@ -179,12 +322,17 @@ export const WorkflowOperation = Schema.Struct({
 });
 export type WorkflowOperation = typeof WorkflowOperation.Type;
 
+export const WorkflowNotificationId = makeBrand("WorkflowNotificationId");
+export type WorkflowNotificationId = typeof WorkflowNotificationId.Type;
+
 export const WorkflowNotification = Schema.Struct({
-  id: TrimmedNonEmptyString,
+  id: WorkflowNotificationId,
+  item: WorkItemRef,
   workflow: WorkflowId,
   operation: WorkflowNodeId,
   summary: TrimmedNonEmptyString,
   answers: Schema.Record(Schema.String, Schema.String),
+  artifacts: Schema.Array(WorkflowActionArtifact),
   atMillis: Schema.Natural,
 });
 export type WorkflowNotification = typeof WorkflowNotification.Type;
@@ -209,6 +357,8 @@ export const WorkflowEdit = Schema.TaggedUnion({
     values: Schema.Array(Schema.String),
   },
   SetTriggerStart: { trigger: WorkflowNodeId, start: WorkflowNodeId },
+  AddTriggerFilter: { trigger: WorkflowNodeId, filter: WorkflowTriggerFilter },
+  RemoveTriggerFilter: { trigger: WorkflowNodeId, entry: WorkflowCatalogKey },
   AddOperation: { operation: WorkflowOperation },
   RemoveOperation: { operation: WorkflowNodeId },
   RenameOperation: { operation: WorkflowNodeId, name: TrimmedNonEmptyString },
@@ -293,6 +443,7 @@ export const WorkflowDiagnosticCode = Schema.Literals([
   "profile-too-narrow",
   "no-workspace",
   "item-kind-mismatch",
+  "filter-not-applicable",
   "connection-not-ready",
   "need-not-ready",
   "harness-unavailable",
@@ -333,10 +484,13 @@ export const WorkflowCatalogParameter = Schema.Struct({
 });
 export type WorkflowCatalogParameter = typeof WorkflowCatalogParameter.Type;
 
+export const WorkflowWorkspaceSource = Schema.Literals(["item-else-agent", "agent"]);
+export type WorkflowWorkspaceSource = typeof WorkflowWorkspaceSource.Type;
+
 export const WorkflowCatalogEntry = Schema.Struct({
   key: WorkflowCatalogKey,
   name: TrimmedNonEmptyString,
-  kind: Schema.Literals(["trigger", "action"]),
+  kind: Schema.Literals(["trigger", "action", "filter"]),
   system: Schema.NullOr(TrimmedNonEmptyString),
   connection: Schema.NullOr(TrimmedNonEmptyString),
   requires: Schema.Array(NeedIdentity),
@@ -344,6 +498,7 @@ export const WorkflowCatalogEntry = Schema.Struct({
   itemKind: Schema.NullOr(TrimmedNonEmptyString),
   actsOn: Schema.Array(TrimmedNonEmptyString),
   requiresWorkspace: Schema.Boolean,
+  workspaceSource: Schema.NullOr(WorkflowWorkspaceSource),
   permissionProfile: RunPlanPolicyProfile,
   agentInputs: Schema.Array(TrimmedNonEmptyString),
   emits: Schema.Array(WorkflowCatalogKey),
@@ -394,38 +549,73 @@ const operationActionEntries = (operation: WorkflowOperation, catalog: WorkflowC
 
 const inputFields = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
   const inputs = unique(operationActionEntries(operation, catalog).flatMap(({ agentInputs }) => agentInputs));
-  return objectFields(inputs.map((input) => [input, Schema.String] as const));
+  return objectFields(
+    inputs.map((input) => [
+      input,
+      input === "review_comments" ? Schema.Array(WorkflowReviewComment) : Schema.String,
+    ]),
+  );
 };
+
+const agentChoosesWorkspaceFrom = {
+  "item-else-agent": (itemWorkspace) => itemWorkspace === undefined,
+  agent: () => true,
+} satisfies Record<WorkflowWorkspaceSource, (itemWorkspace: WorkspaceId | undefined) => boolean>;
 
 export const workflowOperationResultSchema = (
   operation: WorkflowOperation,
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
+  itemWorkspace?: WorkspaceId,
 ) => {
-  const fields = {
+  const elementFields = {
     summary: TrimmedNonEmptyString,
-    stuck: Schema.Boolean,
     answers: Schema.Struct(answerFields(operation)),
     inputs: Schema.Struct(inputFields(operation, catalog)),
   };
   const parseOptions = { onExcessProperty: "error" } as const;
-  const needsWorkspace = operationActionEntries(operation, catalog).some(
-    ({ requiresWorkspace }) => requiresWorkspace,
-  );
-  return needsWorkspace
-    ? Schema.Struct({ ...fields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
+  const entries = operationActionEntries(operation, catalog);
+  const agentChoosesWorkspace = (workspace: WorkspaceId | undefined) =>
+    entries.some(
+      ({ workspaceSource }) =>
+        workspaceSource !== null && agentChoosesWorkspaceFrom[workspaceSource](workspace),
+    );
+  const element = agentChoosesWorkspace(undefined)
+    ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
         parseOptions,
       })
-    : Schema.Struct(fields).annotate({ parseOptions });
+    : Schema.Struct(elementFields).annotate({ parseOptions });
+  const once = agentChoosesWorkspace(itemWorkspace)
+    ? Schema.Struct({
+        summary: TrimmedNonEmptyString,
+        stuck: Schema.Boolean,
+        answers: elementFields.answers,
+        inputs: elementFields.inputs,
+        workspace: Schema.Literals(["none", ...workspaces]),
+      }).annotate({ parseOptions })
+    : Schema.Struct({
+        summary: TrimmedNonEmptyString,
+        stuck: Schema.Boolean,
+        answers: elementFields.answers,
+        inputs: elementFields.inputs,
+      }).annotate({ parseOptions });
+  return operation.forEach === null
+    ? once
+    : Schema.Struct({
+        summary: TrimmedNonEmptyString,
+        stuck: Schema.Boolean,
+        elements: Schema.Array(element).check(Schema.isMaxLength(50)),
+      }).annotate({ parseOptions });
 };
 
 export const workflowOperationResultJsonSchema = (
   operation: WorkflowOperation,
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
+  itemWorkspace?: WorkspaceId,
 ) =>
   Schema.toStandardJSONSchemaV1(
-    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces)),
+    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces, itemWorkspace)),
   );
 
 export const matchWorkflowTransitions = (
@@ -621,6 +811,15 @@ const updateOperation = (
   return operations._tag === "Ok" ? ok({ ...document, operations: operations.value }) : operations;
 };
 
+const updateTrigger = (
+  document: WorkflowDocument,
+  trigger: WorkflowNodeId,
+  update: (value: WorkflowTrigger) => WorkflowTrigger,
+): Decoded<WorkflowDocument> => {
+  const triggers = updateById(document.triggers, trigger, "trigger", update);
+  return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
+};
+
 const withQuestion = (
   document: WorkflowDocument,
   operation: WorkflowNodeId,
@@ -729,27 +928,22 @@ const applyWorkflowEdit = (document: WorkflowDocument, edit: WorkflowEdit): Deco
         ? refused([unknownTarget(trigger, "trigger")])
         : ok({ ...document, triggers });
     },
-    SetTriggerEntry: ({ trigger, entry }) => {
-      const triggers = updateById(document.triggers, trigger, "trigger", (value) => ({
+    SetTriggerEntry: ({ trigger, entry }) =>
+      updateTrigger(document, trigger, (value) => ({ ...value, entry, parameters: [], filters: [] })),
+    AddTriggerFilter: ({ trigger, filter }) =>
+      updateTrigger(document, trigger, (value) => ({
         ...value,
-        entry,
-        parameters: [],
-      }));
-      return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
-    },
-    SetTriggerParameter: ({ trigger, parameter, values }) => {
-      const triggers = updateById(document.triggers, trigger, "trigger", (value) =>
-        setTriggerParameter(value, parameter, values),
-      );
-      return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
-    },
-    SetTriggerStart: ({ trigger, start }) => {
-      const triggers = updateById(document.triggers, trigger, "trigger", (value) => ({
+        filters: [...value.filters.filter(({ entry }) => entry !== filter.entry), filter],
+      })),
+    RemoveTriggerFilter: ({ trigger, entry }) =>
+      updateTrigger(document, trigger, (value) => ({
         ...value,
-        start,
-      }));
-      return triggers._tag === "Ok" ? ok({ ...document, triggers: triggers.value }) : triggers;
-    },
+        filters: value.filters.filter((filter) => filter.entry !== entry),
+      })),
+    SetTriggerParameter: ({ trigger, parameter, values }) =>
+      updateTrigger(document, trigger, (value) => setTriggerParameter(value, parameter, values)),
+    SetTriggerStart: ({ trigger, start }) =>
+      updateTrigger(document, trigger, (value) => ({ ...value, start })),
     AddOperation: ({ operation }) => ok({ ...document, operations: [...document.operations, operation] }),
     RemoveOperation: ({ operation }) => {
       const operations = document.operations
@@ -1015,6 +1209,14 @@ const entryUsages = (document: WorkflowDocument) => [
     expectedKind: "trigger" as const,
     location: location("entry", { trigger: trigger.id }),
   })),
+  ...document.triggers.flatMap((trigger) =>
+    trigger.filters.map(({ entry }) => ({
+      entry,
+      parameters: [],
+      expectedKind: "filter" as const,
+      location: location("filters", { trigger: trigger.id }),
+    })),
+  ),
   ...document.operations.flatMap((operation) =>
     operation.transitions.flatMap((transition) =>
       transition.actions.map((action) => ({
@@ -1253,6 +1455,33 @@ const itemKindDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalo
   });
 };
 
+export const filterAppliesTo = (filter: WorkflowCatalogEntry, trigger: WorkflowCatalogEntry) =>
+  filter.kind === "filter" && filter.system === trigger.system && filter.itemKind === trigger.itemKind;
+
+const filterDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
+  const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
+  return document.triggers.flatMap((trigger) => {
+    const triggerEntry = entries.get(trigger.entry);
+    return trigger.filters.flatMap(({ entry }) => {
+      const filterEntry = entries.get(entry);
+      const notApplicable =
+        triggerEntry?.kind === "trigger" &&
+        filterEntry?.kind === "filter" &&
+        !filterAppliesTo(filterEntry, triggerEntry);
+      return notApplicable
+        ? [
+            diagnostic(
+              "filter-not-applicable",
+              "incomplete",
+              `Filter ${entry} does not apply to Trigger ${trigger.id}`,
+              location("filters", { trigger: trigger.id }),
+            ),
+          ]
+        : [];
+    });
+  });
+};
+
 const optionReadinessDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
   const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
   return entryUsages(document).flatMap((usage) => {
@@ -1260,7 +1489,9 @@ const optionReadinessDiagnostics = (document: WorkflowDocument, catalog: Workflo
     if (!entry) return [];
     return usage.parameters.flatMap(({ id, value }) => {
       const parameter = entry.parameters.find((candidate) => candidate.id === id);
-      const missingLiveValue = parameter?.source === "live" && !parameter.values.includes(value);
+      // A source lists most live values only on request, so an empty catalog list says nothing.
+      const missingLiveValue =
+        parameter?.source === "live" && parameter.values.length > 0 && !parameter.values.includes(value);
       return missingLiveValue
         ? [
             diagnostic(
@@ -1487,6 +1718,7 @@ const validationRules = [
   (document: WorkflowDocument, _catalog: WorkflowCatalog) => emptyInstructionDiagnostics(document),
   operationCapabilityDiagnostics,
   itemKindDiagnostics,
+  filterDiagnostics,
   (document: WorkflowDocument, _catalog: WorkflowCatalog) => unreachableDiagnostics(document),
   handOffTriggerDiagnostics,
 ] satisfies ReadonlyArray<

@@ -4,6 +4,7 @@ import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
@@ -30,6 +31,7 @@ const jsonResponse = (body: unknown = {}, status = 200, headers?: HeadersInit) =
 
 const pullResponse = (number: number) => ({
   number,
+  title: `Pull ${number}`,
   html_url: `https://github.com/colonylabs/cogwork/pull/${number}`,
   user: { login: "cogwork[bot]" },
   head: {
@@ -766,6 +768,119 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("creates a pending review by omitting event", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({ id: 91 }, 200)));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      yield* client.createReview(repo, 480, {
+        commitId: "reviewed-sha",
+        body: "Review draft",
+        comments: [{ path: "src/index.ts", line: 12, body: "Please rename this." }],
+        event: null,
+      });
+
+      const [input, init] = fetch.mock.calls[0] ?? [];
+      assert.isDefined(input);
+      const request = new Request(input, init);
+      assert.strictEqual(request.method, "POST");
+      assert.strictEqual(request.url, "https://api.github.com/repos/colonylabs/cogwork/pulls/480/reviews");
+      assert.deepStrictEqual(yield* Effect.promise(() => request.json()), {
+        commit_id: "reviewed-sha",
+        body: "Review draft",
+        comments: [{ path: "src/index.ts", line: 12, side: "RIGHT", body: "Please rename this." }],
+      });
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("does not retry a review when the response is lost", () => {
+    const status = vi.fn().mockReturnValueOnce(500).mockReturnValue(201);
+    const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, status())));
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const operation = yield* Effect.forkChild(
+        Effect.result(
+          client.createReview(repo, 480, {
+            commitId: "reviewed-sha",
+            body: "Review body",
+            comments: [],
+            event: "COMMENT",
+          }),
+        ),
+      );
+      yield* TestClock.adjust("1 second");
+      const result = yield* Fiber.join(operation);
+
+      assert.isTrue(Result.isFailure(result));
+      assert.strictEqual(fetch.mock.calls.length, 1);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("reads pull request description, diff, and changed files", () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
+      const request = new Request(input, init);
+      if (request.headers.get("accept") === "application/vnd.github.v3.diff") {
+        return Promise.resolve(new Response("diff --git a/src/index.ts b/src/index.ts\n"));
+      }
+      if (request.url.endsWith("/compare/base-sha...head-sha")) {
+        return Promise.resolve(
+          jsonResponse({
+            files: [
+              {
+                filename: "src/index.ts",
+                status: "modified",
+                additions: 1,
+                deletions: 0,
+                changes: 1,
+                patch: "@@ -10,0 +11,1 @@\n+const answer = 42;",
+              },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          ...pullResponse(480),
+          title: "Review this change",
+          body: "Please review the implementation.",
+          base: { sha: "base-sha", ref: "main" },
+        }),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const [pull, diff, files] = yield* Effect.all([
+        client.getPull(repo, 480),
+        client.getPullDiff(repo, "base-sha", "head-sha"),
+        client.listPullFiles(repo, "base-sha", "head-sha"),
+      ]);
+
+      assert.strictEqual(pull.title, "Review this change");
+      assert.strictEqual(pull.body, "Please review the implementation.");
+      assert.strictEqual(diff, "diff --git a/src/index.ts b/src/index.ts\n");
+      assert.deepStrictEqual(files, [
+        {
+          path: "src/index.ts",
+          status: "modified",
+          additions: 1,
+          deletions: 0,
+          changes: 1,
+          patch: "@@ -10,0 +11,1 @@\n+const answer = 42;",
+        },
+      ]);
+      assert.deepStrictEqual(
+        fetch.mock.calls.map(([input, init]) => new Request(input, init).url),
+        [
+          "https://api.github.com/repos/colonylabs/cogwork/pulls/480",
+          "https://api.github.com/repos/colonylabs/cogwork/compare/base-sha...head-sha",
+          "https://api.github.com/repos/colonylabs/cogwork/compare/base-sha...head-sha",
+        ],
+      );
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("surfaces a rejected pull request write as a typed error", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, 422)));
 
@@ -1010,6 +1125,43 @@ describe("GitHub client", () => {
       assert.strictEqual(error.reason, "unavailable");
       assert.include(error.message, "pagination timed out");
     }).pipe(withHttpClient(httpClient));
+  });
+
+  it.effect("lists collaborators from every page", () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({ login: `reviewer-${index}` }));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [{ login: "reviewer-100" }]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const reviewers = yield* client.listCollaborators(repo);
+      assert.lengthOf(reviewers, 101);
+      assert.strictEqual(reviewers.at(-1), "reviewer-100");
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
+  });
+
+  it.effect("lists repository labels from every page", () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      name: `label-${index}`,
+      color: "ededed",
+    }));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = typeof input === "string" || input instanceof URL ? String(input) : input.url;
+      const page = new URL(url).searchParams.get("page");
+      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [{ name: "needs-triage" }]));
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const labels = yield* client.listLabels(repo);
+      assert.lengthOf(labels, 101);
+      assert.strictEqual(labels.at(-1), "needs-triage");
+      assert.strictEqual(fetch.mock.calls.length, 2);
+    }).pipe(withFetchClient(fetch));
   });
 
   it.effect("fails an open-pull pagination timeout without returning a partial page", () => {

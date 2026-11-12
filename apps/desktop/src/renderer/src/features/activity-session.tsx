@@ -1,7 +1,6 @@
 import {
   applyDaemonEvent,
   type Board,
-  ClassifiedItem,
   DaemonEvent,
   initialBoard,
   type RunId,
@@ -20,6 +19,7 @@ import type * as Atom from "effect/unstable/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
 import { recordDaemonEventsApplied } from "../daemon/process-health";
+import { type OperationRun, operationNameOf, runTitle } from "./feed";
 import {
   applyRunPreview,
   previewMap,
@@ -66,7 +66,9 @@ export interface ActiveRun {
   readonly runId: RunId;
   readonly workspace: WorkspaceId;
   readonly workItem: WorkItemId;
-  readonly stage: RunSummary["stage"];
+  readonly subject?: RunSummary["subject"];
+  readonly workflow?: RunSummary["workflow"];
+  readonly operation: RunSummary["operation"];
   readonly status: RunStatus;
   readonly preview: RunActivityPreview | null;
 }
@@ -121,15 +123,6 @@ const settledRun = (board: Board, runId: RunId) => {
 };
 const stamp = (event: DaemonEvent, arrival: number) => event.emittedAtMillis ?? arrival;
 
-const classifiedState = (item: ClassifiedItem) =>
-  ClassifiedItem.match<{ readonly text: string; readonly severity: ActivitySeverity }>(item, {
-    Eligible: () => ({ text: "eligible", severity: "info" }),
-    Claimed: () => ({ text: "claimed", severity: "info" }),
-    Blocked: ({ openBlockers }) => ({ text: `blocked · ${openBlockers} open`, severity: "warn" }),
-    NeedsHuman: () => ({ text: "needs a person", severity: "warn" }),
-    ReadyToMerge: () => ({ text: "ready to merge", severity: "warn" }),
-  });
-
 export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
   running: "info",
   succeeded: "success",
@@ -152,17 +145,16 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
     WorkflowChanged: () => null,
     WorkflowDeleted: () => null,
     ItemChanged: ({ item, workspace }) => {
-      const state = classifiedState(item);
       return {
         id: rowId(ordinal),
         kind: "item",
         atMillis,
         label: activityLabels.item,
-        summary: `${item.title} → ${state.text}`,
-        severity: state.severity,
+        summary: `${item.title} → ready to merge`,
+        severity: "warn",
         entity: { type: "item", id: item.id, workspace },
         raw: pretty(item),
-        lowSignal: ClassifiedItem.guards.Eligible(item),
+        lowSignal: false,
       };
     },
     ItemRemoved: ({ workspace, id }) => ({
@@ -181,7 +173,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       kind: "run",
       atMillis,
       label: activityLabels.run,
-      summary: `${run.workItem} · run ${run.status}`,
+      summary: `${runTitle(run)} · run ${run.status}`,
       severity: runStatusSeverity[run.status],
       entity: { type: "run", id: run.id, workspace: run.workspace, workItem: run.workItem },
       raw: pretty(run),
@@ -532,6 +524,11 @@ export function useActivitySession(): ActivitySession {
   const session = use(ActivitySessionContext);
   if (session === null) throw new Error("useActivitySession must render inside ActivitySessionProvider.");
   return session;
+}
+
+export function useOperationName() {
+  const { workflows } = useActivitySession();
+  return (run: OperationRun) => operationNameOf(workflows, run);
 }
 
 export type BoardResult = Data.TaggedEnum<{

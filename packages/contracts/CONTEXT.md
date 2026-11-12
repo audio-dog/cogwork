@@ -31,23 +31,23 @@ When either Engine port uses GitHub, its `owner/repository` is runtime data deri
 _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Actor identity**:
-Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It stamps claims and coordination comments and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
+Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It authors the daemon's tracker writes and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
 Because that account is the person's own, it cannot tell Cogwork's writes from the person's. In a Workflow the **origin record** decides which writes are Cogwork's, never the account.
 _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
-`issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced in the engine's classification, not here.
+`issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
 **Bot allowlist**:
 `sourceControl.botAllowlist` (with the same fallback field on `issueTracker` the source-control target already borrows) — an optional, non-empty-when-present list of bot logins whose PR feedback is trusted to *wake a follow-up*. Absent means the gate is off: no bot ever wakes one, exactly as before.
 **A trusted bot wakes a follow-up only when it opens a new thread on a line of the diff.** A bot's narration of the pull request — a summary comment, a review header, an automation note — is not a finding and wakes nothing, and neither is a reply inside a thread somebody else opened. An entry ending in `:any` drops the shape test and takes every comment that bot writes; it is the escape hatch for a bot that only speaks at pull-request level. Human feedback is unaffected: a person's PR-level comment still wakes a follow-up and can still set `/fresh`.
-A listed bot's finding is a wake signal only — it triggers a follow-up but does not reset the no-progress counter and can never set `/fresh`, so a stall still parks the item for a person. It grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
+A listed bot's finding is a wake signal only. It can never set `/fresh` and grants no steering: a trusted-bot finding is actionable context, like a failing check, never an instruction. Distinct from the actor identity (who the daemon acts as) and the assignee allowlist (whose tickets it may pick up).
 _Avoid_: Bot filter, trusted authors (humans aren't on it), steering (a bot never steers), *bot comment* as a synonym for *finding* (most of what a bot writes on a PR is neither)
 
 **Follow-up trigger**:
-A pull request condition that wakes a follow-up round: failing required checks, a **base divergence**, new human feedback, or a trusted bot's finding. At the cut-over the four become source-control **Trigger** entries, and their **source revisions** make the rule below structural: a standing state has no new revision, so it cannot wake follow-up again.
-**A trigger must be a condition the agent can clear** — either by working (a red check, a conflict) or by answering it once, since feedback is compared against the follow-up marker and a marker already past it wakes nothing. A condition the agent has no power to clear is a **state** of the pull request, not a trigger, and belongs to classification. The review decision is the worked example: a standing `changes-requested` review holds until its author approves or dismisses it, and no push clears it — so it travels as the PR summary's `review` and wakes nothing on its own. Its *content* still does, because a review's prose and its inline comments are human feedback like any other, including on an approval. See engine ADR 0013.
+A source-control **Trigger** entry for failing required checks, a **base divergence**, new human feedback, or a trusted bot's finding. Source revisions make the rule structural: a standing state has no new revision, so it cannot wake follow-up again.
+**A trigger must be a condition the agent can clear** — either by working or by answering it once. A condition the agent has no power to clear is pull-request state, not a Trigger. A standing `changes-requested` review therefore wakes nothing on its own; its prose and inline comments remain human-feedback occurrences. See engine ADR 0013.
 _Avoid_: Follow-up reason; *wake signal* as a synonym (that names a trusted bot's finding in particular); review decision (that's a state a trigger is defined against)
 
 ### Configuration
@@ -94,7 +94,7 @@ Where a setting lives, and — for the three that hold contributions — where t
 | A **contribution**'s on / off — MCP server | Settings profile · Private workspace overlay |
 | An **Operation setting** | Settings profile · Private workspace overlay — plus Runtime host for `harness` only |
 
-**Skill, Rules, Command and Subagent have no setting**: their Authoring tree is their enablement — see *Authoring tree*, and ADR 0018. Hook's row is deferred with the kind itself. A **Connection** is not on this axis at all: it has no Scope (ADR 0017).
+**Skill, Rules and Subagent have no setting**: their Authoring tree is their enablement — see *Authoring tree*, and ADR 0018. Hook's row is deferred with the kind itself. A **Connection** is not on this axis at all: it has no Scope (ADR 0017).
 The Runtime host holds machine facts — checkout paths, installed harnesses, credential storage location — not contributions, so it is the one Scope with no Authoring tree. The Workspace input is excluded from Operation settings because a repository you cloned must not choose the model you pay for, and from switching an MCP server on because it must not start a process on your machine — it may still *ship* the file, and `register` is the trust act that admits it. The excluded cells are empty by decision, not by omission.
 There is **no collective noun** over either family; say `contribution` or `Operation setting`. Every candidate umbrella collided with a term already in this glossary.
 _Avoid_: Authority, level, tier, target (an invented axis name — say default / Workflow / Operation)
@@ -108,7 +108,7 @@ _Avoid_: Merge (only one of the operators), precedence (only one axis of three),
 **Plugin**:
 A first-party install-and-setup bundle. Its manifest **points at files** rather than inlining definitions, and declares which Connections it requires. **At most one first-party Plugin may require a given Connection**, so "the Plugin that requires Linear" names exactly one bundle and is derivable from that declaration alone — no field states the relation anywhere. `version` is optional — a Plugin is identified by its declared version or, absent one, by content revision. Each contribution has a type-specific identity qualified by the Plugin id; its human-owned settings and Engine-observed status remain separate.
 A Plugin is **a collection of contributions and nothing more**: it contributes no behaviour of its own, so **there is no human-written Plugin on / off**. A Plugin's files are on disk or they are not, and `install` and `uninstall` are how a person writes that — the same rule as an **Authoring tree**, where authoring or deleting a file writes it. Where a Plugin-level "off" ever appears it is Engine-observed status, never a setting.
-**Every Plugin ships with Cogwork.** Nothing is fetched and nothing third-party can be added, so uninstall is always reversible, offline. After an install a Plugin's **MCP server** is on, because installing is itself the trust act; its Skills, Rules, Commands and Subagents are on disk and therefore active, and have no setting at all. An app update is the only thing that changes a Plugin's files, and it lands at load with nothing to stage, accept or decline. See ADR 0014.
+**Every Plugin ships with Cogwork.** Nothing is fetched and nothing third-party can be added, so uninstall is always reversible, offline. After an install a Plugin's **MCP server** is on, because installing is itself the trust act; its Skills, Rules and Subagents are on disk and therefore active, and have no setting at all. An app update is the only thing that changes a Plugin's files, and it lands at load with nothing to stage, accept or decline. See ADR 0014.
 _Avoid_: Capability (retired — there is no umbrella noun), component, marketplace listing, Plugin enablement
 
 **Install record**:
@@ -128,7 +128,7 @@ The surface that owns Plugin **membership** — install and uninstall, the whole
 _Avoid_: Marketplace, Customize, Plugin store; `pin` (retired — no harness exposes version pinning to a person); *stage*, *accept* and *decline* an update, and *refresh the catalog* (all four retired — nothing is fetched, so an app update is the only thing that changes a Plugin); and the lowercase plural *plugins*, which means the bundles
 
 **Customize**:
-The surface that owns **contribution settings** — an MCP server's on / off — and that renders every other contribution read-only. The kind is the view and the authority is a badge on the row — and for a `local:` row that badge *is* the Authoring tree, so it is shown once, not twice. Since ADR 0018 removed the setting from Skill, Rules, Command and Subagent, their rows show what exists and which tree it came from, and carry no toggle. An MCP server keeps its toggle, and a `local:repo` one is the offer-versus-enable row ADR 0013 owes: *this repository offers this. It is off. You can turn it on.* The MCP server view groups by the Engine's conclusion — **Needs Attention** and **Ready** — never by the person's choice: a server switched off greys out and takes a *Disabled* pill in place, so it is switched back on where it was left. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
+The surface that owns **contribution settings** — an MCP server's on / off — and that renders every other contribution read-only. The kind is the view and the authority is a badge on the row — and for a `local:` row that badge *is* the Authoring tree, so it is shown once, not twice. Since ADR 0018 removed the setting from Skill, Rules and Subagent, their rows show what exists and which tree it came from, and carry no toggle. An MCP server keeps its toggle, and a `local:repo` one is the offer-versus-enable row ADR 0013 owes: *this repository offers this. It is off. You can turn it on.* The MCP server view groups by the Engine's conclusion — **Needs Attention** and **Ready** — never by the person's choice: a server switched off greys out and takes a *Disabled* pill in place, so it is switched back on where it was left. It may show a Plugin-owned row's status, including one that failed to load, and it may **never** write membership or credential state: authority is part of a contribution's immutable identity, so the surface that renders authority is the wrong place to change it. As with **Plugins**, "never" is a client-surface rule the daemon does not enforce.
 _Avoid_: Plugins, Settings, preferences
 
 **Connections**:
@@ -141,8 +141,8 @@ The surface that owns what the daemon operates over and under on this machine: r
 _Avoid_: Settings (already on Customize's _Avoid_ line), Engine (the machinery being managed, not a pane), Daemon, Workspace (the singular is the registered repo, not the surface), machine config
 
 **Contribution kind**:
-One of the six types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Command, Hook**. The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
-Only the kinds that **execute or connect** carry a setting. **MCP server** has one — on or off, written as a default and nowhere else. **Skill, Rules, Command and Subagent** have none at all: they exist or they do not, and the Authoring tree a file sits in says everything an on / off could say (ADR 0018). **Hook** is deferred — it stays a named kind with its setting question open, because no cross-harness projection has been designed. Everything else about a contribution lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
+One of the five types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Hook**. Command is not a kind, and Cogwork does not read `commands/` files (ADR 0037). The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.
+Only the kinds that **execute or connect** carry a setting. **MCP server** has one — on or off, written as a default and nowhere else. **Skill, Rules and Subagent** have none at all: they exist or they do not, and the Authoring tree a file sits in says everything an on / off could say (ADR 0018). **Hook** is deferred — it stays a named kind with its setting question open, because no cross-harness projection has been designed. Everything else about a contribution lives in its file. Turning it on for one Workflow or one Operation is not expressed here; that is **binding**, an Operation setting.
 _Avoid_: Capability, Run Plan member (the two lists differ — Rules is a kind but resolves into Instructions; Tools is a member but is never contributed), per-Operation enablement (say binding)
 
 **Connection**:
@@ -152,16 +152,16 @@ Every **output action** acts through the person's Connection for its app, so a W
 _Avoid_: Plugin (a Plugin requires a Connection, never contains one), credential (that is the secret it holds), MCP server, contribution kind, provider key (that one buys inference, not access to the work), Integration, connector
 
 **Connection readiness**:
-The Engine-owned conclusion that a Connection is established, unrevoked, and usable. It is an **input** to MCP server readiness for a contributed server that requires one, and it stands alone for an Engine port, where it gates the reconcile heartbeat. Deliberately **not** generalized: there is no `Readiness` umbrella, because the two are not peers — one feeds the other.
+The Engine-owned conclusion that a Connection is established, unrevoked, and usable. It is an **input** to MCP server readiness for a contributed server that requires one, and it stands alone for an Engine port, where it gates that port's Trigger source. Deliberately **not** generalized: there is no `Readiness` umbrella, because the two are not peers — one feeds the other.
 _Avoid_: Readiness (unqualified), MCP server readiness, established (one of its inputs)
 
 **Tool**:
 A typed function an agent may call during a Run. A Tool may be engine-owned, provider-native, or exposed by an MCP server, but its source remains explicit.
-_Avoid_: MCP server (one server may expose many Tools), Command
+_Avoid_: MCP server (one server may expose many Tools)
 
 **Skill**:
 A discoverable package of instructions and supporting resources an agent may use during a Run. It remains distinct from mandatory Operating Instructions.
-_Avoid_: Operating-instructions package, MCP server, Plugin
+_Avoid_: Operating-instructions package, MCP server, Plugin, Command (retired — ADR 0037)
 
 **MCP server**:
 One configured Model Context Protocol server instance made available to a Run so its Tools, resources, and prompts can be used, identified by a Cogwork-owned `McpServerId`. It retains the verified MCP Registry name/version as provenance when available; runtime `serverInfo` is observed metadata, never the configured identity.
@@ -170,10 +170,6 @@ _Avoid_: MCP skill, Tool, Connection, Plugin
 **MCP server readiness**:
 The Engine-owned conclusion that a configured MCP server is enabled, launchable or reachable, authenticated, protocol-compatible, exposes the expected MCP features, and can be projected by the selected Harness. Its *authenticated* input is **Connection readiness** when the server requires a Connection. Required servers must be ready before a Run Plan is accepted; clients use the same result and reason to show Operation availability.
 _Avoid_: Installed, runtime `serverInfo`, UI-only validation
-
-**Command**:
-A user-invocable prompt template, in the Claude Code sense — identity, description, argument contract, and a template body, and nothing else. Harness, model options, and tool restrictions are deliberately omitted: a Command has no runtime to carry them into until interactive sessions land. Not a shell entry point.
-_Avoid_: Script (retired), Tool, Operation, shell command
 
 **Rules**:
 Reusable advisory guidance contributed at any scope, authored as markdown with frontmatter carrying glob-based path scoping and an always-apply flag. A contribution kind that is *not* a Run Plan member — Rules resolve into Instructions.
@@ -187,7 +183,7 @@ _Avoid_: Hook, Operating Instructions, contribution kind
 
 **Hook**:
 A Harness-native lifecycle extension projected only when the selected Harness supports it. A Hook does not become Middleware merely because both react to lifecycle events.
-_Avoid_: Middleware, Command
+_Avoid_: Middleware
 
 **Subagent**:
 A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool.
@@ -201,7 +197,7 @@ _Avoid_: Middleware, Harness execution boundary
 
 **Workflow**:
 A person's reusable automation: one or more **Triggers**, the **Operations** they start, and the **Transitions** that route each Operation's answers, over a **Workspace selection**. The engine owns the routing; agent judgement is what separates one Operation from the next. Workflows compose through what they create — an issue, a pull request, or a comment one Workflow makes can trip another's Trigger.
-Each Workflow has its own on / off, which a person sets and which is not part of its document. The daily budget and concurrency limits stay daemon-wide. Until the cut-over, the coding pipeline — triage, implement, follow-up — is the engine's own fixed Workflow; after it, the pipeline is a **Workflow template** like any other, and no engine-authored Workflow remains.
+Each Workflow has its own on / off, which a person sets and which is not part of its document. The daily budget and concurrency limits stay daemon-wide. The coding pipeline is a **Workflow template** like any other; no engine-authored Workflow remains.
 _Avoid_: Playbook, automation (Cursor's word for the same idea), pipeline (except in the name of the coding pipeline), run
 
 **Workflow document**:
@@ -239,16 +235,20 @@ _Avoid_: Bare *catalog* (spent — see **Plugin catalog**), Plugin catalog, Mode
 ### Triggers
 
 **Trigger**:
-A Workflow's start rule: one Trigger entry, its parameter values, and the Operation it starts. Every Trigger is level-triggered: it fires once for each new **source revision** of a Work item. The parameters on one Trigger must all match; any one Trigger of a Workflow may start it.
-_Avoid_: Event (that is a **Trigger event**), Hook (a contribution kind), webhook, filter, follow-up trigger (the fixed pipeline's wake conditions)
+A Workflow's start rule: one Trigger entry, its parameter values, its **Trigger filters**, and the Operation it starts. Every Trigger is level-triggered: it fires once for each new **source revision** of a Work item. The parameters and filters on one Trigger must all match; any one Trigger of a Workflow may start it. An issue Trigger matches open issues only: a closed or canceled issue never matches, with or without a filter.
+_Avoid_: Event (that is a **Trigger event**), Hook (a contribution kind), webhook, follow-up trigger (the fixed pipeline's wake conditions)
+
+**Trigger filter**:
+A catalog entry of kind *filter* that narrows a Trigger to items it holds for (*Issue is not blocked*). A filter belongs to one app and item kind, and a Trigger may name only filters of its own entry's app and item kind. The Trigger source decides it: it lists on each event the filters the item passes, and Trigger observation admits a subscription only when the event passes all of its filters. Before a Run claims an item at its Trigger's start Operation, the source checks the item again: a closed, gone, or unlabelled item is skipped with the reason, with no attempt and no park; an item that only fails a filter waits until it passes.
+_Avoid_: Condition (a Trigger entry kind), parameter (an author-set value, not a test of the item), guard
 
 **Condition / occurrence**:
 The two kinds of Trigger entry. A **condition** (*Issue has label*) fires for every item that matches, including items that already match at switch-on; its source revision is the moment it became true. An **occurrence** (*New comment from a person*) fires only for events after switch-on, and events while the Workflow is off are skipped, never replayed. An entry's name states its kind.
-_Avoid_: State / event, filter, *condition* for what a Transition matches (say its answers)
+_Avoid_: State / event, *filter* (that is a **Trigger filter**), *condition* for what a Transition matches (say its answers)
 
 **Parameter**:
 An author-set, typed value on a Trigger or an output action — a label, a channel, a schedule time, a review event — with fixed choices or a live list a Connection supplies. Only the author sets one; where the agent must choose, the author asks a **question** and routes on its answer.
-_Avoid_: Option (that is a **model option**), filter, setting, argument
+_Avoid_: Option (that is a **model option**), *filter* (that is a **Trigger filter**), setting, argument
 
 **Catch-up window**:
 An occurrence entry's parameter that bounds how far back its Trigger source reads after the daemon was down. Events older than the window are skipped, and the read model reports them.
@@ -289,17 +289,16 @@ What an Operation may do to files — `read-only`, the default, or `full` — an
 _Avoid_: Sandbox policy (the Tool, file, and network rules), Operation kind, checkout mode
 
 **Operation definition**:
-An Operation's contract, as its Workflow document states it: its Operating Instructions, permission profile, required needs, **questions**, **agent inputs** and their hints, and whether it answers once or for each finding (**fan-out**). The person — or an agent they work with — authors it; before Workflows the engine authored the coding pipeline's three Definitions, and none remains after the cut-over. A required need names a concrete identity — an MCP server, a Skill, a Connection — with no binding, and requiring never narrows what else a Run receives. The engine adds the needs the Operation's Triggers, actions, and resource references imply; the author never writes those.
+An Operation's contract, as its Workflow document states it: its Operating Instructions, permission profile, required needs, **questions**, **agent inputs** and their hints, and whether it answers once or for each finding (**fan-out**). The person — or an agent they work with — authors it. A required need names a concrete identity — an MCP server, a Skill, a Connection — and requiring never narrows what else a Run receives. The engine adds the needs the Operation's Triggers, actions, and resource references imply; the author never writes those.
 A required need that cannot be satisfied — including a required Connection or MCP server that is not ready — is a Run Plan rejection, uniform across kinds. Rejection is recorded with its reason, but it is a fact about the machine's readiness, never a failed attempt: it does not move the item toward exhaustion, and it never parks the item waiting for a human. The item waits in view with the reason and is admitted when the need is ready. A failed attempt is work an agent was given and could not do.
 _Avoid_: Playbook, run plan, operation settings, Operation kind
 
 **Operation settings**:
 The person's default Harness, model, and model options for every Operation, held at the Scopes the **Scope** table allows. They fill whatever an Operation's model choice in its document leaves empty and never outrank it: a default must never outrank a value that names the work. No setting names a user-authored Workflow, because its document already holds what the Workflow and Operation levels held; its permission profile, required needs, and on / off have no override. A Plugin only offers, and can never mark itself required for an Operation it does not own.
-Until the cut-over the coding pipeline keeps the older shape: settings for one **Workflow** or one **Operation** beside the **default**, the most specific winning before Scope is consulted; on / off and permission profile as settings; the contributions **bound** to an engine Definition's declared needs; and a Definition's lock against override, which is Engine policy that constrains and refuses with its source named. The cut-over deletes the two levels and binding.
 _Avoid_: Playbook, operation definition, run plan, target (say default / Workflow / Operation)
 
 **Question**:
-What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action needs a Workspace — the Workspace the element is about.
+What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action takes its Workspace from the agent — the Workspace the element is about. Each Action entry's Workspace source decides this: an `item-else-agent` action takes the Workspace of an issue or pull request item from the item, and takes it from the agent only when the item has no Workspace; an `agent` action always takes it from the agent.
 _Avoid_: Outcome (overloaded — say answer, or Operation result for the whole value), route condition, enum, disposition
 
 **Agent input**:
@@ -367,7 +366,6 @@ Trigger event → Work item → selected Operation + Work Context
       ├── Skills
       ├── MCP
       ├── Subagents
-      ├── Commands
       ├── Hooks
       ├── Middleware
       ├── Sandbox (Workspace, Policy)
@@ -385,7 +383,7 @@ For GitHub, `issueTracker.priority.field` is the stable numeric ID of an organiz
 _Avoid_: Operation priority (that's the fixed operation order), severity, weight, rank (alone — `priorityRank` is the ordering, priority is the value)
 
 **Triage role**:
-A human-visible label expressing an item's triage outcome: `needs-triage`, `ready-for-agent`, `needs-info`, `ready-for-human`, `wontfix`. Roles drive classification; operations drive execution. At the cut-over roles become label values the coding pipeline's Transitions add and its Triggers match, and the engine stops reading them.
+A label value a coding Workflow's Triggers can match and its Transitions can add, such as `needs-triage` or `ready-for-agent`. The engine gives the value no built-in meaning.
 _Avoid_: Status, state, label (when you mean the role's meaning)
 
 **Requirements digest**:
@@ -400,11 +398,6 @@ _Avoid_: Review policy, gate (the local gate is checks, not reviews), required n
 An item is *blocked* when its issue tracker reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the issue tracker's own dependency relation (GitHub issue dependencies today; Linear blocking relations when its adapter reads them), read per adapter. A blocked item is held out of the implementation operation until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.
 _Avoid_: Depends-on (the inverse framing); needs-info / ready-for-human (those are needs-human — a person clears them); stuck / exhausted / stalled (failure outcomes, not dependencies).
 
-**Needs-human reason**:
-Why triage parked an item for a person: `needs-info` (waiting on the reporter) or `ready-for-human` (needs a human implementer). A needs-human item is neither eligible, claimed, nor blocked. Where a role parks it, a person clears it by changing the role; where a **failure counter** parks it — exhaustion, stall, or crash loop — changing the role is not enough, and the person **hands the item back**.
-The fixed pipeline's set. In a Workflow the **park reason** replaces it: `needs-info` and `ready-for-human` become labels the coding pipeline adds beside *Hand to me*, and a handback no longer takes a role. New follow-up activity clears only an engine-owned failure park; a person's `needs-info` or `ready-for-human` park remains.
-_Avoid_: Block reason (blocking now means open dependencies), error, failure, park reason (the Workflow set).
-
 ### Human touchpoints
 
 **Human touchpoint**:
@@ -416,7 +409,7 @@ The engine holding a Work item for the person, with a **park reason**, until a p
 _Avoid_: Needs-human (the fixed pipeline's narrower set), blocked (open dependencies), pause, hold
 
 **Park reason**:
-Why a Work item is parked, as a tagged set: `stuck`, `exhausted`, `hop-cap`, `missing-operation` (a hand-off to an Operation the current published revision lacks), `write-failed`, `no-workspace-recognized`, `awaiting-approval`, and `handed-to-you` (the *Hand to me* action). `stuck`, `exhausted`, and `hop-cap` are failures; `awaiting-approval`, `no-workspace-recognized`, and `handed-to-you` are not, and move no failure counter.
+Why a Work item is parked, as a tagged set: `stuck`, `exhausted`, `hop-cap`, `missing-operation` (a hand-off to an Operation the current published revision lacks), `write-failed`, `draft-outcome-unknown` (a Slack draft might exist, so Cogwork will not try it again), `no-workspace-recognized`, `awaiting-approval`, and `handed-to-you` (the *Hand to me* action). `stuck`, `exhausted`, and `hop-cap` are failures; `awaiting-approval`, `draft-outcome-unknown`, `no-workspace-recognized`, and `handed-to-you` are not, and move no failure counter.
 _Avoid_: Needs-human reason (its two values become labels a Workflow adds), halt reason, error
 
 **Approval**:
@@ -434,11 +427,11 @@ _Avoid_: Alert, park, Daemon event (the client feed)
 ### Coordination
 
 **Claim**:
-A coordination record marking an item as being worked: `by`, `claimedAtMillis`, an optional operation, and its **lineage**. Persisted in the item's one coordination authority — onto the issue tracker (a label plus a marker) for a tracker item, in the Control store for an engine-minted one — so it survives a daemon restart.
+A coordination record marking an item as being worked: `by`, `claimedAtMillis`, an optional operation, and its **lineage**. Persisted in the Control store for every item, tracker items included (ADR 0036), so it survives a daemon restart; crash recovery releases one a stopped daemon left behind.
 _Avoid_: Lock, lease, reservation
 
 **Refused claim**:
-A claim the issue tracker will not accept — a write the credential is not permitted to make, such as creating the claim label in a team that forbids it. Distinct from a *contended* claim, which cannot happen: classify only ever offers unclaimed work. A refusal the port reports as permanent (`IssueTrackerError.retryable === false`) is one every retry gets the same answer to; absent that field a refusal is worth polling again. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`. What the engine does about one is the executor's, in the engine glossary.
+A claim the coordination authority will not accept, such as a claim on an item whose source revision was never observed. Distinct from a *contended* claim (`claim-held`), which the scheduler avoids by offering only unclaimed admissions. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`.
 _Avoid_: Contended claim, stale claim (one we release), exhausted (a run that gave up after trying)
 
 **Attempt record**:
@@ -472,7 +465,7 @@ _Avoid_: Run ledger (that one is disposable), config (the non-secret `client_id`
 ### Runs
 
 **Run plan**:
-The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Messages, Work Context, Tools, Skills, MCP, Subagents, Commands, Hooks, Middleware, Sandbox (optional Workspace and Policy), Structured Output, Persistence, Connections, and Provenance. Messages contain the resolved user turn. Instructions stay separate. Work Context freezes the admitting snapshot's coordination facts and the work item's prose — its body and comment thread, read through the issue-tracker port at admission — beside the work-item reference (ADR 0030).
+The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Messages, Work Context, Tools, Skills, MCP, Subagents, Hooks, Middleware, Sandbox (optional Workspace and Policy), Structured Output, Persistence, Connections, and Provenance. Messages contain the resolved user turn. Instructions stay separate. Work Context freezes the admitting snapshot's coordination facts and the work item's prose — its body and comment thread, read through the issue-tracker port at admission — beside the work-item reference (ADR 0030).
 Run Plan members are **not** the same list as contribution kinds. Rules is a kind but not a member — it resolves into Instructions. Tools, Connections, and Middleware are members but never contributions.
 Every plan carries a mandatory **provenance stamp**: a Plugin item's declared version where it has one, a content revision where it does not. No contribution carries its own version — no platform in the field versions the capabilities inside a bundle. The plan is accepted before dispatch and never changed by runtime observations.
 _Avoid_: Run manifest, resolved stage, harness request, operation settings
@@ -480,11 +473,11 @@ _Avoid_: Run manifest, resolved stage, harness request, operation settings
 **Run**:
 One execution of one run plan by one harness, captured with its events, outcome, usage, and timings. The run records what was projected and observed without changing its plan.
 A Run is `declined` when the Harness finished its work but the Engine refused the requested pull request because the pushed head was missing or not ahead of its base. The decline is an Engine outcome, records a failed coordination attempt, and releases the claim for normal retry or a park. In a Workflow the same refusal is the precondition of *Open a pull request*, checked when the engine builds the action plan.
-_Avoid_: Attempt (the durable, issue-tracker form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
+_Avoid_: Attempt (the durable coordination form), job. Do not confuse with the harness's `RUN_STARTED` / `RUN_FINISHED` stream events, which are moments inside a run.
 
 **Run ledger**:
-The daemon's local store of runs, their immutable Run Plans, and their events — in-memory, or a region of the Control store on disk. A Run and its Plan are accepted together before dispatch, keyed by Run ID. It also holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because each item's coordination authority — the issue tracker, or the Control store outside the ledger's region — stays authoritative.
-_Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it). Not the GitHub coordination comment, whose anchor marker is also called a "ledger".
+The daemon's local store of runs, their immutable Run Plans, and their events — in-memory, or a region of the Control store on disk. A Run and its Plan are accepted together before dispatch, keyed by Run ID. It also holds run history, harness sessions, and token usage. It does not hold the scheduler's daily usage, and losing it is safe because coordination lives in the Control store outside the ledger's region and stays authoritative.
+_Avoid_: Source of truth, database, backlog, Control store (the ledger is one disposable region of it).
 
 **Run event**:
 One persisted, sequenced entry in a run's stream — an encoded harness event stored with a `seq` and timestamp.
@@ -518,8 +511,8 @@ _Avoid_: Session resume, retry, replacement Run, human attach
 A run selecting a different harness from the branch's latest session. It begins a new session with the full operating instructions while preserving the worktree, branch, code progress, claim, and historical run records; only conversation continuity is discarded. Switching back never resurrects an older session from that harness.
 _Avoid_: Session migration, session transfer, cross-harness resume
 
-**Exhausted / stalled / stuck**:
-The three failure outcomes — how the control plane stops spending tokens on an item after it has already tried. A run is *exhausted* when it gives up after too many failed attempts — counted for each Operation on each item — or a non-retryable error: the terminal `RunStatus`, which escalates the item to `ready-for-human` in the fixed pipeline and parks it as `exhausted` in a Workflow. A follow-up is *stalled* when it hits the no-progress limit without the checks going green or a human replying; the cut-over deletes the limit and *stalled* with it, and the **hop** cap bounds the loop instead. An agent is *stuck* when its own output reports it cannot proceed — a non-retryable cause that feeds exhaustion. Every Operation can report it: the engine adds the flag to every derived result, the author never writes it, and it parks the item at once with the result's summary as the reason. A human comment or review, trusted-bot finding, failing check completed later, or conflict that began later clears a follow-up `stuck`, `exhausted`, or `stalled` park as a handback; standing failures do not. All three are distinct from *blocked*, which is about unresolved dependencies before any attempt.
+**Exhausted / stuck**:
+The two failure outcomes that stop spending tokens after work starts. A Run is *exhausted* after three consecutive failed attempts for one Workflow Operation. An agent is *stuck* when its result reports it cannot proceed; the item parks at once with the summary. A new qualifying source revision can clear the park as a handback. Both are distinct from *blocked*, which is unresolved dependencies before an attempt.
 _Avoid_: Blocked (dependencies now), failed (the single, still-retryable attempt status).
 
 **Interrupted / crashed**:
@@ -588,8 +581,7 @@ The projection of an accepted Run Plan handed to one Harness: checkout path, wor
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action needs one, a Workspace. A result that does not decode is a retryable failed attempt, and the next attempt sees the decode issues.
-Until the cut-over the coding pipeline keeps hand-written schemas, which the shared kernel owns: triage returns exactly one `TriageStageResult` tagged `triage`, containing a terminal triage role (never the input-only `needs-triage`) and a non-empty, trimmed proposal; implement returns `opened-pr`, `stuck`, or `ready-for-pr`, whose pull request title and body the Engine uses after its gate passes; follow-up returns a `FollowUpStageResult` tagged `follow-up`, with `pushed`, `noop`, or `stuck` plus a non-empty, trimmed summary, and a `noop` also chooses whether to speak. A newer follow-up trigger reopens its failure park with a fresh attempt window and appears in the next Run's Work context. Prose remains ordinary streamed output and is never parsed as an operation result.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action takes its Workspace from the agent (see **Question**), a Workspace. A result that does not decode is a retryable failed attempt, and the next attempt sees the decode issues.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:
@@ -625,7 +617,7 @@ _Avoid_: Observed PR (the engine-internal form the provider reads, which also ca
 ### Client RPC
 
 **Query RPC / command RPC**:
-The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* is an imperative that changes daemon state or behavior — cancel a run, reclassify a work item, pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries. `DaemonQueries` and `DaemonCommands` are the two groups; `DaemonRpcs` is their merge, what the daemon serves and a client generates against. The command group holds `CancelRun`, `Reclassify`, `SetScheduling`, and `SetDaemonLimit` today, and fills in further with the settings and Plugin management slice.
+The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* changes daemon state or behavior — cancel a Run, edit or publish a Workflow, or pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries. `DaemonQueries` and `DaemonCommands` are the two groups; `DaemonRpcs` is their merge.
 _Avoid_: Write RPC (too narrow — a command may change behavior, like pausing the scheduler, not only write data), mutation, getter
 
 **Principal**:

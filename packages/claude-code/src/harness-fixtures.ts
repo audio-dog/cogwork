@@ -2,11 +2,10 @@ import {
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
   HarnessName,
-  type LifecycleStage,
   RunPlan,
   SessionId,
 } from "@cogwork/contracts";
-import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert } from "@effect/vitest";
@@ -203,7 +202,7 @@ const destroyTestSandbox = (sandbox: SandboxHandle) =>
 interface RequestOverrides {
   readonly session?: SessionId | null;
   readonly profile?: "read-only" | "full";
-  readonly operation?: LifecycleStage;
+  readonly operation?: string;
   readonly mcp?: boolean;
   readonly model?: string | null;
   readonly effort?: string | null;
@@ -232,8 +231,8 @@ const outputSchema = {
 } as const;
 
 const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => {
-  const operation = overrides.operation ?? (overrides.profile === "read-only" ? "triage" : "implement");
-  const profile = overrides.profile ?? OperationPolicy.operationDefaultProfile(operation);
+  const operation = overrides.operation ?? "operate";
+  const profile = overrides.profile ?? "full";
   const mcp = mcpSelection(overrides.mcp);
   return {
     plan: Schema.decodeSync(RunPlan)({
@@ -263,7 +262,6 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       skills: [],
       mcp,
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput: outputSchema,
@@ -273,12 +271,10 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
         reference: { workItem: "#153", url: null },
         prose: { body: "", comments: [] },
         facts: {
-          roles: ["ready-for-agent"],
           assignees: [],
           openBlockers: 0,
           claim: null,
           priority: "medium",
-          pr: null,
         },
         observation: { generation: 1, observedAtMillis: 1 },
       },
@@ -426,14 +422,14 @@ const capturedDisallowedTools = (capture: typeof Capture.Type) => {
   return capture.args.at(index + 1)?.split(",") ?? [];
 };
 
-const captureOperation = (operation: LifecycleStage) =>
+const captureOperation = (operation: string, profile: "read-only" | "full") =>
   Effect.scoped(
     makeLiveHarness().pipe(
       Effect.flatMap(({ handle, harness }) =>
-        harness.run(makeRequest(handle.id, { operation })).pipe(Stream.runCollect),
+        harness.run(makeRequest(handle.id, { operation, profile })).pipe(Stream.runCollect),
       ),
       Effect.flatMap(captureFrom),
-      Effect.map((capture) => [operation, capture] satisfies [LifecycleStage, typeof Capture.Type]),
+      Effect.map((capture) => [profile, capture] as const),
     ),
   );
 

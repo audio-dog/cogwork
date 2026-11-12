@@ -2,6 +2,7 @@ import {
   type Board,
   ContributionSettingScope,
   type ControlStore,
+  contributionSettingApplies,
   type PluginItem,
   type PluginOverview,
 } from "@cogwork/contracts";
@@ -90,13 +91,8 @@ const settingApplies = (
   setting: ControlStore["contributionSettings"][number],
   contributionId: string,
   workspace: WorkspaceId | undefined,
-) => {
-  if (setting.contribution.id !== contributionId) return false;
-  return ContributionSettingScope.match(setting.scope, {
-    SettingsProfile: () => true,
-    PrivateWorkspaceOverlay: ({ workspace: scopeWorkspace }) => scopeWorkspace === workspace,
-  });
-};
+) =>
+  setting.contribution.id === contributionId && contributionSettingApplies(setting.scope, workspace ?? null);
 
 const contributionWorkspaces = (
   contribution: PluginItem["contributions"][number],

@@ -2,11 +2,10 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HarnessName, TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
 import { Claim } from "./coordination";
-import { PrSummary } from "./daemon";
 import { ProvenanceStamp } from "./provenance";
 import { RunId, SessionKind } from "./run";
 import { ModelOptionSelections, ResolutionOperator, RunPlanPolicyProfile } from "./settings";
-import { LifecycleStage, Priority, TriageRole } from "./triage";
+import { Priority } from "./work-item";
 
 export class RunPlanHarness extends Schema.Class<RunPlanHarness>("RunPlanHarness")({
   name: HarnessName,
@@ -82,14 +81,10 @@ export type RunPlanFollowUpTrigger = typeof RunPlanFollowUpTrigger.Type;
 
 export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFacts>("RunPlanWorkContextFacts")(
   {
-    roles: Schema.Array(TriageRole),
     assignees: Schema.Array(TrimmedNonEmptyString),
     openBlockers: Schema.Natural,
     claim: Schema.NullOr(Claim),
     priority: Priority,
-    pr: Schema.NullOr(PrSummary),
-    failureReason: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
-    followUpTrigger: Schema.optional(Schema.NullOr(RunPlanFollowUpTrigger)),
   },
 ) {}
 
@@ -158,7 +153,6 @@ export const RunPlanMember = Schema.Literals([
   "Skills",
   "MCP",
   "Subagents",
-  "Commands",
   "Hooks",
   "Middleware",
   "Sandbox",
@@ -201,7 +195,7 @@ const StructuredOutput = Schema.NullOr(Schema.Record(Schema.String, Schema.Unkno
 
 export class RunPlan extends Schema.Class<RunPlan>("RunPlan")({
   id: RunId,
-  operation: LifecycleStage,
+  operation: TrimmedNonEmptyString,
   harness: RunPlanHarness,
   instructions: Schema.Array(RunPlanInstruction),
   operatingInstructions: RunPlanOperatingInstructions,
@@ -210,7 +204,6 @@ export class RunPlan extends Schema.Class<RunPlan>("RunPlan")({
   skills: Schema.Array(RunPlanContributionMember),
   mcp: Schema.Array(RunPlanMcpMember),
   subagents: Schema.Array(RunPlanContributionMember),
-  commands: Schema.Array(RunPlanContributionMember),
   hooks: Schema.Array(RunPlanContributionMember),
   middleware: Schema.Array(RunPlanMiddlewareName),
   structuredOutput: StructuredOutput,

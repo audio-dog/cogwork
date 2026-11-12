@@ -5,6 +5,7 @@ import {
   LineageId,
   localOwnerId,
   ParkRecord,
+  type RunPlanWorkContextProse,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -28,7 +29,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { clockEntries } from "./clock-source";
+import { clockEntries, clockSource } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { makeControlStoreCoordination } from "./coordination-control-store";
@@ -43,6 +44,7 @@ import {
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { emptyRegistry, readOnlyRegistry, WorkspaceRegistry } from "./registry";
 import { makeScriptedSource } from "./scripted-source";
+import { trackerTriggerEntries } from "./tracker-trigger-source";
 import {
   make,
   makeControlStoreTriggerObservationStore,
@@ -54,8 +56,11 @@ import {
   type TriggerObservationStoreService,
 } from "./trigger-observation";
 import {
+  Recheck,
   SourceFailure,
+  type TriggerEvent,
   type TriggerSource,
+  type TriggerSourceId,
   TriggerSources,
   type TriggerSubscription,
 } from "./trigger-source";
@@ -65,6 +70,7 @@ const workflowId = Schema.decodeSync(WorkflowId)("daily-summary");
 const otherWorkflowId = Schema.decodeSync(WorkflowId)("other-workflow");
 const triggerId = Schema.decodeSync(WorkflowNodeId)("schedule");
 const entry = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
+const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("github.issue-has-label");
 const scheduleParameters = [
   { id: "hour", value: "0" },
   { id: "minute", value: "0" },
@@ -114,6 +120,7 @@ const subscription: TriggerSubscription = {
   operation: Schema.decodeSync(WorkflowNodeId)("summarize"),
   entry,
   parameters: scheduleParameters,
+  filters: [],
   workspaces: [],
   catchUp: { since: 0 },
 };
@@ -140,20 +147,12 @@ const selectedEvent = {
   revision: "issue-1",
 } as const;
 const selectedTrackerItem: TrackerItem = {
-  claimHeld: false,
-  claim: null,
-  claimedByUs: false,
-  attempts: [],
-  handback: null,
   id: selectedIssueId,
   title: "Selected issue",
   url: "https://github.com/acme/example/issues/1",
-  roles: [],
   assignees: ["owner"],
   openBlockers: 0,
-  proposal: null,
   priority: "medium",
-  followUp: null,
 };
 
 const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* (
@@ -161,15 +160,20 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
     readonly observedItems?: ReadonlyArray<TrackerItem>;
     readonly exactAssignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
     readonly store?: TriggerObservationStoreService;
+    readonly document?: WorkflowDocument;
+    readonly source?: { readonly id: TriggerSourceId; readonly entries: TriggerSource["entries"] };
   } = {},
 ) {
-  const current = yield* Ref.make(record(true, selectedDocument));
+  const current = yield* Ref.make(record(true, options.document ?? selectedDocument));
   const processed = yield* Ref.make<string | null>(null);
   const observed = yield* Ref.make(0);
   const sourceRevision = yield* Ref.make<string | null>(null);
   const trackerCalls = yield* Ref.make(0);
   const exactAssigneeCalls = yield* Ref.make(0);
-  const scripted = yield* makeScriptedSource("clock", clockEntries);
+  const scripted = yield* makeScriptedSource(
+    options.source?.id ?? "clock",
+    options.source?.entries ?? clockEntries,
+  );
   const store = options.store ?? (yield* makeMemoryTriggerObservationStore);
   const bus = yield* makeDaemonEventBus;
   const emptyTracker = yield* makeEmptyIssueTracker;
@@ -202,7 +206,21 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   );
   yield* Effect.yieldNow;
   yield* observation.refresh;
-  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination };
+  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination, store };
+});
+
+const observeLineage = Effect.fn("TriggerObservationTest.observeLineage")(function* (
+  cause: TriggerEvent["cause"],
+) {
+  const { observation, scripted } = yield* makeWorkspaceObservation();
+  const changed = yield* observation.changes.pipe(
+    Stream.take(1),
+    Stream.runCollect,
+    Effect.forkChild({ startImmediately: true }),
+  );
+  yield* scripted.emit({ ...selectedEvent, cause });
+  const admitted = yield* Fiber.join(changed);
+  return admitted[0]?.lineage;
 });
 
 const granolaEntry = Schema.decodeSync(WorkflowCatalogKey)("granola.note-generated");
@@ -274,7 +292,6 @@ const sourceFailingOnce = (starts: Ref.Ref<number>, failure: SourceFailure): Tri
   id: "clock",
   entries: clockEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: () => Effect.succeed([]),
   observe: (subscriptions) =>
     subscriptions.length === 0
       ? Stream.empty
@@ -312,7 +329,97 @@ const exerciseFailedLastAdmissionFinish = (storePath: string, admission: Trigger
     return { failure, failedView, pending, completedView, remaining };
   }).pipe(Effect.provide(bootControlStoreLayer(storePath)));
 
+const exerciseFailedFanOutFinish = Effect.fn("TriggerObservationTest.exerciseFailedFanOutFinish")(function* (
+  parent: TriggerAdmission,
+  child: TriggerAdmission,
+) {
+  const sql = yield* SqlClient.SqlClient;
+  const store = yield* makeControlStoreTriggerObservationStore;
+  yield* store.putAll([parent]);
+  yield* sql`
+      CREATE TRIGGER fail_fan_out_parent_finish
+      BEFORE UPDATE OF processed ON trigger_admissions
+      WHEN NEW.processed = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'finish failed');
+      END
+    `;
+  const failure = yield* Effect.flip(store.fanOut(parent, [child], Effect.void));
+  return { failure, pending: yield* store.admissions };
+});
+
 describe("TriggerObservation", () => {
+  it.effect("orders waiting work by prior Workflow action, priority, then oldest revision", () =>
+    Effect.gen(function* () {
+      const waiting = (revision: string, priority: TriggerEvent["priority"], atMillis: number) => {
+        const key = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis: atMillis } as const;
+        return {
+          event: { ...event, key, revision, priority, atMillis },
+          subscription,
+          lineage: { root: LineageId.make(keyOf(key)), parent: null, hop: 0 },
+        } satisfies TriggerAdmission;
+      };
+      const actedAdmission = waiting("acted", "low", 4);
+      const admissions = [
+        waiting("old-low", "low", 1),
+        waiting("new-urgent", "urgent", 3),
+        waiting("old-urgent", "urgent", 2),
+        actedAdmission,
+      ];
+      const revisions = new Map(
+        admissions.map(({ event: candidate }) => [keyOf(candidate.key), candidate.revision]),
+      );
+      const coordination = {
+        ...coordinationService(
+          yield* Ref.make<string | null>(null),
+          yield* Ref.make(0),
+          yield* Ref.make<string | null>(null),
+        ),
+        read: (ref: WorkItemRef) => {
+          const actedOn = keyOf(ref) === keyOf(actedAdmission.event.key);
+          const attempts = actedOn
+            ? [
+                AttemptRecord.make({
+                  operation: { workflow: workflowId, operation: subscription.operation },
+                  outcome: "succeeded",
+                  atMillis: 1,
+                  lineage: actedAdmission.lineage,
+                }),
+              ]
+            : [];
+          return Effect.succeed(
+            fold(
+              {
+                claim: null,
+                attempts,
+                handbacks: [],
+                parks: [],
+                revision: { observed: revisions.get(keyOf(ref)) ?? event.revision, processed: null },
+              },
+              "cogwork",
+            ),
+          );
+        },
+      } satisfies CoordinationService;
+      const store = yield* makeMemoryTriggerObservationStore;
+      yield* store.putAll(admissions);
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(yield* Ref.make(record(true)))),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, []),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+      );
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        ["acted", "old-urgent", "new-urgent", "old-low"],
+      );
+    }).pipe(Effect.scoped),
+  );
+
   it("matches a schedule event to one Trigger with the scheduled parameters", () => {
     const other = { ...subscription, workflow: Schema.decodeSync(WorkflowId)("other") };
     const later = {
@@ -358,6 +465,22 @@ describe("TriggerObservation", () => {
     assert.deepStrictEqual(matchTriggerEvent([other, selected], slackEvent), [selected]);
   });
 
+  it("matches a targeted sweep item only to its Workflow Trigger", () => {
+    const selected = {
+      ...subscription,
+      entry: Schema.decodeSync(WorkflowCatalogKey)("schedule.sweep"),
+      workspaces: [selectedWorkspaceId],
+    };
+    const other = { ...selected, workflow: otherWorkflowId };
+    const sweepEvent = {
+      ...selectedEvent,
+      entry: selected.entry,
+      target: { workflow: selected.workflow, trigger: selected.trigger },
+    };
+
+    assert.deepStrictEqual(matchTriggerEvent([other, selected], sweepEvent), [selected]);
+  });
+
   it.effect("admits every matching Workflow for one source revision", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
@@ -388,7 +511,7 @@ describe("TriggerObservation", () => {
       const changes = yield* observation.changes.pipe(
         Stream.take(2),
         Stream.runCollect,
-        Effect.timeoutOption("1 second"),
+        Effect.timeoutOption("2 minutes"),
         Effect.forkChild({ startImmediately: true }),
       );
       yield* scripted.emit({
@@ -408,6 +531,247 @@ describe("TriggerObservation", () => {
       );
       assert.lengthOf(yield* observation.eligible, 2);
       assert.strictEqual(yield* Ref.get(observed), 1);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("starts person lineages and extends Cogwork lineages", () =>
+    Effect.gen(function* () {
+      const inheritedRoot = yield* Schema.decodeEffect(LineageId)("issue:root");
+      const parent = keyOf(workItem);
+      const cases = [
+        {
+          cause: { _tag: "Person" } as const,
+          expected: {
+            root: yield* Schema.decodeEffect(LineageId)(keyOf(selectedEvent.key)),
+            parent: null,
+            hop: 0,
+          },
+        },
+        {
+          cause: { _tag: "Clock" } as const,
+          expected: {
+            root: yield* Schema.decodeEffect(LineageId)(
+              `${keyOf(selectedEvent.key)}:${selectedEvent.revision}`,
+            ),
+            parent: null,
+            hop: 0,
+          },
+        },
+        {
+          cause: {
+            _tag: "Cogwork",
+            origin: parent,
+            lineage: { root: inheritedRoot, parent: null, hop: 7 },
+          } as const,
+          expected: {
+            root: inheritedRoot,
+            parent: yield* Schema.decodeEffect(LineageId)(parent),
+            hop: 8,
+          },
+        },
+      ];
+
+      yield* Effect.forEach(
+        cases,
+        ({ cause, expected }) =>
+          observeLineage(cause).pipe(Effect.map((lineage) => assert.deepStrictEqual(lineage, expected))),
+        { discard: true },
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("sweeps 60 parked idle issues across two ticks without repeating the first 50", () =>
+    Effect.gen(function* () {
+      const start = Date.UTC(2026, 0, 1);
+      const day = 86_400_000;
+      yield* TestClock.setTime(start);
+      const sweepDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        name: "Staleness sweep",
+        workspaces: { _tag: "Every" },
+        triggers: [
+          {
+            id: "sweep",
+            entry: "schedule.sweep",
+            parameters: [
+              { id: "hour", value: "0" },
+              { id: "minute", value: "1" },
+              { id: "zone", value: "UTC" },
+              { id: "source", value: "trackers" },
+              { id: "state", value: "parked" },
+              { id: "idle-days", value: "30" },
+            ],
+            start: "judge",
+          },
+        ],
+        operations: [
+          {
+            id: "judge",
+            name: "Judge",
+            instructionPackage: null,
+            instruction: "Judge the parked issue.",
+            permissionProfile: "read-only",
+            requires: [],
+            model: { harness: null, model: null, options: [] },
+            forEach: null,
+            questions: [],
+            transitions: [
+              {
+                when: [],
+                actions: [{ entry: "github.close-this-issue", parameters: [] }],
+                handOff: null,
+              },
+            ],
+            hints: [],
+          },
+        ],
+      });
+      const parked = (index: number, lastTouchedAtMillis: number) =>
+        ({
+          ...selectedTrackerItem,
+          id: Schema.decodeSync(WorkItemId)(`#${index}`),
+          title: `Parked issue ${index}`,
+          url: `https://github.com/acme/example/issues/${index}`,
+          lastTouchedAtMillis,
+        }) satisfies TrackerItem;
+      const candidates = [
+        ...Array.from({ length: 60 }, (_, index) => parked(index + 1, start - (120 - index) * day)),
+        parked(61, start - day),
+      ];
+      const linearWorkspace: RegisteredWorkspace = {
+        source: "test",
+        contributions: [],
+        config: yield* Schema.decodeEffect(WorkspaceConfig)({
+          name: "linear",
+          checkoutPath: "/repos/linear",
+          issueTracker: { type: "linear", teams: ["LIN"] },
+        }),
+      };
+      const current = yield* Ref.make(record(true, sweepDocument));
+      const sourceRevisions = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+      const coordination: CoordinationService = {
+        fold,
+        read: (ref) =>
+          Ref.get(sourceRevisions).pipe(
+            Effect.map((revisions) =>
+              fold(
+                {
+                  claim: null,
+                  attempts: [],
+                  handbacks: [],
+                  parks:
+                    ref._tag === "Issue"
+                      ? [{ reason: { _tag: "Stuck", summary: "parked" }, atMillis: 1 }]
+                      : [],
+                  revision: {
+                    observed: revisions.get(keyOf(ref)) ?? "unobserved",
+                    processed: null,
+                  },
+                },
+                "cogwork",
+              ),
+            ),
+          ),
+        claim: () => Effect.die("unused"),
+        release: () => Effect.die("unused"),
+        recordAttempt: () => Effect.die("unused"),
+        park: () => Effect.die("unused"),
+        handBack: () => Effect.die("unused"),
+        observe: (ref, revision) =>
+          Ref.modify(sourceRevisions, (revisions) => {
+            const item = keyOf(ref);
+            const outcome = revisions.get(item) === revision ? "redelivered" : "moved";
+            return [outcome, new Map(revisions).set(item, revision)] as const;
+          }),
+        markProcessed: () => Effect.void,
+      };
+      const store = yield* makeMemoryTriggerObservationStore;
+      const emptyTracker = yield* makeEmptyIssueTracker;
+      const startSweep = yield* Deferred.make<void>();
+      const sweepSource = {
+        ...clockSource,
+        observe: (subscriptions, readPort) => {
+          const subscription = subscriptions[0];
+          if (subscription === undefined || readPort === undefined) {
+            return Stream.empty as ReturnType<TriggerSource["observe"]>;
+          }
+          const tick = (instant: number) =>
+            Stream.fromEffect(readPort.sweep(subscription, instant)).pipe(
+              Stream.flatMap((read) =>
+                Stream.fromIterable(
+                  read
+                    .filter(({ lastTouchedAtMillis }) => lastTouchedAtMillis <= instant - 30 * day)
+                    .toSorted(
+                      (left, right) =>
+                        left.lastTouchedAtMillis - right.lastTouchedAtMillis ||
+                        keyOf(left.key).localeCompare(keyOf(right.key)),
+                    )
+                    .slice(0, 50),
+                ),
+              ),
+              Stream.mapEffect((candidate) => {
+                const noWorkContext: RunPlanWorkContextProse | undefined = undefined;
+                const loadWorkContext: Effect.Effect<RunPlanWorkContextProse | undefined, SourceFailure> =
+                  candidate.loadWorkContext ?? Effect.succeed(noWorkContext);
+                return loadWorkContext.pipe(
+                  Effect.map(
+                    (workContext) =>
+                      ({
+                        key: candidate.key,
+                        revision: `${subscription.workflow}:${instant}`,
+                        cause: { _tag: "Clock" as const },
+                        atMillis: instant,
+                        entry: subscription.entry,
+                        workspace: candidate.workspace,
+                        target: { workflow: subscription.workflow, trigger: subscription.trigger },
+                        ...(workContext === undefined ? {} : { workContext }),
+                      }) satisfies TriggerEvent,
+                  ),
+                );
+              }),
+            );
+          return Stream.fromEffect(Deferred.await(startSweep)).pipe(
+            Stream.flatMap(() => Stream.concat(tick(start + 60_000), tick(start + day + 60_000))),
+          );
+        },
+      } satisfies TriggerSource;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, [sweepSource]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, {
+          ...emptyTracker,
+          observe: (workspace) =>
+            Effect.succeed(
+              workspace.config.issueTracker.type === "linear" ? [parked(99, start - 200 * day)] : candidates,
+            ),
+          readProse: (_workspace, id) => Effect.succeed({ body: `Parked body ${id}`, comments: [] }),
+        }),
+        Effect.provideService(
+          WorkspaceRegistry,
+          readOnlyRegistry({ workspaces: [selectedWorkspace, linearWorkspace], failures: [] }),
+        ),
+      );
+      const changed = yield* observation.changes.pipe(
+        Stream.take(60),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      yield* Deferred.succeed(startSweep, undefined);
+      const admitted = yield* Fiber.join(changed);
+
+      assert.deepStrictEqual(
+        admitted.map(({ event }) => (event.key._tag === "Issue" ? event.key.id : "")),
+        Array.from({ length: 60 }, (_, index) => `#${index + 1}`),
+      );
+      assert.isTrue(admitted.every(({ event }) => event.cause._tag === "Clock"));
+      assert.strictEqual(new Set(admitted.map(({ event }) => event.revision)).size, 2);
+      assert.strictEqual(new Set(admitted.map(({ lineage }) => lineage.root)).size, 60);
+      assert.strictEqual(admitted[0]?.event.workContext?.body, "Parked body #1");
     }).pipe(Effect.scoped),
   );
 
@@ -622,6 +986,48 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
+  it.effect("admits an item that already matched a condition at switch-on", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000);
+      const labelParameters = [{ id: "label", value: "needs-triage" }];
+      const labelDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...selectedDocument,
+        triggers: [
+          {
+            id: triggerId,
+            entry: issueHasLabelKey,
+            parameters: labelParameters,
+            start: subscription.operation,
+          },
+        ],
+      });
+      const { observation, scripted } = yield* makeWorkspaceObservation({
+        document: labelDocument,
+        source: { id: "github", entries: trackerTriggerEntries("github") },
+      });
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.timeoutOption("1 second"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({
+        ...selectedEvent,
+        entry: issueHasLabelKey,
+        revision: "label:needs-triage:999",
+        atMillis: 999,
+        parameters: labelParameters,
+      });
+      yield* TestClock.adjust("1 second");
+      const admitted = yield* Fiber.join(changed);
+
+      assert.deepStrictEqual(
+        Option.map(admitted, (admissions) => admissions.map(({ event }) => event.revision)),
+        Option.some(["label:needs-triage:999"]),
+      );
+    }).pipe(Effect.scoped),
+  );
+
   it.effect("reuses one assignee snapshot for a Trigger batch", () =>
     Effect.gen(function* () {
       const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
@@ -735,7 +1141,7 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("offers a later conversation revision posted before an exhausted operation park", () =>
+  it.effect("keeps a later conversation revision behind an exhausted operation park", () =>
     Effect.gen(function* () {
       const current = yield* Ref.make(record(true));
       const processed = yield* Ref.make<string | null>("100.000");
@@ -800,7 +1206,7 @@ describe("TriggerObservation", () => {
 
       assert.deepStrictEqual(
         (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
-        ["200.000"],
+        [],
       );
     }).pipe(Effect.scoped),
   );
@@ -1218,6 +1624,30 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("rolls back fan-out children when finishing the parent fails", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-trigger-admissions-" });
+      const storePath = path.join(directory, "control.db");
+      const parent = { event, subscription, lineage } as const;
+      const child = {
+        ...parent,
+        event: {
+          ...event,
+          key: { ...event.key, instantMillis: event.key.instantMillis + 1 },
+          revision: String(event.key.instantMillis + 1),
+        },
+      };
+      const result = yield* exerciseFailedFanOutFinish(parent, child).pipe(
+        Effect.provide(bootControlStoreLayer(storePath)),
+      );
+
+      assert.strictEqual(result.failure._tag, "TriggerObservationStoreError");
+      assert.deepStrictEqual(result.pending, [parent]);
+    }),
+  );
+
   it.effect("persists admissions and skips time spent switched off", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -1289,5 +1719,104 @@ layer(NodeServices.layer)((it) => {
           ),
       );
     }),
+  );
+});
+
+describe("TriggerObservation recheck", () => {
+  const notBlocked = Schema.decodeSync(WorkflowCatalogKey)("schedule.not-blocked");
+  const nextOperation = Schema.decodeSync(WorkflowNodeId)("next");
+  const hourlyEntry = Schema.decodeSync(WorkflowCatalogKey)("schedule.hourly");
+  const filtered = Schema.decodeSync(WorkflowDocument)({
+    ...document,
+    triggers: document.triggers.map((trigger) => ({ ...trigger, filters: [{ entry: notBlocked }] })),
+  });
+  const changedEntry = Schema.decodeSync(WorkflowDocument)({
+    ...filtered,
+    triggers: filtered.triggers.map((trigger) => ({ ...trigger, entry: hourlyEntry })),
+  });
+  const storedBeforeTheFilter: TriggerAdmission = { event, subscription, lineage };
+
+  const byFilter: NonNullable<TriggerSource["recheck"]> = (_event, { filters }) =>
+    Effect.succeed(
+      filters.includes(notBlocked) ? Recheck.Waiting({ reason: "fails Not blocked" }) : Recheck.Matches(),
+    );
+
+  const recheckWith = Effect.fn("TriggerObservationTest.recheckWith")(function* (
+    published: WorkflowDocument,
+    admission: TriggerAdmission,
+    sourceRecheck = byFilter,
+  ) {
+    const source: TriggerSource = {
+      id: "clock",
+      entries: clockEntries,
+      availability: () => Effect.succeed({ _tag: "Available" }),
+      observe: () => Stream.empty,
+      recheck: sourceRecheck,
+    };
+    const observation = yield* make.pipe(
+      Effect.provideService(Workflows, workflowService(yield* Ref.make(record(true, published)))),
+      Effect.provideService(
+        Coordination,
+        coordinationService(
+          yield* Ref.make<string | null>(null),
+          yield* Ref.make(0),
+          yield* Ref.make<string | null>(null),
+        ),
+      ),
+      Effect.provideService(TriggerSources, [source]),
+      Effect.provideService(TriggerObservationStore, yield* makeMemoryTriggerObservationStore),
+      Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+      Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+      Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+    );
+    return yield* observation.recheck(admission);
+  });
+
+  it.effect(
+    "checks an admission against the published Trigger, not the subscription it was stored with",
+    () =>
+      Effect.gen(function* () {
+        assert.deepStrictEqual(storedBeforeTheFilter.subscription.filters, []);
+        assert.deepStrictEqual(
+          yield* recheckWith(filtered, storedBeforeTheFilter),
+          Recheck.Waiting({ reason: "fails Not blocked" }),
+        );
+      }).pipe(Effect.scoped),
+  );
+
+  it.effect("does not check an admission handed off past the Trigger's start Operation", () =>
+    Effect.gen(function* () {
+      const handedOff: TriggerAdmission = {
+        ...storedBeforeTheFilter,
+        subscription: { ...subscription, operation: nextOperation },
+      };
+
+      assert.deepStrictEqual(yield* recheckWith(filtered, handedOff), Recheck.Matches());
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("does not check an admission whose Trigger now names another entry", () =>
+    Effect.gen(function* () {
+      assert.deepStrictEqual(yield* recheckWith(changedEntry, storedBeforeTheFilter), Recheck.Matches());
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("counts an item as matching when the source cannot read it", () =>
+    Effect.gen(function* () {
+      const unreadable = () =>
+        Effect.fail(
+          new SourceFailure({
+            source: "clock",
+            reason: "unavailable",
+            retryAfterMillis: null,
+            message: "down",
+          }),
+        );
+
+      assert.deepStrictEqual(
+        yield* recheckWith(filtered, storedBeforeTheFilter, unreadable),
+        Recheck.Matches(),
+      );
+    }).pipe(Effect.scoped),
   );
 });

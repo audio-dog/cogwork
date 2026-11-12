@@ -3,12 +3,10 @@ import {
   agUiIsStructuredOutputComplete,
   agUiUsage,
   HarnessName,
-  type LifecycleStage,
   RunPlan,
   SessionId,
-  stageResultJsonSchema,
 } from "@cogwork/contracts";
-import { ContextAssembler, CredentialStore, Harness, OperationPolicy, SessionStore } from "@cogwork/engine";
+import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it, layer } from "@effect/vitest";
 import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
@@ -38,7 +36,7 @@ const resumedSessionId = Schema.decodeSync(SessionId)("sess-cursor-resume");
 const decodeObservation = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({
-      instructions: Schema.String,
+      prompt: Schema.String,
       model: Schema.String,
       mcp: Schema.Array(
         Schema.Struct({
@@ -67,6 +65,10 @@ const decodeObservation = Schema.decodeUnknownSync(
       hasCursorApiKey: Schema.Boolean,
     }),
   ),
+);
+
+const decodePermissionOutcome = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ outcome: Schema.String, optionId: Schema.String })),
 );
 
 const restoreEnvironment = (name: string, value: string | undefined) =>
@@ -157,8 +159,8 @@ const harnessRunnerLayer = Layer.mergeAll(
   FetchHttpClient.layer,
 );
 
-const request = (checkoutPath: string, operation: LifecycleStage = "triage") => {
-  const profile = OperationPolicy.operationDefaultProfile(operation);
+const request = (checkoutPath: string, operation = "operate") => {
+  const profile = "read-only" as const;
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-cursor-test",
@@ -179,18 +181,15 @@ const request = (checkoutPath: string, operation: LifecycleStage = "triage") => 
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["sandbox"],
-      structuredOutput: stageResultJsonSchema(operation)["~standard"].jsonSchema.input({
-        target: "draft-2020-12",
-      }),
+      structuredOutput: { type: "object" },
       connections: [],
       messages: [{ role: "user", content: "triage the issue" }],
       workContext: {
         reference: { workItem: "#1", url: null },
         prose: { body: "", comments: [] },
-        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        facts: { assignees: [], openBlockers: 0, claim: null, priority: "medium" },
         observation: { generation: 1, observedAtMillis: 1 },
       },
       sandbox: { workspace: checkoutPath, policy: profile },
@@ -493,7 +492,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
   );
 
   it.effect(
-    "uses host login and the shared mandatory Workspace projection",
+    "uses host login and projects instructions without touching repo instruction files",
     () =>
       withCursorEnvironment(
         Effect.gen(function* () {
@@ -501,6 +500,8 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
             Effect.promise(() => localProcessSandbox({}).create({})),
             (sandbox) => Effect.promise(() => sandbox.destroy()),
           );
+          yield* Effect.promise(() => checkout.fs.write("AGENTS.md", "existing repo agents\n"));
+          yield* Effect.promise(() => checkout.fs.write("CLAUDE.md", "existing repo claude\n"));
           const base = request(checkout.id);
           const projectedRequest = {
             ...base,
@@ -543,8 +544,8 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
             .join("");
           const observation = decodeObservation(output);
 
-          assert.include(observation.instructions, "Mandatory repository context.");
-          assert.include(observation.instructions, "/operating-instructions/triage-agent");
+          assert.include(observation.prompt, "Mandatory repository context.");
+          assert.include(observation.prompt, "/operating-instructions/triage-agent");
           assert.strictEqual(observation.model, "gpt-5.6-sol-high");
           assert.deepStrictEqual(observation.mcp, [
             {
@@ -558,6 +559,14 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           assert.deepStrictEqual(observation.networkEnvironment, cursorNetworkEnvironmentProbe);
           assert.isFalse(observation.hasCursorApiKey);
           assert.notInclude(output, "cursor-mcp-secret");
+          assert.strictEqual(
+            yield* Effect.promise(() => checkout.fs.read("AGENTS.md")),
+            "existing repo agents\n",
+          );
+          assert.strictEqual(
+            yield* Effect.promise(() => checkout.fs.read("CLAUDE.md")),
+            "existing repo claude\n",
+          );
         }),
       ),
     30_000,
@@ -700,6 +709,42 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
         assert.isTrue(Array.from(events).some(agUiIsStructuredOutputComplete));
         assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+      }),
+    30_000,
+  );
+
+  it.effect(
+    "allows a command Cursor asks permission for, because a headless Run has nobody to answer",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const base = request(checkout.id);
+        const fullRequest = {
+          ...base,
+          plan: new RunPlan({
+            ...base.plan,
+            harness: { ...base.plan.harness, profile: "full" },
+            sandbox: { ...base.plan.sandbox, policy: "full" },
+          }),
+        } satisfies Harness.HarnessRequest;
+        const runner = cursorRunner({
+          name: cursorName,
+          agentBin: `node ${fakeCursorAgent} --request-command-permission`,
+        });
+
+        const events = yield* Stream.runCollect(runner.run(fullRequest));
+        const output = Array.from(events)
+          .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
+          .map(({ delta }) => delta ?? "")
+          .join("");
+
+        assert.deepStrictEqual(decodePermissionOutcome(output), {
+          outcome: "selected",
+          optionId: "allow-once",
+        });
       }),
     30_000,
   );

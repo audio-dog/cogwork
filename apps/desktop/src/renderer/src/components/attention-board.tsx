@@ -1,3 +1,5 @@
+import type { WorkItemRef } from "@cogwork/contracts";
+import { Alert, AlertAction, AlertDescription } from "@cogwork/ui/components/alert";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@cogwork/ui/components/card";
@@ -10,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@cogwork/ui/components/dropdown-menu";
+import { Field, FieldGroup } from "@cogwork/ui/components/field";
 import {
   Item,
   ItemActions,
@@ -72,7 +75,6 @@ import {
   type ParkTag,
   type PlanEdits,
   type PlanStep,
-  planDigest,
   reasonLabel,
   runnableSteps,
   type SkippedRecord,
@@ -99,7 +101,6 @@ export interface Approval {
 
 export interface Rejection {
   readonly item: ParkedItem;
-  readonly digest: string;
   readonly note: string;
 }
 
@@ -111,7 +112,7 @@ export interface HandBack {
 export interface AnswerChosen {
   readonly item: ParkedItem;
   readonly choice: AnswerChoice;
-  readonly input: string | null;
+  readonly inputs: Readonly<Record<string, string>>;
 }
 
 export interface AttentionState {
@@ -120,17 +121,20 @@ export interface AttentionState {
   readonly skipped: readonly SkippedRecord[];
   readonly layout: AttentionLayout;
   readonly focus: string | null;
+  readonly failure: string | null;
+  readonly notificationFailure: string | null;
 }
 
 export interface AttentionActions {
-  readonly approve: (approval: Approval) => void;
-  readonly reject: (rejection: Rejection) => void;
-  readonly handBack: (handBack: HandBack) => void;
-  readonly chooseAnswer: (answer: AnswerChosen) => void;
-  readonly dismiss: (notification: NotificationRecord) => void;
-  readonly openItem: (id: string) => void;
+  readonly approve: (approval: Approval) => Promise<boolean>;
+  readonly reject: (rejection: Rejection) => Promise<boolean>;
+  readonly handBack: (handBack: HandBack) => Promise<boolean>;
+  readonly chooseAnswer: (answer: AnswerChosen) => Promise<boolean>;
+  readonly dismiss: (notification: NotificationRecord) => Promise<boolean>;
+  readonly openItem: (item: WorkItemRef) => void;
   readonly setFocus: (id: string | null) => void;
   readonly setLayout: (layout: AttentionLayout) => void;
+  readonly openNotificationSettings: () => void;
 }
 
 export type AttentionMeta = Record<string, never>;
@@ -156,10 +160,10 @@ interface ParkDraft {
   readonly edits: PlanEdits;
   readonly note: string;
   readonly choice: string | null;
-  readonly input: string;
+  readonly inputs: Readonly<Record<string, string>>;
 }
 
-const emptyDraft: ParkDraft = { mode: "view", edits: {}, note: "", choice: null, input: "" };
+const emptyDraft: ParkDraft = { mode: "view", edits: {}, note: "", choice: null, inputs: {} };
 
 interface DraftsContextValue {
   state: { drafts: Readonly<Record<string, ParkDraft>> };
@@ -215,6 +219,8 @@ const reasonPresentations: Record<
   "write-failed": { icon: RiCloseCircleLine, tone: "failure" },
   "hop-cap": { icon: RiLoopLeftLine, tone: "setup" },
   "missing-operation": { icon: RiSignpostLine, tone: "setup" },
+  "plan-rejected": { icon: RiCloseCircleLine, tone: "failure" },
+  "draft-outcome-unknown": { icon: RiErrorWarningLine, tone: "failure" },
   "no-workspace-recognized": { icon: RiMapPinLine, tone: "setup" },
 };
 
@@ -255,12 +261,12 @@ function SourceLabel({ source }: { source: SourceRef }) {
   return <span className={cn("truncate", trackerApps.has(source.app) && "font-mono")}>{source.label}</span>;
 }
 
-function ItemLink({ id, source }: { id: string; source: SourceRef }) {
+function ItemLink({ item, source }: { item: WorkItemRef; source: SourceRef }) {
   const {
     actions: { openItem },
   } = useAttention();
   return (
-    <Button size="xs" variant="link" className="px-0" onClick={() => openItem(id)}>
+    <Button size="xs" variant="link" className="px-0" onClick={() => openItem(item)}>
       <SourceLabel source={source} />
     </Button>
   );
@@ -389,10 +395,9 @@ function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactN
     actions: { update, discard },
   } = useDrafts();
   const draft = drafts[item.id] ?? emptyDraft;
-  const digest = planDigest(item, draft.edits);
-  const send = (command: () => void) => {
-    command();
-    discard(item.id);
+  const digest = item.reason.tag === "awaiting-approval" ? item.reason.digest : "";
+  const send = async (command: () => Promise<boolean>) => {
+    if (await command()) discard(item.id);
   };
   return (
     <ParkedContext
@@ -403,10 +408,9 @@ function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactN
           cancel: () => discard(item.id),
           setEdit: (key, text) => update(item.id, { edits: { ...draft.edits, [key]: text } }),
           approve: () => send(() => actions.approve({ item, digest, edits: draft.edits })),
-          reject: () => send(() => actions.reject({ item, digest, note: draft.note })),
+          reject: () => send(() => actions.reject({ item, note: draft.note })),
           handBack: () => send(() => actions.handBack({ item, note: draft.note })),
-          chooseAnswer: (choice) =>
-            send(() => actions.chooseAnswer({ item, choice, input: choice.input ? draft.input : null })),
+          chooseAnswer: (choice) => send(() => actions.chooseAnswer({ item, choice, inputs: draft.inputs })),
         },
         meta: {},
       }}
@@ -418,21 +422,22 @@ function ParkedProvider({ item, children }: { item: ParkedItem; children: ReactN
 
 function StepInputs({ step }: { step: PlanStep }) {
   const {
-    state: { item, draft },
+    state: { draft },
     actions: { setEdit },
   } = useParked();
   const editable = draft.mode === "edit" && isRunnable(step);
   return (
-    <div className="flex flex-col gap-1.5">
+    <FieldGroup>
       {step.inputs.map((input, index) => {
         const isLead = index === 0;
         return editable ? (
-          <Textarea
-            key={input.id}
-            aria-label={input.label}
-            value={inputText(draft.edits, item, step, input)}
-            onChange={(event) => setEdit(editKey(item, step, input), event.target.value)}
-          />
+          <Field key={input.id}>
+            <Textarea
+              aria-label={input.label}
+              value={inputText(draft.edits, input)}
+              onChange={(event) => setEdit(editKey(input), event.target.value)}
+            />
+          </Field>
         ) : (
           <p
             key={input.id}
@@ -442,11 +447,11 @@ function StepInputs({ step }: { step: PlanStep }) {
               !isLead && "text-muted-foreground",
             )}
           >
-            {inputText(draft.edits, item, step, input)}
+            {inputText(draft.edits, input)}
           </p>
         );
       })}
-    </div>
+    </FieldGroup>
   );
 }
 
@@ -537,13 +542,15 @@ function NoteCommand({
     actions: { update, cancel },
   } = useParked();
   return (
-    <div className="flex w-full flex-col gap-2">
-      <Textarea
-        aria-label="Note"
-        placeholder="Note"
-        value={draft.note}
-        onChange={(event) => update({ note: event.target.value })}
-      />
+    <FieldGroup>
+      <Field>
+        <Textarea
+          aria-label="Note"
+          placeholder="Note"
+          value={draft.note}
+          onChange={(event) => update({ note: event.target.value })}
+        />
+      </Field>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={cancel}>
           Cancel
@@ -552,7 +559,7 @@ function NoteCommand({
           {confirm}
         </Button>
       </div>
-    </div>
+    </FieldGroup>
   );
 }
 
@@ -647,28 +654,36 @@ function ApprovalPrompt() {
   return <Panel />;
 }
 
-function AnswerInput({ choice, label }: { choice: AnswerChoice; label: string }) {
+function AnswerInputs({ choice }: { choice: AnswerChoice }) {
   const {
     state: { draft },
     actions: { update, cancel, chooseAnswer },
   } = useParked();
   return (
-    <div className="flex w-full flex-col gap-2">
-      <Textarea
-        aria-label={label}
-        placeholder={label}
-        value={draft.input}
-        onChange={(event) => update({ input: event.target.value })}
-      />
+    <FieldGroup>
+      {choice.inputs.map((input) => (
+        <Field key={input.id}>
+          <Textarea
+            aria-label={input.label}
+            placeholder={input.label}
+            value={draft.inputs[input.id] ?? ""}
+            onChange={(event) => update({ inputs: { ...draft.inputs, [input.id]: event.target.value } })}
+          />
+        </Field>
+      ))}
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={cancel}>
           Cancel
         </Button>
-        <Button size="sm" disabled={draft.input.trim() === ""} onClick={() => chooseAnswer(choice)}>
+        <Button
+          size="sm"
+          disabled={choice.inputs.some(({ id }) => !draft.inputs[id]?.trim())}
+          onClick={() => chooseAnswer(choice)}
+        >
           {choice.label}
         </Button>
       </div>
-    </div>
+    </FieldGroup>
   );
 }
 
@@ -679,9 +694,9 @@ function AnswerPrompt() {
   } = useParked();
   const choices = item.reason.tag === "handed-to-you" ? item.reason.choices : [];
   const pending = choices.find((choice) => choice.id === draft.choice);
-  if (pending?.input) return <AnswerInput choice={pending} label={pending.input.label} />;
+  if (pending?.inputs.length) return <AnswerInputs choice={pending} />;
   const pick = (choice: AnswerChoice) => {
-    if (choice.input) {
+    if (choice.inputs.length > 0) {
       update({ choice: choice.id });
       return;
     }
@@ -723,9 +738,18 @@ function HandBackCommands() {
   );
 }
 
+function AnswerCommands() {
+  return (
+    <div className="flex flex-col gap-2">
+      <AnswerPrompt />
+      <HandBackCommands />
+    </div>
+  );
+}
+
 const commandPanels: ReadonlyArray<{ command: ParkCommand; Panel: ComponentType }> = [
   { command: "approve", Panel: ApprovalPrompt },
-  { command: "choose-answer", Panel: AnswerPrompt },
+  { command: "choose-answer", Panel: AnswerCommands },
   { command: "hand-back", Panel: HandBackCommands },
 ];
 
@@ -879,7 +903,7 @@ function NotificationCard({ notification }: { notification: NotificationRecord }
         <AnswerChips answers={notification.answers} />
         <ArtifactTrace artifacts={notification.artifacts} />
         <span className="flex items-center justify-between">
-          <ItemLink id={notification.id} source={notification.source} />
+          <ItemLink item={notification.item} source={notification.source} />
           <Button size="sm" variant="ghost" onClick={() => dismiss(notification)}>
             Dismiss
           </Button>
@@ -981,8 +1005,8 @@ function AttentionLanes() {
 
 function AttentionFrame({ children }: { children: ReactNode }) {
   const {
-    state: { layout },
-    actions: { setLayout },
+    state: { layout, failure, notificationFailure },
+    actions: { setLayout, openNotificationSettings },
   } = useAttention();
   return (
     <Tabs
@@ -1005,6 +1029,23 @@ function AttentionFrame({ children }: { children: ReactNode }) {
           </TabsTrigger>
         </TabsList>
       </header>
+      {failure && (
+        <Alert variant="destructive">
+          <AlertDescription>{failure}</AlertDescription>
+        </Alert>
+      )}
+      {notificationFailure && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {notificationFailure}. Parks still appear here. Allow Cogwork notifications in System Settings.
+          </AlertDescription>
+          <AlertAction>
+            <Button size="xs" variant="outline" onClick={openNotificationSettings}>
+              System Settings
+            </Button>
+          </AlertAction>
+        </Alert>
+      )}
       <TabsContent value="board">{children}</TabsContent>
       <TabsContent value="list">{children}</TabsContent>
     </Tabs>

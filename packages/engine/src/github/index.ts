@@ -1,4 +1,4 @@
-export { layer as adapterLayer, makeAdapter, workflowCatalogContribution } from "./adapter";
+export { layer as adapterLayer, makeAdapter } from "./adapter";
 export { makeCliCredentialSource } from "./cli-credential";
 export {
   GitHubClient,

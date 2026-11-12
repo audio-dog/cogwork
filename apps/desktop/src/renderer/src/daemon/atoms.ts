@@ -73,8 +73,6 @@ export const runActivityAtom = Atom.family((runId: RunId) =>
 
 export const cancelRunAtom = DaemonAtomRpc.mutation("CancelRun");
 
-export const reclassifyAtom = DaemonAtomRpc.mutation("Reclassify");
-
 export const handBackAtom = Atom.keepAlive(DaemonAtomRpc.mutation("HandBack"));
 
 export const handBackTargetAtom = Atom.keepAlive(
@@ -142,6 +140,18 @@ export const deregisterWorkspaceAtom = DaemonAtomRpc.mutation("DeregisterWorkspa
 export const rebindWorkspaceAtom = DaemonAtomRpc.mutation("RebindWorkspace");
 
 export const workflowsAtom = DaemonAtomRpc.query("ListWorkflows", undefined);
+
+export const workflowAttentionAtom = DaemonAtomRpc.query("ListWorkflowAttention", undefined);
+
+export const workflowNotificationsAtom = DaemonAtomRpc.query("ListWorkflowNotifications", undefined);
+
+export const approveWorkflowPlanAtom = DaemonAtomRpc.mutation("ApproveWorkflowPlan");
+
+export const rejectWorkflowPlanAtom = DaemonAtomRpc.mutation("RejectWorkflowPlan");
+
+export const chooseWorkflowAnswerAtom = DaemonAtomRpc.mutation("ChooseWorkflowAnswer");
+
+export const dismissWorkflowNotificationAtom = DaemonAtomRpc.mutation("DismissWorkflowNotification");
 
 export const workflowCatalogAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWorkflowCatalog", undefined));
 

@@ -5,12 +5,17 @@ import {
   HarnessName,
   RunPlan,
   SessionId,
-  stageResultJsonSchema,
 } from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert, describe, it } from "@effect/vitest";
-import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
+import {
+  EventType,
+  InMemoryRunStore,
+  type ModelMessage,
+  type StreamChunk,
+  toolDefinition,
+} from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import {
   type ChatWithInterruptsPersistence,
@@ -168,20 +173,18 @@ const contextLayer = (layers: ReadonlyArray<InstructionLayer>) =>
 interface RequestOverrides {
   readonly checkoutPath?: string | null;
   readonly session?: HarnessRequest["session"];
-  readonly stage?: "triage" | "implement";
+  readonly operation?: string;
   readonly model?: string;
 }
 
 const request = (overrides: RequestOverrides): HarnessRequest => {
-  const stage = overrides.stage ?? "implement";
-  const profile = stage === "triage" ? "read-only" : "full";
-  const structuredOutput = stageResultJsonSchema(stage)["~standard"].jsonSchema.input({
-    target: "draft-2020-12",
-  });
+  const operation = overrides.operation ?? "operate";
+  const profile = operation === "triage" ? "read-only" : "full";
+  const structuredOutput = { type: "object" as const };
   return {
     plan: Schema.decodeSync(RunPlan)({
       id: "run-provider-test",
-      operation: stage,
+      operation,
       harness: { name: harnessName, model: overrides.model ?? "openai/gpt-4o", options: {}, profile },
       instructions: [{ ...sampleLayer, kind: "repo" }],
       operatingInstructions: {
@@ -193,7 +196,6 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["persistence", "instruction-context"],
       structuredOutput,
@@ -212,7 +214,7 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
             },
           ],
         },
-        facts: { roles: [], assignees: [], openBlockers: 0, claim: null, priority: "medium", pr: null },
+        facts: { assignees: [], openBlockers: 0, claim: null, priority: "medium" },
         observation: { generation: 1, observedAtMillis: 1 },
       },
       sandbox: {
@@ -347,6 +349,29 @@ describe("providerRunner", { timeout: 30_000 }, () => {
     }),
   );
 
+  it.live("renders an engine-owned issue search tool named by the Run Plan", () =>
+    Effect.gen(function* () {
+      const capturedOptions: Array<RunChatOptions> = [];
+      const runChat: RunChat = (options) => {
+        capturedOptions.push(options);
+        return toAsyncIterable(scriptedChunks);
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+      const base = request({ checkoutPath: null });
+      const issueSearch = toolDefinition({
+        name: "issue-search",
+        description: "Search issues",
+      }).server(() => Promise.resolve({ matches: [] }));
+      const plan = RunPlan.make({ ...base.plan, tools: [...base.plan.tools, "issue-search"] });
+
+      yield* Stream.runDrain(runner.run({ ...base, plan, engineTools: [issueSearch] })).pipe(
+        Effect.provide(providerRunnerLayer()),
+      );
+
+      assert.isTrue(capturedOptions[0]?.tools.some(({ name }) => name === "issue-search"));
+    }),
+  );
+
   it.live("runs without a Workspace in an empty scratch directory and removes it after the Run", () =>
     Effect.gen(function* () {
       const roots: Array<string> = [];
@@ -396,7 +421,7 @@ describe("providerRunner", { timeout: 30_000 }, () => {
       });
       const runner = providerRunner({ name: harnessName, runChat });
 
-      yield* Stream.runDrain(runner.run(request({ stage: "triage", checkoutPath })));
+      yield* Stream.runDrain(runner.run(request({ operation: "triage", checkoutPath })));
 
       assert.isFalse(yield* fs.exists(`${checkoutPath}/changed.txt`));
     }).pipe(Effect.provide(providerRunnerLayer())),
@@ -537,9 +562,9 @@ describe("providerRunner", { timeout: 30_000 }, () => {
         makeAdapter: () => nativeStructuredAdapter,
       });
 
-      const events = yield* Stream.runCollect(runner.run(request({ stage: "triage", checkoutPath }))).pipe(
-        Effect.provide(providerRunnerLayer()),
-      );
+      const events = yield* Stream.runCollect(
+        runner.run(request({ operation: "triage", checkoutPath })),
+      ).pipe(Effect.provide(providerRunnerLayer()));
 
       assert.strictEqual(
         events.filter((event) => event.type === "CUSTOM" && event.name === "structured-output.complete")

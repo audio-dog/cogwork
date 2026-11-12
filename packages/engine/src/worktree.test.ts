@@ -924,6 +924,50 @@ describe("Worktree.pushBranch", () => {
       ]);
     }).pipe(Effect.provide(worktreeLayer({}))),
   );
+
+  it.effect("does nothing when the pull request branch has no new commits", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
+      const headBranch = Worktree.branchName(item);
+      const pushBranchIfAhead = manager.pushBranchIfAhead;
+      if (!pushBranchIfAhead) return yield* Effect.die("push-if-ahead unavailable");
+
+      const pushed = yield* pushBranchIfAhead(workspaceWith(), headBranch);
+
+      assert.isFalse(pushed);
+      assert.isEmpty(yield* Ref.get(recorder.pushedBranches));
+    }).pipe(
+      Effect.provide(
+        worktreeLayer({ remoteBranches: [Worktree.branchName(item)], divergence: { ahead: 0, behind: 0 } }),
+      ),
+    ),
+  );
+
+  it.effect("pushes when the pull request branch has new commits", () =>
+    Effect.gen(function* () {
+      const recorder = yield* WorktreeRecorder;
+      const manager = yield* LayeredWorktree;
+      const headBranch = Worktree.branchName(item);
+      const pushBranchIfAhead = manager.pushBranchIfAhead;
+      if (!pushBranchIfAhead) return yield* Effect.die("push-if-ahead unavailable");
+
+      const pushed = yield* pushBranchIfAhead(workspaceWith(), headBranch);
+
+      assert.isTrue(pushed);
+      assert.deepStrictEqual(yield* Ref.get(recorder.pushedBranches), [
+        {
+          repoPath: "/repo",
+          remoteUrl: "git@example.com:repo.git",
+          branch: headBranch,
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        worktreeLayer({ remoteBranches: [Worktree.branchName(item)], divergence: { ahead: 1, behind: 0 } }),
+      ),
+    ),
+  );
 });
 
 describe("Worktree.reconcile", () => {

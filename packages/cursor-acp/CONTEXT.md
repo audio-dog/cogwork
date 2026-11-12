@@ -34,8 +34,8 @@ Cursor has no native structured-output contract in ACP. The shared runtime suppl
 _Avoid_: Native structured output, guaranteed JSON mode
 
 **Declared policy posture**:
-Cursor declares exactly one Operation profile: Full (ADR 0025). ACP cannot prove worktree confinement or read-only enforcement because Cursor decides which native actions request permission, so no Read only claim is made; the Full declaration trusts Cursor's own permission mode the way ADR 0023 trusts Codex's ambient hooks. An enforceable ACP permission mapping or an isolated Sandbox provider can add the Read only profile later.
-_Avoid_: Permission prompt, bypassPermissions, silent downgrade, read-only claim, refuse-everything posture (reversed by ADR 0025)
+Cursor declares exactly one Operation profile: Full (ADR 0025). ACP cannot prove worktree confinement or read-only enforcement because Cursor decides which native actions request permission, so no Read only claim is made; the Full declaration trusts Cursor's own permission mode the way ADR 0023 trusts Codex's ambient hooks. A Full Run allows each permission request that Cursor sends (`bypassPermissions`, ADR 0025 amendment): Cursor asks before a command that is not on the host's own allowlist, and a headless Run has nobody to answer. A refusal there would make each command depend on an ambient Cursor config. An enforceable ACP permission mapping or an isolated Sandbox provider can add the Read only profile later.
+_Avoid_: Permission prompt, silent downgrade, read-only claim, refuse-everything posture (reversed by ADR 0025)
 
 **Runtime Host process**:
 The local-process provider sets the checkout working directory and scrubs environment variables. It is a trusted Runtime Host boundary, not a container, Sandbox, or worktree-confinement mechanism.

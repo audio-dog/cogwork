@@ -1,6 +1,5 @@
-import type { ConnectionBindingId, ConnectionId } from "@cogwork/contracts";
-import type { BaseDivergence } from "../follow-up";
-import type { RegisteredWorkspace } from "../projector";
+import type { ConnectionBindingId, ConnectionId, PrBaseDivergence } from "@cogwork/contracts";
+import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { type GitHubRepoRef, repoRefFromRepository } from "./client";
 
 export interface BotWakeMode {
@@ -36,7 +35,9 @@ const targetFromRepo = (
   };
 };
 
-export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTargetConfig | null => {
+export const sourceControlTargetFor = (
+  workspace: WorkspaceIssueTrackerBinding,
+): GitHubTargetConfig | null => {
   const explicit = workspace.config.sourceControl;
   if (explicit) {
     if (explicit.type !== "github" || !workspace.repository) return null;
@@ -47,7 +48,7 @@ export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTa
   return targetFromRepo(workspace.repository, source.connectionId, source.botAllowlist);
 };
 
-export const baseDivergenceOf = (mergeableState: string | null): BaseDivergence => {
+export const baseDivergenceOf = (mergeableState: string | null): PrBaseDivergence => {
   if (mergeableState === "dirty") return "conflict";
   if (mergeableState === "behind") return "clean";
   return "none";

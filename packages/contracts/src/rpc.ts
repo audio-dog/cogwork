@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import { HarnessName, TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
+import { HarnessName, TrimmedNonEmptyString, WorkflowId, WorkItemId, WorkspaceId } from "./base-schemas";
 import {
   ConnectionBindingId,
   ConnectionEstablishment,
@@ -10,6 +10,7 @@ import {
   ConnectionMutationResult,
   ConnectionOverview,
 } from "./connection";
+import { WorkItemRef } from "./coordination";
 import {
   ControlStore,
   ControlStoreFailure,
@@ -20,7 +21,7 @@ import {
   SchedulingState,
   StaleControlStoreWrite,
 } from "./daemon";
-import { ClassifiedItem, DaemonEvent, WorkspaceState } from "./daemon-event";
+import { DaemonEvent, WorkspaceState } from "./daemon-event";
 import { HarnessCatalog, HarnessNotRegistered, HarnessReadiness } from "./harness";
 import { IssueTrackerError } from "./issue-tracker";
 import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
@@ -32,21 +33,22 @@ import {
   OperationSettingBatch,
   OperationSettingRefused,
 } from "./settings";
-import { TriageRole } from "./triage";
 import {
+  WorkflowAttention,
   WorkflowCatalogKey,
   WorkflowCatalogResult,
   WorkflowDiagnostic,
   WorkflowDocument,
   WorkflowEditBatch,
   WorkflowFailure,
-  WorkflowId,
   WorkflowList,
   WorkflowNotification,
+  WorkflowNotificationId,
   WorkflowOptionList,
   WorkflowRecord,
   WorkflowSwitchResult,
   WorkflowTemplate,
+  WorkflowTouchpointFailure,
 } from "./workflow";
 import {
   GitHubPriorityField,
@@ -122,6 +124,11 @@ export const ListWorkflowNotifications = Rpc.make("ListWorkflowNotifications", {
   success: Schema.Array(WorkflowNotification),
 });
 
+export const ListWorkflowAttention = Rpc.make("ListWorkflowAttention", {
+  success: WorkflowAttention,
+  error: WorkflowTouchpointFailure,
+});
+
 export const GetWorkflow = Rpc.make("GetWorkflow", {
   payload: { id: WorkflowId },
   success: WorkflowRecord,
@@ -166,6 +173,7 @@ export const DaemonQueries = RpcGroup.make(
   WatchEvents,
   ListWorkflows,
   ListWorkflowNotifications,
+  ListWorkflowAttention,
   GetWorkflow,
   ValidateWorkflow,
   GetWorkflowCatalog,
@@ -184,38 +192,56 @@ export class WorkItemNotFound extends Schema.TaggedError<WorkItemNotFound>()("Wo
   workItem: WorkItemId,
 }) {}
 
-export const CancelRunResult = Schema.TaggedUnion({
-  Cancelled: { item: ClassifiedItem },
-  StillDraining: { item: ClassifiedItem },
-});
-export type CancelRunResult = typeof CancelRunResult.Type;
-
 export const CancelRun = Rpc.make("CancelRun", {
   payload: { runId: RunId, note: Schema.optional(TrimmedNonEmptyString) },
-  success: CancelRunResult,
+  success: Schema.Void,
   error: CancelRunError,
-});
-
-export const Reclassify = Rpc.make("Reclassify", {
-  payload: {
-    workspace: WorkspaceId,
-    workItem: WorkItemId,
-    role: TriageRole,
-    note: Schema.optional(TrimmedNonEmptyString),
-  },
-  success: Schema.NullOr(ClassifiedItem),
-  error: Schema.Union([WorkItemNotFound, IssueTrackerError]),
 });
 
 export const HandBack = Rpc.make("HandBack", {
   payload: {
-    workspace: WorkspaceId,
-    workItem: WorkItemId,
-    role: TriageRole,
+    item: WorkItemRef,
     note: Schema.optional(TrimmedNonEmptyString),
   },
-  success: Schema.NullOr(ClassifiedItem),
-  error: Schema.Union([WorkItemNotFound, IssueTrackerError]),
+  success: Schema.Void,
+  error: WorkflowTouchpointFailure,
+});
+
+export const ApproveWorkflowPlan = Rpc.make("ApproveWorkflowPlan", {
+  payload: {
+    item: WorkItemRef,
+    attempt: RunId,
+    digest: TrimmedNonEmptyString,
+    edits: Schema.optional(Schema.Record(Schema.String, TrimmedNonEmptyString)),
+  },
+  success: TrimmedNonEmptyString,
+  error: WorkflowTouchpointFailure,
+});
+
+export const RejectWorkflowPlan = Rpc.make("RejectWorkflowPlan", {
+  payload: {
+    item: WorkItemRef,
+    attempt: RunId,
+    note: Schema.optional(TrimmedNonEmptyString),
+  },
+  success: Schema.Void,
+  error: WorkflowTouchpointFailure,
+});
+
+export const ChooseWorkflowAnswer = Rpc.make("ChooseWorkflowAnswer", {
+  payload: {
+    item: WorkItemRef,
+    attempt: RunId,
+    answers: Schema.Record(Schema.String, TrimmedNonEmptyString),
+    inputs: Schema.Record(Schema.String, TrimmedNonEmptyString),
+  },
+  success: Schema.Void,
+  error: WorkflowTouchpointFailure,
+});
+
+export const DismissWorkflowNotification = Rpc.make("DismissWorkflowNotification", {
+  payload: { id: WorkflowNotificationId },
+  success: Schema.Void,
 });
 
 export const SetScheduling = Rpc.make("SetScheduling", {
@@ -351,8 +377,11 @@ export const DeleteWorkflow = Rpc.make("DeleteWorkflow", {
 
 export const DaemonCommands = RpcGroup.make(
   CancelRun,
+  ApproveWorkflowPlan,
+  RejectWorkflowPlan,
+  ChooseWorkflowAnswer,
+  DismissWorkflowNotification,
   HandBack,
-  Reclassify,
   SetScheduling,
   ReportProcessHealth,
   CheckHarnesses,

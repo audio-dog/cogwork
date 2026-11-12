@@ -17,7 +17,6 @@ import {
   defaultDaemonLimits,
   HarnessEnablement,
   type HarnessName,
-  LifecycleStage,
   type OperationSettingCell,
   OperationSettingName,
   type OperationSettingRow,
@@ -26,7 +25,6 @@ import {
   OperationSettingUpdate,
   type PluginInstall,
   PluginInstall as PluginInstallSchema,
-  SettingLevel,
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
@@ -244,9 +242,6 @@ const setDaemonLimitFailure = (error: unknown) =>
 
 const StoredOperationSettingRow = Schema.Struct({
   setting: Schema.String,
-  level: Schema.Literals(["default", "workflow", "operation"]),
-  workflow: Schema.String,
-  operation: Schema.String,
   scope: Schema.Literals(["settings-profile", "runtime-host", "private-workspace-overlay"]),
   workspace: Schema.String,
   value: Schema.String,
@@ -345,12 +340,6 @@ const readConnections = Effect.fn("ControlStore.readConnections")(function* (sql
   return yield* Effect.forEach(rows, (row) => decodeConnection(row));
 });
 
-const levelOf = (row: StoredOperationSettingRow) => {
-  if (row.level === "default") return { _tag: "Default" };
-  if (row.level === "workflow") return { _tag: "Workflow", workflow: row.workflow };
-  return { _tag: "Operation", workflow: row.workflow, operation: row.operation };
-};
-
 const scopeOf = (row: StoredOperationSettingRow) => {
   if (row.scope === "settings-profile") return { _tag: "SettingsProfile" };
   if (row.scope === "runtime-host") return { _tag: "RuntimeHost" };
@@ -366,17 +355,10 @@ const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOper
     });
     return null;
   }
-  if (row.level === "operation" && !Schema.is(LifecycleStage)(row.operation)) {
-    yield* Effect.logWarning("ignored stored Operation setting for unknown Operation", {
-      operation: row.operation,
-      setting: row.setting,
-    });
-    return null;
-  }
   const value = yield* decodeJson(row.value);
   return yield* decodeOperationSettingRow({
     setting: row.setting,
-    level: levelOf(row),
+    level: { _tag: "Default" },
     scope: scopeOf(row),
     value,
   });
@@ -385,9 +367,9 @@ const decodeStoredOperationSettingRow = Effect.fn("ControlStore.decodeStoredOper
 const readOperationSettings = (sql: SqlClient.SqlClient) =>
   Effect.gen(function* () {
     const stored = yield* sql<StoredOperationSettingRow>`
-      SELECT setting, level, workflow, operation, scope, workspace, value
+      SELECT setting, scope, workspace, value
       FROM operation_settings
-      ORDER BY setting, level, workflow, operation, scope, workspace
+      ORDER BY setting, scope, workspace
     `;
     const rows = yield* decodeStoredOperationSettingRows(stored);
     return yield* Effect.forEach(rows, decodeStoredOperationSettingRow).pipe(
@@ -497,13 +479,6 @@ const clearContributionSetting = Effect.fn("ControlStore.clearContributionSettin
   `;
 });
 
-const storedLevel = (level: OperationSettingCell["level"]) =>
-  SettingLevel.match(level, {
-    Default: () => ({ level: "default", workflow: "", operation: "" }),
-    Workflow: ({ workflow }) => ({ level: "workflow", workflow, operation: "" }),
-    Operation: ({ workflow, operation }) => ({ level: "operation", workflow, operation }),
-  });
-
 const storedScope = (scope: OperationSettingCell["scope"]) =>
   OperationSettingScope.match(scope, {
     SettingsProfile: () => ({ scope: "settings-profile", workspace: "" }),
@@ -516,7 +491,6 @@ const storedScope = (scope: OperationSettingCell["scope"]) =>
 
 const storedCell = (cell: OperationSettingCell) => ({
   setting: cell.setting,
-  ...storedLevel(cell.level),
   ...storedScope(cell.scope),
 });
 
@@ -527,9 +501,9 @@ const setOperationSetting = Effect.fn("ControlStore.setOperationSetting")(functi
   const cell = storedCell(row);
   const value = yield* encodeJson(row.value);
   yield* sql`
-    INSERT INTO operation_settings (setting, level, workflow, operation, scope, workspace, value)
-    VALUES (${cell.setting}, ${cell.level}, ${cell.workflow}, ${cell.operation}, ${cell.scope}, ${cell.workspace}, ${value})
-    ON CONFLICT (setting, level, workflow, operation, scope, workspace)
+    INSERT INTO operation_settings (setting, scope, workspace, value)
+    VALUES (${cell.setting}, ${cell.scope}, ${cell.workspace}, ${value})
+    ON CONFLICT (setting, scope, workspace)
     DO UPDATE SET value = excluded.value
   `;
 });
@@ -542,9 +516,6 @@ const clearOperationSetting = Effect.fn("ControlStore.clearOperationSetting")(fu
   yield* sql`
     DELETE FROM operation_settings
     WHERE setting = ${stored.setting}
-      AND level = ${stored.level}
-      AND workflow = ${stored.workflow}
-      AND operation = ${stored.operation}
       AND scope = ${stored.scope}
       AND workspace = ${stored.workspace}
   `;

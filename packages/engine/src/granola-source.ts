@@ -2,7 +2,6 @@ import {
   type ConnectionId,
   ParkReason,
   type WorkflowAvailability,
-  type WorkflowCatalogEntry,
   WorkflowCatalogKey,
   type WorkflowTemplate,
 } from "@cogwork/contracts";
@@ -18,8 +17,10 @@ import type { ConnectionStoreService } from "./connection";
 import type { CoordinationService } from "./coordination";
 import type { Credential } from "./credential-store";
 import { type GranolaHttpFailure, makeGranolaHttp } from "./granola-http";
+import { providerSubject } from "./provider-trigger-source";
 import {
   SourceFailure,
+  type TriggerEntry,
   type TriggerEvent,
   type TriggerSource,
   type TriggerSubscription,
@@ -437,6 +438,7 @@ const entry = (key: typeof generatedKey, name: string) =>
     key,
     name,
     kind: "trigger",
+    triggerKind: "occurrence",
     system: "granola",
     connection: "granola",
     requires: [],
@@ -444,15 +446,16 @@ const entry = (key: typeof generatedKey, name: string) =>
     itemKind: "granola-note",
     actsOn: [],
     requiresWorkspace: false,
+    workspaceSource: null,
     permissionProfile: "read-only",
     agentInputs: [],
     emits: [],
-  }) satisfies WorkflowCatalogEntry;
+  }) satisfies TriggerEntry;
 
 export const granolaEntries = [
   entry(generatedKey, "Note generated"),
   entry(editedKey, "Note edited"),
-] satisfies ReadonlyArray<WorkflowCatalogEntry>;
+] satisfies ReadonlyArray<TriggerEntry>;
 
 export const granolaWorkflowCatalogContribution: WorkflowCatalogContribution = {
   entries: granolaEntries,
@@ -515,6 +518,7 @@ const eventOf = Effect.fn("GranolaSource.eventOf")(function* (
     atMillis: note.updatedAtMillis,
     entry: isGeneratedRevision ? generatedKey : editedKey,
     workspace: null,
+    subject: providerSubject(note.title, null),
     payload: payloadOf(note),
   } satisfies TriggerEvent;
 });
@@ -565,7 +569,6 @@ export const makeGranolaSource = (
           Effect.succeed({ _tag: "Unavailable", reason: error.message } satisfies WorkflowAvailability),
         ),
       ),
-    listOptions: (_entry, _parameter) => Effect.succeed([]),
     observe: (subscriptions) => {
       if (subscriptions.length === 0) return Stream.empty;
       const next = (state: { readonly watermark: number; readonly first: boolean }) =>

@@ -1,33 +1,47 @@
 import {
   type Board,
-  ClassifiedItem,
   itemKey,
-  type NeedsHumanReason,
   type RunSummary,
+  refOfKey,
+  type WorkflowId,
+  type WorkflowRecord,
   type WorkItemId,
+  WorkItemRef,
   type WorkspaceId,
   WorkspaceState,
 } from "@cogwork/contracts";
 
-export const needsHumanReasonLabel: Record<NeedsHumanReason, string> = {
-  "needs-info": "Needs info",
-  "ready-for-human": "Ready for human",
-};
-
 export interface FeedRun {
   readonly run: RunSummary;
+  readonly label: string;
   readonly title: string | null;
 }
 
-export interface QueuedItem {
-  readonly workspace: WorkspaceId;
-  readonly item: Extract<ClassifiedItem, { _tag: "Eligible" }>;
-}
+const refLabel = WorkItemRef.match({
+  Issue: ({ id }) => id,
+  PullRequest: ({ number }) => `PR #${number}`,
+  GranolaNote: () => "Granola note",
+  SlackMessage: () => "Slack message",
+  SlackConversation: () => "Slack thread",
+  ScheduleInstant: () => "Schedule",
+  FanOutChild: ({ position }) => `Item ${position + 1}`,
+});
 
-interface FeedItem {
-  readonly workspace: WorkspaceId;
-  readonly item: ClassifiedItem;
-}
+export const workItemLabel = (workItem: string) => {
+  const ref = refOfKey(workItem);
+  return ref === null ? workItem : refLabel(ref);
+};
+
+export const runTitle = (run: Pick<RunSummary, "subject" | "workItem">) =>
+  run.subject?.title ?? workItemLabel(run.workItem);
+
+export type OperationRun = Pick<RunSummary, "workflow" | "operation">;
+
+export const operationNameOf = (workflows: ReadonlyMap<WorkflowId, WorkflowRecord>, run: OperationRun) => {
+  const workflow = run.workflow === undefined ? undefined : workflows.get(run.workflow);
+  const operations = (workflow?.publishedCopy ?? workflow?.workingCopy)?.operations ?? [];
+  return operations.find(({ id }) => id === run.operation)?.name ?? run.operation;
+};
 
 const terminalStatuses: ReadonlySet<RunSummary["status"]> = new Set([
   "succeeded",
@@ -41,14 +55,14 @@ const terminalStatuses: ReadonlySet<RunSummary["status"]> = new Set([
 const inWorkspace = (filter: WorkspaceId | null, workspace: WorkspaceId) =>
   filter === null || filter === workspace;
 
-const titleFor = (board: Board, run: RunSummary) =>
-  board.items.get(itemKey(run.workspace, run.workItem))?.item.title ?? null;
+const feedRunOf = (board: Board, run: RunSummary) => ({
+  run,
+  label: workItemLabel(run.workItem),
+  title: run.subject?.title ?? board.items.get(itemKey(run.workspace, run.workItem))?.item.title ?? null,
+});
 
 const runs = (board: Board, filter: WorkspaceId | null) =>
   [...board.runs.values()].filter((run) => inWorkspace(filter, run.workspace));
-
-const workspaceItems = (board: Board, filter: WorkspaceId | null): FeedItem[] =>
-  [...board.items.values()].filter(({ workspace }) => inWorkspace(filter, workspace));
 
 const registeredStates = (board: Board) =>
   [...board.workspaces.values()].filter(WorkspaceState.guards.Registered);
@@ -91,22 +105,14 @@ export const runningRuns = (board: Board, filter: WorkspaceId | null): FeedRun[]
   runs(board, filter)
     .filter((run) => run.status === "running")
     .sort((a, b) => a.startedAtMillis - b.startedAtMillis)
-    .map((run) => ({ run, title: titleFor(board, run) }));
+    .map((run) => feedRunOf(board, run));
 
 export const recentlyDone = (board: Board, filter: WorkspaceId | null, limit = 8): FeedRun[] =>
   runs(board, filter)
     .filter((run) => terminalStatuses.has(run.status))
     .sort((a, b) => (b.endedAtMillis ?? 0) - (a.endedAtMillis ?? 0))
     .slice(0, limit)
-    .map((run) => ({ run, title: titleFor(board, run) }));
-
-export const queuedItems = (board: Board, filter: WorkspaceId | null): QueuedItem[] =>
-  workspaceItems(board, filter).filter((entry): entry is QueuedItem =>
-    ClassifiedItem.guards.Eligible(entry.item),
-  );
-
-export const blockedCount = (board: Board, filter: WorkspaceId | null): number =>
-  workspaceItems(board, filter).filter(({ item }) => ClassifiedItem.guards.Blocked(item)).length;
+    .map((run) => feedRunOf(board, run));
 
 export const boardItem = (board: Board, workspace: WorkspaceId, workItem: WorkItemId) =>
   board.items.get(itemKey(workspace, workItem)) ?? null;

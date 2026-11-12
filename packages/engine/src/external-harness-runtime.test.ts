@@ -21,6 +21,7 @@ import {
   type StreamChunk,
   type TextAdapter,
   type TextOptions,
+  toolDefinition,
 } from "@tanstack/ai";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import {
@@ -56,7 +57,7 @@ import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import { fullProfile } from "./tools/policy";
+import { policyForProfile } from "./tools/policy";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -209,7 +210,6 @@ const request = Schema.decodeSync(RunPlan)({
   skills: [],
   mcp: [],
   subagents: [],
-  commands: [],
   hooks: [],
   middleware: ["sandbox"],
   structuredOutput: {
@@ -233,12 +233,10 @@ const request = Schema.decodeSync(RunPlan)({
       ],
     },
     facts: {
-      roles: ["ready-for-agent"],
       assignees: [],
       openBlockers: 0,
       claim: null,
       priority: "medium",
-      pr: null,
     },
     observation: { generation: 1, observedAtMillis: 1 },
   },
@@ -449,6 +447,11 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         "Connections",
       ]);
       assert.deepStrictEqual(runner.planMiddleware, ["sandbox"]);
+      const toolRunner = externalHarnessRunner(
+        { ...descriptor([], new ControlledProbe()), declaredMembers: ["Tools"] },
+        { authentication: () => Effect.succeed({ mode: "host", secrets: {} }) },
+      );
+      assert.include(toolRunner.projectedMembers, "Tools");
     });
 
     it.effect(
@@ -484,6 +487,43 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           assert.deepStrictEqual(messages[1], { role: "user", content: "Implement #147." });
           assert.deepStrictEqual(probe.chatOptions[0]?.systemPrompts, []);
         }),
+    );
+
+    it.effect("renders only the Run Plan's engine tools, and only for a descriptor that declares Tools", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-engine-tool-" });
+        const pullRequestTool = toolDefinition({
+          name: "pull-request",
+          description: "Read a pull request",
+        }).server(() => Promise.resolve({}));
+        const hiddenTool = toolDefinition({
+          name: "hidden-tool",
+          description: "Must stay hidden",
+        }).server(() => Promise.resolve({}));
+        const plan = RunPlan.make({
+          ...request,
+          tools: ["pull-request"],
+          sandbox: { ...request.sandbox, workspace: checkout },
+        });
+        const chatTools = (declaredMembers: ReadonlyArray<"Tools">) => {
+          const probe = new ControlledProbe();
+          return makeHarness({ ...descriptor(terminalEvents, probe), declaredMembers })
+            .run({
+              plan,
+              session: freshSession,
+              mcpCredentials: new Map(),
+              engineTools: [pullRequestTool, hiddenTool],
+            })
+            .pipe(
+              Stream.runDrain,
+              Effect.map(() => probe.chatOptions[0]?.tools?.map(({ name }) => name)),
+            );
+        };
+
+        assert.deepStrictEqual(yield* chatTools(["Tools"]), ["pull-request"]);
+        assert.deepStrictEqual(yield* chatTools([]), []);
+      }),
     );
 
     it.effect("ends a Run whose checkout feed never sees an event", () =>
@@ -889,7 +929,7 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
 
         const chatOptions = probe.chatOptions[0];
         if (!chatOptions) return assert.fail("adapter received no chat options");
-        assert.strictEqual(getSandboxPolicy(runtimeCapabilities(chatOptions)), fullProfile);
+        assert.strictEqual(getSandboxPolicy(runtimeCapabilities(chatOptions)), policyForProfile("full"));
         assert.strictEqual(output.filter((event) => event.name === "structured-output.complete").length, 1);
         const diagnostic = output.find((event) => event.name === "controlled.diagnostic");
         assert.deepStrictEqual(diagnostic?.value, { native: true });
@@ -1080,7 +1120,7 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           id: request.id,
           workspace: secretWorkspace,
           workItem: secretWorkItem,
-          stage: "implement",
+          operation: "implement",
           harness: name,
           branch: null,
           session: freshSession,

@@ -70,17 +70,6 @@ export const worktreeRoot = (checkoutPath: string, config?: WorktreeSettings) =>
 
 export const worktreePathFor = (root: string, branch: string) => joinPath(root, branch);
 
-export const checkoutPathFor = (
-  checkoutPath: string,
-  item: WorkItemRef,
-  stage: string,
-  config?: WorktreeSettings,
-  branch: BranchName = branchName(item),
-) => {
-  if (stage === "triage") return checkoutPath;
-  return worktreePathFor(worktreeRoot(checkoutPath, config), branch);
-};
-
 const safeBranch = (branch: string) => /^[a-z0-9][a-z0-9-]*$/.test(branch);
 const safeWorktreeBranch = (branch: string) =>
   !branch.startsWith("/") &&
@@ -378,12 +367,13 @@ export const make = Effect.gen(function* () {
   const pullRequestReadiness = Effect.fn("Worktree.pullRequestReadiness")(function* (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
+    selectedHeadBranch?: string,
   ) {
     const config = workspace.config.worktrees;
     const repoPath = workspace.config.checkoutPath;
     const remote = remoteOf(config);
     const baseBranch = baseBranchOf(config);
-    const headBranch = branchName(item);
+    const headBranch = selectedHeadBranch ?? branchName(item);
 
     const refreshFailure = yield* git
       .fetch(repoPath, remote, {
@@ -423,6 +413,22 @@ export const make = Effect.gen(function* () {
     const remote = remoteOf(config);
     const remoteUrl = yield* git.remoteUrl(repoPath, remote);
     yield* git.pushBranch(repoPath, remoteUrl, headBranch);
+  });
+
+  const pushBranchIfAhead = Effect.fn("Worktree.pushBranchIfAhead")(function* (
+    workspace: RegisteredWorkspace,
+    headBranch: string,
+  ) {
+    const config = workspace.config.worktrees;
+    const repoPath = workspace.config.checkoutPath;
+    const remote = remoteOf(config);
+    const exists = yield* git.remoteBranchExists(repoPath, remote, headBranch);
+    if (exists) {
+      const divergence = yield* git.divergence(repoPath, remote, headBranch, { branch: headBranch });
+      if (divergence.ahead === 0) return false;
+    }
+    yield* pushBranch(workspace, headBranch);
+    return true;
   });
 
   const list = Effect.fn("Worktree.list")(function* (workspace: RegisteredWorkspace) {
@@ -500,6 +506,7 @@ export const make = Effect.gen(function* () {
     ensure,
     pullRequestReadiness,
     pushBranch,
+    pushBranchIfAhead,
     list,
     remove,
     reconcile,

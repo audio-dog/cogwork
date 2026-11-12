@@ -68,7 +68,25 @@ Boot converges the live Control store to `control-store-schema.ts` with drizzle-
 SQLite differ, applies the statements through the engine's `SqlClient`, and verifies convergence with
 an empty second diff. After changing the schema, restart the daemon; do not run `drizzle-kit push` or
 delete `~/.cogwork/control.db`. Rename-shaped diffs are the pre-alpha exception: boot moves the store
-to a timestamped backup and creates a new one. See ADR 0015.
+to a timestamped backup and creates a new one. See `docs/adr/0015-one-control-store-with-engine-owned-migrations.md`.
+
+## TanStack AI
+
+The Harnesses and the engine's own runtime run on TanStack AI: `@tanstack/ai` for `chat()`, tools,
+subagents, and middleware, and `@tanstack/ai-sandbox` for the Workspace definition that every external
+Harness adapter projects. Before you change a Harness descriptor, the external Harness runtime, the
+provider runner, or any code that imports `@tanstack/ai*`, load these skills:
+
+- `pnpm dlx @tanstack/intent@latest load @tanstack/ai#ai-core`, plus the sub-skill for the area, such
+  as `ai-core/tool-calling` or `ai-core/middleware`.
+- `pnpm dlx @tanstack/intent@latest load @tanstack/ai-sandbox#ai-sandbox` for Workspace definitions,
+  projection, and sandboxes.
+- `pnpm dlx @tanstack/intent@latest load @tanstack/ai-skills#ai-skills` for Skill catalogs and
+  `withSkills`.
+
+`.agents/skills/tanstack-ai` is TanStack's map of its packages. Use it to find the package that owns
+a capability. The installed packages' own skills match the installed code, so they win over the docs
+site when the two disagree.
 
 ## Never start the dev server
 

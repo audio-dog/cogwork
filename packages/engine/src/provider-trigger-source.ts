@@ -2,6 +2,7 @@ import {
   keyOf,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
+  type WorkflowOption,
   type WorkflowParameterValue,
   type WorkspaceId,
 } from "@cogwork/contracts";
@@ -12,7 +13,16 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { IssueTrackerError } from "./issue-tracker";
-import { SourceFailure, type TriggerEvent, type TriggerSourceId } from "./trigger-source";
+import type { RegisteredWorkspace, RegistryState } from "./projector";
+import {
+  Recheck,
+  SourceFailure,
+  type TriggerEntry,
+  type TriggerEvent,
+  type TriggerSourceId,
+  type TriggerSubscription,
+} from "./trigger-source";
+import type { OptionReader } from "./workflow-options";
 
 export const catchUpParameter = {
   id: "catch-up-at-most",
@@ -33,11 +43,13 @@ export const triggerEntry = (
   name: string,
   system: "github" | "linear",
   itemKind: "issue" | "pull-request",
+  triggerKind: TriggerEntry["triggerKind"],
   parameters: WorkflowCatalogEntry["parameters"],
-): WorkflowCatalogEntry => ({
+): TriggerEntry => ({
   key: Schema.decodeSync(WorkflowCatalogKey)(key),
   name,
   kind: "trigger",
+  triggerKind,
   system,
   connection: system,
   requires: [],
@@ -45,10 +57,94 @@ export const triggerEntry = (
   itemKind,
   actsOn: [],
   requiresWorkspace: true,
+  workspaceSource: null,
   permissionProfile: "read-only",
   agentInputs: [],
   emits: [],
 });
+
+export interface ItemFilter<Item> {
+  readonly entry: WorkflowCatalogEntry;
+  readonly holds: (item: Item) => boolean;
+}
+
+export const issueNotBlockedFilter = (system: "github" | "linear") =>
+  ({
+    entry: {
+      key: Schema.decodeSync(WorkflowCatalogKey)(`${system}.issue-not-blocked`),
+      name: "Issue is not blocked",
+      kind: "filter",
+      system,
+      connection: system,
+      requires: [],
+      parameters: [],
+      itemKind: "issue",
+      actsOn: [],
+      requiresWorkspace: true,
+      workspaceSource: null,
+      permissionProfile: "read-only",
+      agentInputs: [],
+      emits: [],
+    },
+    holds: ({ openBlockers }) => openBlockers === 0,
+  }) satisfies ItemFilter<{ readonly openBlockers: number }>;
+
+// A filter can start holding without the item changing (its blocker closes), so a modified-since
+// read never sees it; a source reads every open item with a filtered Trigger's label on each poll.
+export const filteredLabels = (subscriptions: ReadonlyArray<TriggerSubscription>) => [
+  ...new Set(
+    subscriptions.flatMap(({ parameters, filters }) => {
+      const label = parameterValue(parameters, "label");
+      return filters.length > 0 && label !== undefined ? [label] : [];
+    }),
+  ),
+];
+
+export const passedFilters = <Item>(filters: ReadonlyArray<ItemFilter<Item>>, item: Item) =>
+  filters.filter(({ holds }) => holds(item)).map(({ entry }) => entry.key);
+
+interface IssueSnapshot<Item> {
+  readonly id: string;
+  readonly open: boolean;
+  readonly labels: ReadonlyArray<string>;
+  readonly item: Item;
+}
+
+interface IssueFacts extends Omit<IssueSnapshot<unknown>, "item"> {
+  readonly label: string;
+  readonly failed: ReadonlyArray<WorkflowCatalogEntry>;
+}
+
+const issueRecheckRules: ReadonlyArray<{
+  readonly holds: (facts: IssueFacts) => boolean;
+  readonly make: (facts: IssueFacts) => Recheck;
+}> = [
+  { holds: ({ open }) => !open, make: ({ id }) => Recheck.Ended({ reason: `${id} is closed` }) },
+  {
+    holds: ({ labels, label }) => !labels.includes(label),
+    make: ({ id, label }) => Recheck.Ended({ reason: `${id} no longer has label ${label}` }),
+  },
+  {
+    holds: ({ failed }) => failed.length > 0,
+    make: ({ id, failed }) =>
+      Recheck.Waiting({ reason: `${id} fails ${failed.map(({ name }) => name).join(", ")}` }),
+  },
+];
+
+export const recheckIssue = <Item>(
+  filters: ReadonlyArray<ItemFilter<Item>>,
+  subscription: TriggerSubscription,
+  { item, ...issue }: IssueSnapshot<Item>,
+) => {
+  const facts: IssueFacts = {
+    ...issue,
+    label: parameterValue(subscription.parameters, "label") ?? "",
+    failed: filters
+      .filter(({ entry, holds }) => subscription.filters.includes(entry.key) && !holds(item))
+      .map(({ entry }) => entry),
+  };
+  return issueRecheckRules.find(({ holds }) => holds(facts))?.make(facts) ?? Recheck.Matches();
+};
 
 export const sourceFailure = (source: TriggerSourceId, error: IssueTrackerError) =>
   new SourceFailure({
@@ -58,8 +154,32 @@ export const sourceFailure = (source: TriggerSourceId, error: IssueTrackerError)
     message: error.message,
   });
 
+export const workspaceOptionReader =
+  (
+    source: TriggerSourceId,
+    registry: Effect.Effect<RegistryState>,
+    names: (workspace: RegisteredWorkspace) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>,
+  ): OptionReader =>
+  (workspace) =>
+    Effect.gen(function* () {
+      if (workspace === undefined) return [];
+      const state = yield* registry;
+      const registered = state.workspaces.find(({ config }) => config.name === workspace);
+      if (!registered) return [];
+      const listed = yield* names(registered);
+      return [...new Set(listed)].map(
+        (name) => ({ value: name, name, listedIn: [workspace] }) satisfies WorkflowOption,
+      );
+    }).pipe(Effect.mapError((error) => sourceFailure(source, error)));
+
 export const parameterValue = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
   parameters.find((parameter) => parameter.id === id)?.value;
+
+export const providerSubject = (title: string | undefined, url: string | null) => {
+  const trimmed = title?.trim();
+  if (!trimmed) return undefined;
+  return { title: trimmed, url: url?.trim() || null };
+};
 
 export const providerModifiedSinceGraceMillis = 30_000;
 const providerPollInterval = Duration.seconds(60);

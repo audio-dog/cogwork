@@ -295,7 +295,7 @@ function PriorityFieldRow() {
       <FieldContent>
         <FieldTitle>Priority</FieldTitle>
         <FieldDescription>
-          Optional organization issue field used to order work within a stage.
+          Optional organization issue field used to order work within a Workflow.
         </FieldDescription>
       </FieldContent>
       {workspace ? (
@@ -310,16 +310,17 @@ function PriorityFieldRow() {
   );
 }
 
+export const trackerItems = [
+  { value: "github", label: "GitHub Issues" },
+  { value: "linear", label: "Linear" },
+] as const;
+
 function IssueTrackerRows() {
   const {
     state: { draft, connections },
     actions: { patch },
     meta: { disabled },
   } = useWorkspaceRecord();
-  const trackerItems = [
-    { value: "github", label: "GitHub Issues" },
-    { value: "linear", label: "Linear" },
-  ];
   return (
     <FieldGroup>
       <Field orientation="responsive">
@@ -403,27 +404,6 @@ function TriageRows() {
           </FieldDescription>
         </FieldContent>
         <DraftInput field="trackerBotAllowlist" label="Tracker bot allowlist" />
-      </Field>
-      <Field orientation="responsive">
-        <FieldContent>
-          <FieldTitle>Role labels</FieldTitle>
-          <FieldDescription>The five labels that move work through triage.</FieldDescription>
-        </FieldContent>
-        <FieldGroup className="w-auto">
-          <DraftInput field="needsTriageLabel" label="Needs triage label" placeholder="needs-triage" />
-          <DraftInput
-            field="readyForAgentLabel"
-            label="Ready for agent label"
-            placeholder="ready-for-agent"
-          />
-          <DraftInput field="needsInfoLabel" label="Needs info label" placeholder="needs-info" />
-          <DraftInput
-            field="readyForHumanLabel"
-            label="Ready for human label"
-            placeholder="ready-for-human"
-          />
-          <DraftInput field="wontfixLabel" label="Won't fix label" placeholder="wontfix" />
-        </FieldGroup>
       </Field>
     </FieldGroup>
   );

@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 
 import {
+  applyWorkflowEdits,
   MachineReadiness,
   PrincipalId,
   WorkflowCatalog,
   WorkflowDocument,
   WorkflowId,
+  type WorkflowOption,
   type WorkflowRecord,
   WorkspaceId,
 } from "@cogwork/contracts";
@@ -15,7 +17,12 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowEditor } from "../components/workflow-editor";
 import { WorkflowsList } from "../components/workflows-list";
-import { type WorkflowClient, WorkflowProvider, workflowProviderValue } from "./workflow-session";
+import {
+  type WorkflowClient,
+  WorkflowProvider,
+  type WorkflowSessionState,
+  workflowProviderValue,
+} from "./workflow-session";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -98,6 +105,7 @@ const catalog = decodeCatalog({
       itemKind: null,
       actsOn: [],
       requiresWorkspace: true,
+      workspaceSource: null,
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],
@@ -113,6 +121,7 @@ const catalog = decodeCatalog({
       itemKind: null,
       actsOn: [],
       requiresWorkspace: true,
+      workspaceSource: "agent",
       permissionProfile: "read-only",
       agentInputs: [],
       emits: [],
@@ -120,6 +129,32 @@ const catalog = decodeCatalog({
   ],
   instructionPackages: [],
   harnesses: [{ name: "codex", models: [{ id: "gpt-5", options: [] }] }],
+});
+
+const filterEntry = (key: string, name: string, system: string | null) => ({
+  key,
+  name,
+  kind: "filter",
+  system,
+  connection: null,
+  requires: [],
+  parameters: [],
+  itemKind: null,
+  actsOn: [],
+  requiresWorkspace: true,
+  workspaceSource: null,
+  permissionProfile: "read-only",
+  agentInputs: [],
+  emits: [],
+});
+
+const filterCatalog = decodeCatalog({
+  ...catalog,
+  entries: [
+    ...catalog.entries,
+    filterEntry("test.unblocked", "Item is not blocked", null),
+    filterEntry("github.issue-not-blocked", "Issue is not blocked", "github"),
+  ],
 });
 
 const machine = decodeMachine({
@@ -131,6 +166,21 @@ const machine = decodeMachine({
   harnesses: [{ name: "codex", available: true }],
   defaultHarness: "codex",
   readyNeeds: [],
+});
+
+const sessionState = (
+  workflows: ReadonlyArray<WorkflowRecord>,
+  overrides: Partial<WorkflowSessionState> = {},
+): WorkflowSessionState => ({
+  workflows,
+  catalog: null,
+  machine: null,
+  workspaceLabels: new Map(),
+  templates: [],
+  harnesses: { catalogs: null, readiness: null, controlStore: null },
+  needs: [],
+  loading: false,
+  ...overrides,
 });
 
 const everyRecord: WorkflowRecord = {
@@ -179,7 +229,11 @@ const unused = async () => {
   throw new Error("unexpected call");
 };
 
-const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => {
+const mountEditor = async (
+  workflow: WorkflowRecord,
+  client: WorkflowClient,
+  editorCatalog: WorkflowCatalog = catalog,
+) => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -187,10 +241,7 @@ const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => 
     act(async () => {
       root.render(
         <WorkflowProvider
-          value={workflowProviderValue(
-            { workflows: [current], catalog, machine, templates: [], loading: false },
-            client,
-          )}
+          value={workflowProviderValue(sessionState([current], { catalog: editorCatalog, machine }), client)}
         >
           <WorkflowEditor workflow={current} />
         </WorkflowProvider>,
@@ -201,6 +252,7 @@ const mountEditor = async (workflow: WorkflowRecord, client: WorkflowClient) => 
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   document.body.replaceChildren();
 });
@@ -228,12 +280,7 @@ describe("WorkflowProvider", () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <WorkflowProvider
-          value={workflowProviderValue(
-            { workflows: [record], catalog: null, machine: null, templates: [], loading: false },
-            client,
-          )}
-        >
+        <WorkflowProvider value={workflowProviderValue(sessionState([record]), client)}>
           <WorkflowEditor workflow={record} />
         </WorkflowProvider>,
       );
@@ -255,14 +302,138 @@ describe("WorkflowProvider", () => {
     await act(async () => root.unmount());
   });
 
-  it("publishes the latest live revision", async () => {
+  it("keeps the typed outcome name through a pause and shows the saved name on blur", async () => {
+    vi.useFakeTimers();
+    const pause = () => vi.advanceTimersByTimeAsync(600);
+    const current = { record: everyRecord };
+    const edit = vi.fn<WorkflowClient["edit"]>(async (_id, edits) => {
+      const applied = applyWorkflowEdits(current.record.workingCopy, edits);
+      if (applied._tag === "Refused") throw new Error("refused");
+      current.record = {
+        ...current.record,
+        workingCopy: applied.value,
+        workingRevision: current.record.workingRevision + 1,
+      };
+      return current.record;
+    });
+    const client: WorkflowClient = {
+      create: unused,
+      edit,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const { container, root } = await mountEditor(everyRecord, client);
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="Outcome 1"]');
+    if (!input) throw new Error("Outcome name input did not render");
+    const type = (text: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, text);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+
+    input.focus();
+    await type("");
+    await act(pause);
+    expect(input.value).toBe("");
+    await type("ready ");
+    await act(pause);
+    expect(edit).toHaveBeenCalledOnce();
+    expect(input.value).toBe("ready ");
+    await type("ready for agent ");
+    await act(async () => input.blur());
+
+    expect(input.value).toBe("ready for agent");
+    expect(current.record.workingCopy.operations[0]?.questions[0]?.choices[0]?.name).toBe("ready for agent");
+    await act(async () => root.unmount());
+  });
+
+  it("removes the only question so the Operation has no outcomes to answer", async () => {
+    const edit = vi.fn<WorkflowClient["edit"]>(async (_id, edits) => {
+      const applied = applyWorkflowEdits(everyRecord.workingCopy, edits);
+      if (applied._tag === "Refused") throw new Error("refused");
+      return { ...everyRecord, workingCopy: applied.value, workingRevision: 2 };
+    });
+    const client: WorkflowClient = {
+      create: unused,
+      edit,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const { container, render, root } = await mountEditor(everyRecord, client);
+    const remove = container.querySelector<HTMLButtonElement>('button[aria-label="Remove question 1"]');
+    if (!remove) throw new Error("The only question has no remove control");
+
+    await act(async () => remove.click());
+    const saved = await edit.mock.results[0]?.value;
+    await render(saved);
+
+    expect(edit).toHaveBeenCalledWith(everyRecord.id, [
+      { _tag: "RemoveQuestion", operation: "work", question: "outcome" },
+    ]);
+    expect(container.querySelector('input[aria-label="Question 1"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("adds a Trigger filter from the filters that apply, and removes it", async () => {
+    const current = { record: everyRecord };
+    const edit = vi.fn<WorkflowClient["edit"]>(async (_id, edits) => {
+      const applied = applyWorkflowEdits(current.record.workingCopy, edits);
+      if (applied._tag === "Refused") throw new Error("refused");
+      current.record = { ...current.record, workingCopy: applied.value };
+      return current.record;
+    });
+    const client: WorkflowClient = {
+      create: unused,
+      edit,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const { container, render, root } = await mountEditor(everyRecord, client, filterCatalog);
+    const addFilter = [...container.querySelectorAll("button")].find(
+      ({ textContent }) => textContent === "Add filter",
+    );
+    if (!addFilter) throw new Error("Add filter did not render");
+    const menuItem = (text: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        ({ textContent }) => textContent === text,
+      );
+
+    await act(async () => addFilter.click());
+    expect(menuItem("Issue is not blocked")).toBeUndefined();
+    await act(async () => menuItem("Item is not blocked")?.click());
+    await render(current.record);
+    const remove = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove filter Item is not blocked"]',
+    );
+    if (!remove) throw new Error("The added filter did not render");
+    await act(async () => remove.click());
+
+    expect(edit.mock.calls.map(([, edits]) => edits)).toEqual([
+      [{ _tag: "AddTriggerFilter", trigger: "started", filter: { entry: "test.unblocked" } }],
+      [{ _tag: "RemoveTriggerFilter", trigger: "started", entry: "test.unblocked" }],
+    ]);
+    await act(async () => root.unmount());
+  });
+
+  it("saves a draft before the switch turns it on", async () => {
     const live = { ...record, workingRevision: 3 };
-    const publish = vi.fn<WorkflowClient["publish"]>(async () => live);
+    const publish = vi.fn<WorkflowClient["publish"]>(async () => ({ ...live, publishedRevision: 3 }));
+    const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => ({
+      ...live,
+      publishedRevision: 3,
+      enabled: true,
+    }));
     const client: WorkflowClient = {
       create: unused,
       edit: unused,
       publish,
-      switchEnabled: unused,
+      switchEnabled,
       delete: unused,
       listOptions: unused,
     };
@@ -270,28 +441,23 @@ describe("WorkflowProvider", () => {
     document.body.append(container);
     const root = createRoot(container);
     const renderEditor = (workflow: WorkflowRecord) => (
-      <WorkflowProvider
-        value={workflowProviderValue(
-          { workflows: [workflow], catalog: null, machine: null, templates: [], loading: false },
-          client,
-        )}
-      >
+      <WorkflowProvider value={workflowProviderValue(sessionState([workflow]), client)}>
         <WorkflowEditor workflow={workflow} />
       </WorkflowProvider>
     );
     await act(async () => root.render(renderEditor(record)));
     await act(async () => root.render(renderEditor(live)));
-    const publishButton = [...container.querySelectorAll("button")].find(
-      ({ textContent }) => textContent === "Publish",
-    );
-    if (!publishButton) throw new Error("Publish button did not render");
+    const enable = container.querySelector<HTMLElement>('[aria-label="Turn this Workflow on"]');
+    if (!enable) throw new Error("Switch did not render");
 
     await act(async () => {
-      publishButton.click();
+      enable.click();
       await Promise.resolve();
     });
 
     expect(publish).toHaveBeenCalledWith(record.id, 3);
+    expect(switchEnabled).toHaveBeenCalledWith(record.id, true);
+    expect(publish.mock.invocationCallOrder[0]).toBeLessThan(switchEnabled.mock.invocationCallOrder[0] ?? 0);
     await act(async () => root.unmount());
   });
 
@@ -310,12 +476,7 @@ describe("WorkflowProvider", () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <WorkflowProvider
-          value={workflowProviderValue(
-            { workflows: [everyRecord], catalog: null, machine: null, templates: [], loading: false },
-            client,
-          )}
-        >
+        <WorkflowProvider value={workflowProviderValue(sessionState([everyRecord]), client)}>
           <WorkflowEditor workflow={everyRecord} />
         </WorkflowProvider>,
       );
@@ -331,10 +492,8 @@ describe("WorkflowProvider", () => {
       await Promise.resolve();
     });
 
-    const publishButton = [...container.querySelectorAll("button")].find(
-      ({ textContent }) => textContent === "Publish",
-    );
-    expect(publishButton?.disabled).toBe(false);
+    const save = [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
+    expect(save?.disabled).toBe(false);
     await act(async () => {
       pending.resolve({
         ...everyRecord,
@@ -349,11 +508,15 @@ describe("WorkflowProvider", () => {
   it("publishes the accepted revision after a queued edit fails", async () => {
     const pending = Promise.withResolvers<WorkflowRecord>();
     const publish = vi.fn<WorkflowClient["publish"]>(async () => everyRecord);
+    const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => ({
+      ...everyRecord,
+      enabled: true,
+    }));
     const client: WorkflowClient = {
       create: unused,
       edit: () => pending.promise,
       publish,
-      switchEnabled: unused,
+      switchEnabled,
       delete: unused,
       listOptions: unused,
     };
@@ -363,10 +526,7 @@ describe("WorkflowProvider", () => {
     await act(async () => {
       root.render(
         <WorkflowProvider
-          value={workflowProviderValue(
-            { workflows: [everyRecord], catalog, machine, templates: [], loading: false },
-            client,
-          )}
+          value={workflowProviderValue(sessionState([everyRecord], { catalog, machine }), client)}
         >
           <WorkflowEditor workflow={everyRecord} />
         </WorkflowProvider>,
@@ -381,13 +541,11 @@ describe("WorkflowProvider", () => {
       input.blur();
       await Promise.resolve();
     });
-    const publishButton = [...container.querySelectorAll("button")].find(
-      ({ textContent }) => textContent === "Publish",
-    );
-    if (!publishButton) throw new Error("Publish button did not render");
-    expect(publishButton.disabled).toBe(false);
+    const save = [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
+    if (!save) throw new Error("Save button did not render");
+    expect(save.disabled).toBe(false);
     await act(async () => {
-      publishButton.click();
+      save.click();
       pending.reject(new Error("edit rejected"));
       await Promise.resolve();
       await Promise.resolve();
@@ -395,6 +553,7 @@ describe("WorkflowProvider", () => {
     });
 
     expect(publish).toHaveBeenCalledWith(everyRecord.id, 1);
+    expect(container.textContent).toContain("Not saved");
     await act(async () => root.unmount());
   });
 
@@ -424,10 +583,12 @@ describe("WorkflowProvider", () => {
     expect(
       container.querySelector('[aria-label="Turn this Workflow on"]')?.getAttribute("aria-checked"),
     ).toBe("true");
+    const save = [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
+    expect(save?.disabled).toBe(false);
     await act(async () => root.unmount());
   });
 
-  it("disables enable controls until the Workflow is published", async () => {
+  it("keeps the list switch disabled until the Workflow is published", async () => {
     const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => record);
     const client: WorkflowClient = {
       create: unused,
@@ -442,20 +603,15 @@ describe("WorkflowProvider", () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <WorkflowProvider
-          value={workflowProviderValue(
-            { workflows: [record], catalog: null, machine: null, templates: [], loading: false },
-            client,
-          )}
-        >
+        <WorkflowProvider value={workflowProviderValue(sessionState([record]), client)}>
           <WorkflowEditor workflow={record} />
           <WorkflowsList />
         </WorkflowProvider>,
       );
     });
 
-    const switches = [...container.querySelectorAll<HTMLElement>('[role="switch"]')];
-    expect(switches).toHaveLength(2);
+    const switches = [...container.querySelectorAll<HTMLElement>('[aria-label="Turn Local name on"]')];
+    expect(switches).toHaveLength(1);
     expect(switches.every((control) => control.getAttribute("aria-disabled") === "true")).toBe(true);
     switches.forEach((control) => {
       control.click();
@@ -464,7 +620,7 @@ describe("WorkflowProvider", () => {
     await act(async () => root.unmount());
   });
 
-  it("renders same-code diagnostics with distinct identities", async () => {
+  it("lists same-code problems with distinct identities", async () => {
     const duplicateLocation = {
       trigger: null,
       operation: null,
@@ -501,15 +657,50 @@ describe("WorkflowProvider", () => {
     };
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { container, root } = await mountEditor(workflow, client);
+    const problems = container.querySelector<HTMLButtonElement>('[aria-label="2 problems"]');
+    if (!problems) throw new Error("Problems button did not render");
+    await act(async () => problems.click());
 
-    expect(
-      [...container.querySelectorAll("[data-diagnostic-class]")].map(({ textContent }) => textContent),
-    ).toEqual(expect.arrayContaining(["incompleteAdd a trigger", "advisoryNo trigger is ready"]));
+    expect(document.body.textContent).toContain("Add a trigger");
+    expect(document.body.textContent).toContain("No trigger is ready");
     expect(consoleError.mock.calls.flat().join(" ")).not.toContain("same key");
     await act(async () => root.unmount());
   });
 
-  it("keeps transition options with their answer after removing an earlier transition", async () => {
+  it("blocks Save for an incomplete problem and never for an advisory one", async () => {
+    const location = { trigger: null, operation: null, question: null, choice: null, field: "document" };
+    const advisory: WorkflowRecord = {
+      ...everyRecord,
+      workingRevision: 2,
+      readiness: [
+        { code: "harness-unavailable", class: "advisory", location, message: "Harness codex is unavailable" },
+      ],
+    };
+    const incomplete: WorkflowRecord = {
+      ...advisory,
+      diagnostics: [
+        { code: "no-trigger", class: "incomplete", location, message: "Workflow has no Trigger" },
+      ],
+    };
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const { container, render, root } = await mountEditor(advisory, client);
+    const save = () =>
+      [...container.querySelectorAll("button")].find(({ textContent }) => textContent === "Save");
+
+    expect(save()?.disabled).toBe(false);
+    await render(incomplete);
+    expect(save()?.disabled).toBe(true);
+    await act(async () => root.unmount());
+  });
+
+  it("keeps action options with their answer after removing an earlier action", async () => {
     const pending = Promise.withResolvers<WorkflowRecord>();
     const loadingOptions = Promise.withResolvers<never>();
     const client: WorkflowClient = {
@@ -521,7 +712,7 @@ describe("WorkflowProvider", () => {
       listOptions: () => loadingOptions.promise,
     };
     const { container, root } = await mountEditor(transitionRecord, client);
-    const remove = container.querySelectorAll<HTMLButtonElement>('[aria-label="Remove Transition"]');
+    const remove = container.querySelectorAll<HTMLButtonElement>('[aria-label="Remove Done"]');
     expect(remove).toHaveLength(2);
     await act(async () => {
       remove[0]?.click();
@@ -534,9 +725,113 @@ describe("WorkflowProvider", () => {
       parameter[0]?.click();
       await Promise.resolve();
     });
-    expect([...document.querySelectorAll('[role="option"]')].map(({ textContent }) => textContent)).toContain(
-      "second",
+    expect(
+      [...document.querySelectorAll('[role="menuitemradio"]')].map(({ textContent }) => textContent),
+    ).toContain("second");
+    await act(async () => root.unmount());
+  });
+
+  it("shows loading only until the first list of trigger options arrives", async () => {
+    const firstListing = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const refresh = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const listings = [firstListing.promise, refresh.promise];
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: () => listings.shift() ?? refresh.promise,
+    };
+    const { container, root } = await mountEditor(everyRecord, client);
+    const parameter = container.querySelector<HTMLButtonElement>('[aria-label="Started target"]');
+    if (!parameter) throw new Error("Trigger parameter did not render");
+    const menu = () => document.querySelector('[role="menu"]');
+    const optionTexts = () =>
+      [...document.querySelectorAll('[role="menuitemradio"]')].map(({ textContent }) => textContent);
+
+    await act(async () => parameter.click());
+    expect(menu()?.textContent).toContain("Loading");
+    await act(async () =>
+      firstListing.resolve([{ value: "needs-triage", name: "needs-triage", listedIn: [] }]),
     );
+    expect(optionTexts()).toEqual(["needs-triage"]);
+    expect(menu()?.textContent).not.toContain("Loading");
+
+    await act(async () => parameter.click());
+    await act(async () => parameter.click());
+    expect(parameter.getAttribute("aria-expanded")).toBe("true");
+    expect(optionTexts()).toEqual(["needs-triage"]);
+    expect(menu()?.textContent).not.toContain("Loading");
+    await act(async () => root.unmount());
+  });
+
+  it("keeps an action's listed options when the Add Action menu opens again", async () => {
+    const firstListing = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const refresh = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const listings = [firstListing.promise, refresh.promise];
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: () => listings.shift() ?? refresh.promise,
+    };
+    const { container, root } = await mountEditor(everyRecord, client);
+    const addAction = [...container.querySelectorAll("button")].find(
+      ({ textContent }) => textContent === "Add Action",
+    );
+    if (!addAction) throw new Error("Add Action did not render");
+    const menuItem = (text: string) =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+        ({ textContent }) => textContent === text,
+      );
+    const openDoneValues = async () => {
+      await act(async () => addAction.click());
+      await act(async () => menuItem("Test")?.click());
+      await act(async () => menuItem("Done…")?.click());
+    };
+
+    await openDoneValues();
+    expect(document.body.textContent).toContain("Loading");
+    await act(async () =>
+      firstListing.resolve([{ value: "needs-triage", name: "needs-triage", listedIn: [] }]),
+    );
+    expect(menuItem("needs-triage")).toBeDefined();
+
+    await act(async () => addAction.click());
+    expect(menuItem("needs-triage")).toBeUndefined();
+    await openDoneValues();
+    expect(menuItem("needs-triage")).toBeDefined();
+    expect(document.body.textContent).not.toContain("Loading");
+    await act(async () => root.unmount());
+  });
+
+  it("keeps the newest options when an older read settles last", async () => {
+    const older = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const newer = Promise.withResolvers<ReadonlyArray<WorkflowOption>>();
+    const listings = [older.promise, newer.promise];
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: () => listings.shift() ?? newer.promise,
+    };
+    const { container, root } = await mountEditor(everyRecord, client);
+    const parameter = container.querySelector<HTMLButtonElement>('[aria-label="Started target"]');
+    if (!parameter) throw new Error("Trigger parameter did not render");
+    const optionTexts = () =>
+      [...document.querySelectorAll('[role="menuitemradio"]')].map(({ textContent }) => textContent);
+
+    await act(async () => parameter.click());
+    await act(async () => parameter.click());
+    await act(async () => parameter.click());
+    await act(async () => newer.resolve([{ value: "new", name: "new", listedIn: [] }]));
+    await act(async () => older.resolve([{ value: "old", name: "old", listedIn: [] }]));
+    expect(optionTexts()).toEqual(["new"]);
     await act(async () => root.unmount());
   });
 
@@ -556,10 +851,7 @@ describe("WorkflowProvider", () => {
     await act(async () => {
       root.render(
         <WorkflowProvider
-          value={workflowProviderValue(
-            { workflows: [everyRecord], catalog, machine, templates: [], loading: false },
-            client,
-          )}
+          value={workflowProviderValue(sessionState([everyRecord], { catalog, machine }), client)}
         >
           <WorkflowEditor workflow={everyRecord} />
         </WorkflowProvider>,
@@ -594,12 +886,7 @@ describe("WorkflowProvider", () => {
     const root = createRoot(container);
     await act(async () => {
       root.render(
-        <WorkflowProvider
-          value={workflowProviderValue(
-            { workflows: [record], catalog: null, machine: null, templates: [], loading: false },
-            client,
-          )}
-        >
+        <WorkflowProvider value={workflowProviderValue(sessionState([record]), client)}>
           <WorkflowEditor workflow={record} />
         </WorkflowProvider>,
       );
@@ -614,6 +901,44 @@ describe("WorkflowProvider", () => {
         textContent?.includes("cogwork"),
       ),
     ).toBe(true);
+    await act(async () => root.unmount());
+  });
+
+  it("names each workspace in the menu instead of showing its id", async () => {
+    const client: WorkflowClient = {
+      create: unused,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const workspaceLabels = new Map([
+      ["cogwork", "Cogwork"],
+      ["first", "First repository"],
+      ["second", "Second repository"],
+    ]);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider
+          value={workflowProviderValue(sessionState([record], { machine, workspaceLabels }), client)}
+        >
+          <WorkflowEditor workflow={record} />
+        </WorkflowProvider>,
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="Workspaces"]');
+    if (!trigger) throw new Error("Workspace menu did not render");
+    expect(trigger.textContent).toContain("Cogwork");
+    await act(async () => trigger.click());
+
+    const options = [...document.querySelectorAll('[role="option"]')].map(({ textContent }) => textContent);
+    expect(options).toEqual(expect.arrayContaining(["Cogwork", "First repository", "Second repository"]));
+    expect(options).not.toContain("first");
     await act(async () => root.unmount());
   });
 });

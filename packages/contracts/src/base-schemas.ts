@@ -10,6 +10,9 @@ export const makeBrand = <Brand extends string>(brand: Brand) =>
 export const WorkspaceId = makeBrand("WorkspaceId");
 export type WorkspaceId = typeof WorkspaceId.Type;
 
+export const WorkflowId = makeBrand("WorkflowId");
+export type WorkflowId = typeof WorkflowId.Type;
+
 export const WorkItemId = makeBrand("WorkItemId");
 export type WorkItemId = typeof WorkItemId.Type;
 
@@ -24,3 +27,15 @@ export type IssueTrackerType = typeof IssueTrackerType.Type;
 
 export const SourceControlType = makeBrand("SourceControlType");
 export type SourceControlType = typeof SourceControlType.Type;
+
+export const SlackTeamId = makeBrand("SlackTeamId");
+export type SlackTeamId = typeof SlackTeamId.Type;
+
+export const SlackChannelId = makeBrand("SlackChannelId");
+export type SlackChannelId = typeof SlackChannelId.Type;
+
+export const SlackMessageTs = makeBrand("SlackMessageTs");
+export type SlackMessageTs = typeof SlackMessageTs.Type;
+
+export const SlackWriteKey = makeBrand("SlackWriteKey");
+export type SlackWriteKey = typeof SlackWriteKey.Type;

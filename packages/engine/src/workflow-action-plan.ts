@@ -4,38 +4,60 @@ import {
   keyOf,
   matchWorkflowTransitions,
   type RunId,
-  type WorkflowActionArtifact,
+  SlackWriteKey,
+  WorkflowActionArtifact,
   WorkflowActionOrigin,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
-  type WorkflowActionTarget,
+  WorkflowActionTarget,
+  type WorkflowAgentInputValue,
   type WorkflowCatalog,
   type WorkflowCatalogEntry,
   type WorkflowDocument,
   type WorkflowNodeId,
   type WorkflowOperation,
   type WorkflowParameterValue,
-  WorkItemId,
+  WorkflowSlackActionArtifact,
+  WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
-import { IssueTracker, type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
-import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
+import { IssueTracker } from "./issue-tracker";
+import type { RegisteredWorkspace } from "./projector";
+import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
-import type { TriggerAdmission } from "./trigger-observation";
+import { type SlackPostReceipt, SlackWrite, SlackWriteError } from "./slack-write";
+import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
+import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import {
+  type ActionContext,
+  type ActionExecutor,
+  decodeFailure,
+  invalidTarget,
+  type PullRequestSnapshot,
+  parameterValues,
+  stringInput,
+  type TargetProducer,
+  WorkflowActionPlanDecodeError,
+} from "./workflow-action-entry";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { actionEntryFor, compareActionPhase } from "./workflow-action-registry";
+import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
+import { WorktreeManager } from "./worktree";
 
-export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
-  "WorkflowActionPlanDecodeError",
-  { message: Schema.String },
-) {}
+const planPreview = (plan: WorkflowActionPlan) =>
+  JSON.stringify({
+    summary: plan.summary,
+    steps: plan.steps.map(({ position, entry }) => ({ position, entry })),
+  });
 
 interface OperationOutput {
   readonly summary: string;
   readonly answers: Readonly<Record<string, string>>;
-  readonly inputs: Readonly<Record<string, string>>;
+  readonly inputs: Readonly<Record<string, WorkflowAgentInputValue>>;
   readonly workspace?: string;
 }
 
@@ -48,6 +70,9 @@ interface BuildInput {
   readonly output: OperationOutput;
   readonly attempt: RunId;
   readonly createdAtMillis: number;
+  readonly workflowRevision: number;
+  readonly sourceControl?: SourceControlProviderService;
+  readonly pullRequestSnapshots?: ReadonlyArray<PullRequestSnapshot>;
 }
 
 const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
@@ -59,143 +84,106 @@ const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArra
   return workspaces.filter(({ config }) => selected.includes(config.name));
 };
 
-const decodeFailure = (message: string) => Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
+const planJson = Schema.fromJsonString(WorkflowActionPlan);
 
-type FrozenIssueTarget = Omit<WorkspaceIssueTrackerBinding, "config"> & {
-  readonly app: WorkspaceIssueTrackerBinding["config"]["issueTracker"]["type"];
-  readonly config: WorkspaceIssueTrackerBinding["config"];
-};
-
-const issueTrackerApps = ["github", "linear"] as const;
-
-const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(function* (
-  entry: WorkflowCatalogEntry,
-  selected: ReadonlyArray<RegisteredWorkspace>,
-  workspaceId: string | undefined,
-) {
-  if (workspaceId === "none") return null;
-  if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
-  const app = issueTrackerApps.find((candidate) => candidate === entry.system);
-  const workspace = selected.find(({ config }) => config.name === workspaceId);
-  if (!app || workspace?.config.issueTracker.type !== app) {
-    return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
-  }
-  return {
-    app: workspace.config.issueTracker.type,
-    config: { name: workspace.config.name, issueTracker: workspace.config.issueTracker },
-    repository: workspace.repository,
-  } satisfies FrozenIssueTarget;
-});
-
-const targetFields = (target: FrozenIssueTarget) => ({
-  workspace: target.config.name,
-  app: target.app,
-  issueTracker: target.config.issueTracker,
-  repository: target.repository ?? null,
-});
-
-const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarget | null) => {
-  if (target === null) return Effect.succeed<WorkflowActionTarget>({ _tag: "NoWorkspace" });
-  const ref = admission.event.key;
-  if (ref._tag !== "Issue" || ref.workspace !== target.config.name) {
-    return decodeFailure("The action cannot target this item in the selected Workspaces");
-  }
-  return Effect.succeed<WorkflowActionTarget>({
-    _tag: "CurrentIssue",
-    ...targetFields(target),
-    issue: ref.id,
-  });
-};
-
-const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(function* (
-  issueInput: string,
-  target: FrozenIssueTarget | null,
-) {
-  if (target === null) return { _tag: "NoWorkspace" } as const;
-  const prefix = `${target.config.name}:`;
-  const hasWorkspacePrefix = issueInput.includes(":");
-  if (hasWorkspacePrefix && !issueInput.startsWith(prefix)) {
-    return yield* decodeFailure("The issue input does not identify the selected Workspace");
-  }
-  const rawIssue = issueInput.startsWith(prefix) ? issueInput.slice(prefix.length) : issueInput;
-  const issue = yield* Schema.decodeEffect(WorkItemId)(rawIssue).pipe(
-    Effect.mapError(() =>
-      WorkflowActionPlanDecodeError.make({ message: `The issue input is invalid: ${issueInput}` }),
-    ),
+const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function* (plan: WorkflowActionPlan) {
+  const encoded = yield* Schema.encodeEffect(planJson)(
+    WorkflowActionPlan.make({ ...plan, digest: "pending" }),
+  ).pipe(
+    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
   );
-  return { _tag: "ExistingIssue", ...targetFields(target), issue } as const;
+  return createHash("sha256").update(encoded).digest("hex");
 });
-
-type TargetProducer = (
-  admission: TriggerAdmission,
-  target: FrozenIssueTarget | null,
-  inputs: Readonly<Record<string, string>>,
-) => Effect.Effect<WorkflowActionTarget, WorkflowActionPlanDecodeError>;
-
-const targetProducers = new Map<string, TargetProducer>([
-  [
-    "create-issue",
-    (
-      _admission: TriggerAdmission,
-      target: FrozenIssueTarget | null,
-      _inputs: Readonly<Record<string, string>>,
-    ) =>
-      Effect.succeed<WorkflowActionTarget>(
-        target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
-      ),
-  ],
-  ["comment-this-item", currentIssueTarget],
-  [
-    "comment-issue",
-    (
-      _admission: TriggerAdmission,
-      target: FrozenIssueTarget | null,
-      inputs: Readonly<Record<string, string>>,
-    ) => existingIssueTarget(inputs.issue ?? "", target),
-  ],
-  ["add-label", currentIssueTarget],
-  ["remove-label", currentIssueTarget],
-  ["close-this-issue", currentIssueTarget],
-]);
 
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
+
+const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
+
+const slackTarget = (target: unknown) =>
+  decodeSlackTarget(target).pipe(
+    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "The Slack target is invalid" })),
+  );
+
+const slackItemTarget: TargetProducer = ({ admission }) =>
+  WorkItemRef.matchOrElse(
+    admission.event.key,
+    {
+      SlackMessage: ({ team, channel, ts, threadTs }) =>
+        slackTarget({
+          _tag: "SlackMessage",
+          team,
+          channel,
+          ts,
+          threadTs: threadTs ?? ts,
+        }),
+      SlackConversation: ({ team, channel, threadTs }) =>
+        slackTarget({
+          _tag: "SlackMessage",
+          team,
+          channel,
+          ts: threadTs,
+          threadTs,
+        }),
+    },
+    () => decodeFailure("The Slack action needs a Slack item"),
+  );
+
+const slackChannelTarget: TargetProducer = ({ parameters }) => {
+  const channel = parameters.find(({ id }) => id === "channel")?.value.trim();
+  return channel
+    ? slackTarget({ _tag: "SlackChannel", channel })
+    : decodeFailure("The Slack message action needs a channel");
+};
+
+const targetProducers = new Map<string, TargetProducer>([
+  ["send-message", slackChannelTarget],
+  ["reply-in-thread", slackItemTarget],
+  ["add-reaction", slackItemTarget],
+  ["draft-reply-in-slack", slackItemTarget],
+]);
 
 const targetFor = (
   entry: WorkflowCatalogEntry,
   admission: TriggerAdmission,
   workspaces: ReadonlyArray<RegisteredWorkspace>,
-  inputs: Readonly<Record<string, string>>,
+  inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
+  parameters: ReadonlyArray<WorkflowParameterValue>,
+  sourceControl: SourceControlProviderService | undefined,
   workspace: string | undefined,
+  pullRequestSnapshots: ReadonlyArray<PullRequestSnapshot> | undefined,
 ) => {
-  const producer = targetProducers.get(actionName(entry.key));
-  if (entry.system === null || producer === undefined) return cogworkTarget;
-  return frozenIssueTarget(entry, workspaces, workspace).pipe(
-    Effect.flatMap((target) => producer(admission, target, inputs)),
-  );
+  const context = {
+    entry,
+    admission,
+    workspaces,
+    inputs,
+    parameters,
+    workspace,
+    sourceControl,
+    pullRequestSnapshots,
+  };
+  const registered = actionEntryFor(entry.key);
+  if (registered) return registered.target(context);
+  return targetProducers.get(actionName(entry.key))?.(context) ?? cogworkTarget;
 };
 
 const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
   entry: WorkflowCatalogEntry,
   output: OperationOutput,
 ) {
-  return yield* Effect.forEach(entry.agentInputs, (name) => {
-    const value = output.inputs[name]?.trim() ?? "";
-    return value.length === 0
+  const inputFor = (
+    name: string,
+  ): Effect.Effect<readonly [string, WorkflowAgentInputValue], WorkflowActionPlanDecodeError> => {
+    const value = output.inputs[name];
+    if (value !== undefined && typeof value !== "string") return Effect.succeed([name, value]);
+    const trimmed = value?.trim() ?? "";
+    return trimmed.length === 0
       ? decodeFailure(`Action ${entry.key} needs non-empty input ${name}`)
-      : Effect.succeed([name, value] as const);
-  }).pipe(Effect.map(Object.fromEntries));
+      : Effect.succeed([name, trimmed]);
+  };
+  const entries = yield* Effect.forEach(entry.agentInputs, inputFor);
+  return Object.fromEntries(entries);
 });
-
-const actionRanks = [
-  { when: (entry: string) => entry === "cogwork.wait-for-approval", rank: 0 },
-  { when: (entry: string) => entry === "cogwork.notify", rank: 2 },
-  {
-    when: (entry: string) => entry === "cogwork.hand-to-me" || entry === "cogwork.stop",
-    rank: 3,
-  },
-] as const;
-
-const actionRank = (entry: string) => actionRanks.find(({ when }) => when(entry))?.rank ?? 1;
 
 export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(function* (input: BuildInput) {
   const entries = new Map(input.catalog.entries.map((entry) => [entry.key, entry]));
@@ -205,7 +193,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     .map((action, documentPosition) => ({ action, documentPosition }))
     .toSorted(
       (left, right) =>
-        actionRank(left.action.entry) - actionRank(right.action.entry) ||
+        compareActionPhase(left.action.entry, right.action.entry) ||
         left.documentPosition - right.documentPosition,
     );
   const steps = yield* Effect.forEach(actions, ({ action }, position) =>
@@ -216,7 +204,16 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
       }
       const inputs = yield* inputsFor(entry, input.output);
       const workspaces = selectedWorkspaces(input.document, input.workspaces);
-      const target = yield* targetFor(entry, input.admission, workspaces, inputs, input.output.workspace);
+      const target = yield* targetFor(
+        entry,
+        input.admission,
+        workspaces,
+        inputs,
+        action.parameters,
+        input.sourceControl,
+        input.output.workspace,
+        input.pullRequestSnapshots,
+      );
       return WorkflowActionPlanStep.make({
         position,
         entry: entry.key,
@@ -239,26 +236,23 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
     revision: input.admission.event.revision,
     createdAtMillis: input.createdAtMillis,
     consumedHandbackAtMillis: 0,
+    workflowRevision: input.workflowRevision,
     summary: input.output.summary,
     answers: input.output.answers,
+    inputs: input.output.inputs,
+    workspace: input.output.workspace ?? null,
+    lineage: input.admission.lineage,
     handOff,
     steps,
   } as const;
-  const encoded = yield* Schema.encodeEffect(Schema.fromJsonString(WorkflowActionPlan))(
-    WorkflowActionPlan.make({ ...content, digest: "pending" }),
-  ).pipe(
-    Effect.mapError(() => WorkflowActionPlanDecodeError.make({ message: "Action plan encoding failed" })),
-  );
-  const digest = createHash("sha256").update(encoded).digest("hex");
-  return WorkflowActionPlan.make({ ...content, digest });
+  const pending = WorkflowActionPlan.make({ ...content, digest: "pending" });
+  const digest = yield* digestWorkflowActionPlan(pending);
+  return WorkflowActionPlan.make({ ...pending, digest });
 });
-
-const parameterValues = (parameters: ReadonlyArray<WorkflowParameterValue>, id: string) =>
-  parameters.filter((parameter) => parameter.id === id).map(({ value }) => value);
 
 const targetWorkspace = (step: WorkflowActionPlanStep) => {
   const target = step.target;
-  if (target._tag === "Cogwork" || target._tag === "NoWorkspace") return null;
+  if (!WorkflowActionTarget.isAnyOf(["CurrentIssue", "ExistingIssue", "NewIssue"])(target)) return null;
   const app = actionName(step.entry) === step.entry ? null : step.entry.slice(0, step.entry.indexOf("."));
   const matchesApp = app === target.app && target.issueTracker.type === target.app;
   if (!matchesApp) return null;
@@ -268,121 +262,82 @@ const targetWorkspace = (step: WorkflowActionPlanStep) => {
   };
 };
 
-const targetIssue = (step: WorkflowActionPlanStep) => {
+const sourceTargetWorkspace = (
+  step: WorkflowActionPlanStep,
+  workspaces: ReadonlyArray<RegisteredWorkspace>,
+) => {
   const target = step.target;
-  return target._tag === "CurrentIssue" || target._tag === "ExistingIssue" ? target.issue : null;
+  if (!WorkflowActionTarget.isAnyOf(["NewPullRequest", "CurrentPullRequest", "NamedPullRequest"])(target)) {
+    return null;
+  }
+  const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+  const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
+  return app === target.app ? (workspace ?? null) : null;
 };
 
-const invalidTarget = (step: WorkflowActionPlanStep) =>
-  new IssueTrackerError({
-    reason: "unavailable",
+const slackInvalidTarget = (step: WorkflowActionPlanStep) =>
+  new SlackWriteError({
+    reason: "invalid",
     retryable: false,
     message: `Action ${step.entry} has an invalid target`,
   });
 
-interface ActionContext {
-  readonly plan: WorkflowActionPlan;
-  readonly step: WorkflowActionPlanStep;
-  readonly workspace: WorkspaceIssueTrackerBinding | null;
-  readonly tracker: IssueTrackerActionService;
-  readonly notifications: Effect.Success<typeof WorkflowNotifications>;
-  readonly ledger: Effect.Success<typeof RunLedger>;
-}
+const requireSlackMessage = (step: WorkflowActionPlanStep) =>
+  WorkflowActionTarget.guards.SlackMessage(step.target)
+    ? Effect.succeed(step.target)
+    : Effect.fail(slackInvalidTarget(step));
 
-const requireIssueTarget = (step: WorkflowActionPlanStep) => {
-  const issue = targetIssue(step);
-  return issue === null ? Effect.fail(invalidTarget(step)) : Effect.succeed(issue);
+const requireSlackWriteKey = (step: WorkflowActionPlanStep) =>
+  Schema.decodeEffect(SlackWriteKey)(step.writeKey).pipe(Effect.mapError(() => slackInvalidTarget(step)));
+
+const slackArtifact = (context: ActionContext, receipt: SlackPostReceipt) =>
+  WorkflowSlackActionArtifact.make({
+    ...receipt,
+    origin: WorkflowActionOrigin.make({
+      item: context.plan.item,
+      workflow: context.plan.workflow,
+      attempt: context.plan.attempt,
+      writeKey: context.step.writeKey,
+      lineage: context.plan.lineage,
+    }),
+  });
+
+const actionExecutors: Record<string, ActionExecutor> = {
+  "send-message": Effect.fn("WorkflowActionPlan.sendSlackMessage")(function* (context: ActionContext) {
+    if (!WorkflowActionTarget.guards.SlackChannel(context.step.target)) {
+      return yield* slackInvalidTarget(context.step);
+    }
+    const writeKey = yield* requireSlackWriteKey(context.step);
+    const receipt = yield* context.slack.sendMessage(
+      context.step.target.channel,
+      stringInput(context.step, "message"),
+      writeKey,
+    );
+    return slackArtifact(context, receipt);
+  }),
+  "reply-in-thread": Effect.fn("WorkflowActionPlan.replyInSlackThread")(function* (context: ActionContext) {
+    const target = yield* requireSlackMessage(context.step);
+    const writeKey = yield* requireSlackWriteKey(context.step);
+    const receipt = yield* context.slack.replyInThread(target, stringInput(context.step, "reply"), writeKey);
+    return slackArtifact(context, receipt);
+  }),
+  "add-reaction": Effect.fn("WorkflowActionPlan.addSlackReaction")(function* (context: ActionContext) {
+    const target = yield* requireSlackMessage(context.step);
+    const emoji = parameterValues(context.step.parameters, "emoji").at(0);
+    if (!emoji) return yield* slackInvalidTarget(context.step);
+    yield* context.slack.addReaction(target, emoji);
+    return null;
+  }),
+  "draft-reply-in-slack": Effect.fn("WorkflowActionPlan.draftSlackReply")(function* (context: ActionContext) {
+    const target = yield* requireSlackMessage(context.step);
+    yield* context.slack.draftReply(target, stringInput(context.step, "reply"));
+    return null;
+  }),
 };
 
-const requireWorkspace = (context: ActionContext) =>
-  context.workspace === null ? Effect.fail(invalidTarget(context.step)) : Effect.succeed(context.workspace);
-
-type ActionExecutor = (
-  context: ActionContext,
-) => Effect.Effect<WorkflowActionArtifact | null, IssueTrackerError>;
-
-const commentIssue = Effect.fn("WorkflowActionPlan.commentIssue")(function* (context: ActionContext) {
-  const workspace = yield* requireWorkspace(context);
-  const issue = yield* requireIssueTarget(context.step);
-  yield* context.tracker.commentIssue(
-    workspace,
-    issue,
-    context.step.inputs.comment ?? "",
-    context.step.writeKey,
-  );
-  return null;
-});
-
-const actionExecutors = {
-  "create-issue": Effect.fn("WorkflowActionPlan.createIssue")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    if (context.step.target._tag !== "NewIssue") return yield* invalidTarget(context.step);
-    return yield* context.tracker.createIssue(workspace, {
-      title: context.step.inputs.issue_title ?? "",
-      body: context.step.inputs.issue_body ?? "",
-      labels: parameterValues(context.step.parameters, "label"),
-      origin: WorkflowActionOrigin.make({
-        item: context.plan.item,
-        workflow: context.plan.workflow,
-        attempt: context.plan.attempt,
-        writeKey: context.step.writeKey,
-      }),
-    });
-  }),
-  "comment-this-item": commentIssue,
-  "comment-issue": commentIssue,
-  "add-label": Effect.fn("WorkflowActionPlan.addLabel")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    const labels = parameterValues(context.step.parameters, "label");
-    if (labels.length === 0) return yield* invalidTarget(context.step);
-    yield* context.tracker.addLabels(workspace, issue, labels, context.step.writeKey);
-    return null;
-  }),
-  "remove-label": Effect.fn("WorkflowActionPlan.removeLabel")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    const label = parameterValues(context.step.parameters, "label").at(0);
-    if (!label) return yield* invalidTarget(context.step);
-    yield* context.tracker.removeLabel(workspace, issue, label, context.step.writeKey);
-    return null;
-  }),
-  "close-this-issue": Effect.fn("WorkflowActionPlan.closeIssue")(function* (context: ActionContext) {
-    const workspace = yield* requireWorkspace(context);
-    const issue = yield* requireIssueTarget(context.step);
-    yield* context.tracker.closeIssue(workspace, issue, context.step.writeKey);
-    return null;
-  }),
-  notify: Effect.fn("WorkflowActionPlan.notify")(function* (context: ActionContext) {
-    const run = yield* context.ledger.getRun(context.plan.attempt);
-    if (run === null) return yield* invalidTarget(context.step);
-    yield* context.notifications
-      .write(run, {
-        id: `${context.plan.workflow}:${context.plan.operation}:${context.plan.revision}`,
-        workflow: context.plan.workflow,
-        operation: context.plan.operation,
-        summary: context.step.inputs.notification ?? "",
-        answers: context.plan.answers,
-        atMillis: context.plan.createdAtMillis,
-      })
-      .pipe(
-        Effect.mapError(
-          (error) =>
-            new IssueTrackerError({
-              reason: "unavailable",
-              retryable: error.retryable,
-              message: error.message,
-            }),
-        ),
-      );
-    return null;
-  }),
-  stop: () => Effect.succeed(null),
-  "hand-to-me": () => Effect.succeed(null),
-  "withdraw-pending-approval": () => Effect.succeed(null),
-} satisfies Record<string, ActionExecutor>;
-
 const executorFor = (step: WorkflowActionPlanStep) => {
+  const registered = actionEntryFor(step.entry);
+  if (registered) return registered.execute;
   const name = actionName(step.entry);
   return Object.entries(actionExecutors).find(([candidate]) => candidate === name)?.[1];
 };
@@ -405,6 +360,8 @@ export type WorkflowActionPlanExecution =
   | { readonly _tag: "Complete"; readonly handOff: WorkflowNodeId | null }
   | { readonly _tag: "Retry" }
   | { readonly _tag: "Replan" }
+  | { readonly _tag: "AwaitingApproval" }
+  | { readonly _tag: "HandedToYou" }
   | { readonly _tag: "Parked" };
 
 interface ExecutionState {
@@ -419,16 +376,42 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
   admission: TriggerAdmission,
 ) {
   const store = yield* WorkflowActionPlanStore;
+  const artifacts = yield* WorkflowArtifactStore;
   const coordination = yield* Coordination;
   const tracker = yield* IssueTracker;
   const notifications = yield* WorkflowNotifications;
   const ledger = yield* RunLedger;
+  const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
+  const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
+  const registry = Option.getOrNull(yield* Effect.serviceOption(WorkspaceRegistry));
+  const registeredWorkspaces = registry === null ? [] : (yield* registry.state).workspaces;
+  const slack = yield* SlackWrite;
+  const observationStore = yield* TriggerObservationStore;
   const coordinationView = yield* coordination.read(admission.event.key);
   const handbackAfterPlan = coordinationView.barrierAtMillis > initial.createdAtMillis;
   const hasFreshHandback =
     coordinationView.barrierAtMillis > Math.max(initial.createdAtMillis, initial.consumedHandbackAtMillis);
   const hasFailedWrite = initial.steps.some(({ status }) => status === "failed");
   if (hasFailedWrite && !hasFreshHandback) return { _tag: "Parked" } as const;
+  const executingDraft = initial.steps.find(
+    ({ entry, status }) => entry === "slack.draft-reply-in-slack" && status === "executing",
+  );
+  if (executingDraft) {
+    yield* coordination.park(admission.event.key, {
+      _tag: "DraftOutcomeUnknown",
+      step: executingDraft.entry,
+    });
+    const plan = replaceStep(initial, executingDraft, { status: "failed" });
+    yield* store.save(plan);
+    return { _tag: "Parked" } as const;
+  }
+  const handedToPerson = initial.steps.some(
+    ({ entry, status }) => entry === "cogwork.hand-to-me" && status === "completed",
+  );
+  if (handedToPerson && hasFreshHandback) {
+    yield* store.remove(initial.item, initial.workflow, initial.attempt);
+    return { _tag: "Replan" } as const;
+  }
   const lacksWorkspace = initial.steps.some(
     ({ target, status }) => target._tag === "NoWorkspace" && status === "pending",
   );
@@ -439,7 +422,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     }
     yield* coordination.park(admission.event.key, {
       _tag: "NoWorkspaceRecognized",
-      plan: initial.digest,
+      plan: planPreview(initial),
     });
     return { _tag: "Parked" } as const;
   }
@@ -451,13 +434,17 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     return { _tag: "Replan" } as const;
   }
   if (waiting) {
-    yield* coordination.park(admission.event.key, {
-      _tag: "AwaitingApproval",
-      plan: initial.attempt,
-      digest: initial.digest,
-      revision: initial.revision,
-    });
-    return { _tag: "Parked" } as const;
+    yield* coordination.park(
+      admission.event.key,
+      {
+        _tag: "AwaitingApproval",
+        plan: initial.attempt,
+        digest: initial.digest,
+        revision: initial.revision,
+      },
+      { workflow: initial.workflow, operation: initial.operation },
+    );
+    return { _tag: "AwaitingApproval" } as const;
   }
   const planForParking = (plan: WorkflowActionPlan) =>
     hasFailedWrite
@@ -487,21 +474,55 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
           });
           return { plan, result: { _tag: "Parked" } } satisfies ExecutionState;
         }
-        const workspace = targetWorkspace(step);
-        const context = { plan: state.plan, step, workspace, tracker, notifications, ledger };
+        const executingPlan =
+          step.entry === "slack.draft-reply-in-slack"
+            ? replaceStep(state.plan, step, { status: "executing" })
+            : state.plan;
+        if (executingPlan !== state.plan) yield* store.save(executingPlan);
+        const executingStep = executingPlan.steps.find(({ position }) => position === step.position) ?? step;
+        const workspace = targetWorkspace(executingStep);
+        const sourceWorkspace = sourceTargetWorkspace(executingStep, registeredWorkspaces);
+        const context = {
+          item: admission.event.key,
+          plan: executingPlan,
+          step: executingStep,
+          workspace,
+          tracker,
+          notifications,
+          ledger,
+          sourceControl,
+          sourceWorkspace,
+          worktrees,
+          slack,
+          actionPlans: store,
+          coordination,
+          observationStore,
+        };
         const result = yield* Effect.result(executor(context));
         if (result._tag === "Success") {
-          const plan = replaceStep(state.plan, step, {
+          const plan = replaceStep(executingPlan, executingStep, {
             status: "completed",
             artifact: result.success,
           });
+          if (Schema.is(WorkflowActionArtifact)(result.success)) yield* artifacts.record(result.success);
           yield* store.save(plan);
           return initialExecutionState(plan);
         }
         const error = result.failure;
-        const failures = step.failures + 1;
-        const parked = issueTrackerErrorIsPermanent(error) || failures >= 3;
-        const updated = replaceStep(state.plan, step, {
+        if (error._tag === "SlackWriteError" && error.reason === "draft-outcome-unknown") {
+          yield* coordination.park(admission.event.key, {
+            _tag: "DraftOutcomeUnknown",
+            step: executingStep.entry,
+          });
+          const plan = replaceStep(executingPlan, executingStep, { status: "failed" });
+          yield* store.save(plan);
+          return { plan, result: { _tag: "Parked" } } satisfies ExecutionState;
+        }
+        const failures = executingStep.failures + 1;
+        const permanent =
+          error._tag === "IssueTrackerError" ? issueTrackerErrorIsPermanent(error) : !error.retryable;
+        const parked = permanent || failures >= 3;
+        const updated = replaceStep(executingPlan, executingStep, {
           failures,
           status: parked ? "failed" : "pending",
         });
@@ -519,16 +540,17 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
       }),
   );
   if (state.result !== null) return state.result;
-  const handedToPerson = state.plan.steps.some(
+  const hasHandToMe = state.plan.steps.some(
     ({ entry, status }) => entry === "cogwork.hand-to-me" && status === "completed",
   );
   const stopped = state.plan.steps.some(
     ({ entry, status }) => entry === "cogwork.stop" && status === "completed",
   );
-  if (handedToPerson) {
+  if (hasHandToMe) {
     yield* coordination.park(admission.event.key, { _tag: "HandedToYou" });
+    return { _tag: "HandedToYou" } as const;
   }
   yield* store.remove(state.plan.item, state.plan.workflow, state.plan.attempt);
-  const clearsHandOff = handedToPerson || stopped;
+  const clearsHandOff = stopped;
   return { _tag: "Complete", handOff: clearsHandOff ? null : state.plan.handOff } as const;
 });

@@ -1,4 +1,5 @@
 import {
+  keyOf,
   type WorkflowCatalogEntry,
   WorkflowCatalogKey,
   type WorkflowOption,
@@ -13,19 +14,24 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import {
   SourceFailure,
+  type TriggerEntry,
   type TriggerEvent,
+  type TriggerReadPort,
   type TriggerSource,
   type TriggerSubscription,
 } from "./trigger-source";
+import { mergeOptions, type OptionReader } from "./workflow-options";
 
 const hourlyKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.hourly");
 const dailyKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.daily");
 const weeklyKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.weekly");
+export const sweepKey = Schema.decodeSync(WorkflowCatalogKey)("schedule.sweep");
 
 const numberValues = (end: number) => Array.from({ length: end }, (_, value) => String(value));
 const minutes = numberValues(60);
 const hours = numberValues(24);
 const weekdays = numberValues(7);
+const idleDays = ["1", "7", "14", "30", "60", "90"];
 
 const parameter = (id: string, source: "fixed" | "live", values: ReadonlyArray<string>) => ({
   id,
@@ -38,23 +44,26 @@ const scheduleEntry = (
   key: typeof hourlyKey,
   name: string,
   parameters: WorkflowCatalogEntry["parameters"],
-): WorkflowCatalogEntry => ({
+  itemKind = "schedule",
+): TriggerEntry => ({
   key,
   name,
   kind: "trigger",
+  triggerKind: "occurrence",
   system: null,
   connection: null,
   requires: [],
   parameters,
-  itemKind: "schedule",
+  itemKind,
   actsOn: [],
   requiresWorkspace: false,
+  workspaceSource: null,
   permissionProfile: "read-only",
   agentInputs: [],
   emits: [],
 });
 
-export const clockEntries: ReadonlyArray<WorkflowCatalogEntry> = [
+export const clockEntries: ReadonlyArray<TriggerEntry> = [
   scheduleEntry(hourlyKey, "Every hour", [
     parameter("minute", "fixed", minutes),
     parameter("zone", "live", []),
@@ -70,6 +79,19 @@ export const clockEntries: ReadonlyArray<WorkflowCatalogEntry> = [
     parameter("minute", "fixed", minutes),
     parameter("zone", "live", []),
   ]),
+  scheduleEntry(
+    sweepKey,
+    "Sweep idle items",
+    [
+      parameter("hour", "fixed", hours),
+      parameter("minute", "fixed", minutes),
+      parameter("zone", "live", []),
+      parameter("source", "fixed", ["trackers", "workflow"]),
+      parameter("state", "live", []),
+      parameter("idle-days", "live", []),
+    ],
+    "issue",
+  ),
 ];
 
 type ClockSchedule = Data.TaggedEnum<{
@@ -103,20 +125,23 @@ const zoneOf = (parameters: ReadonlyArray<WorkflowParameterValue>) => {
 
 type ScheduleParser = (parameters: ReadonlyArray<WorkflowParameterValue>) => ClockSchedule | null;
 
+const dailyParser: ScheduleParser = (parameters) => {
+  const hour = integerOf(parameters, "hour", 24);
+  const minute = integerOf(parameters, "minute", 60);
+  const zone = zoneOf(parameters);
+  return hour === null || minute === null || zone === null
+    ? null
+    : ClockSchedule.Daily({ hour, minute, zone });
+};
+
 const scheduleParsers: Readonly<Record<string, ScheduleParser>> = {
   [hourlyKey]: (parameters) => {
     const minute = integerOf(parameters, "minute", 60);
     const zone = zoneOf(parameters);
     return minute === null || zone === null ? null : ClockSchedule.Hourly({ minute, zone });
   },
-  [dailyKey]: (parameters) => {
-    const hour = integerOf(parameters, "hour", 24);
-    const minute = integerOf(parameters, "minute", 60);
-    const zone = zoneOf(parameters);
-    return hour === null || minute === null || zone === null
-      ? null
-      : ClockSchedule.Daily({ hour, minute, zone });
-  },
+  [dailyKey]: dailyParser,
+  [sweepKey]: dailyParser,
   [weeklyKey]: (parameters) => {
     const hour = integerOf(parameters, "hour", 24);
     const minute = integerOf(parameters, "minute", 60);
@@ -236,6 +261,54 @@ const eventOf = (
   workspace: null,
 });
 
+const sweepIdleMillis = (subscription: TriggerSubscription) => {
+  const days = Number(firstValue(subscription.parameters, "idle-days"));
+  return Number.isInteger(days) && days > 0 ? days * 86_400_000 : null;
+};
+
+const sweepEventsAt = Effect.fn("ClockSource.sweepEventsAt")(function* (
+  subscription: TriggerSubscription,
+  instant: number,
+  readPort: TriggerReadPort | undefined,
+) {
+  const idleMillis = sweepIdleMillis(subscription);
+  if (idleMillis === null) return yield* invalidSchedule(subscription);
+  if (readPort === undefined) {
+    return yield* new SourceFailure({
+      source: "clock",
+      reason: "unavailable",
+      retryAfterMillis: null,
+      message: "Sweep item reader is unavailable",
+    });
+  }
+  const candidates = yield* readPort.sweep(subscription, instant);
+  const selected = candidates
+    .filter(({ lastTouchedAtMillis }) => lastTouchedAtMillis <= instant - idleMillis)
+    .toSorted(
+      (left, right) =>
+        left.lastTouchedAtMillis - right.lastTouchedAtMillis ||
+        keyOf(left.key).localeCompare(keyOf(right.key)),
+    )
+    .slice(0, 50);
+  return yield* Effect.forEach(selected, (candidate) =>
+    Effect.gen(function* () {
+      const loadWorkContext = candidate.loadWorkContext ?? Effect.void;
+      const workContext = yield* loadWorkContext;
+      return {
+        key: candidate.key,
+        revision: `${subscription.workflow}:${instant}`,
+        cause: { _tag: "Clock" },
+        atMillis: instant,
+        entry: subscription.entry,
+        workspace: candidate.workspace,
+        subject: candidate.subject,
+        target: { workflow: subscription.workflow, trigger: subscription.trigger },
+        ...(workContext === undefined ? {} : { workContext }),
+      } satisfies TriggerEvent;
+    }),
+  );
+});
+
 const invalidSchedule = (subscription: TriggerSubscription) =>
   new SourceFailure({
     source: "clock",
@@ -244,7 +317,21 @@ const invalidSchedule = (subscription: TriggerSubscription) =>
     message: `Invalid ${subscription.entry} schedule`,
   });
 
-const futureEvents = (subscription: TriggerSubscription, afterMillis: number) =>
+const eventsAt = (
+  subscription: TriggerSubscription,
+  instant: number,
+  firedAtMillis: number,
+  readPort: TriggerReadPort | undefined,
+) =>
+  subscription.entry === sweepKey
+    ? sweepEventsAt(subscription, instant, readPort)
+    : Effect.succeed([eventOf(subscription, instant, firedAtMillis)]);
+
+const futureEvents = (
+  subscription: TriggerSubscription,
+  afterMillis: number,
+  readPort: TriggerReadPort | undefined,
+) =>
   Stream.unfold(afterMillis, (previous) =>
     Effect.gen(function* () {
       const next = nextScheduledInstant(subscription, previous);
@@ -254,36 +341,64 @@ const futureEvents = (subscription: TriggerSubscription, afterMillis: number) =>
       const firedAtMillis = yield* Clock.currentTimeMillis;
       const latest = latestScheduledInstant(subscription, firedAtMillis);
       if (latest === null) return yield* invalidSchedule(subscription);
-      return [eventOf(subscription, latest, firedAtMillis), latest] as const;
+      return [yield* eventsAt(subscription, latest, firedAtMillis, readPort), latest] as const;
     }),
-  );
+  ).pipe(Stream.flatMap(Stream.fromIterable));
 
-const observeSubscription = (subscription: TriggerSubscription) =>
+const observeSubscription = (subscription: TriggerSubscription, readPort: TriggerReadPort | undefined) =>
   Stream.unwrap(
     Effect.map(Clock.currentTimeMillis, (now) => {
       const latest = latestScheduledInstant(subscription, now);
-      const catchUp =
-        latest !== null && latest > (subscription.catchUp?.since ?? now)
-          ? [eventOf(subscription, latest, now)]
-          : [];
-      return Stream.concat(Stream.fromIterable(catchUp), futureEvents(subscription, latest ?? now));
+      const shouldCatchUp = latest !== null && latest > (subscription.catchUp?.since ?? now);
+      const catchUp = shouldCatchUp
+        ? Stream.fromEffect(eventsAt(subscription, latest, now, readPort)).pipe(
+            Stream.flatMap(Stream.fromIterable),
+          )
+        : Stream.empty;
+      return Stream.concat(catchUp, futureEvents(subscription, latest ?? now, readPort));
     }),
   );
 
-export const clockSource: TriggerSource = {
+const valueOptions = (values: ReadonlyArray<string>) =>
+  Effect.succeed(values.map((value) => ({ value, name: value, listedIn: [] }) satisfies WorkflowOption));
+
+const sweepStateReader =
+  (labelReaders: ReadonlyArray<OptionReader>): OptionReader =>
+  (workspace) =>
+    Effect.forEach(labelReaders, (reader) =>
+      reader(workspace).pipe(Effect.catchTag("SourceFailure", () => Effect.succeed([]))),
+    ).pipe(
+      Effect.map((listed) =>
+        mergeOptions([
+          [{ value: "parked", name: "parked", listedIn: workspace === undefined ? [] : [workspace] }],
+          ...listed,
+        ]),
+      ),
+    );
+
+const clockReaders = (sources: ReadonlyArray<TriggerSource>) => {
+  const labelReaders = sources.flatMap(({ options = [] }) =>
+    options.flatMap(({ readers }) => (readers.label ? [readers.label] : [])),
+  );
+  return {
+    zone: () => valueOptions([...new Set(["UTC", ...Intl.supportedValuesOf("timeZone")])]),
+    "idle-days": () => valueOptions(idleDays),
+    state: sweepStateReader(labelReaders),
+  };
+};
+
+export const makeClockSource = (sweepStateSources: ReadonlyArray<TriggerSource> = []): TriggerSource => ({
   id: "clock",
   entries: clockEntries,
   availability: () => Effect.succeed({ _tag: "Available" }),
-  listOptions: (entry, parameter) => {
-    const isZoneParameter = parameter === "zone" && clockEntries.some(({ key }) => key === entry);
-    if (!isZoneParameter) return Effect.succeed([]);
-    const zones = [...new Set(["UTC", ...Intl.supportedValuesOf("timeZone")])];
-    return Effect.succeed(
-      zones.map((zone) => ({ value: zone, name: zone, listedIn: [] }) satisfies WorkflowOption),
-    );
-  },
-  observe: (subscriptions) =>
+  options: [{ system: "schedule", readers: clockReaders(sweepStateSources) }],
+  observe: (subscriptions, readPort) =>
     subscriptions.length === 0
       ? Stream.empty
-      : Stream.mergeAll(subscriptions.map(observeSubscription), { concurrency: "unbounded" }),
-};
+      : Stream.mergeAll(
+          subscriptions.map((subscription) => observeSubscription(subscription, readPort)),
+          { concurrency: "unbounded" },
+        ),
+});
+
+export const clockSource = makeClockSource();

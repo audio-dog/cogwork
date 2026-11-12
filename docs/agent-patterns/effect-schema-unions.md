@@ -151,7 +151,7 @@ Choose the decoder by what failure means there: `decodeUnknownEffect` when failu
 - `.agents/skills/effect-ts/references/guide-schema.md`.
 - `packages/contracts/src/daemon-event.ts` and `packages/contracts/src/board.ts`: the in-repo `TaggedUnion` + `.match` exemplars.
 - `packages/contracts/src/ag-ui.ts`, `apps/cli/src/watch.ts`, `apps/desktop/src/renderer/src/features/run-activity.ts`, and `apps/desktop/src/renderer/src/features/run-transcript.ts`: the flat event schema and its generated partial folds.
-- `packages/engine/src/classify.ts`: the process-local `Data.taggedEnum` exemplar.
+- `packages/engine/src/session-choice.ts`: the process-local `Data.taggedEnum` exemplar.
 - `packages/engine/src/run-ledger.ts`: `workspace`/`workItem` are branded now; `branch` is the remaining raw-string parameter on the same signatures.
 - `packages/contracts/CONTEXT.md` ("Harness event"): the recorded openness decision the pattern preserves.
 - `.repos/t3code/packages/contracts/src/baseSchemas.ts`: `makeEntityId` (the same brand factory) and `ForwardCompatibleArray`, a principled decode-time forward-compatibility transform.

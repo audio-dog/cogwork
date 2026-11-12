@@ -36,7 +36,7 @@ _Avoid_: Native Codex file event, exact delivery
 The shared runtime passes the Run Plan's root JSON Schema through streaming `outputSchema`; TanStack
 projects it to native Codex `--output-schema`. Codex emits one terminal `structured-output.complete` event;
 the executor, not this package, decodes that object with Effect before it changes coordination.
-The runner preserves ordinary AG-UI events but never parses a stage result itself.
+The runner preserves ordinary AG-UI events but never parses an Operation result itself.
 _Avoid_: Result footer, text-result parser
 
 **Setup handoff**:

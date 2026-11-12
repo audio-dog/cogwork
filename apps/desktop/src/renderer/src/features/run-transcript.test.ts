@@ -38,7 +38,7 @@ const activity = (event: RunActivity["event"], seq: number) =>
     runId: "r",
     workspace: "w",
     workItem: "i",
-    stage: "implement",
+    operation: "implement",
     seq,
     atMillis: 0,
     correlation: {
