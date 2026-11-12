@@ -533,6 +533,9 @@ const unique = <A>(values: ReadonlyArray<A>) => [...new Set(values)];
 const objectFields = <A extends Schema.Top>(entries: ReadonlyArray<readonly [string, A]>) =>
   Object.fromEntries(entries);
 
+const structOrEmpty = <A extends Schema.Top>(fields: Readonly<Record<string, A>>) =>
+  Object.keys(fields).length === 0 ? Schema.Record(Schema.String, Schema.Never) : Schema.Struct(fields);
+
 const answerFields = (operation: WorkflowOperation) =>
   objectFields(
     operation.questions.map(
@@ -570,8 +573,8 @@ export const workflowOperationResultSchema = (
 ) => {
   const elementFields = {
     summary: TrimmedNonEmptyString,
-    answers: Schema.Struct(answerFields(operation)),
-    inputs: Schema.Struct(inputFields(operation, catalog)),
+    answers: structOrEmpty(answerFields(operation)),
+    inputs: structOrEmpty(inputFields(operation, catalog)),
   };
   const parseOptions = { onExcessProperty: "error" } as const;
   const entries = operationActionEntries(operation, catalog);
