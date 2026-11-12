@@ -62,7 +62,6 @@ const replayRequest = (speed: ReplaySpeed) => ({
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,

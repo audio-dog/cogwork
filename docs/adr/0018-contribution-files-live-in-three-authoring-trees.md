@@ -3,6 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-08-25
 - **Amended:** 2026-09-01 — [the private overlay tree may replace an Operating Instructions package](#amendment-2026-09-01--the-private-overlay-tree-may-replace-an-operating-instructions-package)
+- **Amended:** 2026-11-05 — [Commands are retired](#amendment-2026-11-05--commands-are-retired)
 
 ## Context
 
@@ -191,3 +192,10 @@ package whole for that operation's Runs in that Workspace.
 tree scan does not produce it — the Context assembler resolves it directly, and presence is its
 whole state. "Not in any tree" is the part that falls. The deregister cascade this ADR already
 records deletes the override with the rest of the overlay directory.
+
+## Amendment (2026-11-05) — Commands are retired
+
+ADR [0037](./0037-commands-are-retired-and-subagent-files-follow-the-claude-code-shape.md) removes the
+Command kind. The scanner no longer reads `commands/` in any tree. "Skill, Rules, Command and
+Subagent" above now reads "Skill, Rules and Subagent".
+ADR 0037 also moves Subagent files from `subagents/` to `agents/`; that change lands separately.

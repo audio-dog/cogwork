@@ -8,7 +8,6 @@ const slugs: Record<Facet, string> = {
   skill: "skills",
   subagent: "subagents",
   rules: "rules",
-  command: "commands",
   hook: "hooks",
 };
 

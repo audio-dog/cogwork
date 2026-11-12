@@ -4,7 +4,7 @@ import { TrimmedNonEmptyString } from "./base-schemas";
 export const LocalContributionAuthority = Schema.Literals(["local:user", "local:repo", "local:private"]);
 export type LocalContributionAuthority = typeof LocalContributionAuthority.Type;
 
-export const FileContributionKind = Schema.Literals(["mcp-server", "skill", "subagent", "rules", "command"]);
+export const FileContributionKind = Schema.Literals(["mcp-server", "skill", "subagent", "rules"]);
 export type FileContributionKind = typeof FileContributionKind.Type;
 
 export const LocalContribution = Schema.Struct({
