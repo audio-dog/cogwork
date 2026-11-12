@@ -1,0 +1,29 @@
+apps/cli/src/login.test.ts
+  s_e509cfb4655808::t_734a3968daec7a 216,218
+apps/cli/src/platform.test.ts
+  s_e509cfb4655808::t_b6997423ef30d9 980
+  s_e509cfb4655808::t_0c6338b8665ea8 978-979,981
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_e509cfb4655808::t_a1442fe7e0a14c 472
+  s_e509cfb4655808::t_79b02bf9b4c9cb 13
+  s_e509cfb4655808::t_e2fe947f08ba26 253
+  s_e509cfb4655808::t_4ab2c469b73b7b 469-471
+packages/engine/src/workflow.test.ts
+  s_e509cfb4655808::t_ea698f2f4bd087 974
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9a1f0e5f450706720615ac7b4161b584e6adaace",
+  "prompts": {},
+  "sessions": {
+    "s_e509cfb4655808": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "15b7ac82-31bb-405c-9a1c-c7531add7197",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
