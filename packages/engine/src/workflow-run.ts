@@ -290,6 +290,7 @@ export const make = Effect.gen(function* () {
 
   const admittedSkills = Effect.fn("WorkflowRun.admittedSkills")(function* (
     workspace: RegisteredWorkspace | null,
+    required: ReadonlyArray<string>,
   ) {
     if (workspace === null) return [];
     const fromPlugins = yield* plugins.contributions(workspace.config.name).pipe(
@@ -298,7 +299,11 @@ export const make = Effect.gen(function* () {
       ),
       Effect.orElseSucceed(() => []),
     );
-    const contributions = [...workspace.contributions, ...fromPlugins].filter(({ kind }) => kind === "skill");
+    const available = [...workspace.contributions, ...fromPlugins].filter(({ kind }) => kind === "skill");
+    const contributions = [
+      ...available.filter(({ id }) => required.includes(id)),
+      ...available.filter(({ id }) => !required.includes(id)),
+    ];
     return contributions
       .filter(
         (skill, index) => contributions.findIndex(({ localName }) => localName === skill.localName) === index,
@@ -518,14 +523,12 @@ export const make = Effect.gen(function* () {
     if (Result.isFailure(preflight)) return yield* decline(admission);
     const projectedMembers = harness.projectedMembers(selectedHarness);
     const projectsTools = projectedMembers.includes("Tools");
-    const skills = yield* admittedSkills(workspace);
-    const unsuppliedSkill = projectedMembers.includes("Skills")
-      ? undefined
-      : skills.find(({ identity }) => operation.requires.some((need) => need === identity));
-    if (unsuppliedSkill) {
+    const skills = yield* admittedSkills(workspace, operation.requires);
+    const requiredSkill = skills.find(({ identity }) => operation.requires.some((need) => need === identity));
+    if (requiredSkill && !projectedMembers.includes("Skills")) {
       return yield* rejectPlan(
         admission,
-        `${selectedHarness} does not project Skills, so it cannot supply the required Skill ${unsuppliedSkill.identity}`,
+        `${selectedHarness} does not project Skills, so it cannot supply the required Skill ${requiredSkill.identity}`,
       );
     }
 

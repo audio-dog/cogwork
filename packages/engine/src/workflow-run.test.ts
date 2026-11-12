@@ -1502,7 +1502,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  const releaseNeed = Schema.decodeSync(NeedIdentity)("local:repo/skill/release");
+  const releaseNeed = Schema.decodeSync(NeedIdentity)("local:user/skill/release");
   const skillProgram = Effect.fn("WorkflowRunTest.skillProgram")(function* (
     projectedMembers: HarnessRunner["projectedMembers"],
   ) {
@@ -1511,14 +1511,14 @@ describe("WorkflowRun", () => {
       repository: "owner/repo",
       contributions: [
         {
-          id: releaseNeed,
+          id: "local:repo/skill/release",
           authority: "local:repo",
           kind: "skill",
           localName: "release",
           file: "/repo/.agents/skills/release/SKILL.md",
         },
         {
-          id: "local:user/skill/release",
+          id: releaseNeed,
           authority: "local:user",
           kind: "skill",
           localName: "release",
@@ -1576,7 +1576,7 @@ describe("WorkflowRun", () => {
   });
 
   it.effect(
-    "admits a required Skill and Plugin Skills into the Run Plan of a Harness that projects Skills",
+    "admits a required Skill over a same-named Skill, and Plugin Skills, into the Run Plan of a Harness that projects Skills",
     () =>
       Effect.gen(function* () {
         const { plan } = yield* skillProgram(["Tools", "Skills"]);
@@ -1584,7 +1584,7 @@ describe("WorkflowRun", () => {
         assert.deepStrictEqual(
           plan?.skills.map(({ identity, name, source }) => ({ identity, name, source })),
           [
-            { identity: releaseNeed, name: "release", source: "/repo/.agents/skills/release/SKILL.md" },
+            { identity: releaseNeed, name: "release", source: "/home/.agents/skills/release/SKILL.md" },
             {
               identity: "plugin:linear/skill/triage-notes",
               name: "triage-notes",
