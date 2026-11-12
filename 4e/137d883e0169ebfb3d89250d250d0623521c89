@@ -1,0 +1,20 @@
+docs/agent-patterns/effect-schema-unions.md
+  s_e509cfb4655808::t_84b107e1aac204 137
+  s_e509cfb4655808::t_2096a59d32d4f3 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4e137d883e0169ebfb3d89250d250d0623521c89",
+  "prompts": {},
+  "sessions": {
+    "s_e509cfb4655808": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "15b7ac82-31bb-405c-9a1c-c7531add7197",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
