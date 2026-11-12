@@ -196,7 +196,6 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["persistence", "instruction-context"],
       structuredOutput,
