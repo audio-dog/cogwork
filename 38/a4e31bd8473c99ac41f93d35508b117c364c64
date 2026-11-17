@@ -1,0 +1,21 @@
+apps/desktop/src/renderer/src/features/harness-alerts.ts
+  s_11adc39e1ddf7f::t_d06b6ef7b0eedb 23,28-29
+pnpm-workspace.yaml
+  s_11adc39e1ddf7f::t_ebc1a669e9698e 45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "38a4e31bd8473c99ac41f93d35508b117c364c64",
+  "prompts": {},
+  "sessions": {
+    "s_11adc39e1ddf7f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "56f27782-2c16-433b-93ba-1e6330d07aed",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
