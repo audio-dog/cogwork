@@ -14,14 +14,8 @@ allowBuilds:
 
 catalog:
   '@effect/tsgo': '0.69.0'
-  # drizzle-orm@1.0.0-rc.4 calls the beta-only `Schema.TaggedErrorClass` from its Effect driver, so
-  # `drizzle-orm/effect-sqlite-node` cannot be imported on the rc line at all. The rc5-tag build
-  # below calls `Schema.TaggedError` and loads. Move to the release that carries that fix.
-  # Its type declarations still import `effect/unstable/*`, which effect@4.1 removed, so `SqlError`
-  # resolved to `any`. The patch below rewrites those declarations to `effect/*`; the runtime does
-  # not import those paths. Drop the patch when a drizzle-orm release imports the stable paths.
-  drizzle-orm: '1.0.0-rc.5-169397b'
-  drizzle-kit: '1.0.0-rc.4'
+  drizzle-orm: '1.0.0-rc.5'
+  drizzle-kit: '1.0.0-rc.5'
   '@tanstack/ai': '1.0.0'
   '@tanstack/ai-acp': '1.0.0'
   '@tanstack/ai-anthropic': '1.0.0'
@@ -55,10 +49,6 @@ catalogs:
     '@effect/platform-node': '4.1.4'
     '@effect/sql-sqlite-node': '4.1.4'
     '@effect/vitest': '4.1.4'
-
-patchedDependencies:
-  drizzle-orm@1.0.0-rc.5-169397b: patches/drizzle-orm@1.0.0-rc.5-169397b.patch
-
 permissions:
   '@tanstack/ai':
     skills: true
