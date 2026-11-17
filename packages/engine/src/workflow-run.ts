@@ -61,7 +61,7 @@ import { type PullRequestContext, SourceControlProvider } from "./source-control
 import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } from "./trigger-observation";
 import { Recheck } from "./trigger-source";
 import { Workflows } from "./workflow";
-import { itemWorkspaceOf } from "./workflow-action-entry";
+import { itemWorkspaceOf, type WorkflowActionPlanDecodeError } from "./workflow-action-entry";
 import {
   buildWorkflowActionPlan,
   executeWorkflowActionPlan,
@@ -70,7 +70,7 @@ import {
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
-import { PullRequestReadiness, ticketSlug, WorktreeManager } from "./worktree";
+import { ticketSlug, WorktreeManager } from "./worktree";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
@@ -243,6 +243,11 @@ const selectedWorkspaceIds = (
     : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
 };
 
+const planRefusal = {
+  invalid: { status: "failed", result: (message: string) => RefusedResult.ActionPlanRefused({ message }) },
+  declined: { status: "declined", result: (reason: string) => RefusedResult.PullRequestDeclined({ reason }) },
+} as const;
+
 const projection = [
   "Harness Adapter",
   "Instructions",
@@ -303,6 +308,11 @@ export const make = Effect.gen(function* () {
     worktrees === null
       ? sourceControlExecutionContext
       : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
+  const pullRequestBuildInput = (runBranch: string | null) => ({
+    ...(sourceControl ? { sourceControl } : {}),
+    ...(worktrees ? { worktrees } : {}),
+    ...(runBranch ? { runBranch } : {}),
+  });
   const previousResultIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
   const touchpointGate = Semaphore.makeUnsafe(1);
 
@@ -453,6 +463,22 @@ export const make = Effect.gen(function* () {
     );
     return yield* failAttempt(admission, claimed, work, refusalForPerson(refusal), status);
   });
+
+  const refusePlan = (
+    admission: TriggerAdmission,
+    claimed: Ref.Ref<ClaimState>,
+    work: ClaimedWork,
+    error: WorkflowActionPlanDecodeError,
+  ) =>
+    error.reason === "unavailable"
+      ? settleClaimed(claimed, "failed").pipe(Effect.map(() => "retry" as const))
+      : refuseResult(
+          admission,
+          claimed,
+          work,
+          planRefusal[error.reason].result(error.message),
+          planRefusal[error.reason].status,
+        );
 
   const recoverClaimed = Effect.fn("WorkflowRun.recoverClaimed")(function* <E>(
     admission: TriggerAdmission,
@@ -800,18 +826,12 @@ export const make = Effect.gen(function* () {
           attempt: run.id,
           createdAtMillis: startedAtMillis,
           workflowRevision: record.publishedRevision ?? record.workingRevision,
-          ...(sourceControl ? { sourceControl } : {}),
+          ...pullRequestBuildInput(run.branch),
           pullRequestSnapshots: reviewedPullRequests,
         }),
       ).pipe(
         Effect.matchEffect({
-          onFailure: (error) =>
-            refuseResult(
-              admission,
-              claimed,
-              accepted,
-              RefusedResult.ActionPlanRefused({ message: error.message }),
-            ),
+          onFailure: (error) => refusePlan(admission, claimed, accepted, error),
           onSuccess: acceptPlans,
         }),
       );
@@ -828,43 +848,12 @@ export const make = Effect.gen(function* () {
         attempt: run.id,
         createdAtMillis: yield* Clock.currentTimeMillis,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
-        ...(sourceControl ? { sourceControl } : {}),
+        ...pullRequestBuildInput(run.branch),
         pullRequestSnapshots: reviewedPullRequests,
       }),
     );
     if (Result.isFailure(actionPlanResult)) {
-      return yield* refuseResult(
-        admission,
-        claimed,
-        accepted,
-        RefusedResult.ActionPlanRefused({ message: actionPlanResult.failure.message }),
-      );
-    }
-    const openPullRequest = actionPlanResult.success.steps.find(
-      ({ entry, status, target }) =>
-        entry === "github.open-pull-request" && status === "pending" && target._tag === "NewPullRequest",
-    );
-    const openPullRequestTarget = openPullRequest?.target;
-    if (openPullRequestTarget?._tag === "NewPullRequest" && run.branch !== null && worktrees !== null) {
-      const workspace = registryState.workspaces.find(
-        ({ config }) => config.name === openPullRequestTarget.workspace,
-      );
-      if (workspace) {
-        const readiness = yield* worktrees.pullRequestReadiness(
-          workspace,
-          { id: openPullRequestTarget.issue, title: "" },
-          run.branch,
-        );
-        if (PullRequestReadiness.$is("Declined")(readiness)) {
-          return yield* refuseResult(
-            admission,
-            claimed,
-            accepted,
-            RefusedResult.PullRequestDeclined({ reason: readiness.reason }),
-            "declined",
-          );
-        }
-      }
+      return yield* refusePlan(admission, claimed, accepted, actionPlanResult.failure);
     }
     const actionPlan = yield* actionPlans.create(actionPlanResult.success);
     const actionPlanEvent: AgUiEvent = {
@@ -1069,6 +1058,7 @@ export const make = Effect.gen(function* () {
     if (missingInput !== undefined) {
       return yield* failTouchpoint("invalid-edits", `The plan needs input ${missingInput}`);
     }
+    const attemptRun = yield* ledger.getRun(plan.attempt);
     return yield* buildWorkflowActionPlan({
       admission,
       document,
@@ -1084,7 +1074,7 @@ export const make = Effect.gen(function* () {
       attempt: plan.attempt,
       createdAtMillis,
       workflowRevision: plan.workflowRevision,
-      ...(sourceControl ? { sourceControl } : {}),
+      ...pullRequestBuildInput(attemptRun?.branch ?? null),
     }).pipe(Effect.mapError((error) => touchpointFailure("invalid-edits", error.message)));
   });
 
