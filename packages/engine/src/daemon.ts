@@ -135,9 +135,9 @@ export const daemonInfoLayer = Layer.effect(
   Effect.map(Clock.currentTimeMillis, (startedAtMillis) => ({ startedAtMillis })),
 );
 
-const watchedActivity = (activity: RunActivity): RunWatchItem => ({ _tag: "RunActivity", activity });
+const watchedActivity = (activity: RunActivity) => ({ _tag: "RunActivity", activity }) satisfies RunWatchItem;
 
-const historyEnd: RunWatchItem = { _tag: "HistoryEnd" };
+const historyEnd = { _tag: "HistoryEnd" } satisfies RunWatchItem;
 
 const endsRun = (item: RunWatchItem) =>
   RunWatchItem.guards.RunActivity(item) && agUiIsTerminal(item.activity.event);

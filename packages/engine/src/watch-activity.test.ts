@@ -81,38 +81,7 @@ const watchItemLabel = (item: RunWatchItem) =>
   });
 
 describe("watchActivity", () => {
-  it.effect("marks the end of history between the replayed and the live activities", () =>
-    Effect.gen(function* () {
-      const ledger = yield* RunLedger.RunLedger;
-      const recorder = yield* RunRecorder;
-      const id = runId("run-1");
-      const rec = record("run-1");
-
-      yield* ledger.insertRun(rec);
-      yield* seed(rec, [
-        event({ type: "RUN_STARTED" }),
-        event({ type: "TEXT_MESSAGE_CONTENT", delta: "Hel" }),
-      ]);
-
-      const historyEnded = yield* Deferred.make<void>();
-      const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
-        Stream.tap((item) =>
-          RunWatchItem.guards.HistoryEnd(item) ? Deferred.succeed(historyEnded, undefined) : Effect.void,
-        ),
-        Stream.take(4),
-        Stream.runCollect,
-        Effect.forkChild,
-      );
-
-      yield* Deferred.await(historyEnded);
-      yield* recorder.record(rec, event({ type: "TEXT_MESSAGE_CONTENT", delta: "lo" }));
-
-      const seen = yield* Fiber.join(fiber);
-      assert.deepStrictEqual(seen.map(watchItemLabel), ["seq 0", "seq 1", "history end", "seq 2"]);
-    }).pipe(Effect.provide(layer), Effect.scoped),
-  );
-
-  it.effect("seeds scoped watchers from ledger history before live events", () =>
+  it.effect("seeds scoped watchers from ledger history, then marks the end of history, then goes live", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
       const recorder = yield* RunRecorder;
@@ -126,23 +95,25 @@ describe("watchActivity", () => {
         event({ type: "TEXT_MESSAGE_CONTENT", delta: "lo" }),
       ]);
 
-      const ready = yield* Deferred.make<void>();
-      const fiber = yield* watchActivities(id).pipe(
-        Stream.tap((item) => (item.seq === 2 ? Deferred.succeed(ready, undefined) : Effect.void)),
-        Stream.take(4),
+      const historyEnded = yield* Deferred.make<void>();
+      const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
+        Stream.tap((item) =>
+          RunWatchItem.guards.HistoryEnd(item) ? Deferred.succeed(historyEnded, undefined) : Effect.void,
+        ),
+        Stream.take(5),
         Stream.runCollect,
         Effect.forkChild,
       );
 
-      yield* Deferred.await(ready);
+      yield* Deferred.await(historyEnded);
       yield* recorder.record(rec, event({ type: "TEXT_MESSAGE_CONTENT", delta: "!" }));
 
       const seen = yield* Fiber.join(fiber);
-      assert.deepStrictEqual(
-        seen.map((item) => item.seq),
-        [0, 1, 2, 3],
+      assert.deepStrictEqual(seen.map(watchItemLabel), ["seq 0", "seq 1", "seq 2", "history end", "seq 3"]);
+      assert.strictEqual(
+        reconstructText(seen.filter(RunWatchItem.guards.RunActivity).map((item) => item.activity)),
+        "Hello!",
       );
-      assert.strictEqual(reconstructText(seen), "Hello!");
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 
