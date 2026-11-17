@@ -1,0 +1,22 @@
+apps/desktop/src/renderer/src/components/import-review.tsx
+  s_5559435de01e6a::t_9e949e2afeeb3b 1-2,48-54
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_5559435de01e6a::t_01b870c01dface 23
+  s_5559435de01e6a::t_9e949e2afeeb3b 2,295-299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "292a3c9b61479b72718d37fd7eef37aa805f0a49",
+  "prompts": {},
+  "sessions": {
+    "s_5559435de01e6a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e772804-82d1-47b3-8ce1-07e2c635c44a",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "David Simoneau <david.simoneau@scribehow.com>"
+    }
+  }
+}
