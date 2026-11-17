@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_5559435de01e6a::t_5efa08e552a408 215
+apps/desktop/src/renderer/src/components/workflow-gate.tsx
+  s_5559435de01e6a::t_041cf614aea592 1-49
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_5559435de01e6a::t_2ba648df4d7680 1,3,12-14
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_5559435de01e6a::t_5efa08e552a408 894,898,994
+apps/desktop/src/renderer/src/routeTree.gen.ts
+  s_5559435de01e6a::t_5efa08e552a408 31,129-134,155,174,197,220,239,261,404-410,438,450
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_5559435de01e6a::t_78aa55619ba82d 766,772,789,799,836
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId_.review.tsx
+  s_5559435de01e6a::t_9600981ec3588f 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b5851768a0dcc6ae03f17b1c93fb11419bd64f9d",
+  "prompts": {},
+  "sessions": {
+    "s_5559435de01e6a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e772804-82d1-47b3-8ce1-07e2c635c44a",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "David Simoneau <david.simoneau@scribehow.com>"
+    }
+  }
+}

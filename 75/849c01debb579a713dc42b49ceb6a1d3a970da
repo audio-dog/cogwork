@@ -1,0 +1,20 @@
+apps/desktop/src/renderer/src/features/workflow-import-review.ts
+  s_5559435de01e6a::t_ddf1f80aecb58e 2,5,8,19-36,39-41,48-59,61-64,70,77
+  s_5559435de01e6a::t_0123e058b72dcd 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "75849c01debb579a713dc42b49ceb6a1d3a970da",
+  "prompts": {},
+  "sessions": {
+    "s_5559435de01e6a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6e772804-82d1-47b3-8ce1-07e2c635c44a",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "David Simoneau <david.simoneau@scribehow.com>"
+    }
+  }
+}
