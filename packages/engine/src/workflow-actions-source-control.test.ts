@@ -11,6 +11,7 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import type { RegisteredWorkspace } from "./projector";
@@ -18,6 +19,7 @@ import { emptyService as emptySourceControl, type PullRequestContext } from "./s
 import type { TriggerAdmission } from "./trigger-observation";
 import type { TargetContext } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
+import { PullRequestReadiness, WorktreeManager } from "./worktree";
 
 const decodeEntry = Schema.decodeSync(WorkflowCatalogKey);
 const item = Schema.decodeSync(WorkItemId)("#901");
@@ -128,11 +130,15 @@ describe("Source control Action entries", () => {
 
   it.effect("freezes a new pull request for the current Issue only", () =>
     Effect.gen(function* () {
-      assert.deepStrictEqual(yield* targetOf("open-pull-request", issueRef), {
-        _tag: "NewPullRequest",
-        ...frozen,
-        issue: item,
-      });
+      const worktrees = yield* WorktreeManager;
+      assert.deepStrictEqual(
+        yield* targetOf("open-pull-request", issueRef, { worktrees, runBranch: "901-run" }),
+        {
+          _tag: "NewPullRequest",
+          ...frozen,
+          issue: item,
+        },
+      );
       const fromPullRequest = yield* Effect.flip(targetOf("open-pull-request", pullRequestRef));
       assert.strictEqual(
         fromPullRequest.message,
@@ -142,7 +148,14 @@ describe("Source control Action entries", () => {
         targetOf("open-pull-request", { ...issueRef, workspace: otherWorkspace }),
       );
       assert.strictEqual(elsewhere.message, "Workspace other does not bind github");
-    }),
+    }).pipe(
+      Effect.provide(
+        Layer.mock(WorktreeManager, {
+          pullRequestReadiness: (_workspace, _item, headBranch = "") =>
+            Effect.succeed(PullRequestReadiness.Ready({ headBranch, baseBranch: "main" })),
+        }),
+      ),
+    ),
   );
 
   it.effect("freezes the current pull request for an Issue and a PullRequest item", () =>
