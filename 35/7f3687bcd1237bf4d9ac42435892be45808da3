@@ -1,0 +1,37 @@
+apps/desktop/src/renderer/src/features/feed.ts
+  s_97a9113facbb7a::t_6fb0679f5c411b 80
+packages/engine/src/event-publisher.test.ts
+  s_97a9113facbb7a::t_c19fa5047b1990 23,28
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_97a9113facbb7a::t_ee63ef3b2d2c28 81,87,93,98,106-107,335,410,433,435
+packages/engine/src/github/performance-issue-filer.ts
+  s_97a9113facbb7a::t_d4af7b914409b2 182,184,186,188,190,194,327,332,340,347
+packages/engine/src/issue-tracker-router.test.ts
+  s_97a9113facbb7a::t_4b0d218414a368 15,19,23-25
+packages/engine/src/tracker-trigger-source.test.ts
+  s_97a9113facbb7a::t_fbd64a3ee08236 26,32-34
+packages/engine/src/tracker-trigger-source.ts
+  s_97a9113facbb7a::t_f44b433190f108 111,113,115-116,165-167,175,179
+packages/engine/src/workflow-actions-issue.test.ts
+  s_97a9113facbb7a::t_2d452681b19612 153,168,174-177,180,184,244,246-249
+packages/engine/src/workspace-registry.test.ts
+  s_97a9113facbb7a::t_75494a145e4d26 749,752,757,760,763,780,783
+packages/engine/src/worktree-maintenance.ts
+  s_97a9113facbb7a::t_70febe8660f469 35,39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "357f3687bcd1237bf4d9ac42435892be45808da3",
+  "prompts": {},
+  "sessions": {
+    "s_97a9113facbb7a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3d8ec80e-7969-4820-940b-d025ab87489f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
