@@ -147,8 +147,8 @@ describe("foldTranscript", () => {
     const pump = makeTranscriptPump();
     const pull = vi.fn();
     const refresh = vi.fn();
-    const first = AsyncResult.success({ done: false, entries: [] });
-    const second = AsyncResult.success({ done: false, entries: [] });
+    const first = AsyncResult.success({ done: false, replaying: true, entries: [] });
+    const second = AsyncResult.success({ done: false, replaying: true, entries: [] });
 
     pump(first, pull, refresh);
     pump(first, pull, refresh);
