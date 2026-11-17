@@ -349,13 +349,13 @@ export const CreateWorkflow = Rpc.make("CreateWorkflow", {
   payload: { document: WorkflowDocument },
   success: WorkflowRecord,
   error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
-});
+}).annotate(Rpc.ParseOptions, { onExcessProperty: "error" });
 
 export const EditWorkflow = Rpc.make("EditWorkflow", {
   payload: { id: WorkflowId, edits: WorkflowEditBatch },
   success: WorkflowRecord,
   error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
-});
+}).annotate(Rpc.ParseOptions, { onExcessProperty: "error" });
 
 export const PublishWorkflow = Rpc.make("PublishWorkflow", {
   payload: { id: WorkflowId, revision: Schema.Int },
