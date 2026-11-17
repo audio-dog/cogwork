@@ -430,9 +430,11 @@ const action = (
 
 const slackItems = ["slack-message", "slack-conversation"];
 
-export const slackActionEntries = [
-  action("send-message", "Send a message", ["message"], [liveParameter("channel")], ["*"]),
-  action("reply-in-thread", "Reply in thread", ["reply"], [], slackItems),
-  action("add-reaction", "Add a reaction", [], [liveParameter("emoji")], slackItems),
-  action("draft-reply-in-slack", "Draft a reply in Slack", ["reply"], [], slackItems),
-] satisfies ReadonlyArray<WorkflowCatalogEntry>;
+export const slackActionRows = {
+  sendMessage: action("send-message", "Send a message", ["message"], [liveParameter("channel")], ["*"]),
+  replyInThread: action("reply-in-thread", "Reply in thread", ["reply"], [], slackItems),
+  addReaction: action("add-reaction", "Add a reaction", [], [liveParameter("emoji")], slackItems),
+  draftReply: action("draft-reply-in-slack", "Draft a reply in Slack", ["reply"], [], slackItems),
+} satisfies Record<string, WorkflowCatalogEntry>;
+
+export const slackActionEntries = Object.values(slackActionRows);

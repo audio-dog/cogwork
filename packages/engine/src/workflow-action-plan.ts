@@ -4,9 +4,7 @@ import {
   keyOf,
   matchWorkflowTransitions,
   type RunId,
-  SlackWriteKey,
   WorkflowActionArtifact,
-  WorkflowActionOrigin,
   WorkflowActionPlan,
   type WorkflowActionPlanArtifact,
   WorkflowActionPlanStep,
@@ -18,8 +16,6 @@ import {
   type WorkflowNodeId,
   type WorkflowOperation,
   type WorkflowParameterValue,
-  WorkflowSlackActionArtifact,
-  WorkItemRef,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -29,18 +25,13 @@ import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
-import { type SlackPostReceipt, SlackWrite, SlackWriteError } from "./slack-write";
+import { SlackWrite } from "./slack-write";
 import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import {
-  type ActionContext,
-  type ActionExecutor,
   decodeFailure,
   invalidTarget,
   type PullRequestSnapshot,
-  parameterValues,
-  stringInput,
-  type TargetProducer,
   WorkflowActionPlanDecodeError,
 } from "./workflow-action-entry";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
@@ -78,7 +69,6 @@ interface BuildInput {
   readonly pullRequestSnapshots?: ReadonlyArray<PullRequestSnapshot>;
 }
 
-const actionName = (entry: string) => entry.slice(entry.indexOf(".") + 1);
 const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArray<RegisteredWorkspace>) => {
   const selected =
     document.workspaces._tag === "Every"
@@ -102,53 +92,6 @@ const digestWorkflowActionPlan = Effect.fn("WorkflowActionPlan.digest")(function
 
 const cogworkTarget = Effect.succeed<WorkflowActionTarget>({ _tag: "Cogwork" });
 
-const decodeSlackTarget = Schema.decodeUnknownEffect(WorkflowActionTarget);
-
-const slackTarget = (target: unknown) =>
-  decodeSlackTarget(target).pipe(
-    Effect.mapError(() =>
-      WorkflowActionPlanDecodeError.make({ reason: "invalid", message: "The Slack target is invalid" }),
-    ),
-  );
-
-const slackItemTarget: TargetProducer = ({ admission }) =>
-  WorkItemRef.matchOrElse(
-    admission.event.key,
-    {
-      SlackMessage: ({ team, channel, ts, threadTs }) =>
-        slackTarget({
-          _tag: "SlackMessage",
-          team,
-          channel,
-          ts,
-          threadTs: threadTs ?? ts,
-        }),
-      SlackConversation: ({ team, channel, threadTs }) =>
-        slackTarget({
-          _tag: "SlackMessage",
-          team,
-          channel,
-          ts: threadTs,
-          threadTs,
-        }),
-    },
-    () => decodeFailure("The Slack action needs a Slack item"),
-  );
-
-const slackChannelTarget: TargetProducer = ({ parameters }) => {
-  const channel = parameters.find(({ id }) => id === "channel")?.value.trim();
-  return channel
-    ? slackTarget({ _tag: "SlackChannel", channel })
-    : decodeFailure("The Slack message action needs a channel");
-};
-
-const targetProducers = new Map<string, TargetProducer>([
-  ["send-message", slackChannelTarget],
-  ["reply-in-thread", slackItemTarget],
-  ["add-reaction", slackItemTarget],
-  ["draft-reply-in-slack", slackItemTarget],
-]);
-
 const targetFor = (
   entry: WorkflowCatalogEntry,
   input: BuildInput,
@@ -168,9 +111,7 @@ const targetFor = (
     runBranch: input.runBranch,
     pullRequestSnapshots: input.pullRequestSnapshots,
   };
-  const registered = actionEntryFor(entry.key);
-  if (registered) return registered.target(context);
-  return targetProducers.get(actionName(entry.key))?.(context) ?? cogworkTarget;
+  return actionEntryFor(entry.key)?.target(context) ?? cogworkTarget;
 };
 
 const inputsFor = Effect.fn("WorkflowActionPlan.inputsFor")(function* (
@@ -250,7 +191,7 @@ export const buildWorkflowActionPlan = Effect.fn("WorkflowActionPlan.build")(fun
 const targetWorkspace = (step: WorkflowActionPlanStep) => {
   const target = step.target;
   if (!WorkflowActionTarget.isAnyOf(["CurrentIssue", "ExistingIssue", "NewIssue"])(target)) return null;
-  const app = actionName(step.entry) === step.entry ? null : step.entry.slice(0, step.entry.indexOf("."));
+  const app = actionEntryFor(step.entry)?.row.system;
   const matchesApp = app === target.app && target.issueTracker.type === target.app;
   if (!matchesApp) return null;
   return {
@@ -270,73 +211,6 @@ const sourceTargetWorkspace = (
   const workspace = workspaces.find(({ config }) => config.name === target.workspace);
   const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
   return app === target.app ? (workspace ?? null) : null;
-};
-
-const slackInvalidTarget = (step: WorkflowActionPlanStep) =>
-  new SlackWriteError({
-    reason: "invalid",
-    retryable: false,
-    message: `Action ${step.entry} has an invalid target`,
-  });
-
-const requireSlackMessage = (step: WorkflowActionPlanStep) =>
-  WorkflowActionTarget.guards.SlackMessage(step.target)
-    ? Effect.succeed(step.target)
-    : Effect.fail(slackInvalidTarget(step));
-
-const requireSlackWriteKey = (step: WorkflowActionPlanStep) =>
-  Schema.decodeEffect(SlackWriteKey)(step.writeKey).pipe(Effect.mapError(() => slackInvalidTarget(step)));
-
-const slackArtifact = (context: ActionContext, receipt: SlackPostReceipt) =>
-  WorkflowSlackActionArtifact.make({
-    ...receipt,
-    origin: WorkflowActionOrigin.make({
-      item: context.plan.item,
-      workflow: context.plan.workflow,
-      attempt: context.plan.attempt,
-      writeKey: context.step.writeKey,
-      lineage: context.plan.lineage,
-    }),
-  });
-
-const actionExecutors: Record<string, ActionExecutor> = {
-  "send-message": Effect.fn("WorkflowActionPlan.sendSlackMessage")(function* (context: ActionContext) {
-    if (!WorkflowActionTarget.guards.SlackChannel(context.step.target)) {
-      return yield* slackInvalidTarget(context.step);
-    }
-    const writeKey = yield* requireSlackWriteKey(context.step);
-    const receipt = yield* context.slack.sendMessage(
-      context.step.target.channel,
-      stringInput(context.step, "message"),
-      writeKey,
-    );
-    return slackArtifact(context, receipt);
-  }),
-  "reply-in-thread": Effect.fn("WorkflowActionPlan.replyInSlackThread")(function* (context: ActionContext) {
-    const target = yield* requireSlackMessage(context.step);
-    const writeKey = yield* requireSlackWriteKey(context.step);
-    const receipt = yield* context.slack.replyInThread(target, stringInput(context.step, "reply"), writeKey);
-    return slackArtifact(context, receipt);
-  }),
-  "add-reaction": Effect.fn("WorkflowActionPlan.addSlackReaction")(function* (context: ActionContext) {
-    const target = yield* requireSlackMessage(context.step);
-    const emoji = parameterValues(context.step.parameters, "emoji").at(0);
-    if (!emoji) return yield* slackInvalidTarget(context.step);
-    yield* context.slack.addReaction(target, emoji);
-    return null;
-  }),
-  "draft-reply-in-slack": Effect.fn("WorkflowActionPlan.draftSlackReply")(function* (context: ActionContext) {
-    const target = yield* requireSlackMessage(context.step);
-    yield* context.slack.draftReply(target, stringInput(context.step, "reply"));
-    return null;
-  }),
-};
-
-const executorFor = (step: WorkflowActionPlanStep) => {
-  const registered = actionEntryFor(step.entry);
-  if (registered) return registered.execute;
-  const name = actionName(step.entry);
-  return Object.entries(actionExecutors).find(([candidate]) => candidate === name)?.[1];
 };
 
 const replaceStep = (
@@ -459,7 +333,7 @@ export const executeWorkflowActionPlan = Effect.fn("WorkflowActionPlan.execute")
     (state, step) =>
       Effect.gen(function* () {
         if (state.result !== null) return state;
-        const executor = executorFor(step);
+        const executor = actionEntryFor(step.entry)?.execute;
         if (!executor) {
           const error = invalidTarget(step);
           const plan = planForParking(
