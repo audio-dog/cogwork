@@ -20,12 +20,12 @@ import { Scheduler } from "./scheduler";
 import { emptyService, SourceControlProvider } from "./source-control";
 import { memoryLayer as workflowArtifactsLayer } from "./workflow-artifact-store";
 
-const workspaceName = Schema.decodeSync(WorkspaceId)("web");
+const workspaceId = Schema.decodeSync(WorkspaceId)("web");
 const workspace: RegisteredWorkspace = {
   source: "test",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    id: workspaceName,
+    id: workspaceId,
     displayName: "Test workspace",
     checkoutPath: "/repos/web",
     issueTracker: { type: "github" },

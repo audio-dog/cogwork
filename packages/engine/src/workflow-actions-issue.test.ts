@@ -150,7 +150,7 @@ describe("Issue Action entries", () => {
     it.effect(`freezes ${system} new and existing issue targets from the selected Workspace`, () =>
       Effect.gen(function* () {
         const workspace = workspaceFor(system);
-        const name = workspace.config.id;
+        const workspaceId = workspace.config.id;
         const targetOf = (action: string, selected: string, inputs: Record<string, string>) => {
           const entry = actionEntryFor(`${system}.${action}`);
           assert.isDefined(entry);
@@ -165,20 +165,23 @@ describe("Issue Action entries", () => {
           });
         };
         const frozen = {
-          workspace: name,
+          workspace: workspaceId,
           app: workspace.config.issueTracker.type,
           issueTracker: workspace.config.issueTracker,
           repository: null,
         };
 
-        assert.deepStrictEqual(yield* targetOf("create-issue", name, {}), { _tag: "NewIssue", ...frozen });
+        assert.deepStrictEqual(yield* targetOf("create-issue", workspaceId, {}), {
+          _tag: "NewIssue",
+          ...frozen,
+        });
         assert.deepStrictEqual(yield* targetOf("create-issue", "none", {}), { _tag: "NoWorkspace" });
         assert.deepStrictEqual(
-          yield* targetOf("comment-issue", name, { issue: `${name}:${existingIssue}` }),
+          yield* targetOf("comment-issue", workspaceId, { issue: `${workspaceId}:${existingIssue}` }),
           { _tag: "ExistingIssue", ...frozen, issue: existingIssue },
         );
         const otherWorkspace = yield* Effect.result(
-          targetOf("comment-issue", name, { issue: `other-repo:${existingIssue}` }),
+          targetOf("comment-issue", workspaceId, { issue: `other-repo:${existingIssue}` }),
         );
         assert.isTrue(Result.isFailure(otherWorkspace));
       }),
@@ -238,12 +241,12 @@ describe("Issue Action entries", () => {
           })),
         );
         assert.strictEqual(result._tag, "Complete");
-        const name = workspace.config.id;
+        const workspaceId = workspace.config.id;
         assert.deepStrictEqual(yield* Ref.get(calls), [
-          `comment ${name} ${item} Done ${plan.steps[0]?.writeKey}`,
-          `add ${name} ${item} ready`,
-          `remove ${name} ${item} triage`,
-          `close ${name} ${item}`,
+          `comment ${workspaceId} ${item} Done ${plan.steps[0]?.writeKey}`,
+          `add ${workspaceId} ${item} ready`,
+          `remove ${workspaceId} ${item} triage`,
+          `close ${workspaceId} ${item}`,
         ]);
       }).pipe(Effect.provide(requirements)),
     );

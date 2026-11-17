@@ -746,21 +746,21 @@ layer(NodeServices.layer)((it) => {
         setup: ["pnpm install"],
         linkPaths: [".env"],
       });
-      const invalidName = invalidChange.workspace.config.id;
+      const invalidId = invalidChange.workspace.config.id;
       yield* Effect.flatMap(
         SqlClient.SqlClient,
-        (sql) => sql`UPDATE workspaces SET mcp_skills = '{ not json' WHERE id = ${invalidName}`,
+        (sql) => sql`UPDATE workspaces SET mcp_skills = '{ not json' WHERE id = ${invalidId}`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
       yield* liveRegistry.refresh;
       const refreshedState = yield* liveRegistry.state;
       const [failure] = refreshedState.failures;
-      assert.strictEqual(failure?.id, invalidName);
+      assert.strictEqual(failure?.id, invalidId);
       assert.strictEqual(failure?.displayName, "invalid stored settings");
       assert.strictEqual(failure?.workspaceLimit, 3);
-      const liveIssueTracker = Registry.findWorkspaceIssueTracker(refreshedState, invalidName);
+      const liveIssueTracker = Registry.findWorkspaceIssueTracker(refreshedState, invalidId);
       assert.strictEqual(liveIssueTracker?.type, "github");
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(refreshedState, invalidName)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(refreshedState, invalidId)?.repository,
         "acme/repo",
       );
       assert.strictEqual(refreshedState.failures.length, 1);
@@ -777,10 +777,10 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(reloadedState.failures.length, 1);
       assert.strictEqual(reloadedState.failures[0]?.displayName, "invalid stored settings");
       assert.strictEqual(reloadedState.failures[0]?.workspaceLimit, 3);
-      const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloadedState, invalidName);
+      const reloadedIssueTracker = Registry.findWorkspaceIssueTracker(reloadedState, invalidId);
       assert.strictEqual(reloadedIssueTracker?.type, "github");
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(reloadedState, invalidName)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(reloadedState, invalidId)?.repository,
         "acme/repo",
       );
       assert.deepStrictEqual(

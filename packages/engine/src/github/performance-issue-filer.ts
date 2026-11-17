@@ -179,19 +179,19 @@ export const confirmPerformanceIssue = Effect.fn("github.confirmPerformanceIssue
 
 const resolvePerformanceIssueTarget = Effect.fn("github.resolvePerformanceIssueTarget")(function* (
   registry: WorkspaceRegistryService,
-  workspaceName: WorkspaceId | undefined,
+  workspaceId: WorkspaceId | undefined,
 ) {
-  if (!workspaceName) return yield* missingTarget("performance evidence workspace is not configured");
+  if (!workspaceId) return yield* missingTarget("performance evidence workspace is not configured");
   const state = yield* registry.state;
-  const workspace = state.workspaces.find((candidate) => candidate.config.id === workspaceName);
+  const workspace = state.workspaces.find((candidate) => candidate.config.id === workspaceId);
   if (!workspace)
-    return yield* retryableUnavailable(`performance evidence workspace ${workspaceName} is unavailable`);
+    return yield* retryableUnavailable(`performance evidence workspace ${workspaceId} is unavailable`);
   if (workspace.config.issueTracker.type !== "github" || !workspace.repository) {
-    return yield* missingTarget(`performance evidence workspace ${workspaceName} does not use GitHub issues`);
+    return yield* missingTarget(`performance evidence workspace ${workspaceId} does not use GitHub issues`);
   }
   const repo = repoRefFromRepository(workspace.repository);
   if (!repo)
-    return yield* missingTarget(`performance evidence workspace ${workspaceName} has no GitHub repository`);
+    return yield* missingTarget(`performance evidence workspace ${workspaceId} has no GitHub repository`);
   const connectionId = workspace.config.issueTracker.connectionId;
   return {
     ...repo,
@@ -324,12 +324,12 @@ const issueNumber = Effect.fn("github.performanceIssueNumber")(function* (id: Wo
 const host = (
   client: GitHubClientService,
   registry: WorkspaceRegistryService,
-  workspaceName: WorkspaceId | undefined,
+  workspaceId: WorkspaceId | undefined,
   pendingCreations: Ref.Ref<PendingCreations>,
 ) =>
   ({
     codec: wireCodec,
-    target: resolvePerformanceIssueTarget(registry, workspaceName).pipe(
+    target: resolvePerformanceIssueTarget(registry, workspaceId).pipe(
       Effect.map((repo) => targetForRepository(client, repo, pendingCreations, "authenticated-author")),
       Effect.tapError((error) =>
         issueTrackerErrorIsPermanent(error) ? Ref.set(pendingCreations, new Map()) : Effect.void,
@@ -337,13 +337,13 @@ const host = (
     ),
   }) satisfies PerformanceIssueFilerHost;
 
-export const layer = (workspaceName: WorkspaceId | undefined) =>
+export const layer = (workspaceId: WorkspaceId | undefined) =>
   Layer.effect(
     PerformanceIssueFiler,
     Effect.gen(function* () {
       const client = yield* GitHubClient;
       const registry = yield* WorkspaceRegistry;
       const pendingCreations = yield* Ref.make<PendingCreations>(new Map());
-      return yield* make(host(client, registry, workspaceName, pendingCreations));
+      return yield* make(host(client, registry, workspaceId, pendingCreations));
     }),
   );

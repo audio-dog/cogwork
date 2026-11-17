@@ -77,7 +77,7 @@ export interface WorkspaceOption {
   readonly label: string;
 }
 
-/** Register mints the WorkspaceId as a UUIDv7, so anything a person picks from needs the name. */
+/** Register mints the WorkspaceId as a UUIDv7, so anything a person picks from needs the display name. */
 export const registeredWorkspaceOptions = (board: Board): WorkspaceOption[] =>
   registeredStates(board)
     .map((state) => ({ id: state.id, label: state.displayName }))

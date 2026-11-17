@@ -78,24 +78,24 @@ class CreateIssueCalls extends Context.Service<CreateIssueCalls, Ref.Ref<number>
   static readonly layer = Layer.effect(CreateIssueCalls, Ref.make(0));
 }
 
-const performanceWorkspaceName = decodeWorkspaceId("performance");
+const performanceWorkspaceId = decodeWorkspaceId("performance");
 const performanceWorkspace: RegisteredWorkspace = {
   source: "control-store:performance",
   repository: "colonylabs/cogwork",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    id: performanceWorkspaceName,
+    id: performanceWorkspaceId,
     displayName: "Test workspace",
     checkoutPath: "/repos/cogwork",
     issueTracker: { type: "github" },
   }),
 };
-const linearPerformanceWorkspaceName = decodeWorkspaceId("linear-performance");
+const linearPerformanceWorkspaceId = decodeWorkspaceId("linear-performance");
 const linearPerformanceWorkspace: RegisteredWorkspace = {
   ...performanceWorkspace,
   repository: "colonylabs/cogwork",
   config: Schema.decodeSync(WorkspaceConfig)({
-    id: linearPerformanceWorkspaceName,
+    id: linearPerformanceWorkspaceId,
     displayName: "Test workspace",
     checkoutPath: "/repos/linear-performance",
     issueTracker: { type: "linear", teams: ["CGW"] },
@@ -103,8 +103,8 @@ const linearPerformanceWorkspace: RegisteredWorkspace = {
 };
 
 const unexpectedClientCall = () => Effect.die("unexpected GitHub client call");
-const filerLayer = (workspaceName: WorkspaceId | undefined, workspaces: ReadonlyArray<RegisteredWorkspace>) =>
-  layer(workspaceName).pipe(
+const filerLayer = (workspaceId: WorkspaceId | undefined, workspaces: ReadonlyArray<RegisteredWorkspace>) =>
+  layer(workspaceId).pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.mock(GitHubClient, {}),
@@ -332,7 +332,7 @@ it.effect("retries creation after a transient failure that did not report accept
     assert.strictEqual(yield* Ref.get(calls), 2);
   }).pipe(
     Effect.provide(
-      layer(performanceWorkspaceName).pipe(
+      layer(performanceWorkspaceId).pipe(
         Layer.provideMerge(
           Layer.mergeAll(
             Layer.effect(
@@ -407,7 +407,7 @@ it.effect("keeps an unregistered performance workspace retryable", () =>
 
     assert.strictEqual(error.reason, "unavailable");
     assert.isTrue(error.retryable);
-  }).pipe(Effect.provide(filerLayer(performanceWorkspaceName, []))),
+  }).pipe(Effect.provide(filerLayer(performanceWorkspaceId, []))),
 );
 
 it.effect("rejects a missing performance workspace configuration permanently", () =>
@@ -430,7 +430,7 @@ it.effect("rejects a non-GitHub performance workspace permanently", () =>
     assert.isFalse(error.retryable ?? true);
     assert.strictEqual(
       error.message,
-      `performance evidence workspace ${linearPerformanceWorkspaceName} does not use GitHub issues`,
+      `performance evidence workspace ${linearPerformanceWorkspaceId} does not use GitHub issues`,
     );
-  }).pipe(Effect.provide(filerLayer(linearPerformanceWorkspaceName, [linearPerformanceWorkspace]))),
+  }).pipe(Effect.provide(filerLayer(linearPerformanceWorkspaceId, [linearPerformanceWorkspace]))),
 );

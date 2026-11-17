@@ -12,17 +12,17 @@ import type { RegisteredWorkspace } from "./projector";
 const id = Schema.decodeSync(WorkItemId);
 
 const workspaceOf = (
-  name: string,
+  workspaceId: string,
   issueTracker: (typeof WorkspaceConfig.Encoded)["issueTracker"],
   repository?: string,
 ): RegisteredWorkspace => ({
-  source: `${name}.workspace.ts`,
+  source: `${workspaceId}.workspace.ts`,
   contributions: [],
   ...(repository ? { repository } : {}),
   config: Schema.decodeSync(WorkspaceConfig)({
-    id: name,
-    displayName: name,
-    checkoutPath: `/repos/${name}`,
+    id: workspaceId,
+    displayName: workspaceId,
+    checkoutPath: `/repos/${workspaceId}`,
     issueTracker,
   }),
 });

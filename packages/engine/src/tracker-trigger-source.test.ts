@@ -23,15 +23,15 @@ import type { WorkflowArtifactStoreService } from "./workflow-artifact-store";
 const workspaceId = Schema.decodeSync(WorkspaceId)("github-workspace");
 const linearWorkspaceId = Schema.decodeSync(WorkspaceId)("linear-workspace");
 const registered = (
-  name: WorkspaceId,
+  id: WorkspaceId,
   issueTracker: (typeof WorkspaceConfig.Encoded)["issueTracker"],
 ): RegisteredWorkspace => ({
   source: "test",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    id: name,
-    displayName: name,
-    checkoutPath: `/repos/${name}`,
+    id,
+    displayName: id,
+    checkoutPath: `/repos/${id}`,
     issueTracker,
   }),
 });
