@@ -77,7 +77,7 @@ const safeWorktreeBranch = (branch: string) =>
   branch.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 
 const remoteOf = (config?: WorktreeSettings) => config?.remote ?? "origin";
-const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main";
+export const baseBranchOf = (config?: WorktreeSettings) => config?.baseBranch ?? "main";
 
 const linkPathsFor = (config?: WorktreeSettings) => [...new Set(config?.linkPaths ?? [])];
 

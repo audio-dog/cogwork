@@ -8,6 +8,7 @@ import {
   keyOf,
   LineageId,
   localOwnerId,
+  NeedIdentity,
   type ParkReason,
   ParkRecord,
   Principal,
@@ -2934,26 +2935,62 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("declines before creating a Run when Harness preflight fails", () =>
-    Effect.gen(function* () {
-      const { runner, coordination } = yield* testProgram([], {
-        preflight: () =>
-          Effect.fail(
-            new HarnessError({
-              reason: "credential",
-              retryable: true,
-              message: "Harness unavailable",
-            }),
-          ),
-        run: () => Stream.die("unexpected Harness run"),
-      });
-      yield* runner.execute(admission);
+  const documentWithOperation = (change: Partial<WorkflowDocument["operations"][number]>) =>
+    WorkflowDocument.make({
+      ...document,
+      operations: document.operations.map((candidate) => ({ ...candidate, ...change })),
+    });
+  const unreadyCases = [
+    {
+      name: "no Harness can be selected",
+      preflight: () => Effect.void,
+      service: {
+        ...workflowServiceWith(documentWithOperation({ model: { harness: null, model: null, options: [] } })),
+        catalog: workflowService.catalog.pipe(
+          Effect.map((result) => ({ ...result, machine: { ...result.machine, defaultHarness: null } })),
+        ),
+      },
+    },
+    {
+      name: "Harness preflight fails",
+      preflight: () =>
+        Effect.fail(
+          new HarnessError({
+            reason: "credential",
+            retryable: true,
+            message: "Harness unavailable",
+          }),
+        ),
+      service: workflowService,
+    },
+    {
+      name: "a required connection is not ready",
+      preflight: () => Effect.void,
+      service: workflowServiceWith(
+        documentWithOperation({ requires: [NeedIdentity.make("connection:github")] }),
+      ),
+    },
+  ] as const;
 
-      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
-      assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "MissingOperation");
-      assert.isNull(yield* Ref.get(coordination.processed));
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
+  unreadyCases.forEach(({ name, preflight, service }) => {
+    it.effect(`declines without a park when ${name}`, () =>
+      Effect.gen(function* () {
+        const { runner, coordination } = yield* testProgram(
+          [],
+          { preflight, run: () => Stream.die("unexpected Harness run") },
+          service,
+        );
+
+        assert.strictEqual(yield* runner.execute(admission), "waiting");
+        assert.deepStrictEqual(yield* Ref.get(coordination.parks), []);
+        assert.isNull(yield* Ref.get(coordination.processed));
+        assert.strictEqual(
+          (yield* coordination.service.read(admission.event.key)).gate({ workflow, operation })._tag,
+          "Open",
+        );
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+    );
+  });
 
   it.effect("records a failed terminal event when a Workflow Run times out", () =>
     Effect.gen(function* () {

@@ -24,15 +24,15 @@ import type {
 import type { TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import type { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import type { WorkflowNotifications } from "./workflow-notification";
-import type { WorktreeManager } from "./worktree";
+import type { WorktreeManager, WorktreeManagerService } from "./worktree";
 
 export class WorkflowActionPlanDecodeError extends Schema.TaggedError<WorkflowActionPlanDecodeError>()(
   "WorkflowActionPlanDecodeError",
-  { message: Schema.String },
+  { reason: Schema.Literals(["invalid", "declined", "unavailable"]), message: Schema.String },
 ) {}
 
 export const decodeFailure = (message: string) =>
-  Effect.fail(WorkflowActionPlanDecodeError.make({ message }));
+  Effect.fail(WorkflowActionPlanDecodeError.make({ reason: "invalid", message }));
 
 export interface PullRequestSnapshot {
   readonly workspace: string;
@@ -47,6 +47,8 @@ export interface TargetContext {
   readonly parameters: ReadonlyArray<WorkflowParameterValue>;
   readonly workspace: string | undefined;
   readonly sourceControl: SourceControlProviderService | undefined;
+  readonly worktrees?: WorktreeManagerService;
+  readonly runBranch?: string;
   readonly pullRequestSnapshots?: ReadonlyArray<PullRequestSnapshot>;
 }
 
