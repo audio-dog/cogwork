@@ -414,15 +414,6 @@ export const make = Effect.gen(function* () {
     return true;
   });
 
-  const decline = (admission: TriggerAdmission) =>
-    coordination
-      .park(
-        admission.event.key,
-        { _tag: "MissingOperation" },
-        operationKeyOf(admission, admission.subscription.operation),
-      )
-      .pipe(Effect.map(() => "skipped" as const));
-
   const skipNoLongerMatching = Effect.fn("WorkflowRun.skipNoLongerMatching")(function* (
     admission: TriggerAdmission,
     reason: string,
@@ -591,12 +582,12 @@ export const make = Effect.gen(function* () {
     const hasMissingNeed = operation.requires.some(
       (need) => !catalogResult.machine.readyNeeds.includes(need),
     );
-    if (selectedHarness === null || hasMissingNeed) return yield* decline(admission);
+    if (selectedHarness === null || hasMissingNeed) return "waiting" as const;
     const options = Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value]));
     const preflight = yield* Effect.result(
       harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
     );
-    if (Result.isFailure(preflight)) return yield* decline(admission);
+    if (Result.isFailure(preflight)) return "waiting" as const;
     const projectsTools = harness.projectedMembers(selectedHarness).includes("Tools");
 
     const claim =
