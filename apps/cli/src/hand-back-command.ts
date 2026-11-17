@@ -8,15 +8,15 @@ import {
   WorkspaceId,
 } from "@cogwork/contracts";
 import * as Console from "effect/Console";
+import * as Argument from "effect/cli/Argument";
+import * as CliError from "effect/cli/CliError";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as RpcClient from "effect/rpc/RpcClient";
+import type { RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
-import * as Argument from "effect/unstable/cli/Argument";
-import * as CliError from "effect/unstable/cli/CliError";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { defaultSocketPath } from "./paths";
 import { clientLayer } from "./rpc";
 import { terminalLine } from "./terminal-text";
@@ -74,14 +74,14 @@ const runHandBack = Effect.fn("handBack.run")(
   (effect, options) => effect.pipe(Effect.scoped, Effect.provide(clientLayer(options.socket))),
 );
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
 
-const itemArgument = Argument.string("item").pipe(Argument.withDescription("Parked work item to hand back"));
+const itemArgument = Argument.String("item").pipe(Argument.withDescription("Parked work item to hand back"));
 
-const noteFlag = Flag.string("note").pipe(
+const noteFlag = Flag.String("note").pipe(
   Flag.withDescription("Optional note to add to the work item"),
   Flag.optional,
 );

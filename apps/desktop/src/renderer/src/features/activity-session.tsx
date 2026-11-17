@@ -15,7 +15,7 @@ import {
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomSubscribe } from "@effect/atom-react";
 import * as Data from "effect/Data";
-import type * as Atom from "effect/unstable/reactivity/Atom";
+import type * as Atom from "effect/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
 import { daemonEventAtom } from "../daemon/atoms";
 import { recordDaemonEventsApplied } from "../daemon/process-health";
@@ -135,7 +135,7 @@ export const runStatusSeverity: Record<RunStatus, ActivitySeverity> = {
 
 const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): ActivityRow | null => {
   const atMillis = stamp(event, arrival);
-  return DaemonEvent.match<ActivityRow | null>(event, {
+  return DaemonEvent.match(event, {
     SeedEnd: () => null,
     RunActivity: () => null,
     ControlStoreChanged: () => null,
@@ -144,7 +144,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
     HarnessesChanged: () => null,
     WorkflowChanged: () => null,
     WorkflowDeleted: () => null,
-    ItemChanged: ({ item, workspace }) => {
+    ItemChanged: ({ item, workspace }): ActivityRow => {
       return {
         id: rowId(ordinal),
         kind: "item",
@@ -157,7 +157,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
         lowSignal: false,
       };
     },
-    ItemRemoved: ({ workspace, id }) => ({
+    ItemRemoved: ({ workspace, id }): ActivityRow => ({
       id: rowId(ordinal),
       kind: "item-removed",
       atMillis,
@@ -168,7 +168,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       raw: pretty({ workspace, id }),
       lowSignal: true,
     }),
-    RunChanged: ({ run }) => ({
+    RunChanged: ({ run }): ActivityRow => ({
       id: rowId(ordinal),
       kind: "run",
       atMillis,
@@ -179,7 +179,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       raw: pretty(run),
       lowSignal: false,
     }),
-    WorkspaceRemoved: ({ workspace }) => ({
+    WorkspaceRemoved: ({ workspace }): ActivityRow => ({
       id: rowId(ordinal),
       kind: "workspace",
       atMillis,
@@ -190,13 +190,13 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       raw: pretty({ workspace }),
       lowSignal: false,
     }),
-    WorkspaceChanged: ({ workspace }) => {
-      const change = WorkspaceState.match<Pick<ActivityRow, "summary" | "severity">>(workspace, {
-        Failed: ({ source, message }) => ({
+    WorkspaceChanged: ({ workspace }): ActivityRow => {
+      const change = WorkspaceState.match(workspace, {
+        Failed: ({ source, message }): Pick<ActivityRow, "summary" | "severity"> => ({
           summary: `${source} failed · ${message}`,
           severity: "error",
         }),
-        Registered: ({ name, issueTracker }) => ({
+        Registered: ({ name, issueTracker }): Pick<ActivityRow, "summary" | "severity"> => ({
           summary: `${name} registered · ${issueTracker}`,
           severity: "info",
         }),
@@ -212,7 +212,7 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
         lowSignal: false,
       };
     },
-    SchedulerChanged: ({ scheduler }) => {
+    SchedulerChanged: ({ scheduler }): ActivityRow => {
       const paused = scheduler.scheduling === "paused";
       return {
         id: rowId(ordinal),

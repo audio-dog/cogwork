@@ -21,11 +21,11 @@ import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
-import * as ChildProcess from "effect/unstable/process/ChildProcess";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { afterEach, vi } from "vitest";
 import {
   bootControlStoreLayer,

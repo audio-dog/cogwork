@@ -43,7 +43,7 @@ import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import lockfile, { type LockOptions } from "proper-lockfile";
 import * as controlStoreSchema from "./control-store-schema";
 

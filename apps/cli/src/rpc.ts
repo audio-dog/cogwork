@@ -19,14 +19,14 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
+import * as RpcClient from "effect/rpc/RpcClient";
+import { type FromClientEncoded, type FromServerEncoded, RequestId } from "effect/rpc/RpcMessage";
+import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
+import * as RpcServer from "effect/rpc/RpcServer";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+import * as SocketServer from "effect/socket/SocketServer";
 import * as Tuple from "effect/Tuple";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import { type FromClientEncoded, type FromServerEncoded, RequestId } from "effect/unstable/rpc/RpcMessage";
-import * as RpcMiddleware from "effect/unstable/rpc/RpcMiddleware";
-import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { layer as credentialsLayer } from "./credentials";
 import { granolaLoginLayer } from "./granola-login";
 import { layer as ledgerLayer } from "./ledger";
@@ -100,7 +100,7 @@ const standardHarnessRunners = [
   codexRunner({ name: codexName }),
 ];
 
-export const harnessRunners = Config.option(Config.string("COGWORK_REPLAY_FIXTURE")).pipe(
+export const harnessRunners = Config.option(Config.String("COGWORK_REPLAY_FIXTURE")).pipe(
   Effect.flatMap((fixturePath) =>
     Effect.forEach(Option.toArray(fixturePath), (path) =>
       Replay.replayRunner({ name: replayName, fixturePath: Effect.succeed(path) }),

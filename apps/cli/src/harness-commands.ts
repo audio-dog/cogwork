@@ -1,24 +1,24 @@
 import { type ControlStore, HarnessName, type HarnessReadiness } from "@cogwork/contracts";
 import { readControlStore } from "@cogwork/engine";
 import * as Console from "effect/Console";
+import * as Argument from "effect/cli/Argument";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as Argument from "effect/unstable/cli/Argument";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
 import { daemonOrStore } from "./commands";
 import { defaultControlStorePath, defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
-const controlStoreFlag = Flag.string("control-store").pipe(
+const controlStoreFlag = Flag.String("control-store").pipe(
   Flag.withDescription("Path to the machine-local Control store"),
   Flag.withDefault(defaultControlStorePath),
 );
-const harnessArgument = Argument.string("harness");
+const harnessArgument = Argument.String("harness");
 const decodeHarness = Schema.decodeUnknownEffect(HarnessName);
 const enablementLabel = (enabled: boolean) => (enabled ? "enabled" : "disabled");
 const provideClient = (socket: string) => Effect.provide(clientLayer(socket));

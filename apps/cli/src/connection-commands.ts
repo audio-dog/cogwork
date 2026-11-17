@@ -7,34 +7,34 @@ import {
   type ConnectionSystem as ConnectionSystemType,
 } from "@cogwork/contracts";
 import * as Console from "effect/Console";
+import * as Argument from "effect/cli/Argument";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Argument from "effect/unstable/cli/Argument";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
 import { defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
-const envFlag = Flag.string("env").pipe(
+const envFlag = Flag.String("env").pipe(
   Flag.withDescription("Environment variable containing the token"),
   Flag.optional,
 );
-const storedFlag = Flag.boolean("stored").pipe(
+const storedFlag = Flag.Boolean("stored").pipe(
   Flag.withDescription("Use an existing stored browser-login credential"),
 );
-const githubCliFlag = Flag.boolean("github-cli").pipe(
+const githubCliFlag = Flag.Boolean("github-cli").pipe(
   Flag.withDescription("Use the login saved by gh auth login"),
 );
-const systemArgument = Argument.string("system");
-const accountArgument = Argument.string("account").pipe(Argument.optional);
-const connectionIdArgument = Argument.string("connection-id");
+const systemArgument = Argument.String("system");
+const accountArgument = Argument.String("account").pipe(Argument.optional);
+const connectionIdArgument = Argument.String("connection-id");
 const decodeSystem = Schema.decodeUnknownEffect(ConnectionSystem);
 const decodeConnectionId = Schema.decodeUnknownEffect(ConnectionId);
 const storedLoginSystems = new Set<ConnectionSystemType>(["linear", "granola"]);

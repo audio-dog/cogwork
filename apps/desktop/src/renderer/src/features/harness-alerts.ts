@@ -24,15 +24,19 @@ interface HarnessProblem {
 }
 
 const harnessProblem = (label: string) =>
-  HarnessState.match<HarnessProblem | null>({
+  HarnessState.match({
     Ready: () => null,
-    NotSignedIn: ({ signIn }) => ({
+    NotSignedIn: ({ signIn }): HarnessProblem => ({
       problem: "is not signed in",
       signIn: signIn?.command ?? null,
       detail: signIn ? null : `Sign in with the ${label} CLI.`,
     }),
-    NotInstalled: ({ diagnostic }) => ({ problem: "is not installed", signIn: null, detail: diagnostic }),
-    UnsupportedVersion: ({ requirement }) => ({
+    NotInstalled: ({ diagnostic }): HarnessProblem => ({
+      problem: "is not installed",
+      signIn: null,
+      detail: diagnostic,
+    }),
+    UnsupportedVersion: ({ requirement }): HarnessProblem => ({
       problem: "version is not supported",
       signIn: null,
       detail: requirement ? `Needs ${requirement}` : null,
