@@ -1,0 +1,37 @@
+packages/engine/src/slack-write.ts
+  s_9ba8732dc41b4c::t_7dcbfd521a1d85 433-440
+packages/engine/src/workflow-action-registry.ts
+  s_9ba8732dc41b4c::t_dca0d6e89b32ae 4,9-11
+packages/engine/src/workflow-catalog.ts
+  s_9ba8732dc41b4c::t_30cbca47f35887 46
+packages/engine/src/workflow-actions-slack.test.ts
+  s_9ba8732dc41b4c::t_f8432a31dc5ee5 1-94
+  s_9ba8732dc41b4c::t_637a1578d03703 95-115
+packages/engine/src/workflow-actions-slack.ts
+  s_9ba8732dc41b4c::t_38218c97d1c18d 1-138
+  s_9ba8732dc41b4c::t_044848ab4d3d71 139-142
+packages/engine/src/workflow-action-plan.ts
+  s_9ba8732dc41b4c::t_eb3fd3962d0f54 28,114,194,336
+packages/engine/src/workflow-actions-issue.ts
+  s_9ba8732dc41b4c::t_afeb923c28c1de 19,225,231,249,256,258,260,262-263
+packages/engine/src/workflow-run.ts
+  s_9ba8732dc41b4c::t_74c3b173293bae 71,93,97-103,563-565
+packages/engine/src/workflow.test.ts
+  s_9ba8732dc41b4c::t_6e62fa6612b0ba 44,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1211ee367c68e265a655d0113564aa6ed267a5c",
+  "prompts": {},
+  "sessions": {
+    "s_9ba8732dc41b4c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b5d128e4-67ef-425d-b4c0-b35274636bb4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
