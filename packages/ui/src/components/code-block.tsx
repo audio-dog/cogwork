@@ -3,6 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
 import * as React from "react";
 import { Button } from "#components/button";
+import { highlightLines } from "#lib/highlighter";
 
 const codeBlockVariants = cva(
   "group/code-block relative flex w-full min-w-0 flex-col overflow-hidden rounded-lg text-sm has-[>[data-slot=code-block-content]:focus-visible]:ring-3 has-[>[data-slot=code-block-content]:focus-visible]:ring-ring/50 data-[size=sm]:text-xs",
@@ -86,15 +87,6 @@ function CodeBlockCopyButton({
 }: React.ComponentProps<typeof Button> & { value: string }) {
   const [copied, setCopied] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!copied) {
-      return;
-    }
-
-    const timeout = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(timeout);
-  }, [copied]);
-
   return (
     <>
       <Button
@@ -111,6 +103,8 @@ function CodeBlockCopyButton({
             .then(() => setCopied(true))
             .catch(() => {});
         }}
+        onPointerLeave={() => setCopied(false)}
+        onBlur={() => setCopied(false)}
         {...props}
       >
         {copied ? <RiCheckLine /> : <RiFileCopyLine />}
@@ -141,7 +135,6 @@ function CodeBlockContent({
       data-wrap={wrap || undefined}
       data-numbered={lineNumbers || undefined}
       dir="ltr"
-      tabIndex={0}
       style={{ counterReset: `line ${startLine - 1}`, ...style }}
       className={cn(
         "min-h-0 min-w-0 scroll-fade-x scrollbar-thin overflow-auto px-3 py-3 text-start font-mono leading-relaxed outline-none group-has-data-[slot=code-block-footer]/code-block:pb-2 group-has-data-[slot=code-block-header]/code-block:pt-2 group-data-[size=sm]/code-block:px-2.5 group-data-[size=sm]/code-block:py-2.5 group-data-[size=sm]/code-block:group-has-data-[slot=code-block-header]/code-block:pt-1.5 data-wrap:scroll-fade-y data-wrap:wrap-break-word data-wrap:whitespace-pre-wrap",
@@ -208,6 +201,30 @@ function CodeBlockLine({
   );
 }
 
+function CodeBlockHighlight({
+  code,
+  lang,
+  ...props
+}: Omit<React.ComponentProps<typeof CodeBlockContent>, "children"> & { code: string; lang: string }) {
+  return (
+    <CodeBlockContent {...props}>
+      {highlightLines(code, lang).map((tokens, index) => (
+        <CodeBlockLine key={index}>
+          {tokens.map((token, tokenIndex) =>
+            token.className ? (
+              <span key={tokenIndex} className={cn("th-token", `th-${token.className}`)}>
+                {token.value}
+              </span>
+            ) : (
+              token.value
+            ),
+          )}
+        </CodeBlockLine>
+      ))}
+    </CodeBlockContent>
+  );
+}
+
 function CodeBlockFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -228,6 +245,7 @@ export {
   CodeBlockCopyButton,
   CodeBlockFooter,
   CodeBlockHeader,
+  CodeBlockHighlight,
   CodeBlockLine,
   CodeBlockTitle,
 };
