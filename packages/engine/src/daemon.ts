@@ -558,6 +558,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         harnessRuntime,
         issueTracker,
         registry,
+        plugins,
         runLedger,
         runRecorder,
         workflowActionPlans,
