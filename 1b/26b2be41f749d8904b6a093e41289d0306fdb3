@@ -1,0 +1,40 @@
+packages/engine/src/external-harness-runtime.ts
+  s_6629b555f28f13::t_22faa7065bd153 726-729
+packages/engine/src/provider-runner.ts
+  s_6629b555f28f13::t_598e5a55aa4cdc 271
+packages/engine/src/subagent-runner.test.ts
+  s_6629b555f28f13::t_2a408349525bc0 3,5,28,76-85,87,89-93,95-102
+  s_6629b555f28f13::t_05b4052a3944f4 103-113
+packages/engine/src/subagent-runner.ts
+  s_6629b555f28f13::t_1900e7c8937814 25
+  s_6629b555f28f13::t_cb6de79a2a4301 117
+  s_6629b555f28f13::t_8ed544fb929127 152
+  s_6629b555f28f13::t_24ec9c2313e366 91
+  s_6629b555f28f13::t_5089e13b1e8070 56-59
+  s_6629b555f28f13::t_ba731050adf5ea 168
+  s_6629b555f28f13::t_623564bd865270 60
+packages/claude-code/src/model.ts
+  s_6629b555f28f13::t_3157cb46b356a3 6,10-13
+packages/codex-cli/src/model.ts
+  s_6629b555f28f13::t_fce18490bb8839 1,4-7
+packages/engine/src/provider-adapter.ts
+  s_6629b555f28f13::t_2984656efa23b7 26-28
+packages/engine/src/provider-runner.test.ts
+  s_6629b555f28f13::t_bec8c6ffc432fa 634-635,649-652
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1b26b2be41f749d8904b6a093e41289d0306fdb3",
+  "prompts": {},
+  "sessions": {
+    "s_6629b555f28f13": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7d752a1e-ec49-4f38-b95f-55415b8905c1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
