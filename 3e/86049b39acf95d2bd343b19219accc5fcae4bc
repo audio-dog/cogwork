@@ -1,0 +1,57 @@
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_a8b6f1d74fc5f5::t_97b23d9a9a4953 26
+  s_a9a13cff7d0e2d::t_f715115d3056ea 21
+  s_a9a13cff7d0e2d::t_da18401fedec36 85,87-93,98-104
+  s_a9a13cff7d0e2d::t_67b0e5d0cbd85d 94-97
+  s_a9a13cff7d0e2d::t_b9b9c66f008a1a 22
+  s_a9a13cff7d0e2d::t_62959915e6d7e3 86,105-121,123-126
+  s_a8b6f1d74fc5f5::t_cd5fc6d16288ea 2,5-12,23,25,29,38-53,61,64-65,69-70,76-84,127,129,192-208,213-227,229-234
+  s_a9a13cff7d0e2d::t_faffd5268e1bbd 62
+  s_a8b6f1d74fc5f5::t_8f0733ea0ef849 66-68,71-75
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_a8b6f1d74fc5f5::t_1c547f66ac10b8 16
+  s_a8b6f1d74fc5f5::t_23cc479ce3af18 32,63
+  s_a8b6f1d74fc5f5::t_9d2a5d6085d80c 43,47
+  s_a8b6f1d74fc5f5::t_64ec95244de481 14
+  s_a8b6f1d74fc5f5::t_a99815664f60dc 710-721
+  s_a8b6f1d74fc5f5::t_09802b1834061f 35-42,44-46,48-62
+  s_a8b6f1d74fc5f5::t_ceee0164888bbb 651,658-659
+  s_a8b6f1d74fc5f5::t_c83d731a4b9d0d 31
+  s_a8b6f1d74fc5f5::t_ba6b7f896ea557 622,643,645-650,652-657,660-663,666-709
+  s_a8b6f1d74fc5f5::t_f19318c406fe13 27
+apps/desktop/src/renderer/src/features/workflow-transfer.ts
+  s_a8b6f1d74fc5f5::t_076476032df25b 17-19,21
+  s_a8b6f1d74fc5f5::t_a15300b408cc55 10-11
+  s_a8b6f1d74fc5f5::t_16f5a799c77fb6 6
+  s_a8b6f1d74fc5f5::t_326a2c5a06bd03 1-5,7-9,12-16,20,22-36
+apps/desktop/src/renderer/src/features/workflow-transfer.test.ts
+  s_a8b6f1d74fc5f5::t_70c8f7d2a3b6be 1-4,6-34,46-59,61-68,70-74
+  s_a8b6f1d74fc5f5::t_dbe65eae058976 69
+  s_a8b6f1d74fc5f5::t_3784d335c01b57 60
+  s_a8b6f1d74fc5f5::t_bcf83cf03a5ecb 35-45
+  s_a8b6f1d74fc5f5::t_9c4ad070a8bfd2 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3e86049b39acf95d2bd343b19219accc5fcae4bc",
+  "prompts": {},
+  "sessions": {
+    "s_a8b6f1d74fc5f5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bafe922c-6bc9-4498-8db9-4be9332c87dc",
+        "model": "auto-smart"
+      },
+      "human_author": "David Simoneau <david.simoneau@scribehow.com>"
+    },
+    "s_a9a13cff7d0e2d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1530e4d6-4891-465b-8f44-2d2d5624d237",
+        "model": "auto-smart"
+      },
+      "human_author": "David Simoneau <david.simoneau@scribehow.com>"
+    }
+  }
+}
