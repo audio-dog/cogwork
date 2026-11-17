@@ -2,8 +2,11 @@ import {
   type AgUiEvent,
   agUiIsFileDiffUnavailableEvent,
   agUiTextDelta,
+  agUiUsage,
   HarnessName,
+  type ModelLevel,
   RunPlan,
+  RunPlanSubagent,
   SessionId,
 } from "@cogwork/contracts";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
@@ -14,6 +17,7 @@ import {
   InMemoryRunStore,
   type ModelMessage,
   type StreamChunk,
+  type TextOptions,
   toolDefinition,
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
@@ -53,6 +57,7 @@ import {
   type RunChatOptions,
 } from "./provider-runner";
 import { SessionStore, type SessionStoreService } from "./session-store";
+import { hasToolResults, scriptedAdapter, subagentCallTurn, textTurn } from "./testing/scripted-adapter";
 import { isPolicyDenied } from "./tools";
 
 const SECRET = "sk-super-secret-value";
@@ -175,6 +180,7 @@ interface RequestOverrides {
   readonly session?: HarnessRequest["session"];
   readonly operation?: string;
   readonly model?: string;
+  readonly subagents?: ReadonlyArray<RunPlanSubagent>;
 }
 
 const request = (overrides: RequestOverrides): HarnessRequest => {
@@ -195,7 +201,7 @@ const request = (overrides: RequestOverrides): HarnessRequest => {
       tools: ["read", "write", "edit", "bash", "glob", "grep", "webfetch"],
       skills: [],
       mcp: [],
-      subagents: [],
+      subagents: overrides.subagents ?? [],
       hooks: [],
       middleware: ["persistence", "instruction-context"],
       structuredOutput,
@@ -596,6 +602,60 @@ describe("providerRunner", { timeout: 30_000 }, () => {
       );
       assert.isTrue(events.some((event) => event.type === "TEXT_MESSAGE_CONTENT"));
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+    }),
+  );
+
+  it.live("runs a light Subagent on the provider's light model and a standard one on the parent model", () =>
+    Effect.gen(function* () {
+      const checkoutPath = yield* scratchCheckout();
+      const subagent = (name: string, modelLevel: ModelLevel) =>
+        RunPlanSubagent.cases.Available.make({
+          identity: `local:repo/${name}`,
+          name,
+          source: `.agents/agents/${name}.md`,
+          description: `The ${name} Subagent`,
+          tools: [],
+          modelLevel,
+          prompt: `You are the ${name}.`,
+        });
+      const lightCalls: Array<TextOptions> = [];
+      const parentCalls: Array<TextOptions> = [];
+      const parentTurn = (options: TextOptions) => {
+        if (options.systemPrompts?.includes("You are the scout.")) return textTurn("scout done", 5);
+        if (hasToolResults(options)) return textTurn('{"outcome":"done"}', 1);
+        return subagentCallTurn(
+          [
+            { id: "call-reviewer", agent: "reviewer", task: "Review the diff." },
+            { id: "call-scout", agent: "scout", task: "Find the seam." },
+          ],
+          1,
+        );
+      };
+      const models: Array<string> = [];
+      const makeAdapter: ModelAdapterFactory = ({ model }) => {
+        models.push(model);
+        return model === "gpt-6-luna"
+          ? scriptedAdapter(model, () => textTurn("review done", 5), lightCalls)
+          : scriptedAdapter(model, parentTurn, parentCalls);
+      };
+      const runner = providerRunner({ name: harnessName, makeAdapter });
+
+      const events = yield* Stream.runCollect(
+        runner.run(
+          request({
+            checkoutPath,
+            subagents: [subagent("reviewer", "light"), subagent("scout", "standard")],
+          }),
+        ),
+      ).pipe(Effect.provide(providerRunnerLayer()));
+
+      assert.deepStrictEqual(models, ["gpt-4o", "gpt-6-luna"]);
+      assert.deepStrictEqual(lightCalls[0]?.systemPrompts, ["You are the reviewer."]);
+      assert.deepStrictEqual(lightCalls[0]?.messages.at(-1), { role: "user", content: "Review the diff." });
+      assert.isTrue(parentCalls.some((options) => options.messages.at(-1)?.content === "Find the seam."));
+      assert.isFalse(events.some((event) => agUiTextDelta(event) === "review done"));
+      const finished = events.findLast((event) => event.type === "RUN_FINISHED");
+      assert.strictEqual(finished ? agUiUsage(finished)?.totalTokens : null, 22);
     }),
   );
 

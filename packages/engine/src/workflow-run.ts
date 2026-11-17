@@ -263,7 +263,10 @@ const projection = [
   "Provenance",
 ].map((member) => ({ member, disposition: "projected" as const }));
 
-const memberDisposition = (projectedMembers: ReadonlyArray<RunPlanMember>, member: "Tools" | "Skills") =>
+const memberDisposition = (
+  projectedMembers: ReadonlyArray<RunPlanMember>,
+  member: "Tools" | "Skills" | "Subagents",
+) =>
   projectedMembers.includes(member)
     ? { member, disposition: "projected" as const }
     : {
@@ -752,6 +755,7 @@ export const make = Effect.gen(function* () {
           ...projection,
           memberDisposition(projectedMembers, "Tools"),
           memberDisposition(projectedMembers, "Skills"),
+          memberDisposition(projectedMembers, "Subagents"),
         ],
         observation,
       },

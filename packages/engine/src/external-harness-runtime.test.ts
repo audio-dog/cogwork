@@ -2,10 +2,13 @@ import {
   type AgUiEvent,
   agUiIsFileDiffEvent,
   agUiIsFileDiffUnavailableEvent,
+  agUiUsage,
   FILE_DIFF_EVENT,
   HarnessName,
+  type ModelLevel,
   RunId,
   RunPlan,
+  RunPlanSubagent,
   type RunRecord,
   SessionId,
   WorkItemId,
@@ -58,6 +61,7 @@ import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { hasToolResults, subagentCallTurn, textTurn } from "./testing/scripted-adapter";
 import { policyForProfile } from "./tools/policy";
 
 afterEach(() => vi.restoreAllMocks());
@@ -525,6 +529,100 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         assert.deepStrictEqual(yield* chatTools(["Tools"]), ["pull-request"]);
         assert.deepStrictEqual(yield* chatTools([]), []);
       }),
+    );
+
+    it.effect(
+      "starts each admitted Subagent as a child on the level's model, adds its usage, and writes no file",
+      () =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-subagent-checkout-" });
+          const subagent = (subagentName: string, modelLevel: ModelLevel) =>
+            RunPlanSubagent.cases.Available.make({
+              identity: `local:repo/${subagentName}`,
+              name: subagentName,
+              source: `.agents/agents/${subagentName}.md`,
+              description: `The ${subagentName} Subagent`,
+              tools: [],
+              modelLevel,
+              prompt: `You are the ${subagentName}.`,
+            });
+          const unavailable = RunPlanSubagent.cases.Unavailable.make({
+            identity: "local:repo/broken",
+            name: "broken",
+            source: ".agents/agents/broken.md",
+            reason: "no frontmatter",
+          });
+          const parentTurn = (options: TextOptions<ControlledOptions>): ReadonlyArray<StreamChunk> =>
+            hasToolResults(options)
+              ? [
+                  ...terminalEvents.slice(0, -1),
+                  {
+                    type: EventType.RUN_FINISHED,
+                    threadId: "session-148",
+                    runId: request.id,
+                    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+                  },
+                ]
+              : subagentCallTurn(
+                  [
+                    { id: "call-reviewer", agent: "reviewer", task: "Review the diff." },
+                    { id: "call-scout", agent: "scout", task: "Find the seam." },
+                  ],
+                  1,
+                );
+          const probe = new ControlledProbe();
+          const { estimateUsage: _estimate, ...base } = descriptor([], probe);
+          const harness = makeHarness({
+            ...base,
+            declaredMembers: ["Subagents"],
+            modelLevels: { light: "controlled-light" },
+            makeAdapter: (resolved) => {
+              probe.resolved.push(resolved);
+              const turn =
+                resolved.request.subagents.length > 0 ? parentTurn : () => textTurn("child done", 5);
+              return new ControlledAdapter((options) => toAsyncIterable(turn(options)), probe);
+            },
+          });
+
+          const events = yield* harness
+            .run({
+              plan: RunPlan.make({
+                ...request,
+                subagents: [subagent("reviewer", "light"), subagent("scout", "standard"), unavailable],
+                sandbox: { ...request.sandbox, workspace: checkout },
+              }),
+              session: resumedSession,
+              mcpCredentials: new Map(),
+            })
+            .pipe(Stream.runCollect);
+
+          const children = probe.resolved.slice(1).map(({ request: child }) => child);
+          assert.sameMembers(
+            children.map(({ selection }) => selection.model),
+            ["controlled-light", "controlled"],
+          );
+          assert.isTrue(
+            children.every(({ identity, tools }) => identity.resumeHandle === null && tools.length === 0),
+          );
+          assert.deepStrictEqual(
+            probe.chatOptions[0]?.tools?.map(({ name }) => name),
+            ["reviewer", "scout"],
+          );
+          const childCall = (prompt: string) =>
+            probe.chatOptions.find(({ systemPrompts }) => systemPrompts?.includes(prompt));
+          assert.deepStrictEqual(childCall("You are the reviewer.")?.messages.at(-1), {
+            role: "user",
+            content: "Review the diff.",
+          });
+          assert.deepStrictEqual(childCall("You are the scout.")?.messages.at(-1), {
+            role: "user",
+            content: "Find the seam.",
+          });
+          const finished = events.findLast((event) => event.type === EventType.RUN_FINISHED);
+          assert.strictEqual(finished ? agUiUsage(finished)?.totalTokens : null, 22);
+          assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
+        }),
     );
 
     it.effect("supplies Run Plan Skills through chat() only for a descriptor that declares Skills", () =>

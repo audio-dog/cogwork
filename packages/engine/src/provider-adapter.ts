@@ -1,8 +1,10 @@
+import type { ModelLevel } from "@cogwork/contracts";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { ANTHROPIC_MODELS, createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createGeminiChat, GEMINI_MODELS } from "@tanstack/ai-gemini";
 import { createOpenaiChat, OPENAI_CHAT_MODELS } from "@tanstack/ai-openai";
 import * as Redacted from "effect/Redacted";
+import type { ModelLevels } from "./subagent-runner";
 
 // Only providers whose model lists ship as literal-union constants are wired here,
 // so a config model string matches the real list and builds a typed adapter with
@@ -17,7 +19,30 @@ export const providerModelRefs = [
   ...GEMINI_MODELS.map((model) => `google/${model}`),
 ];
 
+type LevelTable<Model extends string> = Partial<Record<ModelLevel, Model>>;
+
+const providerModelLevels = {
+  openai: { light: "gpt-6-luna", deep: "gpt-6.1-sol" },
+  anthropic: { light: "claude-haiku-5-5", deep: "claude-opus-5-5" },
+  google: { light: "gemini-3.8-flash", deep: "gemini-4-argon" },
+} satisfies {
+  readonly openai: LevelTable<(typeof OPENAI_CHAT_MODELS)[number]>;
+  readonly anthropic: LevelTable<(typeof ANTHROPIC_MODELS)[number]>;
+  readonly google: LevelTable<(typeof GEMINI_MODELS)[number]>;
+};
+
 const asProviderId = (value: string) => providerIds.find((id) => id === value) ?? null;
+
+export const modelLevelRefs = (reference: string): ModelLevels => {
+  const resolved = parseModelRef(reference);
+  if (resolved === null) return {};
+  return Object.fromEntries(
+    Object.entries(providerModelLevels[resolved.provider]).map(([level, model]) => [
+      level,
+      `${resolved.provider}/${model}`,
+    ]),
+  );
+};
 
 export interface ResolvedModel {
   readonly provider: ProviderId;

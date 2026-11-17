@@ -31,12 +31,18 @@ import {
   type HarnessRunner,
   selectionOfPreflightInput,
 } from "./harness";
-import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs } from "./provider-adapter";
+import {
+  defaultModelAdapterFactory,
+  type ModelAdapterFactory,
+  modelLevelRefs,
+  providerModelRefs,
+} from "./provider-adapter";
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
 import { workContextMessage } from "./run-plan";
 import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import { SessionStore } from "./session-store";
+import { availableSubagents, levelModel, modelLevelRunner, subagentProjection } from "./subagent-runner";
 import {
   makeOwnedToolSet,
   mergeFileDiffFeed,
@@ -156,6 +162,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
       "Sandbox",
       "Structured Output",
       "Persistence",
+      "Subagents",
     ],
     planMiddleware: ["persistence", "instruction-context"],
     execution: fullHarnessExecution,
@@ -244,12 +251,34 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             Effect.sync(() => new AbortController()),
             (controller) => Effect.sync(() => controller.abort()),
           );
+          const subagents = availableSubagents(plan.subagents);
+          const levels = modelLevelRefs(reference);
+          const childReferences = new Set(
+            subagents
+              .map(({ modelLevel }) => levelModel(levels, reference, modelLevel))
+              .filter((model) => model !== reference),
+          );
+          const childAdapters = new Map(
+            yield* Effect.forEach(childReferences, (model) =>
+              resolveModelAdapter(credentials, model, makeAdapter).pipe(
+                Effect.map((child) => [model, child] as const),
+                Effect.mapError((error) => launchError(false, error.message)),
+              ),
+            ),
+          );
+          const agentLoopStrategy = maxIterations(defaultLoopBudget(plan.harness.profile));
+          const runner = modelLevelRunner(levels, reference, (model) => childAdapters.get(model) ?? adapter);
+          const projection = subagentProjection(subagents, runner, {
+            tools: [...tools, ...engineTools],
+            middleware: [],
+            agentLoopStrategy,
+          });
           const chatStream = runChat({
             adapter,
             messages,
-            tools: [...tools, ...engineTools],
-            middleware,
-            agentLoopStrategy: maxIterations(defaultLoopBudget(plan.harness.profile)),
+            tools: [...tools, ...engineTools, ...projection.tools],
+            middleware: [...middleware, ...projection.middleware],
+            agentLoopStrategy,
             abortController,
             runId: plan.id,
             threadId: session,

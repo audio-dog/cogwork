@@ -65,6 +65,13 @@ import { bridgeChat } from "./provider-bridge";
 import { workContextMessage } from "./run-plan";
 import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import { SessionStore } from "./session-store";
+import {
+  type AvailableSubagent,
+  availableSubagents,
+  type ModelLevels,
+  modelLevelRunner,
+  subagentProjection,
+} from "./subagent-runner";
 import { boundedDiff, ignored, mergeFileDiffFeed, watchWorktreeDiffs } from "./tools/file-diff-feed";
 import { policyForProfile } from "./tools/policy";
 import { openWorktreeSandbox, resolveBaseSha } from "./tools/sandbox";
@@ -110,6 +117,7 @@ export interface ExternalHarnessResolvedRequest {
   readonly prompt: ReadonlyArray<RunPlanMessage>;
   readonly outputSchema: JSONSchema | null;
   readonly tools: ReadonlyArray<AnyTool>;
+  readonly subagents: ReadonlyArray<AvailableSubagent>;
 }
 
 export interface ExternalHarnessCapabilities {
@@ -147,7 +155,8 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter> {
   readonly catalog: HarnessCatalogOptions;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
-  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Tools" | "Skills">>;
+  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Tools" | "Skills" | "Subagents">>;
+  readonly modelLevels?: ModelLevels;
   readonly inheritedEnvironment: ReadonlyArray<string>;
   readonly makeAdapter: (input: {
     readonly model: AdapterModel<Adapter>;
@@ -514,6 +523,9 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
     tools: projectedTools(descriptor, request),
+    subagents: descriptor.declaredMembers?.includes("Subagents")
+      ? availableSubagents(request.plan.subagents)
+      : [],
   } satisfies ExternalHarnessResolvedRequest;
 });
 
@@ -668,6 +680,15 @@ export const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeChe
   return yield* mergeFileDiffFeed(harnessEvents, fileDiffs, "checkout file-diff feed stopped");
 });
 
+const childRequest = (request: ExternalHarnessResolvedRequest, model: string) =>
+  ({
+    ...request,
+    identity: { ...request.identity, resumeHandle: null },
+    selection: { model, options: model === request.selection.model ? request.selection.options : {} },
+    tools: [],
+    subagents: [],
+  }) satisfies ExternalHarnessResolvedRequest;
+
 const openChat = <Adapter extends AnyTextAdapter>(
   descriptor: ExternalHarnessDescriptor<Adapter>,
   request: ExternalHarnessResolvedRequest,
@@ -689,12 +710,28 @@ const openChat = <Adapter extends AnyTextAdapter>(
     fileEvents: false,
   });
   const abortController = new AbortController();
-  const middleware = [
+  const sandboxed = (extra: ReadonlyArray<ChatMiddleware>) => [
     withSandbox(sandbox),
-    ...skills,
+    ...extra,
     ...(writesWorkspaceFiles(workspaceDefinition) ? [] : [satisfiedProjection()]),
   ];
-  const stream = makeChatStream(descriptor, request, adapter, middleware, abortController, secretValues);
+  const runner = modelLevelRunner(descriptor.modelLevels ?? {}, model, (childModel) => {
+    const child = childRequest(request, childModel);
+    return descriptor.makeAdapter({
+      model: descriptor.projectModel(child),
+      nativeAuthentication: "host",
+      request: child,
+    });
+  });
+  const subagents = subagentProjection(request.subagents, runner, { tools: [], middleware: sandboxed([]) });
+  const stream = makeChatStream(
+    descriptor,
+    { ...request, tools: [...request.tools, ...subagents.tools] },
+    adapter,
+    sandboxed([...skills, ...subagents.middleware]),
+    abortController,
+    secretValues,
+  );
   return { abortController, stream };
 };
 
