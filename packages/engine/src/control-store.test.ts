@@ -1084,6 +1084,26 @@ layer(NodeServices.layer)((it) => {
     );
   });
 
+  it.effect("recreates a non-empty table that gains a required column", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* pokeConvergedStore(
+        storePath,
+        `ALTER TABLE plugin_installs DROP COLUMN principal;
+         INSERT INTO plugin_installs (plugin_id, resolved_identity, installed_at_millis)
+         VALUES ('plugin-1', 'identity', 1);`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(plugin_installs)")).some(
+          (column) => column.name === "principal",
+        ),
+      );
+      assert.deepStrictEqual(yield* query(storePath, "SELECT plugin_id FROM plugin_installs"), []);
+    }),
+  );
+
   it.effect("drops the one-artifact-per-item index in place and keeps the stored artifacts", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
