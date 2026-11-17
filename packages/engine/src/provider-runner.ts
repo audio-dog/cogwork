@@ -35,6 +35,7 @@ import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
 import { workContextMessage } from "./run-plan";
+import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
@@ -150,6 +151,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
       "Instructions",
       "Messages",
       "Tools",
+      "Skills",
       "Middleware",
       "Sandbox",
       "Structured Output",
@@ -232,9 +234,11 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const engineTools = request.engineTools?.filter(({ name }) => plan.tools.includes(name)) ?? [];
           const persistence = withPersistence(store.persistence);
           const instructions = providerInstructionContext(plan);
-          const middleware = plan.middleware.flatMap((name) =>
-            providerMiddleware(name, persistence, instructions),
-          );
+          const skills = yield* runPlanSkillsMiddleware(plan.skills);
+          const middleware = [
+            ...plan.middleware.flatMap((name) => providerMiddleware(name, persistence, instructions)),
+            ...skills,
+          ];
 
           const abortController = yield* Effect.acquireRelease(
             Effect.sync(() => new AbortController()),
