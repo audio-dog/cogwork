@@ -186,7 +186,7 @@ A Harness-native lifecycle extension projected only when the selected Harness su
 _Avoid_: Middleware
 
 **Subagent**:
-A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool. A person writes one as `agents/<name>.md` in an **Authoring tree**: YAML frontmatter with a required `name` (lowercase letters, digits, and hyphens, equal to the file name), a required `description`, an optional `tools` list (a YAML list or a comma-separated string), and an optional `metadata.model-level` (a **Model level**; absent means `standard`), then the prompt as the body. A file that does not decode still reaches the Run Plan, with the reason. A vendor `model` value is one such reason; `model: inherit` is not.
+A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool; the engine projects each Available one as a tool that starts a child chat (see the engine's **Subagent runner**). A person writes one as `agents/<name>.md` in an **Authoring tree**: YAML frontmatter with a required `name` (lowercase letters, digits, and hyphens, equal to the file name), a required `description`, an optional `tools` list (a YAML list or a comma-separated string), and an optional `metadata.model-level` (a **Model level**; absent means `standard`), then the prompt as the body. A file that does not decode still reaches the Run Plan, with the reason. A vendor `model` value is one such reason; `model: inherit` is not.
 _Avoid_: Tool, Harness, Operation
 
 **Sandbox policy**:
@@ -548,7 +548,7 @@ The saved option selections (`id` → value pairs) of one Operation, stored and 
 _Avoid_: Effort setting (retired), model suffix, traits (the desktop menu, not the data)
 
 **Model level**:
-The named capability a role or operation asks of its model — `light`, `standard`, or `deep` — instead of a vendor model name. `light` is the cheapest capable model on whatever Harness runs it; `standard` is the Run's own model or the tool's default, rendered as omission where the tool inherits by omitting; `deep` is the reasoning escalation, named and unused. The level is the only model vocabulary a role definition or instruction may use; the mapping to a Harness-native value lives with whoever projects the role (the sync toolkit today, whose tier of the same three words this names, the Harness adapter once Subagents project). See ADR 0028.
+The named capability a role or operation asks of its model — `light`, `standard`, or `deep` — instead of a vendor model name. `light` is the cheapest capable model on whatever Harness runs it; `standard` is the Run's own model or the tool's default, rendered as omission where the tool inherits by omitting; `deep` is the reasoning escalation, named and unused. The level is the only model vocabulary a role definition or instruction may use; the mapping to a Harness-native value lives with whoever projects the role: the sync toolkit, whose tier of the same three words this names, and the Harness adapter for a projected Subagent (Claude Code, Codex, and the provider runner each keep a `light` and `deep` table; `standard` runs on the parent Run's model). See ADR 0028.
 _Avoid_: Tier (sync's word for its rendering mechanism), pinned model, vendor alias (`sonnet`, `haiku` — those are one Harness's native values), `fast` / `default` / `powerful` (sync's retired tier names), level (bare — that word belongs to where an Operation setting is written)
 
 **Harness readiness**:
