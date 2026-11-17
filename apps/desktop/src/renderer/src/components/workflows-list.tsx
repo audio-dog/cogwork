@@ -25,7 +25,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Effect, Result } from "effect";
 import { type ChangeEvent, useRef, useState } from "react";
 import { newWorkflowOperation } from "../features/workflow-defaults";
-import { importReviewMarks } from "../features/workflow-import-review";
 import { useWorkflowSession } from "../features/workflow-session";
 import { exportWorkflow, importWorkflow, workflowExportFileName } from "../features/workflow-transfer";
 
@@ -213,11 +212,7 @@ export function WorkflowsList() {
     }
     setImportFailure(null);
     const workflow = await actions.create(imported.success);
-    await navigate({
-      to: "/workflows/$workflowId",
-      params: { workflowId: workflow.id },
-      state: { importReview: importReviewMarks(imported.success) },
-    });
+    await navigate({ to: "/workflows/$workflowId/review", params: { workflowId: workflow.id } });
   };
   const onImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];

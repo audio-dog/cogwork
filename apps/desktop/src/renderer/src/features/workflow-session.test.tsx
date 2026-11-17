@@ -763,14 +763,13 @@ describe("WorkflowProvider", () => {
 
     expect(create).toHaveBeenCalledWith(workflowDocument);
     expect(navigate).toHaveBeenCalledWith({
-      to: "/workflows/$workflowId",
+      to: "/workflows/$workflowId/review",
       params: { workflowId: imported.id },
-      state: { importReview: [importReviewMark.workspaces] },
     });
     await act(async () => root.unmount());
   });
 
-  it("highlights imported fields until they are saved", async () => {
+  it("highlights imported fields until they are saved and then leaves the review", async () => {
     const operation = everyDocument.operations[0];
     if (!operation) throw new Error("expected an operation");
     const draft = { ...everyRecord, publishedCopy: null, publishedRevision: null };
@@ -787,6 +786,7 @@ describe("WorkflowProvider", () => {
       delete: unused,
       listOptions: unused,
     };
+    const onPublished = vi.fn<() => void>();
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -796,6 +796,7 @@ describe("WorkflowProvider", () => {
           <WorkflowEditor
             workflow={draft}
             importReview={[importReviewMark.workspaces, importReviewMark.model(operation.id)]}
+            onPublished={onPublished}
           />
         </WorkflowProvider>,
       );
@@ -832,8 +833,7 @@ describe("WorkflowProvider", () => {
       await publish.mock.results[0]?.value;
     });
 
-    expect(container.textContent).not.toContain("Review these before you turn this on");
-    expect(container.querySelector("[data-import-review]")).toBeNull();
+    expect(onPublished).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
 

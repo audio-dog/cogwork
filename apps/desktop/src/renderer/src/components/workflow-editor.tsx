@@ -891,9 +891,11 @@ function Operations() {
 export function WorkflowEditor({
   workflow: initial,
   importReview = [],
+  onPublished,
 }: {
   readonly workflow: WorkflowRecord;
   readonly importReview?: readonly string[];
+  readonly onPublished?: () => void;
 }) {
   const { state, actions } = useWorkflowSession();
   const remote = state.workflows.find(({ id }) => id === initial.id) ?? initial;
@@ -989,7 +991,7 @@ export function WorkflowEditor({
         accepted.current.workingRevision,
       );
       const published = await actions.publish(id, latestRevision);
-      setReviewMarks([]);
+      onPublished?.();
       return published;
     },
   };
