@@ -1,0 +1,20 @@
+docs/adr/0038-a-subagent-runs-as-a-tanstack-agent-that-an-engine-tool-starts.md
+  s_d7aed834fc620d::t_c9edec9a550ce1 1-40,43-56
+  s_d7aed834fc620d::t_ca4b96fdc9a545 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "979f622269cccf5d3eb8dd4deed2bf41b24f0367",
+  "prompts": {},
+  "sessions": {
+    "s_d7aed834fc620d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ce29aaa8-181a-4bc9-b65d-835c92d63f57",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
