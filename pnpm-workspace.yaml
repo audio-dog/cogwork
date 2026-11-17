@@ -43,6 +43,8 @@ catalog:
   tsx: '^4.23.13'
   turbo: '^2.10.12'
   typescript: ^7.0.2
+  # @effect/vitest@4.1 needs vitest 5. @tanstack/ai-persistence, ai-sandbox, and ai-skills 1.0.0
+  # still name an optional vitest ^4 peer for their unused testkits; pnpm reports it as unmet.
   vitest: '^5.1.0'
 
 catalogs:

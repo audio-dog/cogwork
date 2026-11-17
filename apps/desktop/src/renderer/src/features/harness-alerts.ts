@@ -17,26 +17,16 @@ export interface HarnessAlert {
   readonly parked: number;
 }
 
-interface HarnessProblem {
-  readonly problem: string;
-  readonly signIn: string | null;
-  readonly detail: string | null;
-}
-
 const harnessProblem = (label: string) =>
   HarnessState.match({
     Ready: () => null,
-    NotSignedIn: ({ signIn }): HarnessProblem => ({
+    NotSignedIn: ({ signIn }) => ({
       problem: "is not signed in",
       signIn: signIn?.command ?? null,
       detail: signIn ? null : `Sign in with the ${label} CLI.`,
     }),
-    NotInstalled: ({ diagnostic }): HarnessProblem => ({
-      problem: "is not installed",
-      signIn: null,
-      detail: diagnostic,
-    }),
-    UnsupportedVersion: ({ requirement }): HarnessProblem => ({
+    NotInstalled: ({ diagnostic }) => ({ problem: "is not installed", signIn: null, detail: diagnostic }),
+    UnsupportedVersion: ({ requirement }) => ({
       problem: "version is not supported",
       signIn: null,
       detail: requirement ? `Needs ${requirement}` : null,
