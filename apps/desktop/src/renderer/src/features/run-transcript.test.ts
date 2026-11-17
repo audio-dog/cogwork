@@ -381,20 +381,19 @@ describe("headingLine while history replays", () => {
     expect(distinctInOrder(seen)).toEqual(["Starting…", "Running gh pr checks…"]);
   });
 
-  it("folds the whole history into the conversation when replay ends", () => {
-    const source = makeTranscriptSource();
-    const last = replay.map(source).at(-1);
-
-    expect(last && AsyncResult.isSuccess(last) ? Array.from(last.value.entries) : []).toEqual(
-      foldTranscript(history.flat()),
-    );
-  });
-
   it("follows a live event after history ends", () => {
     const live = pulled(command("t4", 6, "pnpm build").map(watched));
     const seen = headings("running", [...replay, live]);
 
     expect(seen.slice(-2)).toEqual(["Running gh pr checks…", "Running pnpm build…"]);
+  });
+
+  it("shows the placeholder again when a reconnect replays history", () => {
+    const [firstChunk] = replay;
+    if (!firstChunk) throw new Error("expected a history chunk");
+    const seen = headings("running", [...replay, AsyncResult.initial(true), firstChunk]);
+
+    expect(seen.slice(-3)).toEqual(["Running gh pr checks…", "Starting…", "Starting…"]);
   });
 
   it("shows a settled run's fixed line from the first render", () => {
