@@ -1,4 +1,5 @@
-import { AlertBanner } from "@cogwork/ui/components/alert-banner";
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
+import { RiAlertLine } from "@remixicon/react";
 import { createContext, type ReactNode, use } from "react";
 
 interface ImportReviewValue {
@@ -44,8 +45,12 @@ export function ImportReviewBanner() {
   const review = use(ImportReviewContext);
   if (!review || review.marks.size === 0) return null;
   return (
-    <AlertBanner tone="warning" title="Review these before you turn this on">
-      These values came from another machine. Change one to clear its highlight. Save accepts the rest.
-    </AlertBanner>
+    <Alert variant="warning" role="status">
+      <RiAlertLine />
+      <AlertTitle>Review these before you turn this on</AlertTitle>
+      <AlertDescription>
+        These values came from another machine. Change one to clear its highlight. Save accepts the rest.
+      </AlertDescription>
+    </Alert>
   );
 }

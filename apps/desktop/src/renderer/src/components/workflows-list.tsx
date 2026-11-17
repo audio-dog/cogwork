@@ -1,5 +1,5 @@
 import type { WorkflowDocument } from "@cogwork/contracts";
-import { AlertBanner } from "@cogwork/ui/components/alert-banner";
+import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import {
@@ -20,7 +20,7 @@ import {
 } from "@cogwork/ui/components/empty";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
-import { RiAddLine, RiDownloadLine, RiNodeTree, RiUploadLine } from "@remixicon/react";
+import { RiAddLine, RiDownloadLine, RiErrorWarningLine, RiNodeTree, RiUploadLine } from "@remixicon/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Effect, Result } from "effect";
 import { type ChangeEvent, useRef, useState } from "react";
@@ -292,9 +292,11 @@ export function WorkflowsList() {
           </div>
         </div>
         {importFailure ? (
-          <AlertBanner tone="error" title="Could not import this file">
-            {importFailure}
-          </AlertBanner>
+          <Alert variant="error">
+            <RiErrorWarningLine />
+            <AlertTitle>Could not import this file</AlertTitle>
+            <AlertDescription>{importFailure}</AlertDescription>
+          </Alert>
         ) : null}
         {meta.unreadable.map((failure) => (
           <Card key={failure.id}>
