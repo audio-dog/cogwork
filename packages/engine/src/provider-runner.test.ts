@@ -372,6 +372,29 @@ describe("providerRunner", { timeout: 30_000 }, () => {
     }),
   );
 
+  it.live("supplies the Run Plan's Skills to the chat through the skills middleware", () =>
+    Effect.gen(function* () {
+      const capturedOptions: Array<RunChatOptions> = [];
+      const runChat: RunChat = (options) => {
+        capturedOptions.push(options);
+        return toAsyncIterable(scriptedChunks);
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+      const base = request({ checkoutPath: null });
+      const skills = [{ identity: "local:repo/skill/release", name: "release", source: "/skills/SKILL.md" }];
+
+      yield* Stream.runDrain(runner.run({ ...base, plan: RunPlan.make({ ...base.plan, skills }) })).pipe(
+        Effect.provide(providerRunnerLayer()),
+      );
+      yield* Stream.runDrain(runner.run(base)).pipe(Effect.provide(providerRunnerLayer()));
+
+      assert.deepStrictEqual(
+        capturedOptions.map(({ middleware }) => middleware.some(({ name }) => name === "skills")),
+        [true, false],
+      );
+    }),
+  );
+
   it.live("runs without a Workspace in an empty scratch directory and removes it after the Run", () =>
     Effect.gen(function* () {
       const roots: Array<string> = [];
