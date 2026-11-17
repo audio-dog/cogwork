@@ -18,13 +18,14 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowEditor } from "../components/workflow-editor";
 import { WorkflowsList } from "../components/workflows-list";
+import { importReviewMark } from "./workflow-import-review";
 import {
   type WorkflowClient,
   WorkflowProvider,
   type WorkflowSessionState,
   workflowProviderValue,
 } from "./workflow-session";
-import { importWorkflow } from "./workflow-transfer";
+import { exportWorkflow, importWorkflow } from "./workflow-transfer";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -719,6 +720,120 @@ describe("WorkflowProvider", () => {
         ),
       ),
     );
+    await act(async () => root.unmount());
+  });
+
+  it("imports a workflow file dropped on the list", async () => {
+    const imported = { ...record, id: decodeWorkflowId("workflow-imported") };
+    const create = vi.fn<WorkflowClient["create"]>(async () => imported);
+    const client: WorkflowClient = {
+      create,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider value={workflowProviderValue(sessionState([record]), client)}>
+          <WorkflowsList />
+        </WorkflowProvider>,
+      );
+    });
+    navigate.mockClear();
+    const view = container.firstElementChild;
+    if (!(view instanceof HTMLElement)) throw new Error("Workflow list did not render");
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File([exportWorkflow(workflowDocument)], "local-name.json", { type: "application/json" }),
+    );
+    const drop = new DragEvent("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: transfer });
+
+    await act(async () => {
+      view.dispatchEvent(drop);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(create).toHaveBeenCalledWith(workflowDocument);
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/workflows/$workflowId",
+      params: { workflowId: imported.id },
+      state: { importReview: [importReviewMark.workspaces] },
+    });
+    await act(async () => root.unmount());
+  });
+
+  it("highlights imported fields until they are saved", async () => {
+    const operation = everyDocument.operations[0];
+    if (!operation) throw new Error("expected an operation");
+    const draft = { ...everyRecord, publishedCopy: null, publishedRevision: null };
+    const publish = vi.fn<WorkflowClient["publish"]>(async () => ({
+      ...draft,
+      publishedRevision: draft.workingRevision,
+      publishedCopy: draft.workingCopy,
+    }));
+    const client: WorkflowClient = {
+      create: unused,
+      edit: async () => draft,
+      publish,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider value={workflowProviderValue(sessionState([draft], { catalog }), client)}>
+          <WorkflowEditor
+            workflow={draft}
+            importReview={[importReviewMark.workspaces, importReviewMark.model(operation.id)]}
+          />
+        </WorkflowProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain("Review these before you turn this on");
+    expect(container.querySelector(`[data-import-review="${importReviewMark.workspaces}"]`)).not.toBeNull();
+    expect(
+      container.querySelector(`[data-import-review="${importReviewMark.model(operation.id)}"]`),
+    ).not.toBeNull();
+
+    const workspaces = container.querySelector<HTMLButtonElement>('[aria-label="Workspaces"]');
+    if (!workspaces) throw new Error("Workspace menu did not render");
+    await act(async () => workspaces.click());
+    const noWorkspace = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
+      option.textContent?.includes("No workspace"),
+    );
+    if (!noWorkspace) throw new Error("No workspace was not offered");
+    await act(async () => {
+      noWorkspace.click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(`[data-import-review="${importReviewMark.workspaces}"]`)).toBeNull();
+    expect(
+      container.querySelector(`[data-import-review="${importReviewMark.model(operation.id)}"]`),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("Review these before you turn this on");
+
+    const save = [...container.querySelectorAll("button")].find((button) => button.textContent === "Save");
+    if (!save) throw new Error("Save did not render");
+    await act(async () => {
+      save.click();
+      await publish.mock.results[0]?.value;
+    });
+
+    expect(container.textContent).not.toContain("Review these before you turn this on");
+    expect(container.querySelector("[data-import-review]")).toBeNull();
     await act(async () => root.unmount());
   });
 

@@ -1,7 +1,7 @@
 import { Button } from "@cogwork/ui/components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiNodeTree } from "@remixicon/react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { WorkflowEditor } from "../../../components/workflow-editor";
 import { useWorkflowSession } from "../../../features/workflow-session";
 
@@ -12,8 +12,10 @@ export const Route = createFileRoute("/_app/workflows/$workflowId")({
 function WorkflowRoute() {
   const { workflowId } = Route.useParams();
   const { state } = useWorkflowSession();
+  const importReview = useRouterState({ select: (router) => router.location.state.importReview });
   const workflow = state.workflows.find(({ id }) => id === workflowId);
-  if (workflow) return <WorkflowEditor key={workflowId} workflow={workflow} />;
+  if (workflow)
+    return <WorkflowEditor key={workflowId} workflow={workflow} importReview={importReview ?? []} />;
   if (state.loading)
     return (
       <div className="mx-auto flex w-full max-w-2xl px-8 py-16">

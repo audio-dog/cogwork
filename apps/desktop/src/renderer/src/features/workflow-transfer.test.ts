@@ -60,7 +60,7 @@ describe("workflow transfer", () => {
     const failure = importedFailure("{");
 
     expect(failure._tag).toBe("WorkflowImportError");
-    expect(failure.message.toLowerCase()).toContain("json");
+    expect(failure.message).toBe("This file is not valid JSON.");
   });
 
   it("fails a payload that adds a field the document schema rejects", () => {
@@ -69,6 +69,23 @@ describe("workflow transfer", () => {
     const failure = importedFailure(JSON.stringify(payload));
 
     expect(failure._tag).toBe("WorkflowImportError");
-    expect(failure.message).toContain("extra");
+    expect(failure.message).toBe("Remove extra. A workflow file does not include that field.");
+  });
+
+  it("names an unexpected field instead of the schema path", () => {
+    const payload: Record<string, unknown> = JSON.parse(exportWorkflow(document));
+    payload.description = "personal note";
+    const failure = importedFailure(JSON.stringify(payload));
+
+    expect(failure.message).toBe("Remove description. A workflow file does not include that field.");
+    expect(failure.message).not.toContain("Expected no excess property");
+  });
+
+  it("asks for a field the file left out", () => {
+    const failure = importedFailure(
+      JSON.stringify({ workspaces: { _tag: "Every" }, triggers: [], operations: [] }),
+    );
+
+    expect(failure.message).toBe("Add name and try again.");
   });
 });
