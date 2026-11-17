@@ -31,7 +31,8 @@ const workspace: RegisteredWorkspace = {
   source: "test",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId,
+    id: workspaceId,
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear", teams: ["ENG"], assigneeAllowlist: ["owner"] },
   }),

@@ -196,8 +196,8 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
           summary: `${source} failed · ${message}`,
           severity: "error",
         }),
-        Registered: ({ name, issueTracker }) => ({
-          summary: `${name} registered · ${issueTracker}`,
+        Registered: ({ id, issueTracker }) => ({
+          summary: `${id} registered · ${issueTracker}`,
           severity: "info",
         }),
       });

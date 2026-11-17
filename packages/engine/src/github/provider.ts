@@ -319,7 +319,7 @@ const make = (
   ) =>
     WorkflowActionArtifact.make({
       kind,
-      workspace: workspace.config.name,
+      workspace: workspace.config.id,
       issue: WorkItemId.make(`#${pullRequest.number}`),
       url: pullRequest.url,
       origin,
@@ -337,7 +337,7 @@ const make = (
     target: GitHubRepoRef,
     reference: string,
   ) => {
-    const prefix = `${workspace.config.name}:`;
+    const prefix = `${workspace.config.id}:`;
     const raw = reference.startsWith(prefix) ? reference.slice(prefix.length) : reference;
     const numeric = /^#?(\d+)$/.exec(raw)?.[1];
     if (numeric) return Number(numeric);

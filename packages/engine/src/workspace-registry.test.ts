@@ -21,7 +21,7 @@ const workspaceUpdate = Schema.decodeSync(WorkspaceUpdate);
 
 const githubRegistration = (name: string, checkoutPath: string) =>
   registration({
-    name,
+    displayName: name,
     checkoutPath,
     issueTracker: { type: "github" },
     linearHistory: false,
@@ -153,7 +153,7 @@ layer(NodeServices.layer)((it) => {
         .register(githubRegistration("duplicate", `${checkoutPath}/./`))
         .pipe(Effect.flip);
 
-      assert.include(duplicate.message, `already registered as ${first.workspace.config.name}`);
+      assert.include(duplicate.message, `already registered as ${first.workspace.config.id}`);
       assert.strictEqual((yield* liveRegistry.state).workspaces.length, 1);
     }),
   );
@@ -177,7 +177,7 @@ layer(NodeServices.layer)((it) => {
       const readOnlyContext = yield* Layer.build(readOnlyRegistryLayerAt(storePath));
       const reloaded = Context.get(readOnlyContext, Registry.WorkspaceRegistry);
 
-      assert.isDefined(Registry.findWorkspace(yield* reloaded.state, change.workspace.config.name));
+      assert.isDefined(Registry.findWorkspace(yield* reloaded.state, change.workspace.config.id));
     }),
   );
 
@@ -193,7 +193,7 @@ layer(NodeServices.layer)((it) => {
       const management = Context.get(context, Registry.WorkspaceManagement);
       const change = yield* management.register(
         registration({
-          name: "settings",
+          displayName: "settings",
           checkoutPath,
           issueTracker: { type: "linear", teams: ["ENG"] },
           worktrees: { setup: ["pnpm install"], linkPaths: [".env"] },
@@ -249,7 +249,7 @@ layer(NodeServices.layer)((it) => {
 
       const github = yield* management.register(
         registration({
-          name: "github",
+          displayName: "github",
           checkoutPath: githubCheckout,
           issueTracker: { type: "github" },
           worktrees: { remote: "upstream" },
@@ -257,7 +257,7 @@ layer(NodeServices.layer)((it) => {
       );
       const linear = yield* management.register(
         registration({
-          name: "linear",
+          displayName: "linear",
           checkoutPath: linearCheckout,
           issueTracker: { type: "linear", teams: ["ENG"] },
           sourceControl: { type: "github" },
@@ -275,11 +275,11 @@ layer(NodeServices.layer)((it) => {
       );
       yield* registry.refresh;
       assert.strictEqual(
-        Registry.findWorkspace(yield* registry.state, github.workspace.config.name)?.repository,
+        Registry.findWorkspace(yield* registry.state, github.workspace.config.id)?.repository,
         "colonylabs/refreshed",
       );
 
-      const rebound = yield* management.rebind(github.workspace.config.name, reboundCheckout);
+      const rebound = yield* management.rebind(github.workspace.config.id, reboundCheckout);
       if (rebound._tag === "Failed") return assert.fail("expected re-bind to succeed");
       assert.strictEqual(rebound.workspace.repository, "colonylabs/rebound");
 
@@ -344,7 +344,7 @@ layer(NodeServices.layer)((it) => {
       const state = yield* registry.refresh;
 
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.name)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.id)?.repository,
         "acme/repo",
       );
     }).pipe(Effect.provide(RemoteUrls.layer)),
@@ -374,7 +374,7 @@ layer(NodeServices.layer)((it) => {
       const state = yield* restartedRegistry.state;
 
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.name)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(state, change.workspace.config.id)?.repository,
         "acme/repo",
       );
 
@@ -387,7 +387,7 @@ layer(NodeServices.layer)((it) => {
       const movedState = yield* Context.get(movedContext, Registry.WorkspaceRegistry).state;
 
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(movedState, change.workspace.config.name)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(movedState, change.workspace.config.id)?.repository,
         "acme/moved",
       );
     }).pipe(Effect.provide(RemoteUrls.layer)),
@@ -419,10 +419,10 @@ layer(NodeServices.layer)((it) => {
         SqlClient.SqlClient,
         (sql) => sql`UPDATE workspaces
           SET mcp_skills = '{ not json'
-          WHERE id = ${registered.workspace.config.name}`,
+          WHERE id = ${registered.workspace.config.id}`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
 
-      const rebound = yield* management.rebind(registered.workspace.config.name, secondCheckout);
+      const rebound = yield* management.rebind(registered.workspace.config.id, secondCheckout);
       if (rebound._tag !== "Failed") return assert.fail("expected re-bind to fail");
       assert.strictEqual(rebound.failure.repository, "acme/new");
 
@@ -433,7 +433,7 @@ layer(NodeServices.layer)((it) => {
       const state = yield* Context.get(restartedContext, Registry.WorkspaceRegistry).state;
 
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(state, registered.workspace.config.name)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(state, registered.workspace.config.id)?.repository,
         "acme/new",
       );
     }).pipe(Effect.provide(RemoteUrls.layer)),
@@ -460,7 +460,7 @@ layer(NodeServices.layer)((it) => {
         (sql) => sql`UPDATE workspaces
           SET last_repository = NULL,
               issue_tracker = ${JSON.stringify({ type: "github", connectionId: "unbound", repo: "acme/legacy" })}
-          WHERE id = ${change.workspace.config.name}`,
+          WHERE id = ${change.workspace.config.id}`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
       yield* Ref.set(remotes, new Map([[`${checkoutPath}:origin`, "git@gitlab.com:acme/current.git"]]));
       const upgradedContext = yield* Layer.build(
@@ -469,7 +469,7 @@ layer(NodeServices.layer)((it) => {
       const upgradedState = yield* Context.get(upgradedContext, Registry.WorkspaceRegistry).state;
 
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(upgradedState, change.workspace.config.name)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(upgradedState, change.workspace.config.id)?.repository,
         "acme/legacy",
       );
 
@@ -477,7 +477,7 @@ layer(NodeServices.layer)((it) => {
         SqlClient.SqlClient,
         (sql) => sql`UPDATE workspaces
           SET issue_tracker = ${JSON.stringify({ type: "github", connectionId: "unbound" })}
-          WHERE id = ${change.workspace.config.name}`,
+          WHERE id = ${change.workspace.config.id}`,
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
       const reloadedContext = yield* Layer.build(
         Registry.layerAt(storePath).pipe(Layer.provide(remoteUrlsGitLayer)),
@@ -485,7 +485,7 @@ layer(NodeServices.layer)((it) => {
       const reloadedState = yield* Context.get(reloadedContext, Registry.WorkspaceRegistry).state;
 
       assert.strictEqual(
-        Registry.findWorkspaceIssueTrackerBinding(reloadedState, change.workspace.config.name)?.repository,
+        Registry.findWorkspaceIssueTrackerBinding(reloadedState, change.workspace.config.id)?.repository,
         "acme/legacy",
       );
     }).pipe(Effect.provide(RemoteUrls.layer)),
@@ -621,7 +621,7 @@ layer(NodeServices.layer)((it) => {
       yield* Deferred.succeed(releaseRefresh, undefined);
       yield* Fiber.join(refreshing);
 
-      assert.isDefined(Registry.findWorkspace(yield* liveRegistry.state, second.workspace.config.name));
+      assert.isDefined(Registry.findWorkspace(yield* liveRegistry.state, second.workspace.config.id));
     }),
   );
 
@@ -667,7 +667,7 @@ layer(NodeServices.layer)((it) => {
 
       assert.strictEqual(
         (yield* liveRegistry.state).workspaces.filter(
-          (workspace) => workspace.config.name === change.workspace.config.name,
+          (workspace) => workspace.config.id === change.workspace.config.id,
         ).length,
         1,
       );
@@ -689,7 +689,7 @@ layer(NodeServices.layer)((it) => {
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
       const firstChange = yield* management.register(
         registration({
-          name: "first clone",
+          displayName: "first clone",
           checkoutPath: firstCheckout,
           issueTracker: { type: "github" },
           sourceControl: { type: "github" },
@@ -706,7 +706,7 @@ layer(NodeServices.layer)((it) => {
       );
       const secondChange = yield* management.register(
         registration({
-          name: "first clone",
+          displayName: "first clone",
           checkoutPath: secondCheckout,
           issueTracker: { type: "github" },
           linearHistory: false,
@@ -714,7 +714,7 @@ layer(NodeServices.layer)((it) => {
       );
       const invalidChange = yield* management.register(
         registration({
-          name: "invalid stored settings",
+          displayName: "invalid stored settings",
           checkoutPath: invalidCheckout,
           issueTracker: { type: "github" },
           linearHistory: false,
@@ -730,13 +730,13 @@ layer(NodeServices.layer)((it) => {
       }
       const first = firstChange.workspace;
       const second = secondChange.workspace;
-      assert.notStrictEqual(first.config.name, second.config.name);
+      assert.notStrictEqual(first.config.id, second.config.id);
       assert.strictEqual(first.config.displayName, "first clone");
       assert.strictEqual(second.config.displayName, "first clone");
       const state = yield* liveRegistry.state;
       assert.isUndefined(Registry.findWorkspace(state, "first clone"));
-      assert.strictEqual(Registry.findWorkspace(state, first.config.name), first);
-      assert.strictEqual(Registry.findWorkspace(state, second.config.name), second);
+      assert.strictEqual(Registry.findWorkspace(state, first.config.id), first);
+      assert.strictEqual(Registry.findWorkspace(state, second.config.id), second);
       assert.strictEqual(first.workspaceLimit, 2);
       assert.strictEqual(first.repository, "acme/repo");
       assert.deepStrictEqual(first.config.worktrees, {
@@ -746,7 +746,7 @@ layer(NodeServices.layer)((it) => {
         setup: ["pnpm install"],
         linkPaths: [".env"],
       });
-      const invalidName = invalidChange.workspace.config.name;
+      const invalidName = invalidChange.workspace.config.id;
       yield* Effect.flatMap(
         SqlClient.SqlClient,
         (sql) => sql`UPDATE workspaces SET mcp_skills = '{ not json' WHERE id = ${invalidName}`,
@@ -754,7 +754,7 @@ layer(NodeServices.layer)((it) => {
       yield* liveRegistry.refresh;
       const refreshedState = yield* liveRegistry.state;
       const [failure] = refreshedState.failures;
-      assert.strictEqual(failure?.name, invalidName);
+      assert.strictEqual(failure?.id, invalidName);
       assert.strictEqual(failure?.displayName, "invalid stored settings");
       assert.strictEqual(failure?.workspaceLimit, 3);
       const liveIssueTracker = Registry.findWorkspaceIssueTracker(refreshedState, invalidName);
@@ -765,7 +765,7 @@ layer(NodeServices.layer)((it) => {
       );
       assert.strictEqual(refreshedState.failures.length, 1);
       assert.deepStrictEqual(
-        Registry.findWorkspace(refreshedState, first.config.name)?.config.worktrees?.setup,
+        Registry.findWorkspace(refreshedState, first.config.id)?.config.worktrees?.setup,
         ["pnpm install"],
       );
 
@@ -791,7 +791,7 @@ layer(NodeServices.layer)((it) => {
       const relativeError = yield* management
         .register(
           registration({
-            name: "relative",
+            displayName: "relative",
             checkoutPath: ".",
             issueTracker: { type: "github" },
             linearHistory: false,
@@ -815,7 +815,7 @@ layer(NodeServices.layer)((it) => {
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
       const registered = yield* management.register(
         registration({
-          name: "moving workspace",
+          displayName: "moving workspace",
           checkoutPath: firstCheckout,
           issueTracker: { type: "github" },
           sourceControl: { type: "github" },
@@ -824,7 +824,7 @@ layer(NodeServices.layer)((it) => {
         }),
       );
       if (registered._tag === "Failed") return assert.fail("expected registration to succeed");
-      const workspace = registered.workspace.config.name;
+      const workspace = registered.workspace.config.id;
       const privateTree = path.join(root, "workspaces", workspace);
       yield* fs.makeDirectory(privateTree, { recursive: true });
       yield* fs.writeFileString(path.join(privateTree, "private.md"), "private");
@@ -849,7 +849,7 @@ layer(NodeServices.layer)((it) => {
       ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
 
       const renamedUpdate = workspaceUpdate({
-        name: "renamed workspace",
+        displayName: "renamed workspace",
         issueTracker: { type: "linear", teams: ["ENG"] },
         sourceControl: { type: "github" },
         mcpSkills: [],
@@ -859,7 +859,7 @@ layer(NodeServices.layer)((it) => {
       });
       const updated = yield* management.update(workspace, renamedUpdate);
       if (updated._tag === "Failed") return assert.fail("expected update to succeed");
-      assert.strictEqual(updated.workspace.config.name, workspace);
+      assert.strictEqual(updated.workspace.config.id, workspace);
       assert.strictEqual(updated.workspace.config.checkoutPath, firstCheckout);
       assert.strictEqual(updated.workspace.config.displayName, "renamed workspace");
       assert.strictEqual(updated.workspace.config.issueTracker.type, "linear");
@@ -867,7 +867,7 @@ layer(NodeServices.layer)((it) => {
       assert.deepStrictEqual(
         updated.workspace.record,
         registration({
-          name: "renamed workspace",
+          displayName: "renamed workspace",
           checkoutPath: firstCheckout,
           issueTracker: { type: "linear", connectionId: "unbound", teams: ["ENG"] },
           sourceControl: {
@@ -889,7 +889,7 @@ layer(NodeServices.layer)((it) => {
 
       const rebound = yield* management.rebind(workspace, secondCheckout);
       if (rebound._tag === "Failed") return assert.fail("expected re-bind to succeed");
-      assert.strictEqual(rebound.workspace.config.name, workspace);
+      assert.strictEqual(rebound.workspace.config.id, workspace);
       assert.strictEqual(rebound.workspace.config.checkoutPath, secondCheckout);
       assert.strictEqual(rebound.workspace.repository, "acme/repo");
       assert.strictEqual(rebound.workspace.workspaceLimit, 4);
@@ -933,7 +933,7 @@ layer(NodeServices.layer)((it) => {
         githubRegistration("moving workspace", secondCheckout),
       );
       if (registeredAgain._tag === "Failed") return assert.fail("expected re-registration to succeed");
-      assert.notStrictEqual(registeredAgain.workspace.config.name, workspace);
+      assert.notStrictEqual(registeredAgain.workspace.config.id, workspace);
     }),
   );
 
@@ -964,7 +964,7 @@ layer(NodeServices.layer)((it) => {
       const liveRegistry = Context.get(registryContext, Registry.WorkspaceRegistry);
       const registered = yield* management.register(githubRegistration("rollback", checkoutPath));
       if (registered._tag === "Failed") return assert.fail("expected registration to succeed");
-      const workspace = registered.workspace.config.name;
+      const workspace = registered.workspace.config.id;
       const privateTree = path.join(privateRoot, workspace);
       yield* fs.makeDirectory(privateTree, { recursive: true });
 
@@ -1009,7 +1009,7 @@ layer(NodeServices.layer)((it) => {
       const privateSkill = path.join(
         root,
         "workspaces",
-        firstChange.workspace.config.name,
+        firstChange.workspace.config.id,
         "skills",
         "shared",
         "SKILL.md",
@@ -1019,8 +1019,8 @@ layer(NodeServices.layer)((it) => {
       yield* liveRegistry.refresh;
 
       const state = yield* liveRegistry.state;
-      const first = Registry.findWorkspace(state, firstChange.workspace.config.name);
-      const second = Registry.findWorkspace(state, secondChange.workspace.config.name);
+      const first = Registry.findWorkspace(state, firstChange.workspace.config.id);
+      const second = Registry.findWorkspace(state, secondChange.workspace.config.id);
       assert.deepStrictEqual(
         first?.contributions?.map((entry) => entry.id),
         ["local:private/skill/shared", "local:repo/skill/shared"],

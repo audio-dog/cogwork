@@ -19,7 +19,12 @@ const workspaceOf = (
   source: `${name}.workspace.ts`,
   contributions: [],
   ...(repository ? { repository } : {}),
-  config: Schema.decodeSync(WorkspaceConfig)({ name, checkoutPath: `/repos/${name}`, issueTracker }),
+  config: Schema.decodeSync(WorkspaceConfig)({
+    id: name,
+    displayName: name,
+    checkoutPath: `/repos/${name}`,
+    issueTracker,
+  }),
 });
 
 const githubWorkspace = workspaceOf("gh", { type: "github", priority: { field: 42 } }, "acme/example");

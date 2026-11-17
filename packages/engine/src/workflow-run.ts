@@ -240,7 +240,7 @@ const selectedWorkspaceIds = (
   document: Parameters<typeof buildWorkflowActionPlan>[0]["document"],
   workspaces: ReadonlyArray<RegisteredWorkspace>,
 ) => {
-  const registered = workspaces.map(({ config }) => config.name);
+  const registered = workspaces.map(({ config }) => config.id);
   return document.workspaces._tag === "Every"
     ? registered
     : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
@@ -324,7 +324,7 @@ export const make = Effect.gen(function* () {
     required: ReadonlyArray<string>,
   ) {
     if (workspace === null) return [];
-    const fromPlugins = yield* plugins.contributions(workspace.config.name).pipe(
+    const fromPlugins = yield* plugins.contributions(workspace.config.id).pipe(
       Effect.map((contributions) =>
         contributions.filter(({ load }) => PluginContributionLoad.guards.Loaded(load)),
       ),
@@ -591,7 +591,7 @@ export const make = Effect.gen(function* () {
     const catalogResult = yield* workflows.catalog;
     const registryState = yield* registry.state;
     const workspace =
-      registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
+      registryState.workspaces.find(({ config }) => config.id === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
     const itemWorkspace = itemWorkspaceOf(admission);
     const resultSchema = workflowOperationResultSchema(
@@ -603,7 +603,7 @@ export const make = Effect.gen(function* () {
     const issueSearchEnabled = needsIssueSearch(operation, catalogResult.catalog);
     const pullRequestToolEnabled = needsPullRequestTool(operation, catalogResult.catalog);
     const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
-      outputWorkspaces.includes(config.name),
+      outputWorkspaces.includes(config.id),
     );
     const selectedHarness = operation.model.harness ?? catalogResult.machine.defaultHarness;
     const hasMissingNeed = operation.requires.some(
@@ -787,7 +787,7 @@ export const make = Effect.gen(function* () {
             makePullRequestTool(sourceControl, toolWorkspaces, (selected, pullRequest) =>
               Ref.update(pullRequestSnapshots, (snapshots) => [
                 ...snapshots,
-                { workspace: selected.config.name, pullRequest },
+                { workspace: selected.config.id, pullRequest },
               ]),
             ),
           ]
@@ -1028,7 +1028,7 @@ export const make = Effect.gen(function* () {
       (plan) => {
         const target = waitingReviewTarget(plan);
         if (target?._tag !== "NamedPullRequest") return Effect.void;
-        const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+        const workspace = workspaces.find(({ config }) => config.id === target.workspace);
         if (!workspace) return Effect.void;
         return sourceControl.readPullRequest(workspace, `#${target.number}`).pipe(
           Effect.flatMap((pullRequest) => {

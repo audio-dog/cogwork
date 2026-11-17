@@ -183,7 +183,7 @@ const resolvePerformanceIssueTarget = Effect.fn("github.resolvePerformanceIssueT
 ) {
   if (!workspaceName) return yield* missingTarget("performance evidence workspace is not configured");
   const state = yield* registry.state;
-  const workspace = state.workspaces.find((candidate) => candidate.config.name === workspaceName);
+  const workspace = state.workspaces.find((candidate) => candidate.config.id === workspaceName);
   if (!workspace)
     return yield* retryableUnavailable(`performance evidence workspace ${workspaceName} is unavailable`);
   if (workspace.config.issueTracker.type !== "github" || !workspace.repository) {

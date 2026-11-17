@@ -288,10 +288,10 @@ export const handlersLayer = DaemonRpcs.toLayer({
       scheduler: schedulerStatsOf(registry, config, stats),
       sources: yield* triggerObservation.health,
       workspaces: registry.workspaces.map((workspace) =>
-        workspaceInfoOf(workspace, readyToMerge.get(workspace.config.name)),
+        workspaceInfoOf(workspace, readyToMerge.get(workspace.config.id)),
       ),
-      failures: registry.failures.map(({ name, displayName, source, message }) => ({
-        ...(name === undefined ? {} : { name }),
+      failures: registry.failures.map(({ id, displayName, source, message }) => ({
+        ...(id === undefined ? {} : { id }),
         ...(displayName === undefined ? {} : { displayName }),
         source,
         message,

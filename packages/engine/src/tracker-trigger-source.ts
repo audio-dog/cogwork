@@ -108,7 +108,7 @@ export const makeTrackerTriggerSource = (
       return label !== undefined && item.labels.includes(label) ? [{ subscription, label }] : [];
     });
     if (!item.open || matching.length === 0) return [];
-    const name = workspace.config.name;
+    const name = workspace.config.id;
     const prose = yield* issueTracker.readTriggerProse(workspace, item.id);
     const cause = yield* originCause(name, item.id);
     const shared = {
@@ -162,7 +162,7 @@ export const makeTrackerTriggerSource = (
     workspace: RegisteredWorkspace,
     now: number,
   ) {
-    const name = workspace.config.name;
+    const name = workspace.config.id;
     const selected = workspaceSubscriptions(name, subscriptions);
     if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: name };
     const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
@@ -187,7 +187,7 @@ export const makeTrackerTriggerSource = (
     const state = yield* registry;
     const workspaces = state.workspaces.filter(({ config }) => config.issueTracker.type === system);
     const reads = yield* Effect.forEach(workspaces, (workspace) =>
-      readWorkspace(checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
+      readWorkspace(checkpoint.cursors.get(workspace.config.id), subscriptions, workspace, now),
     );
     return {
       events: reads.flatMap(({ events }) => events),
@@ -204,7 +204,7 @@ export const makeTrackerTriggerSource = (
   ) {
     if (event.key._tag !== "Issue") return Recheck.Matches();
     const { id, workspace } = event.key;
-    const registered = (yield* registry).workspaces.find(({ config }) => config.name === workspace);
+    const registered = (yield* registry).workspaces.find(({ config }) => config.id === workspace);
     if (!registered) return Recheck.Matches();
     const item = yield* issueTracker
       .readItem(registered, id)

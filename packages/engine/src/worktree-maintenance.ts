@@ -32,7 +32,7 @@ const ownedWorktreePaths = Effect.fn("WorktreeMaintenance.ownedWorktreePaths")(f
 ) {
   const ledger = yield* RunLedger;
   const running = yield* ledger.runningRuns;
-  const workspaceByName = new Map(workspaces.map((candidate) => [candidate.config.name, candidate]));
+  const workspaceByName = new Map(workspaces.map((candidate) => [candidate.config.id, candidate]));
   const ownershipRoot = yield* canonicalWorktreeRoot(workspace);
   const ownershipPaths = [ownershipRoot.configuredPath, ownershipRoot.canonicalPath];
   const retained = yield* Effect.forEach(running, ({ branch, workspace: runWorkspace }) => {
@@ -79,7 +79,7 @@ export const maintainWorktrees = Effect.fn("WorktreeMaintenance.maintainWorktree
   yield* Effect.forEach(
     managed,
     (workspace) => {
-      const correlation = { workspace: workspace.config.name };
+      const correlation = { workspace: workspace.config.id };
       return manager.tryWithMaintenanceLock(maintainWorkspace(workspace, registry.workspaces)).pipe(
         Effect.flatMap(
           Option.match({

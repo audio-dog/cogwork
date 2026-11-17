@@ -251,7 +251,8 @@ const reviewWorkspace: RegisteredWorkspace = {
   repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "repo",
+    id: "repo",
+    displayName: "repo",
     checkoutPath: "/repo",
     issueTracker: { type: "github" },
   }),
@@ -295,7 +296,7 @@ const reviewOutput = {
   summary: "Review ready",
   stuck: false,
   answers: { done: "yes" },
-  workspace: reviewWorkspace.config.name,
+  workspace: reviewWorkspace.config.id,
   inputs: {
     pull_request: "#826",
     review_body: "Looks good.",
@@ -875,7 +876,8 @@ describe("WorkflowRun", () => {
         contributions: [],
         repository: "colonylabs/cogwork",
         config: yield* Schema.decodeEffect(WorkspaceConfig)({
-          name: "cogwork",
+          id: "cogwork",
+          displayName: "cogwork",
           checkoutPath: "/cogwork",
           issueTracker: { type: "github" },
         }),
@@ -904,7 +906,7 @@ describe("WorkflowRun", () => {
       });
       const granolaDocument = WorkflowDocument.make({
         ...document,
-        workspaces: { _tag: "Listed", workspaces: [repo.config.name] },
+        workspaces: { _tag: "Listed", workspaces: [repo.config.id] },
         operations: [
           {
             ...document.operations[0],
@@ -960,7 +962,7 @@ describe("WorkflowRun", () => {
             return [
               WorkflowActionArtifact.make({
                 kind: "IssueCreated",
-                workspace: workspace.config.name,
+                workspace: workspace.config.id,
                 issue,
                 url: `https://example.test/issues/${issue.slice(1)}`,
                 origin: input.origin,
@@ -1021,7 +1023,8 @@ describe("WorkflowRun", () => {
       repository: "owner/repo",
       contributions: [],
       config: Schema.decodeSync(WorkspaceConfig)({
-        name: "github",
+        id: "github",
+        displayName: "github",
         checkoutPath: "/repos/github",
         issueTracker: { type: "github" },
       }),
@@ -1044,7 +1047,7 @@ describe("WorkflowRun", () => {
           harnesses: [],
         },
         machine: {
-          workspaces: [{ id: workspace.config.name, binds: ["github"] }],
+          workspaces: [{ id: workspace.config.id, binds: ["github"] }],
           connections: [],
           harnesses: [{ name: harnessName, available: true }],
           defaultHarness: harnessName,
@@ -1062,7 +1065,7 @@ describe("WorkflowRun", () => {
           cause: triggerId === "needs-info-comment" ? { _tag: "Person" } : { _tag: "Unknown" },
           atMillis: 1_000,
           entry: selected.entry,
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           parameters: selected.parameters,
         },
         subscription: {
@@ -1072,7 +1075,7 @@ describe("WorkflowRun", () => {
           entry: selected.entry,
           parameters: selected.parameters,
           filters: [],
-          workspaces: [workspace.config.name],
+          workspaces: [workspace.config.id],
           catchUp: { since: 0 },
         },
         lineage: {
@@ -1108,7 +1111,7 @@ describe("WorkflowRun", () => {
       const issue = (id: string) =>
         ({
           _tag: "Issue",
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           id: decodeWorkItem(id),
         }) satisfies WorkItemRef;
       const needsInfoProgram = yield* runCodingAdmission(admissionFor("needs-triage", issue("#800")), {
@@ -1132,7 +1135,7 @@ describe("WorkflowRun", () => {
       yield* runCodingAdmission(
         admissionFor("checks-failed", {
           _tag: "PullRequest",
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           number: 803,
         }),
         {
@@ -1608,7 +1611,8 @@ describe("WorkflowRun", () => {
         },
       ],
       config: yield* Schema.decodeEffect(WorkspaceConfig)({
-        name: "repo",
+        id: "repo",
+        displayName: "repo",
         checkoutPath: "/repo",
         issueTracker: { type: "github" },
       }),
@@ -1784,7 +1788,8 @@ describe("WorkflowRun", () => {
       repository: "owner/repo",
       contributions: [],
       config: Schema.decodeSync(WorkspaceConfig)({
-        name: "github",
+        id: "github",
+        displayName: "github",
         checkoutPath: "/repos/github",
         issueTracker: { type: "github" },
       }),
@@ -1797,19 +1802,19 @@ describe("WorkflowRun", () => {
       ...admission,
       event: {
         ...admission.event,
-        key: { _tag: "Issue", workspace: workspace.config.name, id: issue },
+        key: { _tag: "Issue", workspace: workspace.config.id, id: issue },
         entry: issueEntry,
-        workspace: workspace.config.name,
+        workspace: workspace.config.id,
       },
       subscription: {
         ...admission.subscription,
         entry: issueEntry,
-        workspaces: [workspace.config.name],
+        workspaces: [workspace.config.id],
       },
     } satisfies TriggerAdmission;
     const pullRequestDocument = Schema.decodeSync(WorkflowDocument)({
       ...document,
-      workspaces: { _tag: "Listed", workspaces: [workspace.config.name] },
+      workspaces: { _tag: "Listed", workspaces: [workspace.config.id] },
       triggers: [{ ...document.triggers[0], entry: issueEntry, parameters: [] }],
       operations: [
         {
@@ -1884,7 +1889,7 @@ describe("WorkflowRun", () => {
         machine: {
           workspaces: [
             {
-              id: workspace.config.name,
+              id: workspace.config.id,
               binds: ["github"],
             },
           ],
@@ -2134,7 +2139,8 @@ describe("WorkflowRun", () => {
         repository: "owner/repo",
         contributions: [],
         config: yield* Schema.decodeEffect(WorkspaceConfig)({
-          name: "repo",
+          id: "repo",
+          displayName: "repo",
           checkoutPath: "/repo",
           issueTracker: { type: "github" },
         }),
@@ -2158,7 +2164,7 @@ describe("WorkflowRun", () => {
           review_comments: [],
           approval_request: "Post this review?",
         },
-        workspace: reviewWorkspace.config.name,
+        workspace: reviewWorkspace.config.id,
         lineage: admission.lineage,
         handOff: null,
         steps: [
@@ -2184,7 +2190,7 @@ describe("WorkflowRun", () => {
             },
             target: {
               _tag: "NamedPullRequest",
-              workspace: reviewWorkspace.config.name,
+              workspace: reviewWorkspace.config.id,
               app: githubSourceControlType,
               issueTracker: reviewWorkspace.config.issueTracker,
               repository: reviewWorkspace.repository ?? null,
@@ -2235,7 +2241,7 @@ describe("WorkflowRun", () => {
             Effect.map(() =>
               WorkflowActionArtifact.make({
                 kind: "PullRequestUpdated",
-                workspace: selected.config.name,
+                workspace: selected.config.id,
                 issue: WorkItemId.make(`#${pullRequest.number}`),
                 url: pullRequest.url,
                 origin,
@@ -2251,7 +2257,7 @@ describe("WorkflowRun", () => {
       yield* (yield* WorkflowActionPlanStore).create(reviewPlan);
       yield* (yield* RunLedger).insertRun({
         id: attempt,
-        workspace: reviewWorkspace.config.name,
+        workspace: reviewWorkspace.config.id,
         workItem: decodeWorkItem("#826"),
         operation: "implement",
         harness: harnessName,
@@ -3140,7 +3146,7 @@ describe("WorkflowRun", () => {
 
       const outcome = yield* runner.execute({
         ...admission,
-        event: { ...admission.event, workspace: reviewWorkspace.config.name },
+        event: { ...admission.event, workspace: reviewWorkspace.config.id },
       });
 
       const attempts = yield* Ref.get(coordination.attempts);

@@ -55,7 +55,7 @@ interface WorkspaceLoadingServices {
 }
 
 interface LoadedWorkspaceInput {
-  readonly name: WorkspaceId;
+  readonly id: WorkspaceId;
   readonly issueTracker: IssueTrackerConfig;
   readonly sourceControl?: SourceControlConfig;
   readonly repository?: string;
@@ -230,11 +230,11 @@ const loadRepository = Effect.fn("WorkspaceRegistry.loadRepository")(function* (
 });
 
 const workspaceFailure = (row: WorkspaceRow, message: string, repository?: string) => {
-  const name = Option.getOrUndefined(decodeWorkspaceIdOption(row.id));
+  const id = Option.getOrUndefined(decodeWorkspaceIdOption(row.id));
   const issueTracker = Option.getOrUndefined(decodeIssueTrackerOption(row.issueTracker));
   const sourceControl = Option.getOrUndefined(decodeSourceControlOption(row.sourceControl));
   return {
-    ...(name ? { name } : {}),
+    ...(id ? { id } : {}),
     ...(issueTracker ? { issueTracker } : {}),
     ...(sourceControl ? { sourceControl } : {}),
     ...(repository ? { repository } : {}),
@@ -245,22 +245,22 @@ const workspaceFailure = (row: WorkspaceRow, message: string, repository?: strin
   } satisfies RegisteredWorkspaceFailure;
 };
 
-export const findWorkspace = (registry: RegistryState, name: string) =>
-  registry.workspaces.find((workspace) => workspace.config.name === name);
+export const findWorkspace = (registry: RegistryState, id: string) =>
+  registry.workspaces.find((workspace) => workspace.config.id === id);
 
-export const findWorkspaceIssueTrackerBinding = (registry: RegistryState, name: string) => {
-  const workspace = findWorkspace(registry, name);
+export const findWorkspaceIssueTrackerBinding = (registry: RegistryState, id: string) => {
+  const workspace = findWorkspace(registry, id);
   if (workspace !== undefined) return workspace;
-  const failure = registry.failures.find((candidate) => candidate.name === name);
-  if (failure?.name === undefined || failure.issueTracker === undefined) return undefined;
+  const failure = registry.failures.find((candidate) => candidate.id === id);
+  if (failure?.id === undefined || failure.issueTracker === undefined) return undefined;
   return {
-    config: { name: failure.name, issueTracker: failure.issueTracker },
+    config: { id: failure.id, issueTracker: failure.issueTracker },
     ...(failure.repository ? { repository: failure.repository } : {}),
   } satisfies WorkspaceIssueTrackerBinding;
 };
 
-export const findWorkspaceIssueTracker = (registry: RegistryState, name: string) =>
-  findWorkspaceIssueTrackerBinding(registry, name)?.config.issueTracker;
+export const findWorkspaceIssueTracker = (registry: RegistryState, id: string) =>
+  findWorkspaceIssueTrackerBinding(registry, id)?.config.issueTracker;
 
 const worktreesFrom = (row: WorkspaceRow, binding: typeof WorkspaceBindingColumns.Type) => {
   const root = present(row.worktreeRoot);
@@ -293,7 +293,7 @@ const loadWorkspaceInput = Effect.fn("WorkspaceRegistry.loadWorkspaceInput")(fun
   services: WorkspaceLoadingServices,
   row: WorkspaceRow,
 ) {
-  const name = yield* decodeWorkspaceId(row.id).pipe(Effect.mapError((error) => registrationError(error)));
+  const id = yield* decodeWorkspaceId(row.id).pipe(Effect.mapError((error) => registrationError(error)));
   const issueTracker = yield* decodeIssueTracker(row.issueTracker).pipe(
     Effect.mapError((error) => registrationError(error)),
   );
@@ -304,7 +304,7 @@ const loadWorkspaceInput = Effect.fn("WorkspaceRegistry.loadWorkspaceInput")(fun
           Effect.mapError((error) => registrationError(error)),
         );
   const repository = yield* loadRepository(services, row, issueTracker, sourceControl);
-  return { name, issueTracker, sourceControl, repository } satisfies LoadedWorkspaceInput;
+  return { id, issueTracker, sourceControl, repository } satisfies LoadedWorkspaceInput;
 });
 
 const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
@@ -317,7 +317,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
     Effect.mapError((error) => registrationError(error)),
   );
   const record = yield* decodeWorkspaceRegistration({
-    name: row.name,
+    displayName: row.name,
     checkoutPath: row.checkoutPath,
     issueTracker: input.issueTracker,
     sourceControl: input.sourceControl,
@@ -327,8 +327,8 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
     concurrency: present(row.concurrency),
   }).pipe(Effect.mapError((error) => registrationError(error)));
   const config = yield* decodeWorkspaceConfig({
-    name: input.name,
-    displayName: record.name,
+    id: input.id,
+    displayName: record.displayName,
     checkoutPath: record.checkoutPath,
     issueTracker: record.issueTracker,
     sourceControl: record.sourceControl,
@@ -338,7 +338,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   }).pipe(Effect.mapError((error) => registrationError(error)));
   const contributions = yield* services
     .scanAuthoringTrees({
-      workspace: input.name,
+      workspace: input.id,
       repoRoot: row.checkoutPath,
       ...authoringRoots,
     })
@@ -447,7 +447,7 @@ const updateWorkspaceRow = Effect.fn("WorkspaceRegistry.updateWorkspaceRow")(fun
 ) {
   const worktrees = update.worktrees;
   const [row] = yield* sql<WorkspaceRow>`UPDATE workspaces SET
-    name = ${update.name},
+    name = ${update.displayName},
     issue_tracker = ${encodeIssueTracker(update.issueTracker)},
     source_control = ${update.sourceControl ? encodeSourceControl(update.sourceControl) : null},
     mcp_skills = ${update.mcpSkills ? encodeMcpSkills(update.mcpSkills) : null},
@@ -534,7 +534,7 @@ const insertWorkspace = Effect.fn("WorkspaceRegistry.insertWorkspace")(function*
     worktree_reap_after_millis, concurrency
   ) VALUES (
     ${id},
-    ${registration.name},
+    ${registration.displayName},
     ${registration.checkoutPath},
     ${encodeIssueTracker(registration.issueTracker)},
     ${registration.sourceControl ? encodeSourceControl(registration.sourceControl) : null},
@@ -578,11 +578,11 @@ const persistRepository = Effect.fn("WorkspaceRegistry.persistRepository")(funct
 });
 
 const persistWorkspaceRepository = (sql: SqlClient.SqlClient, workspace: RegisteredWorkspace) =>
-  persistRepository(sql, workspace.config.name, workspace.repository);
+  persistRepository(sql, workspace.config.id, workspace.repository);
 
 const persistFailureRepository = (sql: SqlClient.SqlClient, failure: RegisteredWorkspaceFailure) => {
-  if (!failure.name || !failure.repository) return Effect.void;
-  return persistRepository(sql, failure.name, failure.repository);
+  if (!failure.id || !failure.repository) return Effect.void;
+  return persistRepository(sql, failure.id, failure.repository);
 };
 
 const persistRegistrationRepository = Effect.fn("WorkspaceRegistry.persistRegistrationRepository")(function* (
@@ -607,17 +607,17 @@ const persistStateRepositories = Effect.fn("WorkspaceRegistry.persistStateReposi
   });
 });
 
-const withoutWorkspace = (state: RegistryState, name: WorkspaceId | undefined) => {
-  if (!name) return state;
+const withoutWorkspace = (state: RegistryState, id: WorkspaceId | undefined) => {
+  if (!id) return state;
   return {
-    workspaces: state.workspaces.filter((workspace) => workspace.config.name !== name),
-    failures: state.failures.filter((failure) => failure.name !== name),
+    workspaces: state.workspaces.filter((workspace) => workspace.config.id !== id),
+    failures: state.failures.filter((failure) => failure.id !== id),
   };
 };
 
 const withPreviousRepository = (state: RegistryState, failure: RegisteredWorkspaceFailure) => {
-  if (failure.repository || !failure.name) return failure;
-  const repository = findWorkspaceIssueTrackerBinding(state, failure.name)?.repository;
+  if (failure.repository || !failure.id) return failure;
+  const repository = findWorkspaceIssueTrackerBinding(state, failure.id)?.repository;
   if (!repository) return failure;
   return { ...failure, repository };
 };
@@ -629,11 +629,11 @@ const withPreviousRepositories = (previous: RegistryState, next: RegistryState) 
 
 const foldRegistration = (state: RegistryState, change: WorkspaceRegistrationChange) => {
   if (change._tag === "Registered") {
-    const current = withoutWorkspace(state, change.workspace.config.name);
+    const current = withoutWorkspace(state, change.workspace.config.id);
     return { ...current, workspaces: [...current.workspaces, change.workspace] };
   }
   const failure = withPreviousRepository(state, change.failure);
-  const current = withoutWorkspace(state, failure.name);
+  const current = withoutWorkspace(state, failure.id);
   return { ...current, failures: [...current.failures, failure] };
 };
 

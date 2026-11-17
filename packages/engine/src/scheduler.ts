@@ -271,7 +271,7 @@ export const make = (config: SchedulerConfig) =>
       const registryState = yield* registry.state;
       const workspaceLimits = new Map(
         registryState.workspaces.map(({ config: workspace, workspaceLimit }) => [
-          workspace.name,
+          workspace.id,
           workspaceLimit ?? config.perWorkspaceLimit,
         ]),
       );

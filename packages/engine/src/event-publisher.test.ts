@@ -25,7 +25,8 @@ const workspace: RegisteredWorkspace = {
   source: "test",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceName,
+    id: workspaceName,
+    displayName: "Test workspace",
     checkoutPath: "/repos/web",
     issueTracker: { type: "github" },
   }),

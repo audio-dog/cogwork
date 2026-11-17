@@ -5,10 +5,10 @@ import { terminalLine } from "./terminal-text";
 const section = (label: string, lines: ReadonlyArray<string>) =>
   lines.length === 0 ? [] : [`      ${label}:`, ...lines.map((line) => `        · ${line}`)];
 
-const workspaceLabel = (workspace: { readonly name?: string; readonly displayName?: string }) => {
-  if (workspace.name === undefined) return workspace.displayName ?? "";
-  if (workspace.displayName === undefined) return workspace.name;
-  return `${workspace.displayName} (${workspace.name})`;
+const workspaceLabel = (workspace: { readonly id?: string; readonly displayName?: string }) => {
+  if (workspace.id === undefined) return workspace.displayName ?? "";
+  if (workspace.displayName === undefined) return workspace.id;
+  return `${workspace.displayName} (${workspace.id})`;
 };
 
 const formatWorkspace = (workspace: WorkspaceInfo) => {
@@ -29,7 +29,7 @@ const formatFailure = (failure: DaemonStatus["failures"][number]) => {
 };
 
 export const formatScheduler = (scheduler: SchedulerStats) => {
-  const loads = scheduler.perWorkspace.map((load) => `${load.name}=${load.inFlight}/${load.limit}`).join(" ");
+  const loads = scheduler.perWorkspace.map((load) => `${load.id}=${load.inFlight}/${load.limit}`).join(" ");
   const suffix = loads.length === 0 ? "" : ` (${loads})`;
   const paused = scheduler.scheduling === "paused" ? " · paused" : "";
   return `scheduler: ${scheduler.globalInFlight}/${scheduler.globalLimit} in-flight · budget ${scheduler.dailyBudgetUsed}/${scheduler.dailyBudgetLimit}${paused}${suffix}`;

@@ -36,15 +36,16 @@ const workspace: RegisteredWorkspace = {
   contributions: [],
   repository: "owner/repo",
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "repo",
+    id: "repo",
+    displayName: "repo",
     checkoutPath: "/repo",
     issueTracker: { type: "github" },
   }),
 };
 const otherWorkspace = Schema.decodeSync(WorkspaceId)("other");
 
-const issueRef = { _tag: "Issue", workspace: workspace.config.name, id: item } as const;
-const pullRequestRef = { _tag: "PullRequest", workspace: workspace.config.name, number: 42 } as const;
+const issueRef = { _tag: "Issue", workspace: workspace.config.id, id: item } as const;
+const pullRequestRef = { _tag: "PullRequest", workspace: workspace.config.id, number: 42 } as const;
 const slackRef = { _tag: "SlackMessage", team: "T1", channel: "C1", ts: "1700.01" } as const;
 
 const admissionFor = (ref: WorkItemRef): TriggerAdmission => {
@@ -56,7 +57,7 @@ const admissionFor = (ref: WorkItemRef): TriggerAdmission => {
       cause: { _tag: "Unknown" },
       atMillis: 1,
       entry,
-      workspace: workspace.config.name,
+      workspace: workspace.config.id,
     },
     subscription: {
       workflow: Schema.decodeSync(WorkflowId)("source-control-writes"),
@@ -65,7 +66,7 @@ const admissionFor = (ref: WorkItemRef): TriggerAdmission => {
       entry,
       parameters: [],
       filters: [],
-      workspaces: [workspace.config.name],
+      workspaces: [workspace.config.id],
       catchUp: { since: 0 },
     },
     lineage: {
@@ -85,7 +86,7 @@ const targetOf = (action: string, ref: WorkItemRef, overrides: Partial<TargetCon
     workspaces: [workspace],
     inputs: {},
     parameters: [],
-    workspace: workspace.config.name,
+    workspace: workspace.config.id,
     sourceControl: undefined,
     ...overrides,
   });
@@ -111,11 +112,11 @@ const namedTargetOf = (action: string, snapshots: ReadonlyArray<PullRequestConte
       ...emptySourceControl,
       readPullRequest: () => Effect.succeed({ ...namedPullRequest, headSha: "current-sha" }),
     },
-    pullRequestSnapshots: snapshots.map((pullRequest) => ({ workspace: workspace.config.name, pullRequest })),
+    pullRequestSnapshots: snapshots.map((pullRequest) => ({ workspace: workspace.config.id, pullRequest })),
   });
 
 const frozen = {
-  workspace: workspace.config.name,
+  workspace: workspace.config.id,
   app: Schema.decodeSync(SourceControlType)("github"),
   issueTracker: workspace.config.issueTracker,
   repository: "owner/repo",

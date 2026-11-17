@@ -60,11 +60,11 @@ import { Scheduler } from "./scheduler";
 import { SlackLogin } from "./slack-login";
 import { WorkflowRun } from "./workflow-run";
 
-const workspaceById = (registry: RegistryState, name: WorkspaceId) =>
-  registry.workspaces.find((workspace) => workspace.config.name === name) ?? null;
+const workspaceById = (registry: RegistryState, id: WorkspaceId) =>
+  registry.workspaces.find((workspace) => workspace.config.id === id) ?? null;
 
-const workspaceIsRegistered = (registry: RegistryState, name: WorkspaceId) =>
-  workspaceById(registry, name) !== null || registry.failures.some((failure) => failure.name === name);
+const workspaceIsRegistered = (registry: RegistryState, id: WorkspaceId) =>
+  workspaceById(registry, id) !== null || registry.failures.some((failure) => failure.id === id);
 
 export const getGitHubPriorityFields = Effect.fn("Daemon.GetGitHubPriorityFields")(function* (payload: {
   readonly workspace: WorkspaceId;
@@ -342,7 +342,7 @@ export const updateWorkspace = Effect.fn("Daemon.UpdateWorkspace")(function* (pa
       const state = workspaceStateFromChange(change);
       const published = yield* publisher.publishWorkspaces();
       yield* publisher.publishScheduler();
-      return published.find((workspace) => workspace.name === payload.workspace) ?? state;
+      return published.find((workspace) => workspace.id === payload.workspace) ?? state;
     }),
   ).pipe(Effect.uninterruptible);
 });
@@ -632,27 +632,27 @@ export const loginSlack = Effect.fn("Daemon.LoginSlack")(() =>
   slackLoginGate.withPermit(loginSlackUnlocked()),
 );
 
-const boundWorkspaceName = (workspace: RegistryState["workspaces"][number], connectionId: ConnectionId) => {
-  if (workspace.config.issueTracker.connectionId === connectionId) return workspace.config.name;
-  if (workspace.config.sourceControl?.connectionId === connectionId) return workspace.config.name;
+const boundWorkspaceId = (workspace: RegistryState["workspaces"][number], connectionId: ConnectionId) => {
+  if (workspace.config.issueTracker.connectionId === connectionId) return workspace.config.id;
+  if (workspace.config.sourceControl?.connectionId === connectionId) return workspace.config.id;
   return null;
 };
 
-const boundFailureName = (failure: RegistryState["failures"][number], connectionId: ConnectionId) => {
-  if (failure.name === undefined) return null;
-  if (failure.issueTracker?.connectionId === connectionId) return failure.name;
-  return failure.sourceControl?.connectionId === connectionId ? failure.name : null;
+const boundFailureId = (failure: RegistryState["failures"][number], connectionId: ConnectionId) => {
+  if (failure.id === undefined) return null;
+  if (failure.issueTracker?.connectionId === connectionId) return failure.id;
+  return failure.sourceControl?.connectionId === connectionId ? failure.id : null;
 };
 
 const boundWorkspaceIds = (registry: RegistryState, connectionId: ConnectionId) => [
   ...new Set([
     ...registry.workspaces.flatMap((workspace) => {
-      const name = boundWorkspaceName(workspace, connectionId);
-      return name ? [name] : [];
+      const id = boundWorkspaceId(workspace, connectionId);
+      return id ? [id] : [];
     }),
     ...registry.failures.flatMap((failure) => {
-      const name = boundFailureName(failure, connectionId);
-      return name ? [name] : [];
+      const id = boundFailureId(failure, connectionId);
+      return id ? [id] : [];
     }),
   ]),
 ];

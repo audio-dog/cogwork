@@ -73,7 +73,8 @@ const workspace: RegisteredWorkspace = {
     },
   ],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId("web"),
+    id: workspaceId("web"),
+    displayName: "Test workspace",
     checkoutPath: "/repos/web",
     issueTracker: { type: "github" },
   }),

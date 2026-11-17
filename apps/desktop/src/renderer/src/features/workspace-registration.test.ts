@@ -22,7 +22,7 @@ describe("workspaceRegistrationFrom", () => {
     expect(
       workspaceRegistrationFrom({ ...githubDraft, checkoutPath: "  /Users/taylor/sites/cogwork/  " }),
     ).toEqual({
-      name: "cogwork",
+      displayName: "cogwork",
       checkoutPath: "/Users/taylor/sites/cogwork/",
       issueTracker: { type: "github", connectionId: "github/acme" },
       linearHistory: false,
@@ -30,7 +30,7 @@ describe("workspaceRegistrationFrom", () => {
   });
 
   it("names a Windows checkout for its last folder", () => {
-    expect(workspaceRegistrationFrom({ ...githubDraft, checkoutPath: "C:\\src\\cogwork" })?.name).toBe(
+    expect(workspaceRegistrationFrom({ ...githubDraft, checkoutPath: "C:\\src\\cogwork" })?.displayName).toBe(
       "cogwork",
     );
   });
@@ -46,7 +46,7 @@ describe("workspaceRegistrationFrom", () => {
         sourceControlConnectionId: "github/acme",
       }),
     ).toEqual({
-      name: "cogwork",
+      displayName: "cogwork",
       checkoutPath: "/Users/taylor/sites/cogwork",
       issueTracker: {
         type: "linear",

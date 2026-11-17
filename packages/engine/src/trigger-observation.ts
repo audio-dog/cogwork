@@ -629,7 +629,7 @@ export const make = Effect.gen(function* () {
       listedWorkflows.workflows.find(({ id }) => id === subscription.workflow)?.publishedCopy ?? null;
     const systems = trackerSystemsOf(document);
     const workspaces = registryState.workspaces.filter(({ config }) => {
-      const isSelected = subscription.workspaces.includes(config.name);
+      const isSelected = subscription.workspaces.includes(config.id);
       const matchesSystem =
         systems.size === 0 ||
         trackerSystems.some((system) => systems.has(system) && config.issueTracker.type === system);
@@ -639,7 +639,7 @@ export const make = Effect.gen(function* () {
       tracker.observe(workspace).pipe(
         Effect.flatMap((items) =>
           Effect.forEach(items, (item) => {
-            const key = { _tag: "Issue", workspace: workspace.config.name, id: item.id } as const;
+            const key = { _tag: "Issue", workspace: workspace.config.id, id: item.id } as const;
             return coordination.read(key).pipe(Effect.map((view) => ({ item, key, view, workspace })));
           }),
         ),
@@ -656,7 +656,7 @@ export const make = Effect.gen(function* () {
       return [
         {
           key,
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           subject: providerSubject(item.title, item.url),
           lastTouchedAtMillis,
           loadWorkContext: tracker.readProse(workspace, item.id).pipe(Effect.mapError(sweepFailure)),
@@ -744,12 +744,12 @@ export const make = Effect.gen(function* () {
     workspace: Effect.Success<typeof registry.state>["workspaces"][number],
     now: number,
   ) {
-    const current = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.name), now);
+    const current = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.id), now);
     if (current) return current;
     const items = yield* tracker.observe(workspace);
     const assignees = new Map(items.map(({ id, assignees }) => [id, assignees] as const));
     yield* Ref.update(assigneeSnapshots, (snapshots) =>
-      new Map(snapshots).set(workspace.config.name, { atMillis: now, assignees }),
+      new Map(snapshots).set(workspace.config.id, { atMillis: now, assignees }),
     );
     return assignees;
   });
@@ -763,7 +763,7 @@ export const make = Effect.gen(function* () {
     if (refreshed.has(itemId)) return refreshed.get(itemId) ?? [];
     const assignees = yield* tracker.assignees?.(workspace, itemId) ?? Effect.succeed([]);
     yield* Ref.update(assigneeSnapshots, (snapshots) =>
-      new Map(snapshots).set(workspace.config.name, {
+      new Map(snapshots).set(workspace.config.id, {
         atMillis: now,
         assignees: new Map(refreshed).set(itemId, assignees),
       }),
@@ -776,7 +776,7 @@ export const make = Effect.gen(function* () {
     itemId: WorkItemId,
   ) {
     const now = yield* Clock.currentTimeMillis;
-    const cached = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.name), now);
+    const cached = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.id), now);
     if (cached?.has(itemId)) return cached.get(itemId) ?? [];
     return yield* assigneeGate.withPermit(refreshItemAssignees(workspace, itemId, now));
   });
@@ -786,7 +786,7 @@ export const make = Effect.gen(function* () {
   ) {
     if (event.workspace === null) return true;
     const state = yield* registry.state;
-    const workspace = state.workspaces.find(({ config }) => config.name === event.workspace);
+    const workspace = state.workspaces.find(({ config }) => config.id === event.workspace);
     if (workspace === undefined) return false;
     const allowlist = workspace.config.issueTracker.assigneeAllowlist;
     if (allowlist === undefined) return true;
@@ -799,7 +799,7 @@ export const make = Effect.gen(function* () {
     const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);
     return subscriptionsOf(
       listed.workflows,
-      registryState.workspaces.map(({ config }) => config.name),
+      registryState.workspaces.map(({ config }) => config.id),
       conditionEntries,
     );
   });
@@ -911,7 +911,7 @@ export const make = Effect.gen(function* () {
               store.activate(
                 subscriptionsOf(
                   listed.workflows,
-                  registryState.workspaces.map(({ config }) => config.name),
+                  registryState.workspaces.map(({ config }) => config.id),
                   conditionEntries,
                 ),
                 atMillis,

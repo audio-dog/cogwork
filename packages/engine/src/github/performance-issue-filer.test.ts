@@ -84,7 +84,8 @@ const performanceWorkspace: RegisteredWorkspace = {
   repository: "colonylabs/cogwork",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: performanceWorkspaceName,
+    id: performanceWorkspaceName,
+    displayName: "Test workspace",
     checkoutPath: "/repos/cogwork",
     issueTracker: { type: "github" },
   }),
@@ -94,7 +95,8 @@ const linearPerformanceWorkspace: RegisteredWorkspace = {
   ...performanceWorkspace,
   repository: "colonylabs/cogwork",
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: linearPerformanceWorkspaceName,
+    id: linearPerformanceWorkspaceName,
+    displayName: "Test workspace",
     checkoutPath: "/repos/linear-performance",
     issueTracker: { type: "linear", teams: ["CGW"] },
   }),

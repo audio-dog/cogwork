@@ -69,7 +69,7 @@ const registeredStates = (board: Board) =>
 
 export const registeredWorkspaces = (board: Board): WorkspaceId[] =>
   registeredStates(board)
-    .map((state) => state.name)
+    .map((state) => state.id)
     .sort();
 
 export interface WorkspaceOption {
@@ -80,7 +80,7 @@ export interface WorkspaceOption {
 /** Register mints the WorkspaceId as a UUIDv7, so anything a person picks from needs the name. */
 export const registeredWorkspaceOptions = (board: Board): WorkspaceOption[] =>
   registeredStates(board)
-    .map((state) => ({ id: state.name, label: state.displayName ?? state.name }))
+    .map((state) => ({ id: state.id, label: state.displayName }))
     .sort((left, right) => left.label.localeCompare(right.label));
 
 export interface FailedWorkspace {
@@ -94,9 +94,9 @@ export interface FailedWorkspace {
 export const failedWorkspaces = (board: Board): FailedWorkspace[] =>
   [...board.workspaces.values()]
     .filter(WorkspaceState.guards.Failed)
-    .map(({ name, displayName, source, message }) => ({
-      id: name ?? null,
-      label: displayName ?? name ?? source,
+    .map(({ id, displayName, source, message }) => ({
+      id: id ?? null,
+      label: displayName ?? id ?? source,
       message,
     }))
     .sort((left, right) => left.label.localeCompare(right.label));

@@ -625,7 +625,7 @@ describe("daemon composition", () => {
       });
       const registration = yield* rpc.RegisterWorkspace({
         registration: {
-          name: WorkspaceId.make("github"),
+          displayName: "github",
           checkoutPath: fixture.checkoutPath,
           issueTracker: { type: githubType, connectionId: connectionIdOf("github", "owner") },
           linearHistory: false,
@@ -660,7 +660,7 @@ describe("daemon composition", () => {
       const eligible = yield* (yield* TriggerObservation).eligible;
       assert.deepStrictEqual(
         eligible.map(({ event }) => event.key),
-        [{ _tag: "Issue", workspace: registration.name, id: WorkItemId.make("#1") }],
+        [{ _tag: "Issue", workspace: registration.id, id: WorkItemId.make("#1") }],
       );
       yield* rpc.SetScheduling({ desired: "running" });
       const scheduler = yield* Scheduler;
@@ -715,7 +715,7 @@ describe("daemon composition", () => {
       const connectionId = connectionIdOf("github", "owner");
       const registration = yield* rpc.RegisterWorkspace({
         registration: {
-          name: WorkspaceId.make("github"),
+          displayName: "github",
           checkoutPath: fixture.checkoutPath,
           issueTracker: { type: githubType, connectionId },
           sourceControl: { type: githubSourceControl, connectionId },
@@ -735,8 +735,8 @@ describe("daemon composition", () => {
       yield* TestClock.adjust("50 seconds");
 
       assert.deepStrictEqual(
-        reconcileWorktrees.mock.calls.map(([workspace]) => workspace.config.name),
-        [registration.name],
+        reconcileWorktrees.mock.calls.map(([workspace]) => workspace.config.id),
+        [registration.id],
       );
       const heartbeatReads = pullListReads() - readsBeforeHeartbeats;
       assert.isAbove(heartbeatReads, 0);
@@ -769,7 +769,7 @@ describe("daemon composition", () => {
         establishment: { system: "slack", account: "review-team", source: { _tag: "Stored" } },
       });
       const registration = yield* Schema.decodeEffect(WorkspaceRegistration)({
-        name: "github",
+        displayName: "github",
         checkoutPath: fixture.root,
         issueTracker: { type: "github", connectionId: "github/connected-account" },
         sourceControl: { type: "github", connectionId: "github/connected-account" },
@@ -778,7 +778,7 @@ describe("daemon composition", () => {
       const workspace = yield* rpc.RegisterWorkspace({ registration });
       assert.strictEqual(workspace._tag, "Registered");
       if (workspace._tag !== "Registered") return;
-      yield* Ref.set(probe.workspace, workspace.name);
+      yield* Ref.set(probe.workspace, workspace.id);
       const template = (yield* rpc.GetWorkflowTemplates()).find(({ id }) => id === "slack-to-github-review");
       assert.isDefined(template);
       if (template === undefined) return;
@@ -901,8 +901,8 @@ describe("daemon composition", () => {
       );
       assert.isTrue(repliedAfterApproval);
       assert.deepStrictEqual(yield* Ref.get(probe.pullRequestToolCalls), [
-        { workspace: workspace.name, pull_request: "#827" },
-        { workspace: workspace.name, pull_request: "#827" },
+        { workspace: workspace.id, pull_request: "#827" },
+        { workspace: workspace.id, pull_request: "#827" },
       ]);
     }).pipe(
       Effect.provide(slackReviewServerTestLayer()),

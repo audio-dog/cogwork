@@ -129,7 +129,8 @@ const selectedWorkspace: RegisteredWorkspace = {
   source: "test",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: selectedWorkspaceId,
+    id: selectedWorkspaceId,
+    displayName: "Test workspace",
     checkoutPath: "/repos/selected",
     issueTracker: { type: "github", assigneeAllowlist: ["owner"] },
   }),
@@ -641,7 +642,8 @@ describe("TriggerObservation", () => {
         source: "test",
         contributions: [],
         config: yield* Schema.decodeEffect(WorkspaceConfig)({
-          name: "linear",
+          id: "linear",
+          displayName: "linear",
           checkoutPath: "/repos/linear",
           issueTracker: { type: "linear", teams: ["LIN"] },
         }),

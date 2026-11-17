@@ -79,18 +79,20 @@ const workspace: RegisteredWorkspace = {
   source: "control-store:workspace",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "repo",
+    id: "repo",
+    displayName: "repo",
     checkoutPath: "/repo",
     issueTracker: { type: "github" },
   }),
 };
 const item = decodeItem("#811");
 const linearConfig = Schema.decodeSync(WorkspaceConfig)({
-  name: "linear",
+  id: "linear",
+  displayName: "linear",
   checkoutPath: "/linear",
   issueTracker: { type: "linear", teams: ["CGW"] },
 });
-const ref = { _tag: "Issue", workspace: workspace.config.name, id: item } as const;
+const ref = { _tag: "Issue", workspace: workspace.config.id, id: item } as const;
 const admission: TriggerAdmission = {
   event: {
     key: ref,
@@ -98,7 +100,7 @@ const admission: TriggerAdmission = {
     cause: { _tag: "Unknown" },
     atMillis: 1,
     entry: decodeEntry("github.issue-changed"),
-    workspace: workspace.config.name,
+    workspace: workspace.config.id,
   },
   subscription: {
     workflow,
@@ -107,7 +109,7 @@ const admission: TriggerAdmission = {
     entry: decodeEntry("github.issue-changed"),
     parameters: [],
     filters: [],
-    workspaces: [workspace.config.name],
+    workspaces: [workspace.config.id],
     catchUp: { since: 0 },
   },
   lineage: {
@@ -153,7 +155,7 @@ const step = (position: number, entry: string, comment = "") =>
     inputs: comment === "" ? {} : { comment },
     target: {
       _tag: "CurrentIssue",
-      workspace: workspace.config.name,
+      workspace: workspace.config.id,
       app: workspace.config.issueTracker.type,
       issueTracker: workspace.config.issueTracker,
       repository: null,
@@ -178,7 +180,7 @@ const sourceStep = (entry: string) =>
     ...step(0, entry),
     target: {
       _tag: "CurrentPullRequest",
-      workspace: sourceWorkspace.config.name,
+      workspace: sourceWorkspace.config.id,
       app: githubSourceControl,
       issueTracker: sourceWorkspace.config.issueTracker,
       repository: sourceWorkspace.repository ?? null,
@@ -191,7 +193,7 @@ const openPullRequestStep = WorkflowActionPlanStep.make({
   inputs: { pr_title: "Open the pull request", pr_body: "Closes #811" },
   target: {
     _tag: "NewPullRequest",
-    workspace: sourceWorkspace.config.name,
+    workspace: sourceWorkspace.config.id,
     app: githubSourceControl,
     issueTracker: sourceWorkspace.config.issueTracker,
     repository: sourceWorkspace.repository ?? null,
@@ -214,7 +216,7 @@ const namedPullRequestStep = (
     },
     target: {
       _tag: "NamedPullRequest",
-      workspace: sourceWorkspace.config.name,
+      workspace: sourceWorkspace.config.id,
       app: githubSourceControl,
       issueTracker: sourceWorkspace.config.issueTracker,
       repository: sourceWorkspace.repository ?? null,
@@ -437,7 +439,7 @@ const pullRequestUpdate = (
 ) =>
   WorkflowActionArtifact.make({
     kind: "PullRequestUpdated",
-    workspace: sourceWorkspace.config.name,
+    workspace: sourceWorkspace.config.id,
     issue: decodeItem(`#${resolved.number}`),
     url: resolved.url,
     origin,
@@ -543,7 +545,7 @@ describe("Workflow action plan", () => {
           output: {
             summary: "Reviewed",
             answers: {},
-            workspace: sourceWorkspace.config.name,
+            workspace: sourceWorkspace.config.id,
             inputs: {
               pull_request: "#826",
               review_body: "Review body",
@@ -1051,7 +1053,7 @@ describe("Workflow action plan", () => {
         ...step(0, "github.close-this-issue"),
         target: {
           _tag: "CurrentIssue",
-          workspace: linearConfig.name,
+          workspace: linearConfig.id,
           app: linearConfig.issueTracker.type,
           issueTracker: linearConfig.issueTracker,
           repository: null,
@@ -1117,7 +1119,7 @@ describe("Workflow action plan", () => {
     const earlierIssue = { ...ref, id: decodeItem("#803") };
     const earlierOpen = WorkflowActionArtifact.make({
       kind: "PullRequestOpened",
-      workspace: sourceWorkspace.config.name,
+      workspace: sourceWorkspace.config.id,
       issue: decodeItem(`#${pullRequest.number}`),
       url: pullRequest.url,
       origin: WorkflowActionOrigin.make({
@@ -1213,7 +1215,7 @@ describe("Workflow action plan", () => {
           output: {
             summary: "Implemented",
             answers: {},
-            workspace: sourceWorkspace.config.name,
+            workspace: sourceWorkspace.config.id,
             inputs: { pr_title: "Open the pull request", pr_body: "Closes #811" },
           },
           attempt: decodeRun(`open-${runBranch}`),
@@ -1246,7 +1248,7 @@ describe("Workflow action plan", () => {
             Effect.map(() =>
               WorkflowActionArtifact.make({
                 kind: "PullRequestOpened",
-                workspace: sourceWorkspace.config.name,
+                workspace: sourceWorkspace.config.id,
                 issue: decodeItem("#830"),
                 url: "https://github.com/owner/repo/pull/830",
                 origin: input.origin,
@@ -1277,7 +1279,7 @@ describe("Workflow action plan", () => {
       const ledger = yield* RunLedger;
       yield* ledger.insertRun({
         id: initial.attempt,
-        workspace: sourceWorkspace.config.name,
+        workspace: sourceWorkspace.config.id,
         workItem: item,
         operation: "implement",
         harness: decodeHarness("scripted"),

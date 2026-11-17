@@ -46,7 +46,8 @@ const workspace: RegisteredWorkspace = {
   repository: "acme/example",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId,
+    id: workspaceId,
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github" },
   }),
@@ -55,7 +56,8 @@ const registryState = { workspaces: [workspace], failures: [] };
 const botWorkspace: RegisteredWorkspace = {
   ...workspace,
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId,
+    id: workspaceId,
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github" },
     sourceControl: { type: "github", botAllowlist: ["maintainer"] },
@@ -65,7 +67,8 @@ const botRegistryState = { workspaces: [botWorkspace], failures: [] };
 const prioritizedWorkspace: RegisteredWorkspace = {
   ...workspace,
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId,
+    id: workspaceId,
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github", priority: { field: 42 } },
   }),

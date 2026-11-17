@@ -29,11 +29,11 @@ const itemFlag = Flag.string("item").pipe(Flag.withDescription("Work item id, e.
 const titleFlag = Flag.string("title").pipe(Flag.withDescription("Work item title"));
 const branchFlag = Flag.string("branch").pipe(Flag.withDescription("Worktree branch name"));
 
-const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (name: string) {
+const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (id: string) {
   const registry = yield* (yield* Registry.WorkspaceRegistry).state;
-  const workspace = Registry.findWorkspace(registry, name);
+  const workspace = Registry.findWorkspace(registry, id);
   if (!workspace) {
-    return yield* new WorktreeWorkspaceNotFound({ detail: `workspace "${name}" not found` });
+    return yield* new WorktreeWorkspaceNotFound({ detail: `workspace "${id}" not found` });
   }
   return workspace;
 });
