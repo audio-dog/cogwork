@@ -1,0 +1,15 @@
+packages/ui/src/components/code-block.tsx
+  h_46518a29d4dd91 6,106-107,204-224,248
+  h_46518a29d4dd91 225-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "60751c9702e849125afcd034937452938e13bb9b",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}

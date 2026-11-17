@@ -1,0 +1,14 @@
+packages/ui/src/components/hover-card.tsx
+  h_46518a29d4dd91 1-2,5,9,20,34,40,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "905ca173a6e1ad9be37dc8ec96cd7715b891dc45",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
