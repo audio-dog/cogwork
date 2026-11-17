@@ -488,7 +488,7 @@ A live envelope broadcast while a run is in flight: run identity (run id / seque
 _Avoid_: Run event (the persisted form), notification
 
 **History end**:
-The marker a run's watch stream (`WatchActivity`) sends after the replayed history and before the live run activity. It is a stream-control item, like `SeedEnd`: it carries a delivery fact, not a domain fact. A client shows history-derived state, such as the latest status line, only after it. A stream that stops on a terminal event in history ends without it, and the end of the stream means the same thing.
+The marker a run's watch stream (`WatchActivity`) sends after the replayed history and before the live run activity. The stream's item type, `RunWatchItem`, is either a run activity or this marker. It is a stream-control item, like `SeedEnd`: it carries a delivery fact, not a domain fact. A client shows history-derived state, such as the latest status line, only after it. A stream that stops on a terminal event in history ends without it, and the end of the stream means the same thing.
 _Avoid_: Caught up, seed end (that is the `WatchEvents` marker)
 
 **Session**:
