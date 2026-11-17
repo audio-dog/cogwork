@@ -1,4 +1,9 @@
-import { codexCatalog } from "./models.generated";
+import type { ModelLevel } from "@cogwork/contracts";
+import { type CodexModel, codexCatalog } from "./models.generated";
+
+export const codexModelLevels = { light: "gpt-5.6-luna", deep: "gpt-5.6-sol" } satisfies Partial<
+  Record<ModelLevel, CodexModel>
+>;
 
 export const codexNativeEffort = (modelId: string, selected: string | null) => {
   const model = codexCatalog.models.find(({ value }) => value === modelId);

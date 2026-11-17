@@ -12,7 +12,7 @@ import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { ClaudeNativeSelectionResult, claudeNativeSelection } from "./model";
+import { ClaudeNativeSelectionResult, claudeModelLevels, claudeNativeSelection } from "./model";
 import { claudeModelCatalog } from "./models.generated";
 
 export interface ClaudeCodeRunnerOptions {
@@ -414,7 +414,8 @@ const descriptor = (
     catalog: managedCatalogOptions,
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
-    declaredMembers: ["Tools", "Skills"],
+    declaredMembers: ["Tools", "Skills", "Subagents"],
+    modelLevels: claudeModelLevels,
     inheritedEnvironment,
     makeAdapter: ({ model, request }) =>
       claudeCodeText(model, adapterConfig(executable, request, nativeSelection(request).effort)),

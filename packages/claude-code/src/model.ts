@@ -2,8 +2,14 @@ import {
   type HarnessManagedCatalog,
   type HarnessManagedCatalogModel,
   HarnessModelOptionDescriptor,
+  type ModelLevel,
 } from "@cogwork/contracts";
 import * as Data from "effect/Data";
+import type { ClaudeCatalogModel } from "./models.generated";
+
+export const claudeModelLevels = { light: "haiku", deep: "opus" } satisfies Partial<
+  Record<ModelLevel, ClaudeCatalogModel>
+>;
 
 type ClaudeModelOptions = Readonly<Record<string, string | boolean>>;
 
