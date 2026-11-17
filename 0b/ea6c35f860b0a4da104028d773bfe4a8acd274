@@ -1,0 +1,19 @@
+packages/engine/CONTEXT.md
+  s_d7aed834fc620d::t_6407f9cb6b4644 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0bea6c35f860b0a4da104028d773bfe4a8acd274",
+  "prompts": {},
+  "sessions": {
+    "s_d7aed834fc620d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ce29aaa8-181a-4bc9-b65d-835c92d63f57",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
