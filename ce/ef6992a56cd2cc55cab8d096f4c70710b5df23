@@ -1,0 +1,95 @@
+apps/desktop/src/renderer/src/features/workflow-transfer.test.ts
+  s_2cdac7432ddef1::t_8db3c928bad3b4 63,72-74,76-79,81
+  s_2cdac7432ddef1::t_5430a9fdfb8e2c 75,80,82-89
+packages/ui/src/components/alert.tsx
+  s_2cdac7432ddef1::t_a715d3577d4b90 14-17
+apps/desktop/src/renderer/src/features/workflow-import-review.test.ts
+  s_2cdac7432ddef1::t_6181bee73e4707 1-71
+apps/desktop/src/renderer/src/router.tsx
+  s_2cdac7432ddef1::t_3e897aa95ca3f6 17-19
+apps/desktop/src/renderer/src/features/workflow-import-review.ts
+  s_2cdac7432ddef1::t_b9be5d4cac8a8e 1-55
+apps/desktop/fixtures/imported-workflow-causing-highlights.json
+  h_8b6bec966fa04e 1-65
+apps/desktop/src/renderer/src/components/import-review.tsx
+  s_2cdac7432ddef1::t_2435308776d4a0 2-42,44-45,51
+  s_2cdac7432ddef1::t_b196b40be95a3b 1
+  s_2cdac7432ddef1::t_5c7351b2c0d481 43,46-50
+apps/desktop/src/renderer/src/features/workflow-transfer.ts
+  s_2cdac7432ddef1::t_1ce142ee5cdf9c 131
+  s_2cdac7432ddef1::t_a41774a38c493f 60,65-74,82-98
+  s_2cdac7432ddef1::t_147b06944655b4 6-59,61-64,75-81,99-101
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_2cdac7432ddef1::t_4743ad070cd231 4
+  s_2cdac7432ddef1::t_7feb4505cb7fef 15,17-18
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_2cdac7432ddef1::t_c1f0b32f113e51 768
+  s_2cdac7432ddef1::t_7b593f7b03254a 726-753,756-767,769-772
+  s_2cdac7432ddef1::t_ab1d6eb1df30b3 21
+  s_2cdac7432ddef1::t_9d472404acc962 795,797-798
+  s_2cdac7432ddef1::t_ab1dbdc92f03ff 28
+  s_2cdac7432ddef1::t_3b33df56782ae3 774-776,778-780
+  s_2cdac7432ddef1::t_8a3fd862b4b3d8 784
+  s_2cdac7432ddef1::t_e67de2f2df6be8 773,777,781-783,785-794,796,799-806,808-812,815,817,819-823,825-839
+  s_2cdac7432ddef1::t_78bb62c7d753ef 807,824
+  s_2cdac7432ddef1::t_7bab51e894897e 813-814,816,818
+  s_2cdac7432ddef1::t_9fda34078c3c38 754-755
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_2cdac7432ddef1::t_2e090ad9a81c3f 295-297
+  s_2cdac7432ddef1::t_1f1b8ed5f32461 2
+  s_2cdac7432ddef1::t_4e9869922106ca 45,52-53
+  s_2cdac7432ddef1::t_101c3eb4bc4df9 44
+  s_2cdac7432ddef1::t_7f2429181db227 28
+  s_2cdac7432ddef1::t_3c883d62869ebf 207-208,221-227,270-272,275
+  s_2cdac7432ddef1::t_a36d14d78c8d67 276-292,294,298-313,319,322-337
+  s_2cdac7432ddef1::t_c109369831c5c6 228
+  s_2cdac7432ddef1::t_a589ddf9faaec7 216-220
+  s_2cdac7432ddef1::t_e0a982af2fd1f7 229-266,269
+  s_2cdac7432ddef1::t_964e7a88bfd7ed 46-51
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_2cdac7432ddef1::t_b53145a6becba8 311,315-317
+  s_2cdac7432ddef1::t_a6d32f10a2bd35 42
+  s_2cdac7432ddef1::t_2e9a525ca6894d 293-303
+  s_2cdac7432ddef1::t_a7fd4848f24a3f 324,326-329,331-348
+  s_2cdac7432ddef1::t_961a163ec64343 44
+packages/ui/src/components/alert-banner.tsx
+  s_2cdac7432ddef1::t_0d3a9be881a68d 1-33
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_2cdac7432ddef1::t_c0cdcd4c5108f3 591-593
+  s_2cdac7432ddef1::t_0176a2b80b637b 561
+  s_2cdac7432ddef1::t_84a10e34653a8d 171-175
+  s_2cdac7432ddef1::t_0d2eadf8e257ce 991-993
+  s_2cdac7432ddef1::t_171fbd5d9d0081 568-569,571
+  s_2cdac7432ddef1::t_95fa64c19867bc 891-897,902
+  s_2cdac7432ddef1::t_2d30d8ac337e95 84-89
+  s_2cdac7432ddef1::t_80fa63b58eeb3a 160
+  s_2cdac7432ddef1::t_17ff7477b657fe 436-454
+  s_2cdac7432ddef1::t_0cba3344de6eb7 744-768,770-774
+  s_2cdac7432ddef1::t_80bf2691887c76 424
+  s_2cdac7432ddef1::t_d63f44ae810094 743
+  s_2cdac7432ddef1::t_af89ee411a7470 140
+  s_2cdac7432ddef1::t_5cee9fd645aa72 75
+  s_2cdac7432ddef1::t_5a04ef2875d3e1 727,731-732,734
+  s_2cdac7432ddef1::t_bb5facad5fd4c0 1003-1004,1021-1028
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ceef6992a56cd2cc55cab8d096f4c70710b5df23",
+  "prompts": {},
+  "humans": {
+    "h_8b6bec966fa04e": {
+      "author": "David Simoneau <david.simoneau@scribehow.com>"
+    }
+  },
+  "sessions": {
+    "s_2cdac7432ddef1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "be5dced1-74a6-45d4-98b8-a074e8b9fc53",
+        "model": "auto-smart"
+      },
+      "human_author": "David Simoneau <david.simoneau@scribehow.com>"
+    }
+  }
+}
