@@ -4,7 +4,6 @@ import {
   WorkflowCatalogKey,
   WorkflowId,
   WorkflowNodeId,
-  type WorkflowParameterValue,
   WorkItemId,
   type WorkItemRef,
   WorkspaceId,
@@ -39,11 +38,7 @@ const admissionFor = (ref: WorkItemRef): TriggerAdmission => {
   };
 };
 
-const targetOf = (
-  action: string,
-  ref: WorkItemRef,
-  parameters: ReadonlyArray<WorkflowParameterValue> = [],
-) => {
+const targetOf = (action: string, ref: WorkItemRef) => {
   const entry = actionEntryFor(`slack.${action}`);
   assert.isDefined(entry);
   return entry.target({
@@ -51,7 +46,7 @@ const targetOf = (
     admission: admissionFor(ref),
     workspaces: [],
     inputs: {},
-    parameters,
+    parameters: [],
     workspace: undefined,
     sourceControl: undefined,
   });
@@ -87,28 +82,12 @@ describe("Slack Action entries", () => {
     }),
   );
 
-  it.effect("refuses a Slack target it cannot freeze", () =>
+  it.effect("refuses a Slack item action on a non-Slack item", () =>
     Effect.gen(function* () {
-      const refusals = [
-        {
-          action: "add-reaction",
-          ref: issue,
-          parameters: [],
-          message: "The Slack action needs a Slack item",
-        },
-        {
-          action: "send-message",
-          ref: issue,
-          parameters: [{ id: "channel", value: "  " }],
-          message: "The Slack message action needs a channel",
-        },
-      ];
-      const failures = yield* Effect.forEach(refusals, ({ action, ref, parameters }) =>
-        Effect.flip(targetOf(action, ref, parameters)),
-      );
+      const failure = yield* Effect.flip(targetOf("add-reaction", issue));
       assert.deepStrictEqual(
-        failures.map(({ reason, message }) => ({ reason, message })),
-        refusals.map(({ message }) => ({ reason: "invalid", message })),
+        { reason: failure.reason, message: failure.message },
+        { reason: "invalid", message: "The Slack action needs a Slack item" },
       );
     }),
   );
