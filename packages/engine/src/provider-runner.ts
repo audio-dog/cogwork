@@ -268,11 +268,12 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           );
           const agentLoopStrategy = maxIterations(defaultLoopBudget(plan.harness.profile));
           const runner = modelLevelRunner(levels, reference, (model) => childAdapters.get(model) ?? adapter);
-          const projection = subagentProjection(subagents, [...tools, ...engineTools], runner, {
-            tools: [...tools, ...engineTools],
-            middleware: [],
-            agentLoopStrategy,
-          });
+          const projection = subagentProjection(
+            subagents,
+            { runId: plan.id, threadId: session, tools: [...tools, ...engineTools] },
+            runner,
+            { tools: [...tools, ...engineTools], middleware: [], agentLoopStrategy },
+          );
           const chatStream = runChat({
             adapter,
             messages,

@@ -25,7 +25,12 @@ const parentRun = (calls: ReadonlyArray<SubagentCall>, runner: SubagentRunner) =
   const parent = scriptedAdapter("parent", (options) =>
     hasToolResults(options) ? textTurn('{"outcome":"done"}', 1) : subagentCallTurn(calls, 1),
   );
-  const projection = subagentProjection([reviewer], [], runner, { tools: [], middleware: [] });
+  const projection = subagentProjection(
+    [reviewer],
+    { runId: "run-884", threadId: "thread-884", tools: [] },
+    runner,
+    { tools: [], middleware: [] },
+  );
   return Effect.promise(() =>
     Array.fromAsync(
       chat({
@@ -93,20 +98,35 @@ describe("subagent runner", () => {
       }),
   );
 
-  it("leaves out a Subagent whose name a parent tool already has", () => {
+  it.effect("gives a failed child to the parent as a tool error, and the parent Run still finishes", () =>
+    Effect.gen(function* () {
+      const child = scriptedAdapter("child", () => {
+        throw new Error("model overloaded");
+      });
+
+      const chunks = yield* parentRun([{ id: "call-1", agent: "reviewer", task: "Check the diff." }], () => ({
+        adapter: child,
+        model: "child",
+      }));
+
+      assert.isTrue(
+        toolResults(chunks).some((content) => content.includes("reviewer failed: model overloaded")),
+      );
+      assert.strictEqual(chunks.at(-1)?.type, EventType.RUN_FINISHED);
+    }),
+  );
+
+  it("leaves out a Subagent whose name a parent tool or TanStack already has", () => {
     const reviewTool = toolDefinition({ name: "reviewer", description: "An engine tool" }).server(() =>
       Promise.resolve({}),
     );
     const child = scriptedAdapter("child", () => textTurn("ok", 1));
 
     const projection = subagentProjection(
-      [reviewer],
-      [reviewTool],
+      [reviewer, RunPlanSubagent.cases.Available.make({ ...reviewer, name: "main" })],
+      { runId: "run-884", threadId: "thread-884", tools: [reviewTool] },
       () => ({ adapter: child, model: "child" }),
-      {
-        tools: [],
-        middleware: [],
-      },
+      { tools: [], middleware: [] },
     );
 
     assert.deepStrictEqual(projection.tools, []);

@@ -3,9 +3,13 @@ import {
   type AgentLoopStrategy,
   type AnyTool,
   type ChatMiddleware,
-  chat,
+  createSubagentId,
+  createSubagentSink,
+  type DefinedAgent,
+  defineAgent,
   EventType,
   fromSpecTokenUsage,
+  runAgentStream,
   type StreamChunk,
   SubagentBudget,
   type SubagentLimits,
@@ -36,6 +40,12 @@ export interface SubagentChoice {
 
 export type SubagentRunner = (task: SubagentTask) => SubagentChoice;
 
+export interface SubagentParent {
+  readonly runId: string;
+  readonly threadId: string;
+  readonly tools: ReadonlyArray<AnyTool>;
+}
+
 export interface SubagentChild {
   readonly tools: ReadonlyArray<AnyTool>;
   readonly middleware: ReadonlyArray<ChatMiddleware>;
@@ -53,8 +63,11 @@ export const subagentLimits = {
 export const availableSubagents = (subagents: ReadonlyArray<RunPlanSubagent>) =>
   subagents.filter(RunPlanSubagent.guards.Available);
 
-const withoutToolNames = (subagents: ReadonlyArray<AvailableSubagent>, tools: ReadonlyArray<AnyTool>) => {
-  const taken = new Set(tools.map(({ name }) => name));
+// TanStack's `defineAgent` refuses the name `main`.
+const reservedAgentName = "main";
+
+const withoutTakenNames = (subagents: ReadonlyArray<AvailableSubagent>, tools: ReadonlyArray<AnyTool>) => {
+  const taken = new Set([reservedAgentName, ...tools.map(({ name }) => name)]);
   return subagents.filter(({ name }) => !taken.has(name));
 };
 
@@ -84,48 +97,74 @@ const sumUsage = (usages: ReadonlyArray<TokenUsage>) => ({
   totalTokens: usages.reduce((total, usage) => total + usage.totalTokens, 0),
 });
 
-// TanStack's `chat({ subagents })` refuses an `outputSchema`, and every workflow Run has one,
-// so each Subagent is an ordinary tool that starts its own child `chat()`.
+const childText = (chunks: ReadonlyArray<StreamChunk>) =>
+  chunks.flatMap((chunk) => (chunk.type === EventType.TEXT_MESSAGE_CONTENT ? [chunk.delta] : [])).join("");
+
+const childError = (chunks: ReadonlyArray<StreamChunk>) =>
+  chunks.flatMap((chunk) => (chunk.type === "SUBAGENT_ERROR" ? [chunk.message] : [])).at(0);
+
+// TanStack's `chat({ subagents })` does not fit a Run. It refuses an `outputSchema`, and every
+// workflow Run has one. On Claude Code and Codex the parent's tools run through the MCP tool
+// bridge, which gives a tool no channel for child events. So each Subagent is a TanStack agent
+// that an ordinary tool starts with `runAgentStream`.
 export const subagentProjection = (
   subagents: ReadonlyArray<AvailableSubagent>,
-  parentTools: ReadonlyArray<AnyTool>,
+  parent: SubagentParent,
   runner: SubagentRunner,
   child: SubagentChild,
 ) => {
   const budget = SubagentBudget.root(subagentLimits);
   const running = new Set<object>();
-  const childUsage: Array<TokenUsage> = [];
-  const collectUsage: ChatMiddleware = {
-    name: "cogwork-subagent-usage",
-    onUsage: (_context, usage) => {
-      childUsage.push(usage);
-    },
-  };
-  const childMiddleware: Array<ChatMiddleware> = [...child.middleware, collectUsage];
-  const childChat = (subagent: AvailableSubagent, task: string, threadId: string, signal: AbortSignal) => {
-    const abortController = new AbortController();
-    signal.addEventListener("abort", () => abortController.abort(signal.reason), { once: true });
-    return chat({
-      adapter: runner({ task, subagent }).adapter,
-      messages: [{ role: "user", content: task }],
-      systemPrompts: [subagent.prompt],
-      tools: [...child.tools],
-      middleware: childMiddleware,
-      ...(child.agentLoopStrategy === undefined ? {} : { agentLoopStrategy: child.agentLoopStrategy }),
-      abortController,
-      threadId: `${threadId}:${subagent.name}`,
-      debug: false,
-      stream: false,
+  const sink = createSubagentSink();
+  const agentFor = (subagent: AvailableSubagent) =>
+    defineAgent({
+      name: subagent.name,
+      description: subagent.description,
+      inputSchema,
+      run: (context) =>
+        context.chat({
+          adapter: runner({ task: context.input.task, subagent }).adapter,
+          messages: [{ role: "user", content: context.input.task }],
+          systemPrompts: [subagent.prompt],
+          tools: [...child.tools],
+          middleware: [...child.middleware],
+          ...(child.agentLoopStrategy === undefined ? {} : { agentLoopStrategy: child.agentLoopStrategy }),
+          debug: false,
+          stream: true,
+        }),
     });
+  const childChunks = (
+    agent: DefinedAgent,
+    task: string,
+    toolCallId: string | undefined,
+    abortSignal: AbortSignal,
+  ) => {
+    const subagentRunId = createSubagentId();
+    return Array.fromAsync(
+      runAgentStream(
+        agent,
+        {
+          input: { task },
+          messages: [],
+          abortSignal,
+          threadId: `${parent.threadId}:${agent.name}`,
+          runId: `${parent.runId}:${subagentRunId}`,
+          parentRunId: parent.runId,
+          subagentRunId,
+        },
+        sink,
+        toolCallId,
+      ),
+    );
   };
   const runChild = Effect.fn("SubagentRunner.runChild")(function* (
-    subagent: AvailableSubagent,
+    agent: DefinedAgent,
     task: string,
-    threadId: string,
+    toolCallId: string | undefined,
   ) {
     const refusal = budget.reserve(running.size);
     if (refusal !== undefined) return yield* new SubagentFailure({ message: refusal });
-    return yield* Effect.acquireUseRelease(
+    const chunks = yield* Effect.acquireUseRelease(
       Effect.sync(() => {
         const call = {};
         running.add(call);
@@ -133,36 +172,44 @@ export const subagentProjection = (
       }),
       () =>
         Effect.tryPromise({
-          try: (signal) => childChat(subagent, task, threadId, signal),
-          catch: (cause) => new SubagentFailure({ message: `${subagent.name} failed: ${String(cause)}` }),
+          try: (signal) => childChunks(agent, task, toolCallId, signal),
+          catch: (cause) => new SubagentFailure({ message: `${agent.name} failed: ${String(cause)}` }),
         }).pipe(
           Effect.timeoutOrElse({
             duration: childTimeout,
             orElse: () =>
               Effect.fail(
                 new SubagentFailure({
-                  message: `${subagent.name} ran past ${Duration.format(childTimeout)}`,
+                  message: `${agent.name} ran past ${Duration.format(childTimeout)}`,
                 }),
               ),
           }),
         ),
       (call) => Effect.sync(() => running.delete(call)),
     );
+    const error = childError(chunks);
+    if (error !== undefined) return yield* new SubagentFailure({ message: `${agent.name} failed: ${error}` });
+    return childText(chunks);
   });
-  const tools = withoutToolNames(subagents, parentTools).map((subagent) =>
-    toolDefinition({ name: subagent.name, description: subagent.description, inputSchema }).server(
-      ({ task }, context) =>
-        Effect.runPromise(runChild(subagent, task, context?.threadId ?? "subagent"), {
-          ...(context?.abortSignal ? { signal: context.abortSignal } : {}),
-        }),
-    ),
-  );
+  const tools = withoutTakenNames(subagents, parent.tools)
+    .map(agentFor)
+    .map((agent) =>
+      toolDefinition({ name: agent.name, description: agent.description, inputSchema }).server(
+        ({ task }, context) =>
+          Effect.runPromise(runChild(agent, task, context?.toolCallId), {
+            ...(context?.abortSignal ? { signal: context.abortSignal } : {}),
+          }),
+      ),
+    );
   const addChildUsage: ChatMiddleware = {
     name: "cogwork-subagent-usage-total",
     onChunk: (_context, chunk) => {
-      if (chunk.type !== EventType.RUN_FINISHED || childUsage.length === 0) return;
+      if (chunk.type !== EventType.RUN_FINISHED || sink.total === undefined) return;
       const own = ownUsage(chunk.usage);
-      return { ...chunk, usage: sumUsage([...(own ? [own] : []), ...childUsage.splice(0)]) };
+      const children = sink.total;
+      sink.total = undefined;
+      sink.usage.length = 0;
+      return { ...chunk, usage: sumUsage([...(own ? [own] : []), children]) };
     },
   };
   return { tools, middleware: [addChildUsage] };
