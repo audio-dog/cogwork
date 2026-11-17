@@ -1,10 +1,11 @@
 import type { WorkflowDocument, WorkflowNodeId, WorkflowOperation } from "@cogwork/contracts";
+import { Array as Arr, Option, pipe, String as Str } from "effect";
 
 // These ids name a person or a machine. Labels and authors are shared conventions, so they travel quietly.
-const personalParameter = (id: string) => id === "bot" || id === "channel" || id === "reviewer";
+const personalParameterIds = ["bot", "channel", "reviewer"];
 
 const filledPersonalParameter = (parameter: { readonly id: string; readonly value: string }) =>
-  personalParameter(parameter.id) && parameter.value.trim().length > 0;
+  Arr.contains(personalParameterIds, parameter.id) && Str.isNonEmpty(Str.trim(parameter.value));
 
 export const importReviewMark = {
   workspaces: "workspaces",
@@ -15,41 +16,63 @@ export const importReviewMark = {
     `action:${operation}:${transition}:${action}:${parameter}`,
 } as const;
 
-const listedWorkspaceMark = (document: WorkflowDocument) => {
-  if (document.workspaces._tag !== "Listed") return [];
-  if (document.workspaces.workspaces.length === 0) return [];
-  return [importReviewMark.workspaces];
-};
+const filledPersonalMarks = (
+  parameters: ReadonlyArray<{ readonly id: string; readonly value: string }>,
+  mark: (parameter: string) => string,
+) =>
+  pipe(
+    parameters,
+    Arr.filter(filledPersonalParameter),
+    Arr.map(({ id }) => mark(id)),
+  );
+
+const listedWorkspaceMark = (document: WorkflowDocument) =>
+  pipe(
+    Option.liftPredicate(
+      document.workspaces,
+      (workspaces) => workspaces._tag === "Listed" && Arr.isReadonlyArrayNonEmpty(workspaces.workspaces),
+    ),
+    Option.map(() => importReviewMark.workspaces),
+  );
 
 const triggerMarks = (document: WorkflowDocument) =>
-  document.triggers.flatMap((trigger) =>
-    trigger.parameters.flatMap((parameter) =>
-      filledPersonalParameter(parameter) ? [importReviewMark.triggerParameter(trigger.id, parameter.id)] : [],
+  Arr.flatMap(document.triggers, (trigger) =>
+    filledPersonalMarks(trigger.parameters, (parameter) =>
+      importReviewMark.triggerParameter(trigger.id, parameter),
     ),
   );
 
 const namedModel = (operation: WorkflowOperation) =>
   operation.model.harness !== null || operation.model.model !== null;
 
+const modelMark = (operation: WorkflowOperation) =>
+  pipe(
+    Option.liftPredicate(operation, namedModel),
+    Option.map(({ id }) => importReviewMark.model(id)),
+  );
+
+const requiresMark = (operation: WorkflowOperation) =>
+  pipe(
+    Option.liftPredicate(operation, ({ requires }) => Arr.isReadonlyArrayNonEmpty(requires)),
+    Option.map(({ id }) => importReviewMark.requires(id)),
+  );
+
 const actionMarks = (operation: WorkflowOperation) =>
-  operation.transitions.flatMap((transition, transitionIndex) =>
-    transition.actions.flatMap((action, actionIndex) =>
-      action.parameters.flatMap((parameter) =>
-        filledPersonalParameter(parameter)
-          ? [importReviewMark.actionParameter(operation.id, transitionIndex, actionIndex, parameter.id)]
-          : [],
+  Arr.flatMap(operation.transitions, (transition, transitionIndex) =>
+    Arr.flatMap(transition.actions, (action, actionIndex) =>
+      filledPersonalMarks(action.parameters, (parameter) =>
+        importReviewMark.actionParameter(operation.id, transitionIndex, actionIndex, parameter),
       ),
     ),
   );
 
 const operationMarks = (operation: WorkflowOperation) => [
-  ...(namedModel(operation) ? [importReviewMark.model(operation.id)] : []),
-  ...(operation.requires.length > 0 ? [importReviewMark.requires(operation.id)] : []),
+  ...Arr.getSomes([modelMark(operation), requiresMark(operation)]),
   ...actionMarks(operation),
 ];
 
 export const importReviewMarks = (document: WorkflowDocument) => [
-  ...listedWorkspaceMark(document),
+  ...Option.toArray(listedWorkspaceMark(document)),
   ...triggerMarks(document),
-  ...document.operations.flatMap(operationMarks),
+  ...Arr.flatMap(document.operations, operationMarks),
 ];
