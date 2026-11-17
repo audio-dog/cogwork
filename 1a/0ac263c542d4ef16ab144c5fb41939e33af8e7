@@ -1,0 +1,49 @@
+packages/engine/src/github/client.test.ts
+  s_28c0ea233a3ff3::t_07c36ff1758e17 815-818
+apps/cli/src/connection-commands.test.ts
+  s_28c0ea233a3ff3::t_142e0e1c4ebe41 128,136
+configs/lint/tests/fixtures/no-bare-failure-assert/invalid-example.ts
+  s_28c0ea233a3ff3::t_3c22896087dfc1 2-6
+configs/lint/tests/fixtures/no-bare-failure-assert/valid-example.ts
+  s_28c0ea233a3ff3::t_c757fc2be520be 4-11
+packages/engine/src/workflow-action-plan.test.ts
+  s_28c0ea233a3ff3::t_76e6e0db4cc336 568
+packages/engine/src/workflow-actions-issue.test.ts
+  s_28c0ea233a3ff3::t_fd005937d491f2 178,181-184
+packages/engine/src/issue-search-tool.test.ts
+  s_28c0ea233a3ff3::t_d8fc37b90173cf 21-22,25-30
+  s_28c0ea233a3ff3::t_b9815518087b82 23-24
+packages/engine/src/workflow-run.test.ts
+  s_28c0ea233a3ff3::t_0c4cf25ca63409 843-846
+  s_28c0ea233a3ff3::t_430e8517806181 2157-2159
+  s_28c0ea233a3ff3::t_54dbc34f7d9f9a 3068,3071
+  s_28c0ea233a3ff3::t_55df79dab00781 1424,1426
+packages/engine/src/workflow.test.ts
+  s_28c0ea233a3ff3::t_0c3980974d9ab4 651
+biome.json
+  s_28c0ea233a3ff3::t_ffa1654e253fd7 96
+configs/lint/tests/rules.test.mjs
+  s_28c0ea233a3ff3::t_ffa1654e253fd7 59-60
+  s_28c0ea233a3ff3::t_bcac32e85da3a7 58
+configs/lint/no-bare-failure-assert.grit
+  s_28c0ea233a3ff3::t_91a0900b435d01 4-15
+  s_28c0ea233a3ff3::t_fc2a99327c1154 16
+packages/engine/src/connection-verify.test.ts
+  s_28c0ea233a3ff3::t_fb57bd6a8671ce 122,124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1a0ac263c542d4ef16ab144c5fb41939e33af8e7",
+  "prompts": {},
+  "sessions": {
+    "s_28c0ea233a3ff3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e3b9734a-f400-46ae-b2a7-3aeb382fd47f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
