@@ -1,9 +1,21 @@
-import { agUiFileDiffUnavailableEvent, RunActivity } from "@cogwork/contracts";
+import {
+  agUiFileDiffUnavailableEvent,
+  RunActivity,
+  type RunStatus,
+  type RunWatchItem,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
+import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
-import { foldTranscript, type TranscriptEntry } from "./run-activity";
+import {
+  foldTranscript,
+  makeTranscriptSource,
+  type TranscriptEntry,
+  transcriptReplaying,
+} from "./run-activity";
 import {
   commandOf,
+  headingLine,
   repoRelative,
   runLine,
   stageNote,
@@ -315,5 +327,79 @@ describe("statusLine", () => {
         message: "The live file-change feed stopped. File changes may be incomplete.",
       },
     ]);
+  });
+});
+
+describe("headingLine while history replays", () => {
+  type ActivityResult = Parameters<ReturnType<typeof makeTranscriptSource>>[0];
+
+  const watched = (value: RunActivity) => ({ _tag: "RunActivity", activity: value }) satisfies RunWatchItem;
+  const historyEnd = { _tag: "HistoryEnd" } satisfies RunWatchItem;
+
+  const pulled = ([first, ...rest]: ReadonlyArray<RunWatchItem>) => {
+    if (!first) throw new Error("expected a non-empty chunk");
+    return AsyncResult.success({
+      done: false,
+      items: [first, ...rest] satisfies [RunWatchItem, ...RunWatchItem[]],
+    });
+  };
+
+  const command = (call: string, seq: number, line: string) => [
+    activity({ type: "TOOL_CALL_START", toolCallId: call, toolCallName: "command_execution" }, seq),
+    activity({ type: "TOOL_CALL_ARGS", toolCallId: call, delta: JSON.stringify({ command: line }) }, seq + 1),
+  ];
+
+  const history = [
+    command("t1", 0, "git status"),
+    command("t2", 2, "pnpm test"),
+    command("t3", 4, "gh pr checks"),
+  ];
+
+  const replay = history.map((chunk, index) =>
+    pulled([...chunk.map(watched), ...(index === history.length - 1 ? [historyEnd] : [])]),
+  );
+
+  const headings = (status: RunStatus, results: ReadonlyArray<ActivityResult>) => {
+    const source = makeTranscriptSource();
+    return results.map((result) => {
+      const snapshot = source(result);
+      const entries = AsyncResult.isSuccess(snapshot) ? snapshot.value.entries : [];
+      return headingLine(
+        transcriptRows(entries, status !== "running"),
+        status,
+        transcriptReplaying(snapshot),
+      );
+    });
+  };
+
+  const distinctInOrder = (values: ReadonlyArray<string>) =>
+    values.filter((value, index) => value !== values[index - 1]);
+
+  it("shows the placeholder until history ends, then the current line", () => {
+    const seen = headings("running", [AsyncResult.initial(true), ...replay]);
+
+    expect(distinctInOrder(seen)).toEqual(["Starting…", "Running gh pr checks…"]);
+  });
+
+  it("folds the whole history into the conversation when replay ends", () => {
+    const source = makeTranscriptSource();
+    const last = replay.map(source).at(-1);
+
+    expect(last && AsyncResult.isSuccess(last) ? Array.from(last.value.entries) : []).toEqual(
+      foldTranscript(history.flat()),
+    );
+  });
+
+  it("follows a live event after history ends", () => {
+    const live = pulled(command("t4", 6, "pnpm build").map(watched));
+    const seen = headings("running", [...replay, live]);
+
+    expect(seen.slice(-2)).toEqual(["Running gh pr checks…", "Running pnpm build…"]);
+  });
+
+  it("shows a settled run's fixed line from the first render", () => {
+    const seen = headings("succeeded", [AsyncResult.initial(true), ...replay]);
+
+    expect(new Set(seen)).toEqual(new Set(["Run finished."]));
   });
 });
