@@ -1,0 +1,27 @@
+docs/agent-patterns/effect-error-design.md
+  s_11adc39e1ddf7f::t_85a5a875624493 15,17,157,163
+docs/agent-patterns/effect-observability.md
+  s_11adc39e1ddf7f::t_684b16955c13d5 113
+docs/agent-patterns/effect-process-edges.md
+  s_11adc39e1ddf7f::t_82d2cf5134cc81 129,159
+docs/agent-patterns/effect-schema-unions.md
+  s_11adc39e1ddf7f::t_68039ba6c97278 160
+docs/agent-patterns/effect-service-layers.md
+  s_11adc39e1ddf7f::t_7ec7f7e4d67ad8 15,18,184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "137119c3730d160e64ba9091588eafc0178f10ad",
+  "prompts": {},
+  "sessions": {
+    "s_11adc39e1ddf7f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "56f27782-2c16-433b-93ba-1e6330d07aed",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
