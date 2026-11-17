@@ -22,7 +22,7 @@ class SubagentFailure extends Data.TaggedError("SubagentFailure")<{ readonly mes
 
 export type AvailableSubagent = typeof RunPlanSubagent.cases.Available.Type;
 
-export type ModelLevels = Partial<Record<ModelLevel, string>>;
+export type ModelLevels<Model extends string = string> = Partial<Record<ModelLevel, Model>>;
 
 export interface SubagentTask {
   readonly task: string;
@@ -48,11 +48,15 @@ export const subagentLimits = {
   maxDepth: 1,
   maxCalls: 8,
   maxConcurrent: 3,
-  timeoutMs: Duration.toMillis(childTimeout),
 } satisfies SubagentLimits;
 
 export const availableSubagents = (subagents: ReadonlyArray<RunPlanSubagent>) =>
   subagents.filter(RunPlanSubagent.guards.Available);
+
+const withoutToolNames = (subagents: ReadonlyArray<AvailableSubagent>, tools: ReadonlyArray<AnyTool>) => {
+  const taken = new Set(tools.map(({ name }) => name));
+  return subagents.filter(({ name }) => !taken.has(name));
+};
 
 export const levelModel = (levels: ModelLevels, parentModel: string, level: ModelLevel) =>
   levels[level] ?? parentModel;
@@ -84,6 +88,7 @@ const sumUsage = (usages: ReadonlyArray<TokenUsage>) => ({
 // so each Subagent is an ordinary tool that starts its own child `chat()`.
 export const subagentProjection = (
   subagents: ReadonlyArray<AvailableSubagent>,
+  parentTools: ReadonlyArray<AnyTool>,
   runner: SubagentRunner,
   child: SubagentChild,
 ) => {
@@ -109,6 +114,7 @@ export const subagentProjection = (
       ...(child.agentLoopStrategy === undefined ? {} : { agentLoopStrategy: child.agentLoopStrategy }),
       abortController,
       threadId: `${threadId}:${subagent.name}`,
+      debug: false,
       stream: false,
     });
   };
@@ -143,7 +149,7 @@ export const subagentProjection = (
       (call) => Effect.sync(() => running.delete(call)),
     );
   });
-  const tools = subagents.map((subagent) =>
+  const tools = withoutToolNames(subagents, parentTools).map((subagent) =>
     toolDefinition({ name: subagent.name, description: subagent.description, inputSchema }).server(
       ({ task }, context) =>
         Effect.runPromise(runChild(subagent, task, context?.threadId ?? "subagent"), {
@@ -159,5 +165,5 @@ export const subagentProjection = (
       return { ...chunk, usage: sumUsage([...(own ? [own] : []), ...childUsage.splice(0)]) };
     },
   };
-  return { tools, middleware: subagents.length === 0 ? [] : [addChildUsage] };
+  return { tools, middleware: [addChildUsage] };
 };

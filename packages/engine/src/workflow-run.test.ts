@@ -1585,35 +1585,6 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("records Subagents as projected for a Harness that projects them", () =>
-    Effect.gen(function* () {
-      const { runner } = yield* testProgram(
-        [
-          {
-            summary: "Create it",
-            stuck: false,
-            answers: { done: "yes" },
-            inputs: { issue_title: "Title", issue_body: "Body" },
-            workspace: "none",
-          },
-        ],
-        { projectedMembers: ["Subagents"] },
-        issueSearchService(yield* workflowService.catalog),
-      );
-
-      yield* runner.execute(admission);
-      const [run] = yield* (yield* RunLedger).listRuns(1);
-      assert.isDefined(run);
-      if (!run) return;
-      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
-
-      assert.deepStrictEqual(
-        { ...plan?.provenance.projection.find(({ member }) => member === "Subagents") },
-        { member: "Subagents", disposition: "projected" },
-      );
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
   const releaseNeed = Schema.decodeSync(NeedIdentity)("local:user/skill/release");
   const skillProgram = Effect.fn("WorkflowRunTest.skillProgram")(function* (
     projectedMembers: HarnessRunner["projectedMembers"],

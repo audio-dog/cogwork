@@ -1,4 +1,3 @@
-import type { ModelLevel } from "@cogwork/contracts";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { ANTHROPIC_MODELS, createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createGeminiChat, GEMINI_MODELS } from "@tanstack/ai-gemini";
@@ -19,16 +18,14 @@ export const providerModelRefs = [
   ...GEMINI_MODELS.map((model) => `google/${model}`),
 ];
 
-type LevelTable<Model extends string> = Partial<Record<ModelLevel, Model>>;
-
 const providerModelLevels = {
   openai: { light: "gpt-6-luna", deep: "gpt-6.1-sol" },
   anthropic: { light: "claude-haiku-5-5", deep: "claude-opus-5-5" },
   google: { light: "gemini-3.8-flash", deep: "gemini-4-argon" },
 } satisfies {
-  readonly openai: LevelTable<(typeof OPENAI_CHAT_MODELS)[number]>;
-  readonly anthropic: LevelTable<(typeof ANTHROPIC_MODELS)[number]>;
-  readonly google: LevelTable<(typeof GEMINI_MODELS)[number]>;
+  readonly openai: ModelLevels<(typeof OPENAI_CHAT_MODELS)[number]>;
+  readonly anthropic: ModelLevels<(typeof ANTHROPIC_MODELS)[number]>;
+  readonly google: ModelLevels<(typeof GEMINI_MODELS)[number]>;
 };
 
 const asProviderId = (value: string) => providerIds.find((id) => id === value) ?? null;

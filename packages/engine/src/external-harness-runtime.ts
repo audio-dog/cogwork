@@ -723,7 +723,10 @@ const openChat = <Adapter extends AnyTextAdapter>(
       request: child,
     });
   });
-  const subagents = subagentProjection(request.subagents, runner, { tools: [], middleware: sandboxed([]) });
+  const subagents = subagentProjection(request.subagents, request.tools, runner, {
+    tools: [],
+    middleware: sandboxed([]),
+  });
   const stream = makeChatStream(
     descriptor,
     { ...request, tools: [...request.tools, ...subagents.tools] },

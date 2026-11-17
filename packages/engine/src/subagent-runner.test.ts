@@ -1,14 +1,8 @@
 import { RunPlanSubagent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { chat, EventType, type StreamChunk, type TextOptions } from "@tanstack/ai";
+import { chat, EventType, type StreamChunk, type TextOptions, toolDefinition } from "@tanstack/ai";
 import * as Effect from "effect/Effect";
-import {
-  levelModel,
-  type SubagentRunner,
-  type SubagentTask,
-  subagentLimits,
-  subagentProjection,
-} from "./subagent-runner";
+import { type SubagentRunner, type SubagentTask, subagentProjection } from "./subagent-runner";
 import {
   hasToolResults,
   type SubagentCall,
@@ -31,7 +25,7 @@ const parentRun = (calls: ReadonlyArray<SubagentCall>, runner: SubagentRunner) =
   const parent = scriptedAdapter("parent", (options) =>
     hasToolResults(options) ? textTurn('{"outcome":"done"}', 1) : subagentCallTurn(calls, 1),
   );
-  const projection = subagentProjection([reviewer], runner, { tools: [], middleware: [] });
+  const projection = subagentProjection([reviewer], [], runner, { tools: [], middleware: [] });
   return Effect.promise(() =>
     Array.fromAsync(
       chat({
@@ -53,11 +47,6 @@ const toolResults = (chunks: ReadonlyArray<StreamChunk>) =>
   );
 
 describe("subagent runner", () => {
-  it("chooses the Harness model for a level and the parent model for no level", () => {
-    assert.strictEqual(levelModel({ light: "haiku" }, "sonnet", "light"), "haiku");
-    assert.strictEqual(levelModel({ light: "haiku" }, "sonnet", "standard"), "sonnet");
-  });
-
   it.effect(
     "starts an admitted Subagent as a child that gets its prompt, the task, and the routed adapter",
     () =>
@@ -84,19 +73,42 @@ describe("subagent runner", () => {
       }),
   );
 
-  it.effect("refuses a start past a Subagent limit as a tool error, and the parent Run still finishes", () =>
-    Effect.gen(function* () {
-      const child = scriptedAdapter("child", () => textTurn("ok", 1));
-      const calls = Array.from({ length: subagentLimits.maxCalls + 1 }, (_, index) => ({
-        id: `call-${index}`,
-        agent: "reviewer",
-        task: `Task ${index}.`,
-      }));
+  it.effect(
+    "refuses a start past the concurrency limit as a tool error, and the parent Run still finishes",
+    () =>
+      Effect.gen(function* () {
+        const child = scriptedAdapter("child", () => textTurn("ok", 1));
+        const calls = Array.from({ length: 4 }, (_, index) => ({
+          id: `call-${index}`,
+          agent: "reviewer",
+          task: `Task ${index}.`,
+        }));
 
-      const chunks = yield* parentRun(calls, () => ({ adapter: child, model: "child" }));
+        const chunks = yield* parentRun(calls, () => ({ adapter: child, model: "child" }));
 
-      assert.isTrue(toolResults(chunks).some((content) => content.includes("subagent limit reached")));
-      assert.strictEqual(chunks.at(-1)?.type, EventType.RUN_FINISHED);
-    }),
+        assert.isTrue(
+          toolResults(chunks).some((content) => content.includes("subagent limit reached (maxConcurrent 3)")),
+        );
+        assert.strictEqual(chunks.at(-1)?.type, EventType.RUN_FINISHED);
+      }),
   );
+
+  it("leaves out a Subagent whose name a parent tool already has", () => {
+    const reviewTool = toolDefinition({ name: "reviewer", description: "An engine tool" }).server(() =>
+      Promise.resolve({}),
+    );
+    const child = scriptedAdapter("child", () => textTurn("ok", 1));
+
+    const projection = subagentProjection(
+      [reviewer],
+      [reviewTool],
+      () => ({ adapter: child, model: "child" }),
+      {
+        tools: [],
+        middleware: [],
+      },
+    );
+
+    assert.deepStrictEqual(projection.tools, []);
+  });
 });

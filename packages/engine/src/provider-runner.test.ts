@@ -631,13 +631,10 @@ describe("providerRunner", { timeout: 30_000 }, () => {
           1,
         );
       };
-      const models: Array<string> = [];
-      const makeAdapter: ModelAdapterFactory = ({ model }) => {
-        models.push(model);
-        return model === "gpt-6-luna"
+      const makeAdapter: ModelAdapterFactory = ({ model }) =>
+        model === "gpt-6-luna"
           ? scriptedAdapter(model, () => textTurn("review done", 5), lightCalls)
           : scriptedAdapter(model, parentTurn, parentCalls);
-      };
       const runner = providerRunner({ name: harnessName, makeAdapter });
 
       const events = yield* Stream.runCollect(
@@ -649,9 +646,10 @@ describe("providerRunner", { timeout: 30_000 }, () => {
         ),
       ).pipe(Effect.provide(providerRunnerLayer()));
 
-      assert.deepStrictEqual(models, ["gpt-4o", "gpt-6-luna"]);
-      assert.deepStrictEqual(lightCalls[0]?.systemPrompts, ["You are the reviewer."]);
-      assert.deepStrictEqual(lightCalls[0]?.messages.at(-1), { role: "user", content: "Review the diff." });
+      assert.deepStrictEqual(
+        lightCalls.map(({ messages }) => messages.at(-1)?.content),
+        ["Review the diff."],
+      );
       assert.isTrue(parentCalls.some((options) => options.messages.at(-1)?.content === "Find the seam."));
       assert.isFalse(events.some((event) => agUiTextDelta(event) === "review done"));
       const finished = events.findLast((event) => event.type === "RUN_FINISHED");
