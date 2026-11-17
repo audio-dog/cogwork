@@ -1,0 +1,27 @@
+packages/engine/src/provider-runner.ts
+  s_d7aed834fc620d::t_a47bc29a9df920 271-276
+packages/engine/src/external-harness-runtime.ts
+  s_d7aed834fc620d::t_cd83f11891c575 726-731
+packages/engine/src/subagent-runner.test.ts
+  s_d7aed834fc620d::t_051e7684e73d46 28-33
+  s_d7aed834fc620d::t_9ec1360e8fd89c 101-118
+  s_d7aed834fc620d::t_0e1c60f5e696d5 119,126-127,129
+packages/engine/src/subagent-runner.ts
+  s_d7aed834fc620d::t_5754be95e1cd02 6-9,12,43-48,66-70,100-109,112,118-134,136-158,161,163,167,175-176,183,190-192,194-203,207,209-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "97add5577c4d16400387a88bd72e1e6b93870828",
+  "prompts": {},
+  "sessions": {
+    "s_d7aed834fc620d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ce29aaa8-181a-4bc9-b65d-835c92d63f57",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
