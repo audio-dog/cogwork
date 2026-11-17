@@ -8,8 +8,6 @@ import { IssueTracker } from "./issue-tracker";
 import { routedLayer } from "./issue-tracker-router";
 import { LinearClient } from "./linear/client";
 import type { RegisteredWorkspace } from "./projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
-import { WorkflowArtifactStore } from "./workflow-artifact-store";
 
 const id = Schema.decodeSync(WorkItemId);
 
@@ -118,17 +116,7 @@ const linearClient = Layer.mock(LinearClient, {
   listLabels: () => Effect.succeed(["needs-triage"]),
 });
 
-const trackerLayer = routedLayer.pipe(
-  Layer.provide([
-    githubClient,
-    linearClient,
-    Layer.succeed(
-      WorkspaceRegistry,
-      readOnlyRegistry({ workspaces: [githubWorkspace, linearWorkspace], failures: [] }),
-    ),
-    Layer.mock(WorkflowArtifactStore, {}),
-  ]),
-);
+const trackerLayer = routedLayer.pipe(Layer.provide([githubClient, linearClient]));
 
 describe("routed issue tracker reads", () => {
   it.effect("observes open GitHub issues with the configured priority field", () =>

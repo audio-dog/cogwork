@@ -32,6 +32,7 @@ const cogworkRow = (key: string, name: string, agentInputs: ReadonlyArray<string
     itemKind: null,
     actsOn: ["*"],
     requiresWorkspace: false,
+    workspaceSource: null,
     permissionProfile: "read-only",
     agentInputs,
     emits: [],

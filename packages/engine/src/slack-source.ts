@@ -141,6 +141,7 @@ const entry = (
   itemKind,
   actsOn: [],
   requiresWorkspace: false,
+  workspaceSource: null,
   permissionProfile: "read-only",
   agentInputs: [],
   emits: [],

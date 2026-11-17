@@ -186,7 +186,7 @@ A Harness-native lifecycle extension projected only when the selected Harness su
 _Avoid_: Middleware
 
 **Subagent**:
-A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool.
+A named agent definition available for delegation by a parent agent. It remains a distinct Run Plan field even when a Harness projects it as a Tool. A person writes one as `agents/<name>.md` in an **Authoring tree**: YAML frontmatter with a required `name` (lowercase letters, digits, and hyphens, equal to the file name), a required `description`, an optional `tools` list (a YAML list or a comma-separated string), and an optional `metadata.model-level` (a **Model level**; absent means `standard`), then the prompt as the body. A file that does not decode still reaches the Run Plan, with the reason. A vendor `model` value is one such reason; `model: inherit` is not.
 _Avoid_: Tool, Harness, Operation
 
 **Sandbox policy**:
@@ -298,7 +298,7 @@ The person's default Harness, model, and model options for every Operation, held
 _Avoid_: Playbook, operation definition, run plan, target (say default / Workflow / Operation)
 
 **Question**:
-What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action needs a Workspace — the Workspace the element is about.
+What an Operation's author asks the agent to decide, with a closed set of **choices**; the agent's pick is its **answer**, and Transitions route on answers. The engine adds what an author never writes: the `stuck` flag, and — when an action takes its Workspace from the agent — the Workspace the element is about. Each Action entry's Workspace source decides this: an `item-else-agent` action takes the Workspace of an issue or pull request item from the item, and takes it from the agent only when the item has no Workspace; an `agent` action always takes it from the agent.
 _Avoid_: Outcome (overloaded — say answer, or Operation result for the whole value), route condition, enum, disposition
 
 **Agent input**:
@@ -581,8 +581,12 @@ The projection of an accepted Run Plan handed to one Harness: checkout path, wor
 _Avoid_: Run plan (the complete engine-owned input), prompt, job
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action needs one, a Workspace. A result that does not decode is a retryable failed attempt, and the next attempt sees the decode issues.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action takes its Workspace from the agent (see **Question**), a Workspace. One engine module accepts the result from the final `structured-output.complete` Harness event, or gives a **Refused result**.
 _Avoid_: Footer, sentinel, disposition line, text protocol
+
+**Refused result**:
+The typed reason the engine does not accept an **Operation result**. Its kinds are: the result does not match the schema (each issue's path and message), the action plan refuses it (the plan's message), pull request readiness declines it (the readiness reason), and the Harness stream fails before it gives a result. Each kind has two renderings. The agent text tells the next attempt what to change, through the `previous-result-issues` Run Plan resource. The person text is plain language for the attempt record and the `Exhausted` park reason that Attention shows; it never holds an Effect `Cause` dump. A refused result is a failed attempt, so three in a row make the item *exhausted*.
+_Avoid_: Refused claim (a claim coordination will not accept), decode issues (only one kind), error string
 
 **Operating-instructions package**:
 The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path; `SKILL.md` is reserved for real Skills. The engine ships the default packages, an Operation in a Workflow document names one by name, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).

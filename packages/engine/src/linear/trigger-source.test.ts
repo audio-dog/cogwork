@@ -15,12 +15,16 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
-import type { RegisteredWorkspace } from "../projector";
+import type { RegisteredWorkspace, RegistryState } from "../projector";
+import { makeTrackerTriggerSource } from "../tracker-trigger-source";
 import { matchTriggerEvent } from "../trigger-observation";
 import { Recheck, type TriggerSubscription } from "../trigger-source";
 import { makeWorkflowOptions } from "../workflow-options";
 import { LinearClient, type LinearClientService } from "./client";
-import { makeLinearTrackerTriggerSource } from "./tracker-trigger-source";
+import { makeIssueReads } from "./host";
+
+const linearTrackerInstance = (client: LinearClientService, registry: Effect.Effect<RegistryState>) =>
+  makeTrackerTriggerSource("linear", makeIssueReads(client), registry, null);
 
 const workspaceId = Schema.decodeSync(WorkspaceId)("linear-workspace");
 const workspace: RegisteredWorkspace = {
@@ -109,7 +113,7 @@ it.effect("lists the team's Linear labels without reading its issues", () => {
 
   return Effect.gen(function* () {
     const client = yield* LinearClient;
-    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const source = linearTrackerInstance(client, Effect.succeed(registryState));
     const entry = source.entries.find(({ key }) => key === issueHasLabelKey);
     if (!entry) return assert.fail("missing issue-has-label entry");
     const options = yield* makeWorkflowOptions(source.options ?? []).list(entry, "label", [workspaceId]);
@@ -125,7 +129,7 @@ it.effect("lists the team's Linear labels without reading its issues", () => {
 it.effect("reads Linear updates and keeps comment revisions distinct by label", () =>
   Effect.gen(function* () {
     const client = yield* LinearClient;
-    const events = yield* makeLinearTrackerTriggerSource(client, Effect.succeed(registryState))
+    const events = yield* linearTrackerInstance(client, Effect.succeed(registryState))
       .observe([
         subscription("linear.issue-has-label", "label"),
         subscription("linear.new-comment-from-person", "comment"),
@@ -174,7 +178,7 @@ const issue = (number: number) => ({
 it.effect("matches open issues only, and a not-blocked filter only unblocked issues", () =>
   Effect.gen(function* () {
     const client = yield* LinearClient;
-    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const source = linearTrackerInstance(client, Effect.succeed(registryState));
     const labelled = { ...subscription("linear.issue-has-label", "labelled"), catchUp: null };
     const unblocked = {
       ...subscription("linear.issue-has-label", "unblocked"),
@@ -204,7 +208,7 @@ it.effect("matches open issues only, and a not-blocked filter only unblocked iss
           ]),
         observeLabelledIssues: () => Effect.succeed([]),
         readTriggerProse: () => Effect.succeed({ body: "Body", comments: [] }),
-        labelAppliedAt: (_target, id) => Effect.succeed(id === "issue-3" || id === "issue-4" ? 1_000 : 3_000),
+        labelAppliedAt: (_target, id) => Effect.succeed(id === "ENG-3" || id === "ENG-4" ? 1_000 : 3_000),
       }),
     ),
   ),
@@ -216,7 +220,7 @@ it.effect("reads every open issue with a filtered Trigger's label, so an unblock
   );
   return Effect.gen(function* () {
     const client = yield* LinearClient;
-    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const source = linearTrackerInstance(client, Effect.succeed(registryState));
     const filtered = {
       ...subscription("linear.issue-has-label", "unblocked"),
       catchUp: null,
@@ -257,7 +261,7 @@ it.effect.each([
 ])("rechecks a Linear issue that $case", ({ read, expected }) =>
   Effect.gen(function* () {
     const client = yield* LinearClient;
-    const source = makeLinearTrackerTriggerSource(client, Effect.succeed(registryState));
+    const source = linearTrackerInstance(client, Effect.succeed(registryState));
     const selected = {
       ...subscription("linear.issue-has-label", "unblocked"),
       filters: [issueNotBlockedKey],
@@ -291,7 +295,7 @@ it.effect("skips a failed Linear issue read and advances the workspace cursor", 
   return Effect.gen(function* () {
     yield* TestClock.setTime(100_000);
     const client = yield* LinearClient;
-    const observed = yield* makeLinearTrackerTriggerSource(client, Effect.succeed(registryState))
+    const observed = yield* linearTrackerInstance(client, Effect.succeed(registryState))
       .observe([subscription("linear.issue-has-label", "label")])
       .pipe(
         Stream.take(2),
@@ -316,7 +320,7 @@ it.effect("skips a failed Linear issue read and advances the workspace cursor", 
       Layer.mock(LinearClient, {
         observeIssues: listIssues,
         readTriggerProse: (_target, id) =>
-          id === "issue-1"
+          id === "ENG-1"
             ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue read failed" }))
             : Effect.succeed({ body: "Body", comments: [] }),
         labelAppliedAt: () => Effect.succeed(3_000),

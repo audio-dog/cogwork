@@ -58,7 +58,7 @@ The step between claim and dispatch that ensures the checkout, chooses the Sessi
 _Avoid_: Setup, bootstrap, Run Plan resolution (the decision this step feeds)
 
 **Run completion**:
-The decision, taken from a Run's result and the item's coordination view, of what follows: retry, exhaust, park stuck, fan out, complete, or hand off. One decision serves a fresh Run, a resumed Action plan, and a review-plan refresh, so the failure counters and park reasons are applied in one place.
+The decision, taken from a Run's result and the item's coordination view, of what follows: retry, exhaust, park stuck, fan out, complete, or hand off. One decision serves a fresh Run, a resumed Action plan, and a review-plan refresh, so the failure counters and park reasons are applied in one place. An accepted Run always settles. A typed failure or a defect after the Claim is an input to this decision. It records one failed attempt and settles the Run `failed` or `exhausted`. An interruption settles the Run `interrupted` and records no attempt (ADR 0016).
 _Avoid_: Outcome handling, completion closure, failure policy (one input to it), disposition
 
 **Run recorder**:
@@ -146,7 +146,7 @@ The decision that combines the published Operation, Default settings, Operating 
 _Avoid_: Fixed Operation resolution, stage resolution, prompt assembly, decline (the runner's act on a rejection)
 
 **Action entry**:
-One registered output action: its catalog row, the target it freezes, the write it performs, its phase in the Action plan's fixed order (approval, write, notify, terminal), and the engine Tools a Run needs to use it. Registered once under its full catalog key; the Trigger and action catalog's action rows derive from the registry, so a row cannot exist without its write.
+One registered output action: its catalog row, the target it freezes, the write it performs, its phase in the Action plan's fixed order (approval, write, notify, terminal), and the engine Tools a Run needs to use it. Registered once under its full catalog key; the Trigger and action catalog's action rows derive from the registry, so a row cannot exist without its write. The row also gives the entry's **Workspace source**: where its target's Workspace comes from — the item, else the agent's choice (`item-else-agent`), or the agent's choice only (`agent`). The target producer reads the Workspace through that field, and the Operation result asks the agent for a Workspace only when the field says the agent chooses it.
 _Avoid_: Action executor (one field), catalog row (one field), handler, action definition
 
 **Issue tracker adapter**:

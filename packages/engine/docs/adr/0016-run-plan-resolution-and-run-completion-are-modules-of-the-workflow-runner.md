@@ -10,7 +10,7 @@ the runner must do so inline, but that is what landed: the 2026-11-04 architectu
 decodes, and routes in one scope, three copies of the plan-execution-to-settlement mapping, and a test
 2.3 times the module. The ratio ADR 0012 recorded is back.
 
-Two decisions.
+Three decisions.
 
 **Run Plan resolution is a pure module.** It decides over facts — the published Operation, the
 catalog and machine readiness, the Workspace, the assembled instruction layers, the Work Context
@@ -26,6 +26,18 @@ verb: retry, exhaust, park stuck, fan out, complete, or hand off. The runner's f
 resumed-plan path, and the review-plan refresh all consume it, so the failure counters and park
 reasons apply in one place.
 
+**An accepted Run always settles.** One guarantee gives this result. It starts where the Workflow
+runner takes the Claim. It does not add a `settle` call to each branch. A failure after the Claim
+and before the outcome is recorded is an input to Run completion. This applies to a typed failure
+and to a defect. The runner records one failed attempt, with the cause as its reason. It settles the
+accepted Run `failed` and returns `retry`. When the attempt counters are exhausted, the Run settles
+`exhausted` and the item parks `Exhausted`. Then the runner returns `completed`. If no Run is
+accepted yet, the runner records the attempt and creates no Run. On the resumed path, the accepted
+Run is the Run of the stored plan. An interruption before the attempt settles the accepted Run
+`interrupted` and records no attempt. An interrupted Run is not an outcome. After a replan, the Claim stays open for
+the next Run. If a write fails after the runner records the attempt, the runner settles the Run.
+Then it sends the failure to the scheduler. It does not record a second attempt.
+
 The open-pull-request readiness check moves into Action plan building, where the shared kernel's
 glossary already places it; the runner's copy is deleted.
 
@@ -36,6 +48,13 @@ glossary already places it; the runner's copy is deleted.
   written three times.
 - **One module for preparation and resolution.** Rejected: the side effects would sit in the same
   interface as the decision, and the decision could not be tested as a value.
+- **A `settle` call in each branch.** Rejected. On 2026-11-11, about ten branches each called
+  `settle`. An Action plan failure escaped all of them. Four Runs stayed `running` and recorded no
+  attempt. The counters did not park the items. The scheduler retried the jobs 44 times and used
+  all of the daily budget.
+- **Decide from the status of the Run in the ledger.** Rejected. The attempt before a resumed plan
+  already settled the Run of that plan. The status cannot show if this attempt recorded an
+  outcome.
 - **Reopen the fixed Operation-resolution module of ADR 0012.** Rejected: that module resolved
   engine-authored Operation Definitions. The Workflow runner resolves an Operation a document
   declares; the inputs differ, the shape of the decision is the same.
