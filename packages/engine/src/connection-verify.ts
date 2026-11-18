@@ -10,7 +10,7 @@ import { GitHubClient } from "./github/client";
 import { type GranolaHttpFailure, makeGranolaHttp } from "./granola-http";
 import { verifyCredential as verifyLinear } from "./linear/client";
 
-// Connection readiness is "established, unrevoked, and usable" (contracts CONTEXT.md). Resolving a
+// Connection readiness is "established, unrevoked, and usable" (contracts GLOSSARY.md). Resolving a
 // token locally answers the first two; only the system itself answers the third, so establishment
 // asks it once rather than waiting for the first reconcile poll to discover the credential is junk.
 // Each adapter probes with the cheapest call that needs no repository, team, or extra scope, and
