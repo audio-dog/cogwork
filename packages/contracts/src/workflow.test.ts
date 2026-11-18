@@ -563,8 +563,6 @@ describe("Workflow validator", () => {
       { ...issueTrigger, key: "linear.issue-opened", system: "linear", connection: "linear/main" },
       { ...issueTrigger, key: "schedule.sweep", system: null, connection: null },
       appAction("github.add-label", ["github.issue"]),
-      appAction("github.close-this-issue", ["github.issue"]),
-      appAction("linear.comment-this-item", ["linear.issue"]),
       appAction("github.open-pull-request", ["issue"]),
     ],
   });
@@ -593,23 +591,9 @@ describe("Workflow validator", () => {
       ],
     },
     {
-      case: "a linear action reached by a github issue",
-      trigger: "github.issue-opened",
-      action: "linear.comment-this-item",
-      messages: [
-        "Action linear.comment-this-item in Operation triage acts only on linear.issue, but github.issue reaches it",
-      ],
-    },
-    {
       case: "a github action reached by a github issue",
       trigger: "github.issue-opened",
       action: "github.add-label",
-      messages: [],
-    },
-    {
-      case: "a linear action reached by a linear issue",
-      trigger: "linear.issue-opened",
-      action: "linear.comment-this-item",
       messages: [],
     },
     {
@@ -640,7 +624,7 @@ describe("Workflow validator", () => {
           transitions: [
             {
               ...transition,
-              actions: [{ entry: decodeCatalogKey("github.close-this-issue"), parameters: [] }],
+              actions: [{ entry: decodeCatalogKey("github.add-label"), parameters: [] }],
             },
           ],
         },
@@ -648,7 +632,7 @@ describe("Workflow validator", () => {
     });
 
     assert.deepStrictEqual(itemKindMessages(document), [
-      "Action github.close-this-issue in Operation review acts only on github.issue, but linear.issue reaches it",
+      "Action github.add-label in Operation review acts only on github.issue, but linear.issue reaches it",
     ]);
   });
 

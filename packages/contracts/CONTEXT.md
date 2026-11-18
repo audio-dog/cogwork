@@ -229,7 +229,7 @@ A Workflow document that Cogwork ships. Using one is *create* with its document,
 _Avoid_: Default Workflow (as a kind), preset, blueprint, built-in Workflow
 
 **Trigger and action catalog**:
-The engine-owned list of every Trigger entry and action entry a Workflow document may name, read through a query and never held as a constant in a client. Each entry is keyed by its connected app first (`github.create-issue`, `linear.issue-has-label`) and declares what it requires and its **parameters**; a Trigger entry also declares the item kind it yields, which fixes the Work context, and an action entry its target, the item kinds it acts on, and its **agent inputs**. A client that has only the RPC can author every Workflow the editor can.
+The engine-owned list of every Trigger entry and action entry a Workflow document may name, read through a query and never held as a constant in a client. Each entry is keyed by its connected app first (`github.create-issue`, `linear.issue-has-label`) and declares what it requires and its **parameters**; a Trigger entry also declares the item kind it yields, which fixes the Work context, and an action entry its target, the item kinds it acts on, and its **agent inputs**. An action that acts only on the current item of its own app names the app with the kind (`github.issue`). A client that has only the RPC can author every Workflow the editor can.
 _Avoid_: Bare *catalog* (spent — see **Plugin catalog**), Plugin catalog, Model catalog, connector list, `connectorOnly` (retired — an entry *requires*, and the catalog hides nothing)
 
 ### Triggers

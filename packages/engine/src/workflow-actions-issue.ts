@@ -129,7 +129,6 @@ const issueActionRow = (
   name: string,
   agentInputs: ReadonlyArray<string>,
   parameters: WorkflowCatalogEntry["parameters"] = [],
-  actsOn: ReadonlyArray<string> = ["*"],
 ) =>
   ({
     key: Schema.decodeSync(WorkflowCatalogKey)(`${system}.${id}`),
@@ -140,7 +139,7 @@ const issueActionRow = (
     requires: [],
     parameters,
     itemKind: null,
-    actsOn,
+    actsOn: ["*"],
     requiresWorkspace: true,
     permissionProfile: "read-only",
     agentInputs,
@@ -230,7 +229,12 @@ const issueEntry = (
 });
 
 const currentIssueEntry = (row: IssueActionRow, execute: ActionExecutor) =>
-  issueEntry(row, currentIssueTargetProducer, execute, "item-else-agent");
+  issueEntry(
+    { ...row, actsOn: [`${row.system}.issue`] },
+    currentIssueTargetProducer,
+    execute,
+    "item-else-agent",
+  );
 
 const issueEntries = (system: IssueTrackerApp) => [
   issueEntry(
@@ -252,35 +256,18 @@ const issueEntries = (system: IssueTrackerApp) => [
     "agent",
   ),
   currentIssueEntry(
-    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], [`${system}.issue`]),
+    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"]),
     commentIssue,
   ),
   currentIssueEntry(
-    issueActionRow(
-      system,
-      "add-label",
-      "Add a label",
-      [],
-      [issueParameter("label", true)],
-      [`${system}.issue`],
-    ),
+    issueActionRow(system, "add-label", "Add a label", [], [issueParameter("label", true)]),
     addLabel,
   ),
   currentIssueEntry(
-    issueActionRow(
-      system,
-      "remove-label",
-      "Remove a label",
-      [],
-      [issueParameter("label", true)],
-      [`${system}.issue`],
-    ),
+    issueActionRow(system, "remove-label", "Remove a label", [], [issueParameter("label", true)]),
     removeLabel,
   ),
-  currentIssueEntry(
-    issueActionRow(system, "close-this-issue", "Close this issue", [], [], [`${system}.issue`]),
-    closeIssue,
-  ),
+  currentIssueEntry(issueActionRow(system, "close-this-issue", "Close this issue", []), closeIssue),
 ];
 
 export const issueActionEntries = issueTrackerApps.flatMap(issueEntries);

@@ -1448,10 +1448,14 @@ const reachableItems = (document: WorkflowDocument, catalog: WorkflowCatalog) =>
   return Array.from({ length: document.operations.length }, () => null).reduce(next, seeds);
 };
 
-const appOf = (actsOnValue: string) => actsOnValue.split(".", 1)[0];
+const matchesAppLimit = (actsOnValue: string, { system, kind }: ReachedItem) => {
+  const [app, limitedKind] = actsOnValue.split(".");
+  const appUnknown = system === null;
+  return limitedKind === kind && (appUnknown || system === app);
+};
 
-const acceptsItem = (actsOn: ReadonlyArray<string>, { system, kind }: ReachedItem) =>
-  actsOn.some((value) => ["*", kind, `${system ?? appOf(value)}.${kind}`].includes(value));
+const acceptsItem = (actsOn: ReadonlyArray<string>, item: ReachedItem) =>
+  actsOn.some((value) => value === "*" || value === item.kind || matchesAppLimit(value, item));
 
 const itemName = ({ system, kind }: ReachedItem) => (system === null ? kind : `${system}.${kind}`);
 

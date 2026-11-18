@@ -156,7 +156,17 @@ describe("Issue Action entries", () => {
       instructionPackages: [],
       harnesses: [],
     };
-    const refusedActions = (triggerApp: IssueTrackerApp, actionApp: IssueTrackerApp) =>
+    const openPullRequest = {
+      ...writeOperation("github"),
+      transitions: [
+        {
+          when: [],
+          actions: [{ entry: decodeEntry("github.open-pull-request"), parameters: [] }],
+          handOff: null,
+        },
+      ],
+    };
+    const itemKindMessages = (triggerApp: IssueTrackerApp, write: WorkflowDocument["operations"][number]) =>
       validateWorkflow(
         WorkflowDocument.make({
           name: "Cross-tracker writes",
@@ -170,27 +180,28 @@ describe("Issue Action entries", () => {
               start: operation,
             },
           ],
-          operations: [writeOperation(actionApp)],
+          operations: [write],
         }),
         catalog,
       )
         .filter(({ code }) => code === "item-kind-mismatch")
-        .map(({ message }) => message.split(" ")[1]);
+        .map(({ message }) => message);
 
-    assert.deepStrictEqual(refusedActions("linear", "github"), [
-      "github.comment-this-item",
-      "github.add-label",
-      "github.remove-label",
-      "github.close-this-issue",
+    assert.deepStrictEqual(itemKindMessages("linear", writeOperation("github")), [
+      "Action github.comment-this-item in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.add-label in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.remove-label in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.close-this-issue in Operation write acts only on github.issue, but linear.issue reaches it",
     ]);
-    assert.deepStrictEqual(refusedActions("github", "linear"), [
-      "linear.comment-this-item",
-      "linear.add-label",
-      "linear.remove-label",
-      "linear.close-this-issue",
+    assert.deepStrictEqual(itemKindMessages("github", writeOperation("linear")), [
+      "Action linear.comment-this-item in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.add-label in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.remove-label in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.close-this-issue in Operation write acts only on linear.issue, but github.issue reaches it",
     ]);
-    assert.deepStrictEqual(refusedActions("github", "github"), []);
-    assert.deepStrictEqual(refusedActions("linear", "linear"), []);
+    assert.deepStrictEqual(itemKindMessages("github", writeOperation("github")), []);
+    assert.deepStrictEqual(itemKindMessages("linear", writeOperation("linear")), []);
+    assert.deepStrictEqual(itemKindMessages("linear", openPullRequest), []);
   });
 
   for (const system of issueTrackerApps) {
