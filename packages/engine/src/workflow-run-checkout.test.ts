@@ -122,13 +122,16 @@ describe("WorkflowRun", () => {
           {
             outcome,
             runs: yield* (yield* RunLedger).listRuns(10),
-            attempts: (yield* Ref.get(coordination.attempts)).map(({ outcome }) => outcome),
+            attempts: (yield* Ref.get(coordination.attempts)).map(({ outcome, reason }) => ({
+              outcome,
+              reason,
+            })),
             parks: (yield* Ref.get(coordination.parks)).map(({ reason }) => reason),
           },
           {
             outcome: "completed",
             runs: [],
-            attempts: ["failed"],
+            attempts: [{ outcome: "failed", reason: "branch workflow has a merge in progress" }],
             parks: [
               {
                 _tag: "WorktreeBlocked",

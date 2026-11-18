@@ -40,13 +40,13 @@ type WorktreeBlocked = Extract<ParkReason, { readonly _tag: "WorktreeBlocked" }>
 
 const worktreeBlockedSummaries = {
   "operation-in-progress": ({ branch, operation }: WorktreeBlocked) =>
-    `Branch ${branch} has a ${operation ?? "Git operation"} in progress in its worktree. Finish or abort it, then hand back.`,
+    `Branch ${branch} has a ${operation ?? "Git operation"} in progress in its worktree. Finish or abort it.`,
   diverged: ({ branch }: WorktreeBlocked) =>
-    `Branch ${branch} has diverged from its remote. Reconcile the branch in its worktree, then hand back.`,
+    `Branch ${branch} has diverged from its remote. Reconcile the branch in its worktree.`,
   detached: ({ branch }: WorktreeBlocked) =>
-    `The worktree for branch ${branch} is not registered with Git and can hold uncommitted work. Move or remove it, then hand back.`,
+    `The worktree for branch ${branch} is not registered with Git and can hold uncommitted work. Move or remove it.`,
   "unsafe-branch": ({ branch }: WorktreeBlocked) =>
-    `Branch ${branch} does not resolve below the worktree root. Use a different branch, then hand back.`,
+    `Branch ${branch} does not resolve below the worktree root. Use a different branch.`,
 } satisfies Record<WorktreeBlocked["reason"], (reason: WorktreeBlocked) => string>;
 
 const summaryByReason = {

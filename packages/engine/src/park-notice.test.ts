@@ -131,7 +131,7 @@ it.effect(
         unmergedPaths: ["src/a.ts"],
       });
 
-      assert.include(posted.body, "Branch 947 has a merge in progress in its worktree. Finish or abort it");
+      assert.include(posted.body, "Branch 947 has a merge in progress in its worktree. Finish or abort it.");
       assert.notInclude(posted.body, "/Users/someone");
     }).pipe(Effect.provide(environment(Effect.void))),
 );

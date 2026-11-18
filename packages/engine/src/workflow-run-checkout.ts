@@ -107,7 +107,7 @@ export const makeCheckout = ({
 
     const preparationPark = (error: Effect.Error<ReturnType<typeof prepareCheckout>>) =>
       Match.valueTags(error, {
-        WorktreeError: worktreeBlocked,
+        WorktreeError: (failure) => (failure.retryable ? null : worktreeBlocked(failure)),
         IssueTrackerError: (failure) =>
           exhaustedUnlessRetryable({
             retryable: !issueTrackerErrorIsPermanent(failure),

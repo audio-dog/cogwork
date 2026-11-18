@@ -239,12 +239,9 @@ const reasonOf = (
     WriteFailed: ({ step, error }) => ({ tag: "write-failed", step, error }) as const,
     DraftOutcomeUnknown: ({ step }) => ({ tag: "draft-outcome-unknown", step }) as const,
     NoWorkspaceRecognized: () => ({ tag: "no-workspace-recognized" }) as const,
-    WorktreeBlocked: ({ reason, branch, operation, path, unmergedPaths }) =>
+    WorktreeBlocked: ({ path, unmergedPaths }) =>
       ({
         tag: "worktree-blocked",
-        reason,
-        branch,
-        operation: operation ?? null,
         path: path ?? null,
         unmergedPaths: unmergedPaths ?? [],
       }) as const,

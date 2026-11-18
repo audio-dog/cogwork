@@ -165,6 +165,7 @@ const attentionWith = (
   reason: Record<string, unknown>,
   commands: ReadonlyArray<string>,
   activePlan: unknown = plan,
+  summary = "Ready to comment",
 ) =>
   decodeAttention({
     parks: [
@@ -174,7 +175,7 @@ const attentionWith = (
         publishedRevision: 4,
         operation: "review",
         lineage,
-        summary: "Ready to comment",
+        summary,
         changedSinceParked: false,
         commands,
         reason,
@@ -409,6 +410,7 @@ describe("AttentionClientProvider", () => {
   });
 
   it("shows what to do, the worktree path, and the unmerged files for a blocked worktree", async () => {
+    const instruction = "Branch 947 has a merge in progress in its worktree. Finish or abort it.";
     const { container, root } = await renderAttention({
       snapshot: snapshot(
         attentionWith(
@@ -422,15 +424,14 @@ describe("AttentionClientProvider", () => {
           },
           ["hand-back"],
           null,
+          instruction,
         ),
       ),
       client: defaultClient(),
     });
 
     const text = container.textContent ?? "";
-    expect(text).toContain(
-      "Branch 947 has a merge in progress. Finish or abort it in the worktree, then hand back.",
-    );
+    expect(text.split(instruction)).toHaveLength(2);
     expect(text).toContain("/worktrees/947");
     expect(text).toContain("src/a.ts");
     expect(text).toContain("src/b.ts");
