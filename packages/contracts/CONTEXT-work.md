@@ -31,6 +31,7 @@ _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
 `issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
+An entry is the tracker's own identity for a person (a GitHub login, a Linear user id), never a display name. When the gate is on, an unassigned issue is nobody's, so it is not eligible: assigning it is how a person opts in. A pull request belongs to the Work item its link key names; with no linked Work item, it belongs to its author.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
 **Bot allowlist**:
