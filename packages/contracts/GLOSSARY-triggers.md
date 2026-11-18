@@ -18,30 +18,10 @@ _Avoid_: State / event, *filter* (that is a **Trigger filter**), *condition* for
 An author-set, typed value on a Trigger or an output action — a label, a channel, a schedule time, a review event — with fixed choices or a live list a Connection supplies. Only the author sets one; where the agent must choose, the author asks a **question** and routes on its answer.
 _Avoid_: Option (that is a **model option**), *filter* (that is a **Trigger filter**), setting, argument
 
-**Catch-up window**:
-An occurrence entry's parameter that bounds how far back its Trigger source reads after the daemon was down. Events older than the window are skipped, and the read model reports them.
-_Avoid_: Replay window, backfill
-
-**Quiet period**:
-An ambient Slack Trigger's parameter: how long a conversation must stay silent before the Trigger fires, so one Run reads a finished exchange. Beside it, *at most every* bounds how often one conversation fires.
-_Avoid_: Debounce, delay, cooldown (that is *at most every*)
-
-**Sweep**:
-A schedule Trigger with a selector over Work items that already exist — their source, state, and idle time — that gives each selected item one Run. Each sweep starts a new lineage, and the idle time bounds how fast it can repeat.
-_Avoid_: Batch, cron job, scan
-
 **Trigger source**:
 The observer of one source — the issue tracker, source control, Granola, Slack, or the clock — that emits Trigger events for its subscriptions. It sees subscriptions (an entry, its parameter values, and its Workspaces), never Workflows, and writes nothing; the engine admits its events and pairs them with Triggers. Receiving events instead of polling is a change inside one source, never a second model.
 _Avoid_: Sensor (the self-correction layer's health watcher), connector, listener, webhook
 
-**Trigger event**:
-One observation a Trigger source makes: the Work item it names, that item's new source revision, its **cause**, and its time. A redelivered event names a revision already seen and starts nothing.
-_Avoid_: Webhook, delivery, notification, Daemon event (the client feed)
-
 **Source revision**:
 The value from a source that moves only when its event happens again — a newest comment id, a head SHA, a Granola update time, a Slack `ts`, a scheduled instant. Each Work item carries an observed and a processed source revision and is eligible when the first is ahead and no claim is held, so edits during a Run combine into one next Run. The engine owns revisions; no author writes one.
 _Avoid_: Bare *revision* (a Workflow has a **published revision**), version, watermark (a read position, not the authority)
-
-**Origin record**:
-The engine's record on each artifact it creates — an issue, a pull request, a comment, a Slack post — naming the Work item and Run behind it. Cogwork writes through the person's account, so the account cannot tell Cogwork's writes from the person's; the origin record does. It decides a Trigger event's **cause** and carries lineage across Workflows, and a Slack post Cogwork made never moves the source revision of the conversation it lands in.
-_Avoid_: Bot marker, actor check (the account cannot decide), provenance (the Run Plan's stamp)

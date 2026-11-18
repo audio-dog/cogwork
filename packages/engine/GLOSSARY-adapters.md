@@ -14,9 +14,20 @@ _Avoid_: GitHub Trigger source, Linear Trigger source (instances, not modules), 
 A concrete implementation of pull-request Trigger sources and Workflow actions, with GitHub the only one today. It also projects the ready-to-merge view from Cogwork origin records and live pull-request state.
 _Avoid_: Forge, code host, client (the HTTP client is a lower-level detail), plugin
 
+**Link key**:
+The stable key tying a work item to its pull request across systems. GitHub numeric work items first match an open PR's GitHub-resolved closing reference (`Closes #N`); all items retain the `ticketSlug(item.id)` branch-prefix fallback (`fel-157-…`, `13-…`). The engine-cut branch remains stable because it derives from the immutable item id rather than the title. A same-repository closing-reference match carries its actual head branch into follow-up.
+_Avoid_: PR reference, branch name (the full branch also carries a title slug that can drift)
+
+**Actor identity**:
+Who the daemon acts *as* on a tracker — the authenticated account discovered from the bound **Connection**. It authors the daemon's tracker writes and marks which comments and pull requests are the daemon's own. A workspace stores only the Connection binding; it has no separate actor selector.
+Because that account is the person's own, it cannot tell Cogwork's writes from the person's. In a Workflow the **origin record** decides which writes are Cogwork's, never the account.
+_Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
+
 **Credential store**:
-The seam every Connection credential is resolved through. A Connection id selects a stored API key, an environment-variable reference, or a stored browser grant; the caller receives the token and discovered identity, never the persisted secret. Linear, GitHub, Granola, and Slack resolve through it. A stored browser grant refreshes at read time when possible; Slack refresh also replaces the single-use refresh token. A rejected credential can be invalidated. The same store resolves **provider keys** (see below), so one instance holds external-system credentials and AI-provider keys in one file. A keychain-backed layer can arrive behind the same seam later.
-_Avoid_: Secret manager, token cache (the credential file, not the store, holds tokens), auth provider
+The daemon's credential source for Connections, and the seam every Connection credential is resolved through. It holds the secret half of a **Connection**, whose non-secret record lives in the Control store: stored API keys, environment-variable references, OAuth token pairs, and GitHub CLI source markers keyed by system and account. A Connection id selects one; the caller receives the token and discovered identity, never the persisted secret. Linear, GitHub, Granola, and Slack resolve through it.
+At run time it **acquires** the current GitHub CLI token for the Connection's fixed account and holds successful acquisitions in memory for ten minutes; the token is never persisted. A stored browser grant refreshes at read time when possible. Slack's user token and rotating refresh token are one stored OAuth credential, and a Slack refresh also replaces the single-use refresh token. A rejected credential can be invalidated. The same store resolves **provider keys** (see below), so one instance holds external-system credentials and AI-provider keys in one file.
+The backing layer is a `0600` file today; an OS keychain on desktop or a per-user database row on a hosted server can arrive behind the same seam later. Unlike the run ledger it is **not** disposable — losing it logs the daemon out — and it is never committed to the repo.
+_Avoid_: Secret manager, token cache (the credential file, not the store, holds tokens), auth provider, Run ledger (that one is disposable), config (the non-secret `client_id` lives in config, not here), keychain (only one possible backing layer)
 
 **Provider key**:
 An AI provider's API key, resolved through the credential store beside Connection credentials. A provider account is just a provider id plus the env vars a key can live in (most-specific first); resolution prefers a stored key over the environment, and a missing key is an error naming the env vars to set. Keys are durable — no expiry, no refresh — so they persist as a plain `StoredProviderKey` in the `version: 3` credential file; versions 1 and 2 still decode. Bring-your-own-key is the whole story today: a key arrives from the environment or is pasted through `login key`.

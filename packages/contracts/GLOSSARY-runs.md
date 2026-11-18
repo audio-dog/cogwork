@@ -33,26 +33,6 @@ _Avoid_: Caught up, seed end (that is the `WatchEvents` marker)
 A first-class entity with its own `SessionId`, grouping the runs that make up one conversation — a run points at it by foreign key (`RunRecord.session`), and runs on the same branch share one while their selected harness remains unchanged. Every session is permanently owned by the harness that created it and can be resumed only by that harness; model, model-option, operation, and instruction changes do not affect compatibility. A fresh start always mints a new session. It comes in two kinds. An **owned-transcript** session is the provider runner's: the whole conversation lives in our run ledger, so its transcript folds straight from the events and no handle is kept. An **opaque-handle** session is a CLI harness's: the harness keeps its own history and hands back an opaque `handle` (e.g. Cursor's session id) we store to resume it — `null` until the harness emits one. The kind is not a guess: each harness runner declares its `SessionKind` beside its name, and the session store mints the matching one. The session is minted when the run is inserted, before the harness has said anything (see engine ADR 0002), so a run always names a session even before it can be resumed.
 _Avoid_: Run, connection, handle (that's one field of the opaque-handle kind, not the session itself)
 
-**Session resume**:
-A new Run and new native invocation that continue an existing Session. Cogwork sends the Session's `SessionId` as TanStack `threadId`; an opaque native handle, when present, goes only into the adapter's native `modelOptions.sessionId`. A resume never continues the old Run.
-_Avoid_: Retry (why the new Run started), replacement Run (one recovery reason), Run takeover (continuation of the same invocation)
-
-**Retry**:
-The control plane starting another Run after a retryable failure. The new Run can resume the failed Run's Session, but retry describes failure policy, not conversation identity.
-_Avoid_: Session resume, replacement Run, Run takeover
-
-**Replacement Run**:
-The new Run started after an interrupted or crashed Run. It can resume the same Session, but it starts a new native invocation with a continuation Message that treats the prepared Worktree as ground truth.
-_Avoid_: Retry (interruption and crash are not attempts), Run takeover
-
-**Run takeover**:
-A successor driver adopting the same live native invocation and continuing the same Run after driver loss. It requires an exact delivery log, persistent native status, durable cancellation, distributed locking and fencing, and scheduled reaping. Cogwork does not enable it.
-_Avoid_: Session resume, retry, replacement Run, human attach
-
-**Harness switch**:
-A run selecting a different harness from the branch's latest session. It begins a new session with the full operating instructions while preserving the worktree, branch, code progress, claim, and historical run records; only conversation continuity is discarded. Switching back never resurrects an older session from that harness.
-_Avoid_: Session migration, session transfer, cross-harness resume
-
 **Exhausted / stuck**:
 The two failure outcomes that stop spending tokens after work starts. A Run is *exhausted* after three consecutive failed attempts for one Workflow Operation. An agent is *stuck* when its result reports it cannot proceed; the item parks at once with the summary. A new qualifying source revision can clear the park as a handback. Both are distinct from *blocked*, which is unresolved dependencies before an attempt.
 _Avoid_: Blocked (dependencies now), failed (the single, still-retryable attempt status).
