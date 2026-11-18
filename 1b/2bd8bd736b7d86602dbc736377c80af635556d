@@ -1,0 +1,29 @@
+packages/engine/src/github/provider.test.ts
+  s_1fd0227da3f3cc::t_6ef53714c9031b 1-118
+packages/engine/src/github/provider.ts
+  s_5dfa87be025d86::t_fd10fae0cd7a80 583
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1b2bd8bd736b7d86602dbc736377c80af635556d",
+  "prompts": {},
+  "sessions": {
+    "s_1fd0227da3f3cc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a101695def57a8817",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_5dfa87be025d86": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a2558b0a-6907-4e1a-b28b-69f148fd310c",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
