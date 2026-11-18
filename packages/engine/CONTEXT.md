@@ -31,6 +31,7 @@ _Avoid_: Classification, merge stage, role
 
 **Assignee ownership gate**:
 A per-workspace Trigger-observation precondition: when `issueTracker.assigneeAllowlist` is set, an observed item is admitted only when an assignee is on the list. Absent means no gate. The bound Connection's account is distinct from whose work the daemon may take.
+Only a successful read decides "not on the list". A failed lookup is not an answer: the event waits, and the Trigger source reports the failure.
 _Avoid_: Assignee filter (it gates every Workflow, not just a view), permission check
 
 **Scheduler**:
