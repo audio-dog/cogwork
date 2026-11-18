@@ -1,5 +1,6 @@
 import {
   keyOf,
+  type ParkReason,
   Principal,
   type RunId,
   WorkflowActionPlan,
@@ -21,6 +22,10 @@ import {
   type PendingPlanDependencies,
 } from "./workflow-run-pending-plan";
 import { operationInProgressSummary, WorktreeManager } from "./worktree";
+
+type WorktreeBlocked = Extract<ParkReason, { readonly _tag: "WorktreeBlocked" }>;
+
+const probedWorktreePath = ({ reason, path }: WorktreeBlocked) => (reason === "detached" ? undefined : path);
 
 const waitingReviewTarget = (plan: WorkflowActionPlan) => {
   const waiting = plan.steps.some(
@@ -193,21 +198,24 @@ export const makeWorkflowRunTouchpoints = Effect.fn("WorkflowRun.makeTouchpoints
     yield* finishTouchpointPlan(rebuilt, admission, execution);
   });
 
-  const refuseBlockedWorktree = Effect.fn("WorkflowRun.refuseBlockedWorktree")(function* ({
-    branch,
-    path,
-  }: {
-    readonly branch: string;
-    readonly path?: string;
-  }) {
-    if (path === undefined || worktrees === null) return;
-    const operation = yield* worktrees
-      .operationInProgress(path)
-      .pipe(Effect.catchTag("GitError", () => Effect.succeed(null)));
+  const refuseBlockedWorktree = Effect.fn("WorkflowRun.refuseBlockedWorktree")(function* (
+    blocked: WorktreeBlocked,
+  ) {
+    if (worktrees === null) return;
+    const path = probedWorktreePath(blocked);
+    if (path === undefined) return;
+    const operation = yield* worktrees.operationInProgress(path).pipe(
+      Effect.catchTag("GitError", (error) =>
+        Effect.logWarning("worktree probe failed; handing back without it", {
+          path,
+          message: error.message,
+        }).pipe(Effect.map(() => null)),
+      ),
+    );
     if (operation === null) return;
     return yield* failTouchpoint(
       "worktree-blocked",
-      `Hand Back needs the worktree at ${path}: ${operationInProgressSummary(branch, operation)} Finish or abort it first.`,
+      `Hand Back needs the worktree at ${path}: ${operationInProgressSummary(blocked.branch, operation)} Finish or abort it first.`,
     );
   });
 
