@@ -5,10 +5,9 @@ import * as Schema from "effect/Schema";
 import {
   baseCatalog,
   catalogWith,
-  cogworkWorkspace,
   decodeCatalogKey,
   decodeNodeId,
-  jsonMember,
+  decodeWorkspaceId,
   operation,
   replaceOperation,
   transition,
@@ -18,6 +17,11 @@ import {
   workflowOperationResultJsonSchema,
   workflowOperationResultSchema,
 } from "./workflow-operation-result";
+
+const jsonMember = (value: unknown, key: string) =>
+  typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+
+const cogworkWorkspace = decodeWorkspaceId("cogwork");
 
 describe("Workflow Operation result", () => {
   const schema = workflowOperationResultSchema(operation, baseCatalog, [cogworkWorkspace]);

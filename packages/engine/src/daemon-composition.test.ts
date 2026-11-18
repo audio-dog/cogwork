@@ -1,30 +1,46 @@
 import {
   connectionIdOf,
   DaemonRpcs,
+  IssueTrackerType,
   keyOf,
   LineageId,
   RunId,
   type RunRecord,
+  SourceControlType,
   WorkItemId,
   WorkspaceId,
 } from "@cogwork/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as Layer from "effect/Layer";
 import * as RpcClient from "effect/rpc/RpcClient";
+import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
 import { Coordination } from "./coordination";
 import * as Daemon from "./daemon";
-import {
-  Fixture,
-  githubSourceControl,
-  githubType,
-  harnessName,
-  reconcileWorktrees,
-  testLayer,
-} from "./daemon-composition-fixtures";
+import { Fixture, harnessName, reconcileWorktrees } from "./daemon-composition-fixtures";
 import * as RunLedger from "./run-ledger";
 import { Scheduler } from "./scheduler";
 import { TriggerObservation } from "./trigger-observation";
+
+const githubType = Schema.decodeSync(IssueTrackerType)("github");
+
+const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
+
+const testLayer = () =>
+  Layer.unwrap(
+    Effect.map(Fixture, ({ clientLayer, fetchStub, serverLayer }) =>
+      Layer.merge(serverLayer, clientLayer).pipe(
+        Layer.provide(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+        ),
+        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
+      ),
+    ),
+  ).pipe(Layer.provideMerge(Fixture.layer), Layer.provide(NodeServices.layer));
 
 const crashedIssue = {
   _tag: "Issue",

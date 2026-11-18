@@ -1,18 +1,14 @@
-import { HarnessName, IssueTrackerType, SourceControlType } from "@cogwork/contracts";
-import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import { HarnessName } from "@cogwork/contracts";
 import type * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as NetAddress from "effect/net/NetAddress";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as RpcClient from "effect/rpc/RpcClient";
 import * as RpcServer from "effect/rpc/RpcServer";
-import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Socket from "effect/socket/Socket";
 import * as SocketServer from "effect/socket/SocketServer";
@@ -27,8 +23,6 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 export const harnessName = HarnessName.make("scripted");
-export const githubType = Schema.decodeSync(IssueTrackerType)("github");
-export const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
 export const structuredOutput = {
   summary: "Ready for implementation",
   stuck: false,
@@ -106,7 +100,7 @@ export const gitLayer = Layer.succeed(Git, {
   pushBranch: () => Effect.die("unused"),
 } satisfies GitService);
 
-export const credentialsLayer = Layer.succeed(CredentialStore.CredentialStore, {
+const credentialsLayer = Layer.succeed(CredentialStore.CredentialStore, {
   resolveSource: () =>
     Effect.succeed({ source: "stored-key", token: Redacted.make("token"), identity: null }),
   bearerToken: () =>
@@ -141,7 +135,7 @@ export const socketServerLayer = (socket: Socket.Socket) =>
     run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
   });
 
-export const issueResponse = (labels: ReadonlyArray<string>) => ({
+const issueResponse = (labels: ReadonlyArray<string>) => ({
   node_id: "I_issue_1",
   number: 1,
   title: "Triage me",
@@ -178,7 +172,7 @@ export const advancingClock = () => {
   } satisfies Clock.Clock;
 };
 
-export function makeFixture() {
+function makeFixture() {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -277,15 +271,3 @@ export class Fixture extends Context.Service<Fixture, Effect.Success<ReturnType<
 ) {
   static readonly layer = Layer.effect(Fixture, makeFixture());
 }
-
-export const testLayer = () =>
-  Layer.unwrap(
-    Effect.map(Fixture, ({ clientLayer, fetchStub, serverLayer }) =>
-      Layer.merge(serverLayer, clientLayer).pipe(
-        Layer.provide(
-          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
-        ),
-        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
-      ),
-    ),
-  ).pipe(Layer.provideMerge(Fixture.layer), Layer.provide(NodeServices.layer));

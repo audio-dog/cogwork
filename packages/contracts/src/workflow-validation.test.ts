@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { type WorkflowDocument, WorkflowDocument as WorkflowDocumentSchema } from "./workflow";
+import { HarnessName } from "./base-schemas";
+import { NeedIdentity, type WorkflowDocument, WorkflowDocument as WorkflowDocumentSchema } from "./workflow";
 import type { WorkflowDiagnosticCode } from "./workflow-diagnostic";
 import { applyWorkflowEdits } from "./workflow-edit";
 import {
@@ -12,21 +13,57 @@ import {
   decodeCatalog,
   decodeCatalogKey,
   decodeDocument,
-  decodeHarness,
-  decodeNeed,
+  decodeMachine,
   decodeNodeId,
   decodeWorkspaceId,
   documentWith,
-  filterCatalog,
-  filteredDocument,
-  machineWith,
   operation,
-  readinessCodesOf,
   replaceOperation,
   transition,
 } from "./workflow-fixtures";
 import { adviseReadiness, availabilityOf } from "./workflow-readiness";
 import { validateWorkflow, validateWorkflowInput } from "./workflow-validation";
+
+const decodeHarness = Schema.decodeUnknownSync(HarnessName);
+
+const decodeNeed = Schema.decodeUnknownSync(NeedIdentity);
+
+const filterEntry = (system: string, itemKind: string) => ({
+  key: `${system}.${itemKind}-not-blocked`,
+  name: "Not blocked",
+  kind: "filter",
+  system,
+  connection: system,
+  requires: [],
+  parameters: [],
+  itemKind,
+  actsOn: [],
+  requiresWorkspace: true,
+  workspaceSource: null,
+  permissionProfile: "read-only",
+  agentInputs: [],
+  emits: [],
+});
+
+const filterCatalog = decodeCatalog({
+  ...baseCatalog,
+  entries: [
+    ...baseCatalog.entries,
+    filterEntry("github", "issue"),
+    filterEntry("linear", "issue"),
+    filterEntry("github", "pull-request"),
+  ],
+});
+
+const filteredDocument = (entry: string) =>
+  documentWith({
+    triggers: [{ ...baseDocument.triggers[0], filters: [{ entry: decodeCatalogKey(entry) }] }],
+  });
+
+const machineWith = (change: Partial<typeof baseMachine>) => decodeMachine({ ...baseMachine, ...change });
+
+const readinessCodesOf = (document = baseDocument, catalog = baseCatalog, machine = baseMachine) =>
+  adviseReadiness(document, catalog, machine).map(({ code }) => code);
 
 interface DiagnosticCase {
   readonly code: WorkflowDiagnosticCode;

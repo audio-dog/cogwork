@@ -1,7 +1,6 @@
 import * as Schema from "effect/Schema";
-import { HarnessName, WorkspaceId } from "./base-schemas";
+import { WorkspaceId } from "./base-schemas";
 import {
-  NeedIdentity,
   WorkflowCatalogKey,
   type WorkflowDocument,
   WorkflowDocument as WorkflowDocumentSchema,
@@ -12,21 +11,14 @@ import {
   type WorkflowCatalog,
   WorkflowCatalog as WorkflowCatalogSchema,
 } from "./workflow-catalog";
-import { adviseReadiness } from "./workflow-readiness";
 import { validateWorkflow } from "./workflow-validation";
 
 export const decodeDocument = Schema.decodeUnknownSync(WorkflowDocumentSchema);
 export const decodeCatalog = Schema.decodeUnknownSync(WorkflowCatalogSchema);
 export const decodeMachine = Schema.decodeUnknownSync(MachineReadiness);
-export const decodeHarness = Schema.decodeUnknownSync(HarnessName);
-export const decodeNeed = Schema.decodeUnknownSync(NeedIdentity);
 export const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);
 export const decodeCatalogKey = Schema.decodeUnknownSync(WorkflowCatalogKey);
 export const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
-export const jsonMember = (value: unknown, key: string) =>
-  typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
-export const cogworkWorkspace = decodeWorkspaceId("cogwork");
-
 export const baseDocument = decodeDocument({
   name: "Issue helper",
   workspaces: { _tag: "Every" },
@@ -131,42 +123,8 @@ export const documentWith = (change: Partial<WorkflowDocument>) =>
   decodeDocument({ ...baseDocument, ...change });
 export const catalogWith = (change: Partial<WorkflowCatalog>) => decodeCatalog({ ...baseCatalog, ...change });
 
-export const filterEntry = (system: string, itemKind: string) => ({
-  key: `${system}.${itemKind}-not-blocked`,
-  name: "Not blocked",
-  kind: "filter",
-  system,
-  connection: system,
-  requires: [],
-  parameters: [],
-  itemKind,
-  actsOn: [],
-  requiresWorkspace: true,
-  workspaceSource: null,
-  permissionProfile: "read-only",
-  agentInputs: [],
-  emits: [],
-});
-export const filterCatalog = decodeCatalog({
-  ...baseCatalog,
-  entries: [
-    ...baseCatalog.entries,
-    filterEntry("github", "issue"),
-    filterEntry("linear", "issue"),
-    filterEntry("github", "pull-request"),
-  ],
-});
-export const filteredDocument = (entry: string) =>
-  documentWith({
-    triggers: [{ ...baseDocument.triggers[0], filters: [{ entry: decodeCatalogKey(entry) }] }],
-  });
-export const machineWith = (change: Partial<typeof baseMachine>) =>
-  decodeMachine({ ...baseMachine, ...change });
 export const replaceOperation = (change: Partial<(typeof baseDocument.operations)[number]>) =>
   documentWith({ operations: [{ ...operation, ...change }] });
 
 export const codesOf = (document = baseDocument, catalog = baseCatalog) =>
   validateWorkflow(document, catalog).map(({ code }) => code);
-
-export const readinessCodesOf = (document = baseDocument, catalog = baseCatalog, machine = baseMachine) =>
-  adviseReadiness(document, catalog, machine).map(({ code }) => code);
