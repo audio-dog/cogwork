@@ -1,0 +1,45 @@
+apps/cli/src/ledger.test.ts
+  s_b3d4c44022f439::t_12137d1b258c48 544,546,554-556
+apps/cli/src/ledger.ts
+  s_fc0a437ee7234f::t_f0868232ed48cd 420-421
+packages/engine/src/run-ledger.test.ts
+  s_b3d4c44022f439::t_ba6ef8a4f51bd3 399,403,406,414-417
+packages/engine/src/run-ledger.ts
+  s_fc0a437ee7234f::t_a41a20044c9fc2 157-158,257-259,261
+packages/engine/src/workflow-run.test.ts
+  s_fc06a8384f08a4::t_6135ea56370d90 80,666-672,2301-2302,2649-2650,2853-2854,3060,3108-3114,3364-3365,3399-3402,3411,3413-3415,3451-3452
+packages/engine/src/workflow-run.ts
+  s_fc0a437ee7234f::t_cb5f42dee0b9e3 230-234,240-249,402-405,490-492,560,571-572,640-641,784
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e5a3af0f0d70c79c5b197b6facbbf1dabbb66ff8",
+  "prompts": {},
+  "sessions": {
+    "s_b3d4c44022f439": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ab6ee9144cb09d8c3",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_fc06a8384f08a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eae871b0-415d-42d6-ac9d-8684197856f5",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_fc0a437ee7234f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8031f72a-bd60-4f3e-9a6b-e06f89f088ff",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
