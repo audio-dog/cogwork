@@ -290,5 +290,8 @@ export const runLine = (rows: readonly TranscriptRow[], status: RunStatus) => {
   return workLine(last.steps);
 };
 
+export const headingLine = (rows: readonly TranscriptRow[], status: RunStatus, replaying: boolean) =>
+  runLine(replaying ? [] : rows, status);
+
 export const statusLine = (entries: Iterable<TranscriptEntry>, status: RunStatus) =>
   runLine(transcriptRows(entries, status !== "running"), status);

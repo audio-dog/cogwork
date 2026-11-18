@@ -154,6 +154,9 @@ export const logRunSettled = (status: RunRecord["status"]) => Effect.logInfo("se
 export const logRunsSettled = (runIds: ReadonlyArray<RunId>, status: RunRecord["status"]) =>
   Effect.forEach(runIds, () => logRunSettled(status), { discard: true });
 
+export const logRunUpdateRefused = (requested: RunRecord["status"]) =>
+  Effect.logWarning("refused a status change to a Run that is not running", { requested });
+
 type MemoryEvents = ReadonlyMap<RunId, ReadonlyArray<RunEvent>>;
 
 const eventCountOf = (events: MemoryEvents, runId: RunId) => events.get(runId)?.length ?? 0;
@@ -252,10 +255,10 @@ export const makeMemory = Effect.gen(function* () {
 
   const updateRun = Effect.fn("RunLedger.updateRun")(function* (runId: RunId, update: RunUpdate) {
     const updated = yield* Ref.modify(runsRef, (runs) => {
-      if (!runs.some((run) => run.id === runId)) return [false, runs];
-      return [true, patchRun(runs, runId, (run) => applyUpdate(run, update))];
+      const running = runs.some((run) => run.id === runId && run.status === "running");
+      return [running, running ? patchRun(runs, runId, (run) => applyUpdate(run, update)) : runs];
     });
-    if (!updated) return;
+    if (!updated) return yield* logRunUpdateRefused(update.status);
     yield* logRunSettled(update.status);
   });
 
