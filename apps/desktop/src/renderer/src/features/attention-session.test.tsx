@@ -165,6 +165,7 @@ const attentionWith = (
   reason: Record<string, unknown>,
   commands: ReadonlyArray<string>,
   activePlan: unknown = plan,
+  summary = "Ready to comment",
 ) =>
   decodeAttention({
     parks: [
@@ -174,7 +175,7 @@ const attentionWith = (
         publishedRevision: 4,
         operation: "review",
         lineage,
-        summary: "Ready to comment",
+        summary,
         changedSinceParked: false,
         commands,
         reason,
@@ -405,6 +406,35 @@ describe("AttentionClientProvider", () => {
       item: expect.objectContaining({ _tag: "Issue", id: "#817" }),
       note: "Use the newer report",
     });
+    await act(async () => root.unmount());
+  });
+
+  it("shows what to do, the worktree path, and the unmerged files for a blocked worktree", async () => {
+    const instruction = "Branch 947 has a merge in progress in its worktree. Finish or abort it.";
+    const { container, root } = await renderAttention({
+      snapshot: snapshot(
+        attentionWith(
+          {
+            _tag: "WorktreeBlocked",
+            reason: "operation-in-progress",
+            branch: "947",
+            path: "/worktrees/947",
+            operation: "merge",
+            unmergedPaths: ["src/a.ts", "src/b.ts"],
+          },
+          ["hand-back"],
+          null,
+          instruction,
+        ),
+      ),
+      client: defaultClient(),
+    });
+
+    const text = container.textContent ?? "";
+    expect(text.split(instruction)).toHaveLength(2);
+    expect(text).toContain("/worktrees/947");
+    expect(text).toContain("src/a.ts");
+    expect(text).toContain("src/b.ts");
     await act(async () => root.unmount());
   });
 

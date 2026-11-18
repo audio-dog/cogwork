@@ -94,10 +94,11 @@ export const make = Effect.gen(function* () {
     skipNoLongerMatching,
     rejectPlan,
     refuseResult,
+    refusePreparation,
     recoverClaimed,
     actOnResult,
   } = yield* makeWorkflowRunAttempts(pullRequestBuildInput);
-  const { admittedSkills, prepareCheckout, runTools } = yield* makeWorkflowRunPreparation();
+  const { admittedSkills, prepareCheckout, preparationPark, runTools } = yield* makeWorkflowRunPreparation();
   const touchpointGate = Semaphore.makeUnsafe(1);
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (
@@ -200,9 +201,8 @@ export const make = Effect.gen(function* () {
       );
     }
 
-    const claim =
-      pendingClaim ??
-      (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null, lineageParent: null })));
+    const preparing = ClaimState.Claimed({ key, run: null, lineageParent: null });
+    const claim = pendingClaim ?? (yield* claimItem(admission, claimed, preparing));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(SecureRandom.uuidV4Unsafe());
@@ -219,12 +219,14 @@ export const make = Effect.gen(function* () {
     ];
     const resumedRun = yield* resumeReaders.find((read) => read !== null)?.() ?? Effect.succeed(null);
     const resumedSession = resumedRun?.session ?? null;
-    const checkout = yield* prepareCheckout(
-      admission,
-      workspace,
-      operation.permissionProfile,
-      resumedSession !== null,
+    const prepared = yield* Effect.result(
+      prepareCheckout(admission, workspace, operation.permissionProfile, resumedSession !== null),
     );
+    if (Result.isFailure(prepared)) {
+      const park = preparationPark(prepared.failure);
+      return yield* refusePreparation(admission, claimed, preparing, prepared.failure.message, park);
+    }
+    const checkout = prepared.success;
     const session =
       resumedSession ??
       (yield* sessions.mint(

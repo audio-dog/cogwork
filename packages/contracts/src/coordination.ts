@@ -146,6 +146,13 @@ export const ParkReason = Schema.TaggedUnion({
   WriteFailed: { step: TrimmedNonEmptyString, error: TrimmedNonEmptyString },
   DraftOutcomeUnknown: { step: TrimmedNonEmptyString },
   NoWorkspaceRecognized: { plan: TrimmedNonEmptyString },
+  WorktreeBlocked: {
+    reason: Schema.Literals(["detached", "diverged", "operation-in-progress", "unsafe-branch"]),
+    branch: TrimmedNonEmptyString,
+    path: Schema.optional(TrimmedNonEmptyString),
+    operation: Schema.optional(Schema.Literals(["merge", "rebase", "cherry-pick"])),
+    unmergedPaths: Schema.optional(Schema.Array(Schema.String)),
+  },
   AwaitingApproval: {
     plan: TrimmedNonEmptyString,
     digest: TrimmedNonEmptyString,
