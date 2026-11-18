@@ -942,24 +942,34 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return team;
     });
 
-  const observeIssues = (ref: LinearTeamRef, coordination: CoordinationScope | null) =>
-    observeMatching(ref, coordination, uncompletedIssuesFilter);
+  const observeIssues = Effect.fn("linear.observeIssues")(function* (
+    ref: LinearTeamRef,
+    coordination: CoordinationScope | null,
+  ) {
+    return yield* observeMatching(ref, coordination, uncompletedIssuesFilter);
+  });
 
-  const observeOpenIssuesSince = (
+  const observeOpenIssuesSince = Effect.fn("linear.observeOpenIssuesSince")(function* (
     ref: LinearTeamRef,
     updatedSince: number,
     assigneeIds: ReadonlyArray<string> | undefined,
-  ) =>
-    observeMatching(ref, null, {
+  ) {
+    return yield* observeMatching(ref, null, {
       ...openIssuesFilter(assigneeIds),
       updatedAt: { gte: DateTime.formatIso(DateTime.makeUnsafe(updatedSince)) },
     });
+  });
 
-  const observeLabelledIssues = (
+  const observeLabelledIssues = Effect.fn("linear.observeLabelledIssues")(function* (
     ref: LinearTeamRef,
     label: string,
     assigneeIds: ReadonlyArray<string> | undefined,
-  ) => observeMatching(ref, null, { ...openIssuesFilter(assigneeIds), labels: { name: { eq: label } } });
+  ) {
+    return yield* observeMatching(ref, null, {
+      ...openIssuesFilter(assigneeIds),
+      labels: { name: { eq: label } },
+    });
+  });
 
   const observeMatching = Effect.fn("linear.observeMatching")(function* (
     ref: LinearTeamRef,
