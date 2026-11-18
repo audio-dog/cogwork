@@ -417,13 +417,8 @@ const make = Effect.fn("ledger.make")(function* () {
           .returning({ id: runs.id })
           .all(),
       );
-      if (runIds.length > 0) return yield* RunLedger.logRunsSettled(runIds, patch.status);
-      const kept = yield* readRows("updateRun", () =>
-        db.select({ status: runs.status }).from(runs).where(eq(runs.id, runId)).all(),
-      );
-      yield* Effect.forEach(kept, ({ status }) => RunLedger.logSettledRunKept(status, patch.status), {
-        discard: true,
-      });
+      if (runIds.length === 0) return yield* RunLedger.logRunUpdateRefused(patch.status);
+      yield* RunLedger.logRunsSettled(runIds, patch.status);
     }),
 
     setRunSession: (runId: RunId, session: SessionId) =>

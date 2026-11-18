@@ -541,7 +541,9 @@ describe("sqlite RunLedger", () => {
     it.effect("keeps a settled Run's status and end time when asked to change them", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;
+        const logs = yield* LedgerLogProbe;
         yield* ledger.insertRun(record("settled", 1000, { status: "crashed", endedAtMillis: 2000 }));
+        const before = (yield* logs.entries).length;
 
         yield* ledger.updateRun(runId("settled"), { status: "succeeded", usage: null, endedAtMillis: 3000 });
 
@@ -549,6 +551,9 @@ describe("sqlite RunLedger", () => {
           status: "crashed",
           endedAtMillis: 2000,
         });
+        assert.deepStrictEqual((yield* logs.entries).slice(before), [
+          ["refused a status change to a Run that is not running", { requested: "succeeded" }],
+        ]);
       }),
     );
 
