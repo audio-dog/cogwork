@@ -5,7 +5,6 @@ import {
   type WorkflowCatalogEntry,
   type WorkflowDiagnostic,
   type WorkflowDocument,
-  type WorkflowEdit,
   type WorkflowOperation,
   type WorkflowQuestion,
   type WorkflowQuestionChoice,
@@ -36,10 +35,11 @@ import {
   RiCloseLine,
   RiErrorWarningLine,
 } from "@remixicon/react";
-import { createContext, Fragment, type ReactNode, use, useState } from "react";
+import { createContext, Fragment, type ReactNode, type Ref, use, useState } from "react";
 import { freshNodeId, yesOrNoQuestion } from "../features/workflow-defaults";
 import { type Answers, answersKey, outcomeEdits, transitionAt } from "../features/workflow-edits";
 import { importReviewMark } from "../features/workflow-import-review";
+import { useWorkingCopy } from "../features/working-copy-provider";
 import { BufferedInput, BufferedTextarea } from "./buffered-field";
 import { ImportReview, useDismissImportReview } from "./import-review";
 import {
@@ -48,21 +48,16 @@ import {
   type CatalogChoice,
   CatalogMenu,
   type HandOffTarget,
-  type ListValues,
   ParameterMenu,
 } from "./workflow-catalog-menu";
 import { ProblemMark, problemsAt, problemTargetId } from "./workflow-problems";
 
 export interface OperationOutcomesValue {
   readonly state: { readonly operation: WorkflowOperation };
-  readonly actions: {
-    readonly send: (edits: ReadonlyArray<WorkflowEdit>) => Promise<WorkflowRecord | null>;
-  };
   readonly meta: {
     readonly entries: ReadonlyArray<WorkflowCatalogEntry>;
     readonly machine: MachineReadiness | null;
     readonly handOffs: ReadonlyArray<HandOffTarget>;
-    readonly listValues: ListValues;
     readonly takenIds: ReadonlyArray<string>;
     readonly problems: ReadonlyArray<WorkflowDiagnostic>;
     readonly workflowDocument: WorkflowDocument;
@@ -71,7 +66,7 @@ export interface OperationOutcomesValue {
 
 interface OperationOutcomesContextValue extends OperationOutcomesValue {
   readonly state: OperationOutcomesValue["state"] & { readonly justPicked: string | null };
-  readonly actions: OperationOutcomesValue["actions"] & {
+  readonly actions: {
     readonly pick: (when: Answers, choice: CatalogChoice) => void;
   };
 }
@@ -86,14 +81,11 @@ const useOperationOutcomes = () => {
 
 const pickKey = (when: Answers, entry: WorkflowCatalogEntry["key"]) => `${answersKey(when)}|${entry}`;
 
-const updatedOperation = (record: WorkflowRecord | null, operation: WorkflowOperation) =>
-  record?.workingCopy.operations.find(({ id }) => id === operation.id);
+export const operationIn = (record: WorkflowRecord, operation: WorkflowOperation) =>
+  record.workingCopy.operations.find(({ id }) => id === operation.id);
 
-const updatedQuestion = (
-  record: WorkflowRecord | null,
-  operation: WorkflowOperation,
-  question: WorkflowQuestion,
-) => updatedOperation(record, operation)?.questions.find(({ id }) => id === question.id);
+const questionIn = (record: WorkflowRecord, operation: WorkflowOperation, question: WorkflowQuestion) =>
+  operationIn(record, operation)?.questions.find(({ id }) => id === question.id);
 
 function Provider({
   value,
@@ -103,13 +95,14 @@ function Provider({
   readonly children: ReactNode;
 }) {
   const [justPicked, setJustPicked] = useState<string | null>(null);
+  const workingCopy = useWorkingCopy();
   const { operation } = value.state;
   const pick = (when: Answers, choice: CatalogChoice) => {
     if (choice._tag === "HandOff") {
-      value.actions.send(outcomeEdits.handOff(operation, when, choice.operation));
+      workingCopy.actions.edit(outcomeEdits.handOff(operation, when, choice.operation));
       return;
     }
-    value.actions.send(
+    workingCopy.actions.edit(
       outcomeEdits.addAction(
         operation,
         when,
@@ -120,9 +113,7 @@ function Provider({
     setJustPicked(choice.entry.agentInputs.length > 0 ? pickKey(when, choice.entry.key) : null);
   };
   return (
-    <OperationOutcomesContext
-      value={{ ...value, state: { ...value.state, justPicked }, actions: { ...value.actions, pick } }}
-    >
+    <OperationOutcomesContext value={{ ...value, state: { ...value.state, justPicked }, actions: { pick } }}>
       {children}
     </OperationOutcomesContext>
   );
@@ -168,8 +159,11 @@ const outcomeIsEmpty = (state: OutcomeContextValue["state"]) =>
 
 function AddActionMenu({ children }: { readonly children: ReactNode }) {
   const {
-    meta: { entries, machine, handOffs, listValues },
+    meta: { entries, machine, handOffs },
   } = useOperationOutcomes();
+  const {
+    meta: { listValues },
+  } = useWorkingCopy();
   const { actions } = useOutcome();
   if (!machine) return null;
   return (
@@ -245,10 +239,32 @@ const fieldLabel = (field: string) => {
   return `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
 };
 
+function HintField({ field, ref }: { readonly field: string; readonly ref?: Ref<HTMLTextAreaElement> }) {
+  const {
+    state: { operation },
+  } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
+  const hint = actions.field(
+    (record) =>
+      operationIn(record, operation)?.hints.find((candidate) => candidate.field === field)?.text ?? "",
+    (text) => [{ _tag: "SetHint", operation: operation.id, field, text: text.trim() || null }],
+  );
+  return (
+    <BufferedTextarea
+      ref={ref}
+      rows={1}
+      label={`What the agent writes for the ${fieldLabel(field).toLowerCase()}`}
+      value={hint.value}
+      placeholder="What to write"
+      className="w-auto max-w-full min-w-24 rounded-sm py-[5px] text-xs leading-4"
+      save={hint.save}
+    />
+  );
+}
+
 function Instructions({ entry }: { readonly entry: WorkflowCatalogEntry }) {
   const {
-    state: { operation, justPicked },
-    actions,
+    state: { justPicked },
   } = useOperationOutcomes();
   const { state } = useOutcome();
   const several = entry.agentInputs.length > 1;
@@ -268,22 +284,7 @@ function Instructions({ entry }: { readonly entry: WorkflowCatalogEntry }) {
               {fieldLabel(field)}
             </span>
           ) : null}
-          <BufferedTextarea
-            ref={focusFirst && index === 0 ? focusOnAttach : undefined}
-            rows={1}
-            label={`What the agent writes for the ${fieldLabel(field).toLowerCase()}`}
-            value={operation.hints.find((hint) => hint.field === field)?.text ?? ""}
-            placeholder="What to write"
-            className="w-auto max-w-full min-w-24 rounded-sm py-[5px] text-xs leading-4"
-            save={async (text) => {
-              const record = await actions.send([
-                { _tag: "SetHint", operation: operation.id, field, text: text.trim() || null },
-              ]);
-              return (
-                updatedOperation(record, operation)?.hints.find((hint) => hint.field === field)?.text ?? ""
-              );
-            }}
-          />
+          <HintField field={field} ref={focusFirst && index === 0 ? focusOnAttach : undefined} />
         </Fragment>
       ))}
     </div>
@@ -304,9 +305,12 @@ function ReviewedActionParameter({
 function ActionLine({ action, index }: { readonly action: WorkflowAction; readonly index: number }) {
   const {
     state: { operation },
-    actions,
-    meta: { entries, listValues },
+    meta: { entries },
   } = useOperationOutcomes();
+  const {
+    actions,
+    meta: { listValues },
+  } = useWorkingCopy();
   const { state } = useOutcome();
   const dismissImportReview = useDismissImportReview();
   const entry = entries.find(({ key }) => key === action.entry);
@@ -340,7 +344,7 @@ function ActionLine({ action, index }: { readonly action: WorkflowAction; readon
                     importReviewMark.actionParameter(operation.id, transitionIndex, index, parameter.id),
                   );
                 }
-                actions.send(
+                actions.edit(
                   outcomeEdits.setActionParameter(operation, state.when, index, parameter.id, value, entries),
                 );
               }}
@@ -352,7 +356,7 @@ function ActionLine({ action, index }: { readonly action: WorkflowAction; readon
       <RemoveOnHover
         label={`Remove ${name}`}
         className="mt-0.5 group-hover/action:opacity-100"
-        onRemove={() => actions.send(outcomeEdits.removeAction(operation, state.when, index, entries))}
+        onRemove={() => actions.edit(outcomeEdits.removeAction(operation, state.when, index, entries))}
       />
     </div>
   );
@@ -361,9 +365,9 @@ function ActionLine({ action, index }: { readonly action: WorkflowAction; readon
 function HandOffLine({ target }: { readonly target: WorkflowOperation["id"] }) {
   const {
     state: { operation },
-    actions,
     meta: { workflowDocument },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const { state } = useOutcome();
   const name = workflowDocument.operations.find(({ id }) => id === target)?.name ?? target;
   return (
@@ -373,7 +377,7 @@ function HandOffLine({ target }: { readonly target: WorkflowOperation["id"] }) {
       <RemoveOnHover
         label={`Stop handing off to ${name}`}
         className="ms-auto group-hover/action:opacity-100"
-        onRemove={() => actions.send(outcomeEdits.handOff(operation, state.when, null))}
+        onRemove={() => actions.edit(outcomeEdits.handOff(operation, state.when, null))}
       />
     </div>
   );
@@ -438,25 +442,23 @@ function OutcomeName({
 }) {
   const {
     state: { operation },
-    actions,
     meta: { problems, workflowDocument },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
+  const name = actions.field(
+    (record) =>
+      questionIn(record, operation, question)?.choices.find(({ id }) => id === choice.id)?.name ?? "",
+    (text) => [
+      { _tag: "RenameChoice", operation: operation.id, question: question.id, choice: choice.id, name: text },
+    ],
+  );
   return (
     <span className="flex w-56 max-w-full min-w-0 items-center gap-0.5">
       <BufferedInput
-        value={choice.name}
+        value={name.value}
         label={`Outcome ${question.choices.indexOf(choice) + 1}`}
         className="h-7 flex-1 px-1.5 font-mono text-[13px]"
-        save={async (name) => {
-          if (!name.trim()) return choice.name;
-          const record = await actions.send([
-            { _tag: "RenameChoice", operation: operation.id, question: question.id, choice: choice.id, name },
-          ]);
-          return (
-            updatedQuestion(record, operation, question)?.choices.find(({ id }) => id === choice.id)?.name ??
-            name
-          );
-        }}
+        save={name.save}
       />
       <ProblemMark
         problems={problemsAt(problems, { operation: operation.id, question: question.id, choice: choice.id })}
@@ -467,7 +469,7 @@ function OutcomeName({
           label={`Remove ${choice.name}`}
           className="group-hover/row:opacity-100"
           onRemove={() =>
-            actions.send([
+            actions.edit([
               { _tag: "RemoveChoice", operation: operation.id, question: question.id, choice: choice.id },
             ])
           }
@@ -480,24 +482,22 @@ function OutcomeName({
 function QuestionLine({ question }: { readonly question: WorkflowQuestion }) {
   const {
     state: { operation },
-    actions,
     meta: { problems, workflowDocument },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const label = `Question ${operation.questions.indexOf(question) + 1}`;
+  const text = actions.field(
+    (record) => questionIn(record, operation, question)?.text ?? "",
+    (written) => [{ _tag: "SetQuestionText", operation: operation.id, question: question.id, text: written }],
+  );
   return (
     <div className="group/question flex items-center gap-2 px-3 pt-3 pb-1">
       <BufferedInput
-        value={question.text}
+        value={text.value}
         placeholder="Question"
         label={label}
         className="h-7 flex-1 text-sm font-medium"
-        save={async (text) => {
-          if (!text.trim()) return question.text;
-          const record = await actions.send([
-            { _tag: "SetQuestionText", operation: operation.id, question: question.id, text },
-          ]);
-          return updatedQuestion(record, operation, question)?.text ?? text;
-        }}
+        save={text.save}
       />
       <ProblemMark
         problems={problemsAt(problems, { operation: operation.id, question: question.id, choice: null })}
@@ -507,7 +507,7 @@ function QuestionLine({ question }: { readonly question: WorkflowQuestion }) {
         label={`Remove ${label.toLowerCase()}`}
         className="group-hover/question:opacity-100"
         onRemove={() =>
-          actions.send([{ _tag: "RemoveQuestion", operation: operation.id, question: question.id }])
+          actions.edit([{ _tag: "RemoveQuestion", operation: operation.id, question: question.id }])
         }
       />
     </div>
@@ -517,8 +517,8 @@ function QuestionLine({ question }: { readonly question: WorkflowQuestion }) {
 function QuestionBlock({ question }: { readonly question: WorkflowQuestion }) {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   return (
     <div
       id={problemTargetId({ operation: operation.id, question: question.id })}
@@ -544,7 +544,7 @@ function QuestionBlock({ question }: { readonly question: WorkflowQuestion }) {
             "outcome",
             question.choices.map((choice) => choice.id),
           );
-          actions.send([
+          actions.edit([
             { _tag: "AddChoice", operation: operation.id, question: question.id, choice: { id, name: id } },
           ]);
         }}
@@ -559,8 +559,8 @@ function QuestionBlock({ question }: { readonly question: WorkflowQuestion }) {
 function EveryTime() {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   return (
     <div className="border-b bg-muted/30 last:border-b-0">
       <Outcome when={[]}>
@@ -569,7 +569,7 @@ function EveryTime() {
           <RemoveOnHover
             label="Stop running anything every time"
             className="group-hover/row:opacity-100"
-            onRemove={() => actions.send([{ _tag: "RemoveTransition", operation: operation.id, when: [] }])}
+            onRemove={() => actions.edit([{ _tag: "RemoveTransition", operation: operation.id, when: [] }])}
           />
         </OutcomeHeading>
         <OutcomeActions />
@@ -581,8 +581,8 @@ function EveryTime() {
 function Combinations() {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const combined = operation.transitions.filter(({ when }) => when.length > 1);
   if (combined.length === 0) return null;
   return (
@@ -597,7 +597,7 @@ function Combinations() {
               label="Remove this combination"
               className="group-hover/row:opacity-100"
               onRemove={() =>
-                actions.send([{ _tag: "RemoveTransition", operation: operation.id, when: transition.when }])
+                actions.edit([{ _tag: "RemoveTransition", operation: operation.id, when: transition.when }])
               }
             />
           </OutcomeHeading>
@@ -611,14 +611,14 @@ function Combinations() {
 function CombinationLevel({ prefix, after }: { readonly prefix: Answers; readonly after: number }) {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const last = operation.questions.length - 1;
   const atTop = prefix.length === 0;
   const canJoin = (index: number) => index > after && !(atTop && index === last);
   const addRoute = (when: Answers) => {
     if (transitionAt(operation, when)) return;
-    actions.send([{ _tag: "AddTransition", operation: operation.id, when }]);
+    actions.edit([{ _tag: "AddTransition", operation: operation.id, when }]);
   };
   const candidates = operation.questions
     .map((question, index) => ({ question, index }))
@@ -704,9 +704,9 @@ function UncoveredNotice() {
 function Footer() {
   const {
     state: { operation },
-    actions,
     meta: { takenIds },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   return (
     <>
       <div className="flex flex-wrap items-center gap-1">
@@ -715,7 +715,7 @@ function Footer() {
             size="xs"
             variant="ghost"
             className="font-normal text-muted-foreground"
-            onClick={() => actions.send([{ _tag: "AddTransition", operation: operation.id, when: [] }])}
+            onClick={() => actions.edit([{ _tag: "AddTransition", operation: operation.id, when: [] }])}
           >
             <RiAddLine data-icon="inline-start" />
             Every time
@@ -726,7 +726,7 @@ function Footer() {
           variant="ghost"
           className="font-normal text-muted-foreground"
           onClick={() =>
-            actions.send([
+            actions.edit([
               {
                 _tag: "AddQuestion",
                 operation: operation.id,
@@ -753,9 +753,13 @@ const cardinalityChoices = [
 function Cardinality() {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const forEach = operation.forEach;
+  const noun = actions.field(
+    (record) => operationIn(record, operation)?.forEach ?? "",
+    (text) => [{ _tag: "SetForEach", operation: operation.id, forEach: text }],
+  );
   return (
     <div className="flex items-center gap-1">
       <DropdownMenu>
@@ -771,10 +775,10 @@ function Cardinality() {
               value={forEach === null ? "once" : "each"}
               onValueChange={(value) => {
                 if (value === "once" && forEach !== null) {
-                  actions.send([{ _tag: "SetForEach", operation: operation.id, forEach: null }]);
+                  actions.edit([{ _tag: "SetForEach", operation: operation.id, forEach: null }]);
                 }
                 if (value === "each" && forEach === null) {
-                  actions.send([{ _tag: "SetForEach", operation: operation.id, forEach: "finding" }]);
+                  actions.edit([{ _tag: "SetForEach", operation: operation.id, forEach: "finding" }]);
                 }
               }}
             >
@@ -789,16 +793,10 @@ function Cardinality() {
       </DropdownMenu>
       {forEach === null ? null : (
         <BufferedInput
-          value={forEach}
+          value={noun.value}
           label="What the Operation finds"
           className="h-7 w-40 px-1.5 font-mono text-[13px]"
-          save={async (noun) => {
-            if (!noun.trim()) return forEach;
-            const record = await actions.send([
-              { _tag: "SetForEach", operation: operation.id, forEach: noun },
-            ]);
-            return updatedOperation(record, operation)?.forEach ?? noun;
-          }}
+          save={noun.save}
         />
       )}
     </div>

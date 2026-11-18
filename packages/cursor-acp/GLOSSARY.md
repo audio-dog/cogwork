@@ -1,6 +1,6 @@
 # Cursor ACP (harness adapter)
 
-The Cursor-specific [harness runner](../engine/CONTEXT.md): it implements the engine's harness
+The Cursor-specific [harness runner](../engine/GLOSSARY.md): it implements the engine's harness
 contract by driving the Cursor agent CLI over ACP (Agent Client Protocol). The engine knows nothing
 about ACP; this package knows nothing about scheduling. It only translates.
 

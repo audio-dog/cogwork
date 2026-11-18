@@ -118,7 +118,7 @@ return hostFailure("harness", error.message);
 ## The retryable field
 
 Add `retryable` only where callers make a retry decision, and keep its meaning aligned with the
-contracts vocabulary: `packages/contracts/CONTEXT.md` defines a permanent refusal as
+contracts vocabulary: `packages/contracts/GLOSSARY.md` defines a permanent refusal as
 `IssueTrackerError.retryable === false`, and the port refines it further:
 
 ```ts
@@ -164,7 +164,7 @@ no `reason` enum with one value that nothing branches on, no `retryable` nobody 
   convention. `.repos/effect/packages/platform/browser/src/Clipboard.ts`: a `Data.TaggedError`
   exemplar in Effect's own platform code.
 - `packages/contracts/src/issue-tracker.ts`: `IssueTrackerError` and
-  `issueTrackerErrorIsPermanent`. `packages/contracts/CONTEXT.md`: the binding `retryable`
+  `issueTrackerErrorIsPermanent`. `packages/contracts/GLOSSARY.md`: the binding `retryable`
   vocabulary.
 - `packages/engine/src/harness.ts`: `HarnessError` reason literals. `packages/engine/src/git.ts`:
   optional single-literal `reason`.
