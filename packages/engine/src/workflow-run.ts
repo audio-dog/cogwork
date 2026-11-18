@@ -23,29 +23,31 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { ContextAssembler } from "./context-assembler";
 import { Coordination, maxLineageHops } from "./coordination";
 import { Harness } from "./harness";
 import { acceptOperationResult, harnessStreamFailed } from "./operation-result";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
-import { subagentMembers } from "./run-plan";
-import { harnessOptions, resolveRunPlan } from "./run-plan-resolution";
+import {
+  type RunPlanRejection,
+  RunPlanResolution,
+  readyHarness,
+  resolveRunPlan,
+} from "./run-plan-resolution";
+import { CheckoutRefused, make as makeRunPreparation, selectedWorkspaceIds } from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
-import { SessionStore } from "./session-store";
 import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } from "./trigger-observation";
 import { Recheck } from "./trigger-source";
 import { Workflows } from "./workflow";
 import { itemWorkspaceOf } from "./workflow-action-entry";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
-import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { handOffAdmission, operationKeyOf, parkedAdmission } from "./workflow-run-admission";
 import { ClaimState, makeWorkflowRunAttempts } from "./workflow-run-attempts";
+import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
 import { makeWorkflowRunExecutionContext } from "./workflow-run-execution-context";
 import { touchpointFailure } from "./workflow-run-pending-plan";
-import { engineToolsFor, makeWorkflowRunPreparation, selectedWorkspaceIds } from "./workflow-run-preparation";
 import { makeWorkflowRunTouchpoints } from "./workflow-run-touchpoints";
 
 const runId = Schema.decodeSync(RunId);
@@ -74,12 +76,9 @@ export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
   const coordination = yield* Coordination;
   const harness = yield* Harness;
-  const sessions = yield* SessionStore;
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
-  const contextAssembler = yield* ContextAssembler;
   const actionPlans = yield* WorkflowActionPlanStore;
-  const artifacts = yield* WorkflowArtifactStore;
   const registry = yield* WorkspaceRegistry;
   const observationStore = yield* TriggerObservationStore;
   const triggerObservation = yield* TriggerObservation;
@@ -98,8 +97,12 @@ export const make = Effect.gen(function* () {
     recoverClaimed,
     actOnResult,
   } = yield* makeWorkflowRunAttempts(pullRequestBuildInput);
-  const { admittedSkills, prepareCheckout, preparationPark, runTools } = yield* makeWorkflowRunPreparation();
+  const preparation = yield* makeRunPreparation;
+  const runEngineTools = yield* makeRunEngineTools;
   const touchpointGate = Semaphore.makeUnsafe(1);
+
+  const declineRun = (reason: RunPlanRejection) =>
+    Effect.logDebug("Run Plan rejected", { reason }).pipe(Effect.map(() => "waiting" as const));
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (
     admission: TriggerAdmission,
@@ -175,25 +178,17 @@ export const make = Effect.gen(function* () {
       outputWorkspaces,
       itemWorkspaceOf(admission),
     );
-    const actionTools = engineToolsFor(operation, catalogResult.catalog);
-    const selectedHarness = operation.model.harness ?? catalogResult.machine.defaultHarness;
-    const hasMissingNeed = operation.requires.some(
-      (need) => !catalogResult.machine.readyNeeds.includes(need),
+    const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
+      outputWorkspaces.includes(config.name),
     );
-    if (selectedHarness === null || hasMissingNeed) return "waiting" as const;
-    const preflight = yield* Effect.result(
-      harness.preflight(
-        selectedHarness,
-        operation.permissionProfile,
-        operation.model.model,
-        harnessOptions(operation),
-      ),
-    );
-    if (Result.isFailure(preflight)) return "waiting" as const;
-    const projectedMembers = harness.projectedMembers(selectedHarness);
-    const skills = yield* admittedSkills(workspace, operation.requires);
+    const preflight = yield* preparation.preflight(operation, catalogResult.machine);
+    const ready = readyHarness(preflight);
+    if (Result.isFailure(ready)) return yield* declineRun(ready.failure);
+    const selectedHarness = ready.success.name;
+    const skills = yield* preparation.admittedSkills(workspace, operation.requires);
     const requiredSkill = skills.find(({ identity }) => operation.requires.some((need) => need === identity));
-    const requiredSkillUnsupplied = requiredSkill !== undefined && !projectedMembers.includes("Skills");
+    const requiredSkillUnsupplied =
+      requiredSkill !== undefined && !ready.success.projectedMembers.includes("Skills");
     if (requiredSkillUnsupplied) {
       return yield* rejectPlan(
         admission,
@@ -207,68 +202,39 @@ export const make = Effect.gen(function* () {
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(SecureRandom.uuidV4Unsafe());
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
-    const coordinationView = yield* coordination.read(admission.event.key);
-    const handback =
-      coordinationView.handback !== null && coordinationView.handback.atMillis > admission.event.atMillis
-        ? coordinationView.handback
-        : null;
-    const parkedAttempt = admission.lineage.parent === null ? null : RunId.make(admission.lineage.parent);
-    const resumeReaders = [
-      resumed === null ? null : () => ledger.getRun(resumed.plan.attempt),
-      handback !== null && parkedAttempt !== null ? () => ledger.getRun(parkedAttempt) : null,
-    ];
-    const resumedRun = yield* resumeReaders.find((read) => read !== null)?.() ?? Effect.succeed(null);
-    const resumedSession = resumedRun?.session ?? null;
-    const prepared = yield* Effect.result(
-      prepareCheckout(admission, workspace, operation.permissionProfile, resumedSession !== null),
-    );
-    if (Result.isFailure(prepared)) {
-      const park = preparationPark(prepared.failure);
-      return yield* refusePreparation(admission, claimed, preparing, prepared.failure.message, park);
+    const prepared = yield* preparation
+      .prepare({
+        admission,
+        workspace,
+        operation,
+        harness: selectedHarness,
+        run: { id, workspace: runWorkspace, startedAtMillis },
+        pendingPlanAttempt: resumed?.plan.attempt ?? null,
+      })
+      .pipe(Effect.catchTag("CheckoutRefused", Effect.succeed));
+    if (prepared instanceof CheckoutRefused) {
+      return yield* refusePreparation(admission, claimed, preparing, prepared.message, prepared.park);
     }
-    const checkout = prepared.success;
-    const session =
-      resumedSession ??
-      (yield* sessions.mint(
-        { workspace: runWorkspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
-        harness.sessionKind,
-      ));
-    const priorIssues = (yield* Ref.get(previousResultIssues)).get(keyOf(admission.event.key)) ?? null;
-    const assembled = yield* contextAssembler.assemble({
-      runId: id,
-      workspace: runWorkspace,
-      cwd: checkout.path,
-      projectRoot: checkout.path,
-      operatingInstructions: operation,
-      contributions: [],
-    });
-    yield* Effect.addFinalizer(() => contextAssembler.cleanup(id).pipe(Effect.ignore));
-    const lineageArtifacts = yield* artifacts.byLineage(admission.lineage.root);
-    const subagents = yield* subagentMembers(workspace?.contributions ?? [], operation.requires);
-    const plan = resolveRunPlan({
+    const resolution = resolveRunPlan({
       id,
+      operation,
+      harness: preflight,
       admission,
       workflow: record,
-      operation,
       catalog: catalogResult.catalog,
       outputWorkspaces,
-      harness: {
-        name: selectedHarness,
-        projectedMembers,
-        middleware: harness.planMiddleware(selectedHarness),
-        sessionKind: harness.sessionKind(selectedHarness),
-      },
-      workspaceCheckout: workspace === null ? null : checkout.path,
-      instructions: assembled,
-      previousResultIssues: priorIssues,
-      lineageArtifacts,
+      workspaceCheckout: workspace === null ? null : prepared.checkout.path,
+      instructions: prepared.instructions,
+      previousResultIssues: (yield* Ref.get(previousResultIssues)).get(keyOf(admission.event.key)) ?? null,
+      lineageArtifacts: prepared.lineageArtifacts,
       claim,
-      handback,
-      gitOperationInProgress: checkout.operationInProgress,
-      toolNeeds: actionTools,
+      handback: prepared.handback,
+      gitOperationInProgress: prepared.checkout.operationInProgress,
       skills,
-      subagents,
+      subagents: prepared.subagents,
     });
+    if (RunPlanResolution.$is("Rejected")(resolution)) return yield* declineRun(resolution.reason);
+    const { plan, toolNeeds } = resolution;
     const run: RunRecord = {
       id,
       workspace: runWorkspace,
@@ -277,8 +243,8 @@ export const make = Effect.gen(function* () {
       workflow: record.id,
       operation: operation.id,
       harness: selectedHarness,
-      branch: checkout.branch,
-      session,
+      branch: prepared.checkout.branch,
+      session: prepared.session,
       usage: null,
       status: "running",
       startedAtMillis,
@@ -290,17 +256,16 @@ export const make = Effect.gen(function* () {
       Effect.uninterruptible,
     );
 
-    const { engineTools, pullRequestSnapshots } = yield* runTools(
-      actionTools,
-      registryState.workspaces.filter(({ config }) => outputWorkspaces.includes(config.name)),
-    );
-    const eventsExit = yield* harness.run({ plan, session, mcpCredentials: new Map(), engineTools }).pipe(
-      Stream.tap((event) => recorder.record(run, event)),
-      Stream.filter(agUiIsStructuredOutputComplete),
-      Stream.runLast,
-      Effect.timeout(defaultRunBudget(operation.permissionProfile)),
-      Effect.exit,
-    );
+    const engineTools = yield* runEngineTools(toolNeeds, toolWorkspaces);
+    const eventsExit = yield* harness
+      .run({ plan, session: prepared.session, mcpCredentials: new Map(), engineTools: engineTools.tools })
+      .pipe(
+        Stream.tap((event) => recorder.record(run, event)),
+        Stream.filter(agUiIsStructuredOutputComplete),
+        Stream.runLast,
+        Effect.timeout(defaultRunBudget(operation.permissionProfile)),
+        Effect.exit,
+      );
     if (Exit.isFailure(eventsExit)) {
       yield* recorder.record(run, failedTerminal);
       return yield* refuseResult(admission, claimed, accepted, harnessStreamFailed(eventsExit.cause));
@@ -342,7 +307,7 @@ export const make = Effect.gen(function* () {
         catalog: catalogResult.catalog,
         workspaces: registryState.workspaces,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
-        pullRequestSnapshots: yield* Ref.get(pullRequestSnapshots),
+        pullRequestSnapshots: yield* engineTools.reviewedPullRequests,
       },
     });
   });
