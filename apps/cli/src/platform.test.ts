@@ -16,12 +16,12 @@ import * as Logger from "effect/Logger";
 import * as MutableRef from "effect/MutableRef";
 import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import * as ChildProcess from "effect/unstable/process/ChildProcess";
-import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
 
 const interruptionGate = Latch.makeUnsafe();
@@ -975,7 +975,10 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
         yield* shell(root, worktree, "echo engine >> work.txt && git commit -qam engine");
 
         const directPush = yield* Effect.exit(shell(root, worktree, `git push -q origin ${branch}`));
-        assert.isTrue(Exit.isFailure(directPush));
+        assert.include(
+          Exit.isFailure(directPush) ? Cause.pretty(directPush.cause) : "pushed",
+          "fixture failed (128)",
+        );
 
         yield* git.pushBranch(worktree, yield* git.remoteUrl(checkout, "origin"), branch);
         yield* git.fetch(checkout, "origin", { branches: [branch] });

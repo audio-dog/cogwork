@@ -2,26 +2,24 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { makeAdapter as makeGitHub } from "./github/adapter";
 import { GitHubClient } from "./github/client";
-import { makeGitHubTrackerTriggerSource } from "./github/tracker-trigger-source";
 import { IssueTracker, type IssueTrackerService } from "./issue-tracker";
 import { makeAdapter as makeLinear } from "./linear/adapter";
 import { LinearClient } from "./linear/client";
-import { makeLinearTrackerTriggerSource } from "./linear/tracker-trigger-source";
 import type { WorkspaceIssueTrackerBinding } from "./projector";
-import { WorkspaceRegistry } from "./registry";
-import { WorkflowArtifactStore } from "./workflow-artifact-store";
 
-export const route = (
-  github: IssueTrackerService,
-  linear: IssueTrackerService,
-  triggerSources: NonNullable<IssueTrackerService["triggerSources"]> = [],
-): IssueTrackerService => {
+export const route = (github: IssueTrackerService, linear: IssueTrackerService): IssueTrackerService => {
   const forWorkspace = (workspace: WorkspaceIssueTrackerBinding) =>
     workspace.config.issueTracker.type === "linear" ? linear : github;
   return {
-    triggerSources,
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
+    itemsChangedSince: (workspace, sinceMillis) =>
+      forWorkspace(workspace).itemsChangedSince(workspace, sinceMillis),
+    openItemsWithLabel: (workspace, label) => forWorkspace(workspace).openItemsWithLabel(workspace, label),
+    readItem: (workspace, id) => forWorkspace(workspace).readItem(workspace, id),
     readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
+    readTriggerProse: (workspace, id) => forWorkspace(workspace).readTriggerProse(workspace, id),
+    labelAppliedAt: (workspace, id, label) => forWorkspace(workspace).labelAppliedAt(workspace, id, label),
+    listLabels: (workspace) => forWorkspace(workspace).listLabels(workspace),
     assignees: (workspace, id) => forWorkspace(workspace).assignees?.(workspace, id) ?? Effect.succeed([]),
     createIssue: (workspace, input) => forWorkspace(workspace).createIssue(workspace, input),
     commentIssue: (workspace, id, body, writeKey) =>
@@ -37,11 +35,6 @@ export const routedLayer = Layer.effect(
   Effect.gen(function* () {
     const githubClient = yield* GitHubClient;
     const linearClient = yield* LinearClient;
-    const registry = yield* WorkspaceRegistry;
-    const artifacts = yield* WorkflowArtifactStore;
-    return route(makeGitHub(githubClient), makeLinear(linearClient), [
-      makeGitHubTrackerTriggerSource(githubClient, registry.state, artifacts),
-      makeLinearTrackerTriggerSource(linearClient, registry.state, artifacts),
-    ]);
+    return route(makeGitHub(githubClient), makeLinear(linearClient));
   }),
 );

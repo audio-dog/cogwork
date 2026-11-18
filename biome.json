@@ -90,6 +90,10 @@
     {
       "includes": ["apps/desktop/src/**", "packages/ui/src/**"],
       "plugins": ["./configs/lint/no-use-effect.grit"]
+    },
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "plugins": ["./configs/lint/no-bare-exit-failure.grit"]
     }
   ]
 }

@@ -8,13 +8,13 @@ import {
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import type * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { ConnectionStoreService } from "./connection";
 import type { Credential } from "./credential-store";
 import type { SlackMessage, SlackSession } from "./slack-source";

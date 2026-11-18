@@ -1,12 +1,13 @@
 import { assert, describe, it } from "@effect/vitest";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { TestClock } from "effect/testing";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as HttpClient from "effect/unstable/http/HttpClient";
 import { afterEach, vi } from "vitest";
 import {
   authorizeUrl,
@@ -23,16 +24,12 @@ import {
   tokenExchangeRequest,
 } from "./oauth";
 
-const cryptoLayer = Layer.succeed(
-  Crypto.Crypto,
-  Crypto.make({
-    randomBytes: (size) => Uint8Array.from({ length: size }, (_, index) => index),
-    digest: (algorithm, data) =>
-      Effect.map(
-        Effect.promise(() => globalThis.crypto.subtle.digest(algorithm, Uint8Array.from(data))),
-        (buffer) => new Uint8Array(buffer),
-      ),
-  }),
+const cryptoLayer = Layer.mergeAll(
+  Layer.succeed(
+    SecureRandom.SecureRandom,
+    SecureRandom.make((size) => Uint8Array.from({ length: size }, (_, index) => index)),
+  ),
+  Digest.layerWebCrypto,
 );
 
 const withCrypto = <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.provide(effect, cryptoLayer);

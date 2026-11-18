@@ -21,12 +21,14 @@
     "@tanstack/ai-persistence": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
     "@tanstack/ai-sandbox-local-process": "catalog:",
+    "@tanstack/ai-skills": "catalog:",
     "@vscode/ripgrep": "1.18.0",
-    "drizzle-kit": "1.0.0-rc.4",
+    "drizzle-kit": "catalog:",
     "drizzle-orm": "catalog:",
     "effect": "catalog:effect",
     "ignore": "7.0.9",
-    "proper-lockfile": "4.1.2"
+    "proper-lockfile": "4.1.2",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
     "@cogwork/test-config": "workspace:*",

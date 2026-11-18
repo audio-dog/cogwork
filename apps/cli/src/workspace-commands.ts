@@ -1,21 +1,21 @@
 import { WorkspaceId, WorkspaceRegistration, WorkspaceState, WorkspaceUpdate } from "@cogwork/contracts";
 import * as Console from "effect/Console";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
 import { defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
 
-const inputFlag = Flag.string("input").pipe(Flag.withDescription("One-time JSON registration input"));
-export const workspaceFlag = Flag.string("workspace").pipe(Flag.withDescription("WorkspaceId to manage"));
-const checkoutFlag = Flag.string("checkout").pipe(Flag.withDescription("New absolute checkout path"));
+const inputFlag = Flag.String("input").pipe(Flag.withDescription("One-time JSON registration input"));
+export const workspaceFlag = Flag.String("workspace").pipe(Flag.withDescription("WorkspaceId to manage"));
+const checkoutFlag = Flag.String("checkout").pipe(Flag.withDescription("New absolute checkout path"));
 
 const decodeRegistration = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceRegistration));
 export const decodeWorkspaceUpdateJson = Schema.decodeUnknownEffect(Schema.fromJsonString(WorkspaceUpdate));

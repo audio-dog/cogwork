@@ -2,13 +2,16 @@ import {
   AttemptRecord,
   BranchName,
   Claim,
+  ControlStoreFailure,
   HandbackRecord,
   HarnessName,
   keyOf,
   LineageId,
   localOwnerId,
+  NeedIdentity,
   type ParkReason,
   ParkRecord,
+  type PluginContribution,
   Principal,
   RunId,
   SessionId,
@@ -33,13 +36,13 @@ import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { clockEntries } from "./clock-source";
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, CoordinationError, type CoordinationService, fold } from "./coordination";
@@ -60,6 +63,7 @@ import {
   makeEmpty as makeEmptyIssueTracker,
 } from "./issue-tracker";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
+import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry } from "./registry";
@@ -75,14 +79,16 @@ import { engineTestLayer } from "./testing/engine-test-layer";
 import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
+  TriggerObservation,
   TriggerObservationStore,
   TriggerObservationStoreError,
   type TriggerObservationStoreService,
 } from "./trigger-observation";
-import { Recheck, type TriggerSource, TriggerSources } from "./trigger-source";
+import { Recheck } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
 import {
   WorkflowActionPlanStore,
+  type WorkflowActionPlanStoreService,
   memoryLayer as workflowActionPlanStoreLayer,
 } from "./workflow-action-plan-store";
 import { WorkflowArtifactStore, memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
@@ -186,6 +192,7 @@ const workflowService: WorkflowsService = {
           itemKind: null,
           actsOn: ["*"],
           requiresWorkspace: false,
+          workspaceSource: null,
           permissionProfile: "read-only",
           agentInputs: ["notification"],
           emits: [],
@@ -201,6 +208,7 @@ const workflowService: WorkflowsService = {
           itemKind: null,
           actsOn: ["*"],
           requiresWorkspace: false,
+          workspaceSource: null,
           permissionProfile: "read-only",
           agentInputs: ["hand_off"],
           emits: [],
@@ -232,9 +240,68 @@ const waitForApprovalCatalogEntry = {
   itemKind: null,
   actsOn: ["*"],
   requiresWorkspace: false,
+  workspaceSource: null,
   permissionProfile: "read-only" as const,
   agentInputs: ["approval_request"],
   emits: [],
+};
+
+const reviewWorkspace: RegisteredWorkspace = {
+  source: "test",
+  repository: "owner/repo",
+  contributions: [],
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: "repo",
+    checkoutPath: "/repo",
+    issueTracker: { type: "github" },
+  }),
+};
+
+const postReviewEntry = decodeEntry("github.post-review");
+
+const reviewDocument = WorkflowDocument.make({
+  ...document,
+  workspaces: { _tag: "Every" },
+  operations: document.operations.map((candidate) => ({
+    ...candidate,
+    transitions: candidate.transitions.map((transition) => ({
+      ...transition,
+      actions: [
+        { entry: postReviewEntry, parameters: [{ id: "event", value: "comment" }] },
+        { entry: waitForApprovalEntry, parameters: [] },
+      ],
+    })),
+  })),
+});
+
+const postReviewCatalogEntry = {
+  key: postReviewEntry,
+  name: "Post a review",
+  kind: "action" as const,
+  system: "github",
+  connection: "github",
+  requires: [],
+  parameters: [{ id: "event", required: true, source: "fixed" as const, values: ["comment"] }],
+  itemKind: null,
+  actsOn: ["*"],
+  requiresWorkspace: true,
+  workspaceSource: "agent",
+  permissionProfile: "read-only" as const,
+  agentInputs: ["pull_request", "review_body", "review_comments"],
+  emits: [],
+} satisfies WorkflowCatalogEntry;
+
+const reviewOutput = {
+  summary: "Review ready",
+  stuck: false,
+  answers: { done: "yes" },
+  workspace: reviewWorkspace.config.name,
+  inputs: {
+    pull_request: "#826",
+    review_body: "Looks good.",
+    review_comments: [],
+    approval_request: "Post this review?",
+  },
 };
 
 const workflowServiceFor = (
@@ -266,31 +333,6 @@ const documentWithTransition = (transition: {
     operations: [{ ...summarize, transitions: [transition] }],
   });
 };
-
-const recheckingSource = (result: Recheck): TriggerSource => ({
-  id: "clock",
-  entries: [
-    {
-      key: scheduleEntry,
-      name: "Every day",
-      kind: "trigger",
-      triggerKind: "condition",
-      system: null,
-      connection: null,
-      requires: [],
-      parameters: [],
-      itemKind: null,
-      actsOn: [],
-      requiresWorkspace: false,
-      permissionProfile: "read-only",
-      agentInputs: [],
-      emits: [],
-    },
-  ],
-  availability: () => Effect.succeed({ _tag: "Available" }),
-  observe: () => Stream.empty,
-  recheck: () => Effect.succeed(result),
-});
 
 const workflowServiceWith = (publishedCopy: WorkflowDocument): WorkflowsService => ({
   ...workflowService,
@@ -564,15 +606,60 @@ const requirements = Layer.mergeAll(
 );
 
 interface HarnessBehavior {
+  readonly projectedMembers?: HarnessRunner["projectedMembers"];
   readonly preflight?: HarnessRunner["preflight"];
   readonly run?: HarnessRunner["run"];
   readonly coordination?: (service: CoordinationService) => CoordinationService;
   readonly observationStore?: (service: TriggerObservationStoreService) => TriggerObservationStoreService;
+  readonly actionPlans?: (service: WorkflowActionPlanStoreService) => WorkflowActionPlanStoreService;
   readonly issueTracker?: IssueTrackerService;
   readonly registry?: RegistryState;
+  readonly pluginContributions?: ReadonlyArray<PluginContribution>;
   readonly sourceControl?: SourceControlProviderService;
-  readonly triggerSources?: ReadonlyArray<TriggerSource>;
+  readonly recheck?: Recheck;
 }
+
+const issueSearchService = (baseCatalogResult: Effect.Success<WorkflowsService["catalog"]>) => {
+  const createIssueEntry = decodeEntry("github.create-issue");
+  const issueDocument = WorkflowDocument.make({
+    ...document,
+    operations: document.operations.map((candidate) => ({
+      ...candidate,
+      transitions: candidate.transitions.map((candidateTransition) => ({
+        ...candidateTransition,
+        actions: [{ entry: createIssueEntry, parameters: [] }],
+      })),
+    })),
+  });
+  return {
+    ...workflowServiceWith(issueDocument),
+    catalog: Effect.succeed({
+      ...baseCatalogResult,
+      catalog: {
+        ...baseCatalogResult.catalog,
+        entries: [
+          ...baseCatalogResult.catalog.entries,
+          {
+            key: createIssueEntry,
+            name: "Create an issue",
+            kind: "action" as const,
+            system: "github",
+            connection: "github",
+            requires: [],
+            parameters: [],
+            itemKind: null,
+            actsOn: ["*"],
+            requiresWorkspace: true,
+            workspaceSource: "agent",
+            permissionProfile: "read-only" as const,
+            agentInputs: ["issue_title", "issue_body"],
+            emits: [],
+          },
+        ],
+      },
+    }),
+  } satisfies WorkflowsService;
+};
 
 const testProgram = (
   objects: ReadonlyArray<unknown>,
@@ -584,14 +671,16 @@ const testProgram = (
     const coordination = yield* makeCoordination();
     const baseObservationStore = yield* makeMemoryTriggerObservationStore;
     const observationStore = behavior.observationStore?.(baseObservationStore) ?? baseObservationStore;
+    const baseActionPlans = yield* WorkflowActionPlanStore;
     const notifications = yield* makeNotifications;
+    const observation = yield* TriggerObservation;
     const issueTracker = behavior.issueTracker ?? (yield* IssueTracker);
     const registry = readOnlyRegistry(behavior.registry ?? emptyRegistry);
     const harness = makeHarness([
       {
         name: harnessName,
         sessionKind: "owned-transcript",
-        projectedMembers: [],
+        projectedMembers: behavior.projectedMembers ?? ["Tools"],
         planMiddleware: ["sandbox", "persistence", "instruction-context"],
         execution: fullHarnessExecution,
         capabilities: {
@@ -628,15 +717,37 @@ const testProgram = (
         behavior.coordination?.(coordination.service) ?? coordination.service,
       ),
       Effect.provideService(TriggerObservationStore, observationStore),
+      Effect.provideService(
+        WorkflowActionPlanStore,
+        behavior.actionPlans?.(baseActionPlans) ?? baseActionPlans,
+      ),
       Effect.provideService(Harness, harness),
+      Effect.provideService(PluginManager, {
+        overview: Effect.die("unused"),
+        install: () => Effect.die("unused"),
+        uninstall: () => Effect.die("unused"),
+        contributions: () => Effect.succeed(behavior.pluginContributions ?? []),
+      }),
       Effect.provideService(IssueTracker, issueTracker),
       Effect.provideService(WorkspaceRegistry, registry),
       Effect.provideService(WorkflowNotifications, notifications),
       Effect.provideService(SourceControlProvider, behavior.sourceControl ?? emptySourceControl),
-      Effect.provideService(TriggerSources, behavior.triggerSources ?? []),
+      Effect.provideService(TriggerObservation, {
+        ...observation,
+        recheck: () => Effect.succeed(behavior.recheck ?? Recheck.Matches()),
+      }),
     );
     return { runner, coordination, notifications, observationStore };
   });
+
+const previousResultIssues = Effect.fn("WorkflowRunTest.previousResultIssues")(function* () {
+  const ledger = yield* RunLedger;
+  const plans = yield* Effect.forEach(yield* ledger.listRuns(10), ({ id }) => ledger.getRunPlan(id));
+  return plans
+    .flatMap((plan) => plan?.operatingInstructions.resources ?? [])
+    .filter(({ source }) => source === "previous-result-issues")
+    .map(({ content }) => content);
+});
 
 const exerciseFanOut = Effect.fn("WorkflowRunTest.exerciseFanOut")(function* (
   summaries: ReadonlyArray<string>,
@@ -786,6 +897,7 @@ describe("WorkflowRun", () => {
         itemKind: null,
         actsOn: ["*"],
         requiresWorkspace: true,
+        workspaceSource: "agent" as const,
         permissionProfile: "read-only" as const,
         agentInputs: inputs,
         emits: [],
@@ -1004,21 +1116,18 @@ describe("WorkflowRun", () => {
         stuck: false,
         answers: { role: "needs-info" },
         inputs: { comment: "Please add the failing logs.", hand_off: "Waiting for logs." },
-        workspace: "none",
       });
       yield* runCodingAdmission(admissionFor("needs-info-comment", issue("#801")), {
         summary: "Ready after reporter reply",
         stuck: false,
         answers: { role: "ready-for-agent" },
         inputs: { comment: "Thanks, this is ready.", hand_off: "" },
-        workspace: workspace.config.name,
       });
       yield* runCodingAdmission(admissionFor("ready-for-agent", issue("#802")), {
         summary: "Implementation complete",
         stuck: false,
         answers: {},
         inputs: { pr_title: "Implement retries", pr_body: "Closes #802" },
-        workspace: workspace.config.name,
       });
       yield* runCodingAdmission(
         admissionFor("checks-failed", {
@@ -1031,7 +1140,6 @@ describe("WorkflowRun", () => {
           stuck: false,
           answers: { reply: "no" },
           inputs: { comment: "" },
-          workspace: workspace.config.name,
         },
       );
 
@@ -1175,7 +1283,7 @@ describe("WorkflowRun", () => {
   it.effect("skips an admission whose item no longer matches its Trigger, with no attempt", () =>
     Effect.gen(function* () {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
-        triggerSources: [recheckingSource(Recheck.Ended({ reason: "Issue #1 is closed" }))],
+        recheck: Recheck.Ended({ reason: "Issue #1 is closed" }),
       });
       yield* observationStore.putAll([admission]);
 
@@ -1192,7 +1300,7 @@ describe("WorkflowRun", () => {
   it.effect("keeps an admission waiting while its item fails a Trigger filter", () =>
     Effect.gen(function* () {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
-        triggerSources: [recheckingSource(Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }))],
+        recheck: Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }),
       });
       yield* observationStore.putAll([admission]);
 
@@ -1200,31 +1308,6 @@ describe("WorkflowRun", () => {
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
       assert.isNull(yield* Ref.get(coordination.processed));
       assert.lengthOf(yield* observationStore.admissions, 1);
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
-  it.effect("does not recheck an admission handed off past the Trigger's start", () =>
-    Effect.gen(function* () {
-      const next = decodeNode("next");
-      const handedOff: TriggerAdmission = {
-        ...admission,
-        subscription: { ...admission.subscription, operation: next },
-      };
-      const { runner } = yield* testProgram(
-        [{}],
-        { triggerSources: [recheckingSource(Recheck.Ended({ reason: "#1 no longer has label ready" }))] },
-        workflowServiceWith(
-          WorkflowDocument.make({
-            ...document,
-            operations: [
-              ...document.operations,
-              ...document.operations.map((value) => ({ ...value, id: next })),
-            ],
-          }),
-        ),
-      );
-
-      assert.strictEqual(yield* runner.execute(handedOff), "retry");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -1432,45 +1515,6 @@ describe("WorkflowRun", () => {
 
   it.effect("adds issue search only when a Transition writes an issue", () =>
     Effect.gen(function* () {
-      const createIssueEntry = decodeEntry("github.create-issue");
-      const issueDocument = WorkflowDocument.make({
-        ...document,
-        operations: document.operations.map((candidate) => ({
-          ...candidate,
-          transitions: candidate.transitions.map((candidateTransition) => ({
-            ...candidateTransition,
-            actions: [{ entry: createIssueEntry, parameters: [] }],
-          })),
-        })),
-      });
-      const baseCatalogResult = yield* workflowService.catalog;
-      const issueService = {
-        ...workflowServiceWith(issueDocument),
-        catalog: Effect.succeed({
-          ...baseCatalogResult,
-          catalog: {
-            ...baseCatalogResult.catalog,
-            entries: [
-              ...baseCatalogResult.catalog.entries,
-              {
-                key: createIssueEntry,
-                name: "Create an issue",
-                kind: "action" as const,
-                system: "github",
-                connection: "github",
-                requires: [],
-                parameters: [],
-                itemKind: null,
-                actsOn: ["*"],
-                requiresWorkspace: true,
-                permissionProfile: "read-only" as const,
-                agentInputs: ["issue_title", "issue_body"],
-                emits: [],
-              },
-            ],
-          },
-        }),
-      } satisfies WorkflowsService;
       const { runner } = yield* testProgram(
         [
           {
@@ -1482,7 +1526,7 @@ describe("WorkflowRun", () => {
           },
         ],
         {},
-        issueService,
+        issueSearchService(yield* workflowService.catalog),
       );
 
       yield* runner.execute(admission);
@@ -1492,51 +1536,159 @@ describe("WorkflowRun", () => {
       const plan = yield* (yield* RunLedger).getRunPlan(run.id);
 
       assert.deepStrictEqual(plan?.tools, ["issue-search"]);
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
+        { member: "Tools", disposition: "projected" },
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("lists no engine tool for a Harness that does not project Tools", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram(
+        [
+          {
+            summary: "Create it",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { issue_title: "Title", issue_body: "Body" },
+            workspace: "none",
+          },
+        ],
+        { projectedMembers: [] },
+        issueSearchService(yield* workflowService.catalog),
+      );
+
+      yield* runner.execute(admission);
+      const [run] = yield* (yield* RunLedger).listRuns(1);
+      assert.isDefined(run);
+      if (!run) return;
+      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
+
+      assert.deepStrictEqual(plan?.tools, []);
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
+        {
+          member: "Tools",
+          disposition: "not-projected",
+          reason: "selected harness does not project Tools",
+        },
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  const releaseNeed = Schema.decodeSync(NeedIdentity)("local:user/skill/release");
+  const skillProgram = Effect.fn("WorkflowRunTest.skillProgram")(function* (
+    projectedMembers: HarnessRunner["projectedMembers"],
+  ) {
+    const skillWorkspace: RegisteredWorkspace = {
+      source: "test",
+      repository: "owner/repo",
+      contributions: [
+        {
+          id: "local:repo/skill/release",
+          authority: "local:repo",
+          kind: "skill",
+          localName: "release",
+          file: "/repo/.agents/skills/release/SKILL.md",
+        },
+        {
+          id: releaseNeed,
+          authority: "local:user",
+          kind: "skill",
+          localName: "release",
+          file: "/home/.agents/skills/release/SKILL.md",
+        },
+        {
+          id: "local:repo/rules/style",
+          authority: "local:repo",
+          kind: "rules",
+          localName: "style",
+          file: "/repo/.agents/rules/style.md",
+        },
+      ],
+      config: yield* Schema.decodeEffect(WorkspaceConfig)({
+        name: "repo",
+        checkoutPath: "/repo",
+        issueTracker: { type: "github" },
+      }),
+    };
+    const requiredDocument = WorkflowDocument.make({
+      ...document,
+      operations: document.operations.map((candidate) => ({ ...candidate, requires: [releaseNeed] })),
+    });
+    const { runner, coordination } = yield* testProgram(
+      [{ summary: "Done", stuck: false, answers: { done: "yes" }, inputs: { notification: "Done" } }],
+      {
+        projectedMembers,
+        registry: { ...emptyRegistry, workspaces: [skillWorkspace] },
+        pluginContributions: [
+          {
+            id: "plugin:linear/skill/triage-notes",
+            authority: "plugin:linear",
+            kind: "skill",
+            localName: "triage-notes",
+            summary: "Triage notes",
+            file: "/plugins/linear/skills/triage-notes/SKILL.md",
+            load: { _tag: "Loaded" },
+          },
+        ],
+      },
+      {
+        ...workflowServiceWith(requiredDocument),
+        catalog: workflowService.catalog.pipe(
+          Effect.map((result) => ({ ...result, machine: { ...result.machine, readyNeeds: [releaseNeed] } })),
+        ),
+      },
+    );
+    yield* runner.execute({
+      ...admission,
+      event: { ...admission.event, workspace: decodeWorkspace("repo") },
+    });
+    const [run] = yield* (yield* RunLedger).listRuns(1);
+    const plan = run ? yield* (yield* RunLedger).getRunPlan(run.id) : null;
+    return { plan, parks: yield* Ref.get(coordination.parks) };
+  });
+
+  it.effect(
+    "admits a required Skill over a same-named Skill, and Plugin Skills, into the Run Plan of a Harness that projects Skills",
+    () =>
+      Effect.gen(function* () {
+        const { plan } = yield* skillProgram(["Tools", "Skills"]);
+
+        assert.deepStrictEqual(
+          plan?.skills.map(({ identity, name, source }) => ({ identity, name, source })),
+          [
+            { identity: releaseNeed, name: "release", source: "/home/.agents/skills/release/SKILL.md" },
+            {
+              identity: "plugin:linear/skill/triage-notes",
+              name: "triage-notes",
+              source: "/plugins/linear/skills/triage-notes/SKILL.md",
+            },
+          ],
+        );
+        assert.deepStrictEqual(
+          { ...plan?.provenance.projection.find(({ member }) => member === "Skills") },
+          { member: "Skills", disposition: "projected" },
+        );
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("rejects the Run Plan when the Harness cannot supply a required Skill", () =>
+    Effect.gen(function* () {
+      const { plan, parks } = yield* skillProgram(["Tools"]);
+
+      assert.isNull(plan);
+      assert.deepStrictEqual(parks.at(-1)?.reason, {
+        _tag: "PlanRejected",
+        reason: `${harnessName} does not project Skills, so it cannot supply the required Skill ${releaseNeed}`,
+        entry: admission.event.entry,
+      });
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
   it.effect("adds the pull request tool and rejects a head change after its read", () =>
     Effect.gen(function* () {
-      const reviewWorkspace: RegisteredWorkspace = {
-        source: "test",
-        repository: "owner/repo",
-        contributions: [],
-        config: yield* Schema.decodeEffect(WorkspaceConfig)({
-          name: "repo",
-          checkoutPath: "/repo",
-          issueTracker: { type: "github" },
-        }),
-      };
-      const postReviewEntry = decodeEntry("github.post-review");
-      const reviewDocument = WorkflowDocument.make({
-        ...document,
-        workspaces: { _tag: "Every" },
-        operations: document.operations.map((candidate) => ({
-          ...candidate,
-          transitions: candidate.transitions.map((transition) => ({
-            ...transition,
-            actions: [
-              { entry: postReviewEntry, parameters: [{ id: "event", value: "comment" }] },
-              { entry: waitForApprovalEntry, parameters: [] },
-            ],
-          })),
-        })),
-      });
-      const postReviewCatalogEntry = {
-        key: postReviewEntry,
-        name: "Post a review",
-        kind: "action" as const,
-        system: "github",
-        connection: "github",
-        requires: [],
-        parameters: [{ id: "event", required: true, source: "fixed" as const, values: ["comment"] }],
-        itemKind: null,
-        actsOn: ["*"],
-        requiresWorkspace: true,
-        permissionProfile: "read-only" as const,
-        agentInputs: ["pull_request", "review_body", "review_comments"],
-        emits: [],
-      } satisfies WorkflowCatalogEntry;
       const pullReads = yield* Ref.make(0);
       const sourceControl = {
         ...emptySourceControl,
@@ -1555,18 +1707,6 @@ describe("WorkflowRun", () => {
               comments: [],
             })),
           ),
-      };
-      const reviewOutput = {
-        summary: "Review ready",
-        stuck: false,
-        answers: { done: "yes" },
-        workspace: reviewWorkspace.config.name,
-        inputs: {
-          pull_request: "#826",
-          review_body: "Looks good.",
-          review_comments: [],
-          approval_request: "Post this review?",
-        },
       };
       const { runner, coordination } = yield* testProgram(
         [reviewOutput],
@@ -1716,6 +1856,7 @@ describe("WorkflowRun", () => {
               itemKind: "issue",
               actsOn: [],
               requiresWorkspace: true,
+              workspaceSource: null,
               permissionProfile: "read-only",
               agentInputs: [],
               emits: [],
@@ -1731,6 +1872,7 @@ describe("WorkflowRun", () => {
               itemKind: null,
               actsOn: ["issue"],
               requiresWorkspace: true,
+              workspaceSource: "item-else-agent",
               permissionProfile: "full",
               agentInputs: ["pr_title", "pr_body"],
               emits: [],
@@ -1760,44 +1902,41 @@ describe("WorkflowRun", () => {
       Layer.mock(WorktreeManager, worktreeService),
     );
 
+    const result = {
+      summary: "Open it",
+      stuck: false,
+      answers: {},
+      inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
+    };
+    const personText = `The engine did not open the pull request: ${reason}.`;
+    const agentText = `The engine did not open a pull request from your previous result: ${reason}. Correct the branch before you return the result.`;
+
     return Effect.gen(function* () {
       const { runner, coordination } = yield* testProgram(
-        [
-          {
-            summary: "Open it",
-            stuck: false,
-            workspace: workspace.config.name,
-            answers: {},
-            inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
-          },
-          {
-            summary: "Open it",
-            stuck: false,
-            workspace: workspace.config.name,
-            answers: {},
-            inputs: { pr_title: "Open output actions", pr_body: "Closes #820" },
-          },
-        ],
+        [result, result, result],
         { registry: { ...emptyRegistry, workspaces: [workspace] } },
         service,
       );
 
       assert.strictEqual(yield* runner.execute(issueAdmission), "retry");
       assert.strictEqual(yield* runner.execute(issueAdmission), "retry");
+      assert.strictEqual(yield* runner.execute(issueAdmission), "completed");
       const ledger = yield* RunLedger;
       const runs = yield* ledger.listRuns(10);
-      const plans = yield* Effect.forEach(runs, ({ id }) => ledger.getRunPlan(id));
       const attempts = yield* Ref.get(coordination.attempts);
       assert.deepStrictEqual(
-        { statuses: runs.map(({ status }) => status), reasons: attempts.map(({ reason }) => reason) },
-        { statuses: ["declined", "declined"], reasons: [reason, reason] },
-      );
-      assert.isTrue(
-        plans.some((plan) =>
-          plan?.operatingInstructions.resources.some(
-            ({ source, content }) => source === "previous-result-issues" && content.includes(reason),
-          ),
-        ),
+        {
+          statuses: runs.map(({ status }) => status).toSorted(),
+          reasons: attempts.map(({ reason }) => reason),
+          park: (yield* Ref.get(coordination.parks)).at(-1)?.reason,
+          nextRunIssues: yield* previousResultIssues(),
+        },
+        {
+          statuses: ["declined", "declined", "exhausted"],
+          reasons: [personText, personText, personText],
+          park: { _tag: "Exhausted", reason: personText },
+          nextRunIssues: [agentText, agentText],
+        },
       );
       assert.isNull(
         yield* (yield* WorkflowActionPlanStore).pending(keyOf(issueAdmission.event.key), workflow),
@@ -2587,6 +2726,7 @@ describe("WorkflowRun", () => {
                   itemKind: null,
                   actsOn: ["*"],
                   requiresWorkspace: false,
+                  workspaceSource: null,
                   permissionProfile: "read-only",
                   agentInputs: ["approval_request"],
                   emits: [],
@@ -2699,24 +2839,88 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("parks the item after three invalid results", () =>
-    Effect.gen(function* () {
-      const { runner, coordination } = yield* testProgram([{}, {}, {}]);
-      yield* runner.execute(admission);
-      yield* runner.execute(admission);
-      yield* runner.execute(admission);
+  const refusedResults = [
+    {
+      name: "a result that does not match the schema",
+      results: Array.from({ length: 3 }, () => ({
+        summary: "Done",
+        stuck: false,
+        answers: { done: "maybe" },
+        "x\n- y": 1,
+      })),
+      behavior: {},
+      agentText: [
+        "Your previous result did not match the result schema. Correct each issue below, then return the complete result again.",
+        '- ["x\\n- y"]: Expected no excess property',
+        '- answers.done: Expected "yes"',
+        "- inputs: Missing key",
+      ].join("\n"),
+      personText:
+        'The agent\'s result did not match the Operation\'s result schema (["x\\n- y"]: Expected no excess property; answers.done: Expected "yes"; inputs: Missing key).',
+    },
+    {
+      name: "a result the action plan refuses",
+      results: Array.from({ length: 3 }, () => ({
+        summary: "No message",
+        stuck: false,
+        answers: { done: "yes" },
+        inputs: { notification: "   " },
+      })),
+      behavior: {},
+      agentText:
+        "The engine could not build an action plan from your previous result: Action cogwork.notify needs non-empty input notification. Change the result so that the engine can act on it.",
+      personText:
+        "The engine could not act on the agent's result: Action cogwork.notify needs non-empty input notification.",
+    },
+    {
+      name: "a Harness stream that fails",
+      results: [],
+      behavior: {
+        run: () =>
+          Stream.fail(
+            new HarnessError({ reason: "turn", retryable: true, message: "The model connection closed" }),
+          ),
+      },
+      agentText:
+        "Your previous Run stopped before it returned a result. Return the result before the Run ends.",
+      personText: "The Harness stopped before the agent returned a result: The model connection closed.",
+    },
+  ] satisfies ReadonlyArray<{
+    readonly name: string;
+    readonly results: ReadonlyArray<unknown>;
+    readonly behavior: HarnessBehavior;
+    readonly agentText: string;
+    readonly personText: string;
+  }>;
 
-      assert.lengthOf(yield* Ref.get(coordination.attempts), 3);
-      assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Exhausted");
-      assert.isNull(yield* Ref.get(coordination.processed));
-      const ledger = yield* RunLedger;
-      const plans = yield* Effect.forEach(yield* ledger.listRuns(10), ({ id }) => ledger.getRunPlan(id));
-      assert.isTrue(
-        plans.some((plan) =>
-          plan?.operatingInstructions.resources.some(({ source }) => source === "previous-result-issues"),
-        ),
-      );
-    }).pipe(Effect.provide(requirements), Effect.scoped),
+  refusedResults.map(({ name, results, behavior, agentText, personText }) =>
+    it.effect(`parks the item after three refusals of ${name}`, () =>
+      Effect.gen(function* () {
+        const { runner, coordination } = yield* testProgram(results, behavior);
+        const outcomes = [
+          yield* runner.execute(admission),
+          yield* runner.execute(admission),
+          yield* runner.execute(admission),
+        ];
+
+        assert.deepStrictEqual(
+          {
+            outcomes,
+            attempts: (yield* Ref.get(coordination.attempts)).map(({ reason }) => reason),
+            park: (yield* Ref.get(coordination.parks)).at(-1)?.reason,
+            processed: yield* Ref.get(coordination.processed),
+            nextRunIssues: yield* previousResultIssues(),
+          },
+          {
+            outcomes: ["retry", "retry", "completed"],
+            attempts: [personText, personText, personText],
+            park: { _tag: "Exhausted", reason: personText },
+            processed: null,
+            nextRunIssues: [agentText, agentText],
+          },
+        );
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+    ),
   );
 
   it.effect("parks a stuck result without blocking a sibling Workflow", () =>
@@ -2747,31 +2951,67 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("declines before creating a Run when Harness preflight fails", () =>
-    Effect.gen(function* () {
-      const { runner, coordination } = yield* testProgram([], {
-        preflight: () =>
-          Effect.fail(
-            new HarnessError({
-              reason: "credential",
-              retryable: true,
-              message: "Harness unavailable",
-            }),
-          ),
-        run: () => Stream.die("unexpected Harness run"),
-      });
-      yield* runner.execute(admission);
+  const documentWithOperation = (change: Partial<WorkflowDocument["operations"][number]>) =>
+    WorkflowDocument.make({
+      ...document,
+      operations: document.operations.map((candidate) => ({ ...candidate, ...change })),
+    });
+  const unreadyCases = [
+    {
+      name: "no Harness can be selected",
+      preflight: () => Effect.void,
+      service: {
+        ...workflowServiceWith(documentWithOperation({ model: { harness: null, model: null, options: [] } })),
+        catalog: workflowService.catalog.pipe(
+          Effect.map((result) => ({ ...result, machine: { ...result.machine, defaultHarness: null } })),
+        ),
+      },
+    },
+    {
+      name: "Harness preflight fails",
+      preflight: () =>
+        Effect.fail(
+          new HarnessError({
+            reason: "credential",
+            retryable: true,
+            message: "Harness unavailable",
+          }),
+        ),
+      service: workflowService,
+    },
+    {
+      name: "a required connection is not ready",
+      preflight: () => Effect.void,
+      service: workflowServiceWith(
+        documentWithOperation({ requires: [NeedIdentity.make("connection:github")] }),
+      ),
+    },
+  ] as const;
 
-      assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
-      assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "MissingOperation");
-      assert.isNull(yield* Ref.get(coordination.processed));
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
+  unreadyCases.forEach(({ name, preflight, service }) => {
+    it.effect(`declines without a park when ${name}`, () =>
+      Effect.gen(function* () {
+        const { runner, coordination } = yield* testProgram(
+          [],
+          { preflight, run: () => Stream.die("unexpected Harness run") },
+          service,
+        );
+
+        assert.strictEqual(yield* runner.execute(admission), "waiting");
+        assert.deepStrictEqual(yield* Ref.get(coordination.parks), []);
+        assert.isNull(yield* Ref.get(coordination.processed));
+        assert.strictEqual(
+          (yield* coordination.service.read(admission.event.key)).gate({ workflow, operation })._tag,
+          "Open",
+        );
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+    );
+  });
 
   it.effect("records a failed terminal event when a Workflow Run times out", () =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();
-      const { runner } = yield* testProgram([], {
+      const { runner, coordination } = yield* testProgram([], {
         run: () =>
           Stream.fromEffect(Deferred.succeed(started, undefined)).pipe(Stream.flatMap(() => Stream.never)),
       });
@@ -2790,6 +3030,188 @@ describe("WorkflowRun", () => {
       assert.deepInclude(
         activities.map(({ event }) => event),
         { type: "RUN_FINISHED", finishReason: "failed" },
+      );
+      assert.deepStrictEqual(
+        (yield* Ref.get(coordination.attempts)).map(({ reason }) => reason),
+        ["The Harness stopped before the agent returned a result: the Run used all of its time budget."],
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect(
+    "settles the Run on each fresh or resumed Action plan failure and parks the item at exhaustion",
+    () =>
+      Effect.gen(function* () {
+        const { runner, coordination } = yield* testProgram(
+          [
+            {
+              summary: "All clear",
+              stuck: false,
+              answers: { done: "yes" },
+              inputs: { notification: "All clear" },
+            },
+          ],
+          {
+            actionPlans: (service) => ({
+              ...service,
+              save: () =>
+                Effect.fail(
+                  new ControlStoreFailure({
+                    operation: "save Workflow action plan",
+                    message: "Control store unavailable",
+                    retryable: true,
+                  }),
+                ),
+            }),
+          },
+        );
+        const ledger = yield* RunLedger;
+
+        const results = yield* Effect.forEach([1, 2, 3], () =>
+          runner.execute(admission).pipe(
+            Effect.flatMap((outcome) =>
+              Effect.map(ledger.listRuns(10), (runs) => ({
+                outcome,
+                statuses: runs.map(({ status }) => status),
+              })),
+            ),
+          ),
+        );
+
+        assert.deepStrictEqual(results, [
+          { outcome: "retry", statuses: ["failed"] },
+          { outcome: "retry", statuses: ["failed"] },
+          { outcome: "completed", statuses: ["exhausted"] },
+        ]);
+        const attempts = yield* Ref.get(coordination.attempts);
+        assert.deepStrictEqual(
+          attempts.map(({ outcome }) => outcome),
+          ["failed", "failed", "failed"],
+        );
+        assert.include(attempts[0]?.reason ?? "", "Control store unavailable");
+        assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Exhausted");
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("settles the Run and records a failed attempt when the Action plan build dies", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram(
+        [reviewOutput],
+        {
+          registry: { ...emptyRegistry, workspaces: [reviewWorkspace] },
+          sourceControl: {
+            ...emptySourceControl,
+            readPullRequest: () => Effect.die("pull request read crashed"),
+          },
+        },
+        workflowServiceFor(reviewDocument, [postReviewCatalogEntry, waitForApprovalCatalogEntry]),
+      );
+
+      const outcome = yield* runner.execute(admission);
+
+      const runs = yield* (yield* RunLedger).listRuns(10);
+      const attempts = yield* Ref.get(coordination.attempts);
+      assert.deepStrictEqual(
+        {
+          outcome,
+          statuses: runs.map(({ status }) => status),
+          attempts: attempts.map(({ outcome }) => outcome),
+        },
+        { outcome: "retry", statuses: ["failed"], attempts: ["failed"] },
+      );
+      assert.include(attempts[0]?.reason ?? "", "pull request read crashed");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("records a failed attempt and creates no Run when the checkout cannot be prepared", () =>
+    Effect.gen(function* () {
+      const fullDocument = WorkflowDocument.make({
+        ...document,
+        operations: document.operations.map((candidate) => ({
+          ...candidate,
+          permissionProfile: "full" as const,
+        })),
+      });
+      const { runner, coordination } = yield* testProgram(
+        [],
+        { registry: { ...emptyRegistry, workspaces: [reviewWorkspace] } },
+        workflowServiceWith(fullDocument),
+      );
+
+      const outcome = yield* runner.execute({
+        ...admission,
+        event: { ...admission.event, workspace: reviewWorkspace.config.name },
+      });
+
+      const attempts = yield* Ref.get(coordination.attempts);
+      assert.deepStrictEqual(
+        {
+          outcome,
+          runs: yield* (yield* RunLedger).listRuns(10),
+          attempts: attempts.map(({ outcome }) => outcome),
+        },
+        { outcome: "retry", runs: [], attempts: ["failed"] },
+      );
+      assert.include(attempts[0]?.reason ?? "", "Worktree manager is not configured");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("settles the Run without a second attempt when a write fails after its attempt", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram(
+        [
+          {
+            summary: "Needs a decision",
+            stuck: true,
+            answers: { done: "yes" },
+            inputs: { notification: "Wait" },
+          },
+        ],
+        {
+          coordination: (service) => ({
+            ...service,
+            park: () =>
+              Effect.fail(
+                new CoordinationError({
+                  reason: "unavailable",
+                  retryable: true,
+                  message: "Control store unavailable",
+                }),
+              ),
+          }),
+        },
+      );
+
+      const result = yield* Effect.result(runner.execute(admission));
+
+      const runs = yield* (yield* RunLedger).listRuns(10);
+      assert.isTrue(Result.isFailure(result));
+      assert.deepStrictEqual(
+        {
+          statuses: runs.map(({ status }) => status),
+          attempts: (yield* Ref.get(coordination.attempts)).map(({ outcome }) => outcome),
+        },
+        { statuses: ["failed"], attempts: ["failed"] },
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("settles an interrupted Run as interrupted and records no attempt", () =>
+    Effect.gen(function* () {
+      const started = yield* Deferred.make<void>();
+      const { runner, coordination } = yield* testProgram([], {
+        run: () =>
+          Stream.fromEffect(Deferred.succeed(started, undefined)).pipe(Stream.flatMap(() => Stream.never)),
+      });
+      const running = yield* Effect.forkChild(runner.execute(admission), { startImmediately: true });
+      yield* Deferred.await(started);
+
+      yield* Fiber.interrupt(running);
+
+      const runs = yield* (yield* RunLedger).listRuns(10);
+      assert.deepStrictEqual(
+        { statuses: runs.map(({ status }) => status), attempts: yield* Ref.get(coordination.attempts) },
+        { statuses: ["interrupted"], attempts: [] },
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );

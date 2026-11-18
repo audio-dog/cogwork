@@ -134,6 +134,8 @@ Helpers like this exist only because the variant's payload is typed `Schema.Unkn
 
 Choose the decoder by what failure means there: `decodeUnknownEffect` when failure is a typed error the workflow handles, `decodeUnknownOption` when best-effort is correct (a foreign stream chunk that may not be an event), `decodeUnknownSync` only for compile-time constants.
 
+A struct built from fields at run time can be empty. An empty `Schema.Struct({})` decodes any value except `null` and `undefined` (strings and numbers too), and parse options such as `onExcessProperty` do not apply to it; its JSON Schema is `anyOf: [object, array]`. When "no fields" must mean "no keys", use `Schema.Record(Schema.String, Schema.Never)`, the form Effect itself uses for `Tool.EmptyParams`: it refuses every key and emits `{ type: "object", additionalProperties: false }` (#953).
+
 ## Cogwork conventions
 
 - A union branched on more than once is `Schema.TaggedUnion` (or `Schema.Union` piped through `Schema.toTaggedUnion`) when it is ever encoded, `Data.taggedEnum` when it is process-local. String-literal `kind` unions and bare `_tag` object types are not declared by hand.
@@ -155,4 +157,4 @@ Choose the decoder by what failure means there: `decodeUnknownEffect` when failu
 - `packages/engine/src/run-ledger.ts`: `workspace`/`workItem` are branded now; `branch` is the remaining raw-string parameter on the same signatures.
 - `packages/contracts/CONTEXT.md` ("Harness event"): the recorded openness decision the pattern preserves.
 - `.repos/t3code/packages/contracts/src/baseSchemas.ts`: `makeEntityId` (the same brand factory) and `ForwardCompatibleArray`, a principled decode-time forward-compatibility transform.
-- `.repos/opencode/packages/opencode/src/session/schema.ts`: prefix-checked brands (note: opencode pins an older beta; `Schema.TaggedErrorClass` there is `Schema.TaggedError` on the rc line — verify names against `.repos/effect` before copying).
+- `.repos/opencode/packages/opencode/src/session/schema.ts`: prefix-checked brands (note: opencode pins an older beta; `Schema.TaggedErrorClass` there is `Schema.TaggedError` on the pinned 4.1 release — verify names against `.repos/effect` before copying).

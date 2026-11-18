@@ -16,6 +16,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
@@ -23,7 +24,6 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { cursorModelOptions, cursorRunner, estimatedUsage, interceptCursorTelemetry } from "./harness";
 import { cursorCatalog } from "./models.generated";
 
@@ -36,7 +36,7 @@ const resumedSessionId = Schema.decodeSync(SessionId)("sess-cursor-resume");
 const decodeObservation = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({
-      instructions: Schema.String,
+      prompt: Schema.String,
       model: Schema.String,
       mcp: Schema.Array(
         Schema.Struct({
@@ -65,6 +65,10 @@ const decodeObservation = Schema.decodeUnknownSync(
       hasCursorApiKey: Schema.Boolean,
     }),
   ),
+);
+
+const decodePermissionOutcome = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ outcome: Schema.String, optionId: Schema.String })),
 );
 
 const restoreEnvironment = (name: string, value: string | undefined) =>
@@ -177,7 +181,6 @@ const request = (checkoutPath: string, operation = "operate") => {
       skills: [],
       mcp: [],
       subagents: [],
-      commands: [],
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput: { type: "object" },
@@ -489,7 +492,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
   );
 
   it.effect(
-    "uses host login and the shared mandatory Workspace projection",
+    "uses host login and projects instructions without touching repo instruction files",
     () =>
       withCursorEnvironment(
         Effect.gen(function* () {
@@ -497,6 +500,8 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
             Effect.promise(() => localProcessSandbox({}).create({})),
             (sandbox) => Effect.promise(() => sandbox.destroy()),
           );
+          yield* Effect.promise(() => checkout.fs.write("AGENTS.md", "existing repo agents\n"));
+          yield* Effect.promise(() => checkout.fs.write("CLAUDE.md", "existing repo claude\n"));
           const base = request(checkout.id);
           const projectedRequest = {
             ...base,
@@ -539,8 +544,8 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
             .join("");
           const observation = decodeObservation(output);
 
-          assert.include(observation.instructions, "Mandatory repository context.");
-          assert.include(observation.instructions, "/operating-instructions/triage-agent");
+          assert.include(observation.prompt, "Mandatory repository context.");
+          assert.include(observation.prompt, "/operating-instructions/triage-agent");
           assert.strictEqual(observation.model, "gpt-5.6-sol-high");
           assert.deepStrictEqual(observation.mcp, [
             {
@@ -554,6 +559,14 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
           assert.deepStrictEqual(observation.networkEnvironment, cursorNetworkEnvironmentProbe);
           assert.isFalse(observation.hasCursorApiKey);
           assert.notInclude(output, "cursor-mcp-secret");
+          assert.strictEqual(
+            yield* Effect.promise(() => checkout.fs.read("AGENTS.md")),
+            "existing repo agents\n",
+          );
+          assert.strictEqual(
+            yield* Effect.promise(() => checkout.fs.read("CLAUDE.md")),
+            "existing repo claude\n",
+          );
         }),
       ),
     30_000,
@@ -696,6 +709,42 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
         assert.isTrue(Array.from(events).some(agUiIsStructuredOutputComplete));
         assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
+      }),
+    30_000,
+  );
+
+  it.effect(
+    "allows a command Cursor asks permission for, because a headless Run has nobody to answer",
+    () =>
+      Effect.gen(function* () {
+        const checkout = yield* Effect.acquireRelease(
+          Effect.promise(() => localProcessSandbox({}).create({})),
+          (sandbox) => Effect.promise(() => sandbox.destroy()),
+        );
+        const base = request(checkout.id);
+        const fullRequest = {
+          ...base,
+          plan: new RunPlan({
+            ...base.plan,
+            harness: { ...base.plan.harness, profile: "full" },
+            sandbox: { ...base.plan.sandbox, policy: "full" },
+          }),
+        } satisfies Harness.HarnessRequest;
+        const runner = cursorRunner({
+          name: cursorName,
+          agentBin: `node ${fakeCursorAgent} --request-command-permission`,
+        });
+
+        const events = yield* Stream.runCollect(runner.run(fullRequest));
+        const output = Array.from(events)
+          .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
+          .map(({ delta }) => delta ?? "")
+          .join("");
+
+        assert.deepStrictEqual(decodePermissionOutcome(output), {
+          outcome: "selected",
+          optionId: "allow-once",
+        });
       }),
     30_000,
   );

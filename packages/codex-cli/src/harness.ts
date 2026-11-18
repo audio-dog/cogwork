@@ -321,6 +321,7 @@ const codexDescriptor = (
     catalog: catalogOptions,
     readiness: () => codexReadiness(executable),
     sharedGit: "required",
+    declaredMembers: ["Tools", "Skills"],
     inheritedEnvironment: ExternalHarnessRuntime.defaultInheritedEnvironment,
     makeAdapter: ({ model, nativeAuthentication, request }) => {
       const mcp = codexMcpProjection(request.mcp);

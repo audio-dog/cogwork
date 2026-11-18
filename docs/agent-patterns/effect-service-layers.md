@@ -12,10 +12,10 @@ A service is one module exporting three parts: a shape, a tag class, and a layer
   `Context.Reference` is the mechanism for a key with a default value — the repo's two sites are
   `ConnectionStore` (`packages/engine/src/connection.ts`) and `ControlStore`
   (`packages/engine/src/control-store.ts`). `Effect.Service`, `Context.Tag`, and
-  `Context.GenericTag` do not exist at `effect@4.0.0-rc.112`; the repo has zero uses of them.
+  `Context.GenericTag` do not exist at `effect@4.1.4`; the repo has zero uses of them.
 - `Layer.effect` is the effectful layer constructor and it covers scoped construction: its result is
   `Layer<I, E, Exclude<R, Scope.Scope>>`, so an acquire/release effect fits directly. `Layer.scoped`
-  does not exist on the rc line.
+  does not exist on the pinned 4.1 release.
 - Consumers reach a service through the package's namespace re-export (`export * as Executor from
   "./executor"` in `index.ts`), so call sites read `Executor.layer`, `Executor.make`.
 
@@ -181,7 +181,7 @@ then `yield*` the service directly.
 
 - `.repos/effect/packages/effect/src/Context.ts`: the `Context.Service` overloads (explicit shape,
   inferred from `make`) and `Context.Reference` for keys with defaults. `Context.Tag` and
-  `Context.GenericTag` are absent on the rc line.
+  `Context.GenericTag` are absent on the pinned 4.1 release.
 - `.repos/effect/packages/effect/src/Layer.ts`: `effect`, `succeed`, `mergeAll`, `provide`,
   `provideMerge`, `unwrap`. `Layer.scoped` is absent; `Layer.effect` discharges `Scope`.
 - `.agents/skills/effect-ts/references/guide-layers.md`: definition styles and the composition cheat

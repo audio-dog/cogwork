@@ -1,3 +1,4 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createHash } from "node:crypto";
 import {
   AgUiEvent,
@@ -7,6 +8,7 @@ import {
   type ModelOptionSelections,
   type RunId,
   type RunPlanInstruction,
+  type RunPlanMember,
   type RunPlanMessage,
   type RunPlanOperatingInstructions,
   type SessionId,
@@ -62,6 +64,7 @@ import {
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
 import { workContextMessage } from "./run-plan";
+import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import { SessionStore } from "./session-store";
 import { boundedDiff, ignored, mergeFileDiffFeed, watchWorktreeDiffs } from "./tools/file-diff-feed";
 import { policyForProfile } from "./tools/policy";
@@ -145,6 +148,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter> {
   readonly catalog: HarnessCatalogOptions;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
+  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Tools" | "Skills">>;
   readonly inheritedEnvironment: ReadonlyArray<string>;
   readonly makeAdapter: (input: {
     readonly model: AdapterModel<Adapter>;
@@ -473,8 +477,24 @@ const gitWritablePaths = (
   return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
 };
 
+const projectedTools = (
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "declaredMembers">,
+  request: HarnessRequest,
+) =>
+  descriptor.declaredMembers?.includes("Tools")
+    ? (request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [])
+    : [];
+
+const projectedSkills = (
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "declaredMembers">,
+  request: HarnessRequest,
+) =>
+  descriptor.declaredMembers?.includes("Skills")
+    ? runPlanSkillsMiddleware(request.plan.skills)
+    : Effect.succeed([]);
+
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
-  descriptor: { readonly sharedGit: ExternalHarnessDescriptor<AnyTextAdapter>["sharedGit"] },
+  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "sharedGit" | "declaredMembers">,
   request: HarnessRequest,
   checkoutPath: string,
   session: SessionId,
@@ -494,7 +514,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     checkout: { path: checkoutPath, gitWritablePaths: writablePaths },
     prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
-    tools: request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [],
+    tools: projectedTools(descriptor, request),
   } satisfies ExternalHarnessResolvedRequest;
 });
 
@@ -655,6 +675,7 @@ const openChat = <Adapter extends AnyTextAdapter>(
   provider: SandboxProvider,
   workspaceDefinition: WorkspaceDefinition,
   secretValues: ReadonlyArray<string>,
+  skills: ReadonlyArray<ChatMiddleware>,
 ) => {
   const model = descriptor.projectModel(request);
   const adapter = descriptor.makeAdapter({ model, nativeAuthentication: "host", request });
@@ -671,6 +692,7 @@ const openChat = <Adapter extends AnyTextAdapter>(
   const abortController = new AbortController();
   const middleware = [
     withSandbox(sandbox),
+    ...skills,
     ...(writesWorkspaceFiles(workspaceDefinition) ? [] : [satisfiedProjection()]),
   ];
   const stream = makeChatStream(descriptor, request, adapter, middleware, abortController, secretValues);
@@ -691,6 +713,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
   return {
     name: descriptor.name,
     ...externalHarnessDeclaration,
+    projectedMembers: [...externalHarnessDeclaration.projectedMembers, ...(descriptor.declaredMembers ?? [])],
     execution: descriptor.capabilities.execution,
     capabilities: descriptor.capabilities.profile,
     authentication: descriptor.authentication,
@@ -703,9 +726,12 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
     run: (request) =>
       Stream.unwrap(
         resolveExternalLaunch(descriptor, inputs, request).pipe(
-          Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues }) =>
+          Effect.flatMap((launch) =>
+            Effect.map(projectedSkills(descriptor, request), (skills) => ({ ...launch, skills })),
+          ),
+          Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues, skills }) =>
             Effect.try({
-              try: () => openChat(descriptor, resolved, provider, workspaceDefinition, secretValues),
+              try: () => openChat(descriptor, resolved, provider, workspaceDefinition, secretValues, skills),
               catch: descriptor.diagnostics,
             }).pipe(
               Effect.mapError((error) => scrubHarnessError(error, secretValues)),

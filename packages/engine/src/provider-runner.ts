@@ -21,8 +21,8 @@ import { withPersistence } from "@tanstack/ai-persistence";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+import type * as HttpClient from "effect/http/HttpClient";
 import * as Stream from "effect/Stream";
-import type * as HttpClient from "effect/unstable/http/HttpClient";
 import { CredentialStore } from "./credential-store";
 import {
   fullHarnessExecution,
@@ -35,6 +35,7 @@ import { defaultModelAdapterFactory, type ModelAdapterFactory, providerModelRefs
 import { bridgeChat } from "./provider-bridge";
 import { resolveModelAdapter } from "./provider-resolve";
 import { workContextMessage } from "./run-plan";
+import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import { SessionStore } from "./session-store";
 import {
   makeOwnedToolSet,
@@ -150,6 +151,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
       "Instructions",
       "Messages",
       "Tools",
+      "Skills",
       "Middleware",
       "Sandbox",
       "Structured Output",
@@ -232,9 +234,11 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           const engineTools = request.engineTools?.filter(({ name }) => plan.tools.includes(name)) ?? [];
           const persistence = withPersistence(store.persistence);
           const instructions = providerInstructionContext(plan);
-          const middleware = plan.middleware.flatMap((name) =>
-            providerMiddleware(name, persistence, instructions),
-          );
+          const skills = yield* runPlanSkillsMiddleware(plan.skills);
+          const middleware = [
+            ...plan.middleware.flatMap((name) => providerMiddleware(name, persistence, instructions)),
+            ...skills,
+          ];
 
           const abortController = yield* Effect.acquireRelease(
             Effect.sync(() => new AbortController()),

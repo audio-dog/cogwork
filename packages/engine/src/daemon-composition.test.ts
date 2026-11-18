@@ -12,24 +12,26 @@ import {
   WorkspaceId,
   WorkspaceRegistration,
 } from "@cogwork/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
+import * as NetAddress from "effect/net/NetAddress";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as RpcClient from "effect/rpc/RpcClient";
+import * as RpcServer from "effect/rpc/RpcServer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as Socket from "effect/socket/Socket";
+import * as SocketServer from "effect/socket/SocketServer";
 import * as TestClock from "effect/testing/TestClock";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import * as Socket from "effect/unstable/socket/Socket";
-import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import { Coordination } from "./coordination";
@@ -50,15 +52,20 @@ import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 const harnessName = HarnessName.make("scripted");
 const githubType = Schema.decodeSync(IssueTrackerType)("github");
 const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
-const structuredOutput = (workspace: string) => ({
+const structuredOutput = {
   summary: "Ready for implementation",
   stuck: false,
   answers: { role: "ready-for-agent" },
   inputs: { comment: "Ready for implementation.", hand_off: "" },
-  workspace,
+};
+
+const resultEvent = (object: unknown) => ({
+  type: "CUSTOM" as const,
+  name: "structured-output.complete" as const,
+  value: { object, raw: JSON.stringify(object) },
 });
 
-const runner = <Workspace extends string>(workspace: Ref.Ref<Workspace>): HarnessRunner => ({
+const runner: HarnessRunner = {
   name: harnessName,
   sessionKind: "owned-transcript",
   projectedMembers: [],
@@ -86,20 +93,8 @@ const runner = <Workspace extends string>(workspace: Ref.Ref<Workspace>): Harnes
       diagnostics: [],
     }),
   preflight: () => Effect.void,
-  run: () =>
-    Stream.fromEffect(
-      Ref.get(workspace).pipe(
-        Effect.map((selected) => {
-          const object = structuredOutput(selected);
-          return {
-            type: "CUSTOM" as const,
-            name: "structured-output.complete" as const,
-            value: { object, raw: JSON.stringify(object) },
-          };
-        }),
-      ),
-    ),
-});
+  run: () => Stream.succeed(resultEvent(structuredOutput)),
+};
 
 const reconcileWorktrees = vi.fn<WorktreeManagerService["reconcile"]>(() =>
   Effect.succeed({ tornDown: [], reaped: [] }),
@@ -164,7 +159,7 @@ const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
 
 const socketServerLayer = (socket: Socket.Socket) =>
   Layer.succeed(SocketServer.SocketServer, {
-    address: { _tag: "UnixAddress", path: "memory" },
+    address: NetAddress.unixPathAddress("memory"),
     run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
   });
 
@@ -208,15 +203,8 @@ class SlackReviewProbe extends Context.Service<SlackReviewProbe, SlackReviewProb
   );
 }
 
-const resultEvent = (object: unknown) => ({
-  type: "CUSTOM" as const,
-  name: "structured-output.complete" as const,
-  value: { object, raw: JSON.stringify(object) },
-});
-
 const slackReviewRunner = (probe: SlackReviewProbeService): HarnessRunner => ({
-  ...runner(probe.workspace),
-  capabilities: { ...runner(probe.workspace).capabilities, structuredOutput: "native" },
+  ...runner,
   run: (request) => {
     const body = request.plan.workContext.prose.body;
     const executePullRequest = request.engineTools?.find(({ name }) => name === "pull-request")?.execute;
@@ -451,7 +439,9 @@ const slackReviewServerTestLayer = () =>
   Layer.unwrap(
     Effect.map(SlackReviewServerFixture, ({ clientLayer, fetchStub, serverLayer }) =>
       Layer.merge(serverLayer, clientLayer).pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+        ),
         Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
       ),
     ),
@@ -489,7 +479,6 @@ function makeFixture() {
     yield* fs.makeDirectory(checkoutPath);
     const labels = ["needs-triage"];
     const comments: Array<Record<string, unknown>> = [];
-    const selectedWorkspace = yield* Ref.make("none");
     const fetchStub = vi.fn<typeof globalThis.fetch>((input, init) => {
       const request = new Request(input, init);
       const url = new URL(request.url);
@@ -555,7 +544,6 @@ function makeFixture() {
     return {
       checkoutPath,
       fetchStub,
-      selectedWorkspace,
       clientLayer,
       serverLayer: Daemon.serverLayer({
         transport,
@@ -565,7 +553,7 @@ function makeFixture() {
         controlStorePath: path.join(root, "control.db"),
         userAgentsDir: path.join(root, ".agents"),
         worktrees: worktreeLayer,
-        harnessRunners: [runner(selectedWorkspace)],
+        harnessRunners: [runner],
         appVersion: "test",
         performanceEvidenceRoot: path.join(root, "perf"),
         performanceHealth: Layer.succeed(PerformanceHealthSource, {
@@ -586,7 +574,9 @@ const testLayer = () =>
   Layer.unwrap(
     Effect.map(Fixture, ({ clientLayer, fetchStub, serverLayer }) =>
       Layer.merge(serverLayer, clientLayer).pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+        ),
         Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
       ),
     ),
@@ -649,7 +639,6 @@ describe("daemon composition", () => {
       });
       assert.strictEqual(registration._tag, "Registered");
       if (registration._tag !== "Registered") return;
-      yield* Ref.set(fixture.selectedWorkspace, registration.name);
       yield* rpc.SetOperationSetting({
         updates: [
           {

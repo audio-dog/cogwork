@@ -18,21 +18,22 @@ import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as References from "effect/References";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as RpcServer from "effect/rpc/RpcServer";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
-import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import type { SqlError } from "effect/unstable/sql/SqlError";
+import type { SqlError } from "effect/sql/SqlError";
 import { makeClockSource } from "./clock-source";
 import {
   cancelRun,
@@ -79,6 +80,7 @@ import { IssueTracker } from "./issue-tracker";
 import { routedLayer as issueTrackerRoutedLayer } from "./issue-tracker-router";
 import * as Linear from "./linear";
 import * as McpSkill from "./mcp-skill";
+import { withParkNotices } from "./park-notice";
 import { PerformanceHealthSource } from "./performance-health-source";
 import { recordProcessHealth, reportDaemonProcessHealth } from "./performance-metrics";
 import {
@@ -102,6 +104,7 @@ import * as SessionStore from "./session-store";
 import { make as makeSlackSource, httpClientLayer as slackClientLayer } from "./slack-source";
 import { layer as slackWriteLayer } from "./slack-write";
 import { SourceControlProvider } from "./source-control";
+import { makeTrackerTriggerSource } from "./tracker-trigger-source";
 import {
   controlStoreTriggerObservationStoreLayer,
   TriggerObservation,
@@ -111,7 +114,10 @@ import {
 import { combineTriggerSources, TriggerSources } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
 import { controlStoreLayer as workflowActionPlanStoreLayer } from "./workflow-action-plan-store";
-import { controlStoreLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
+import {
+  WorkflowArtifactStore,
+  controlStoreLayer as workflowArtifactStoreLayer,
+} from "./workflow-artifact-store";
 import { WorkflowAttention, layer as workflowAttentionLayer } from "./workflow-attention";
 import { workflowCatalogContributionsLayer } from "./workflow-catalog";
 import { layer as machineReadinessLayer } from "./workflow-machine-readiness";
@@ -389,8 +395,12 @@ export const principalMiddlewareLayer = Layer.succeed(PrincipalMiddleware)(
 export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
-  readonly granolaLogin?: Layer.Layer<never, E, R | Crypto.Crypto>;
-  readonly slackLogin?: Layer.Layer<never, E, R | Crypto.Crypto | HttpClient.HttpClient>;
+  readonly granolaLogin?: Layer.Layer<never, E, R | SecureRandom.SecureRandom>;
+  readonly slackLogin?: Layer.Layer<
+    never,
+    E,
+    R | SecureRandom.SecureRandom | Digest.Digest | HttpClient.HttpClient
+  >;
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
@@ -407,17 +417,25 @@ export interface HostAdapters<E = never, R = never> {
 }
 
 const providerTriggerSourcesLayer = <E, R>(
-  issueTracker: Layer.Layer<IssueTracker | SourceControlProvider, E, R>,
+  dependencies: Layer.Layer<
+    IssueTracker | SourceControlProvider | WorkspaceRegistry | WorkflowArtifactStore,
+    E,
+    R
+  >,
 ) =>
   Layer.effect(
     TriggerSources,
-    Effect.all([IssueTracker, SourceControlProvider]).pipe(
-      Effect.map(([tracker, provider]) => {
-        const sources = [...(tracker.triggerSources ?? []), ...(provider.triggerSources ?? [])];
+    Effect.all([IssueTracker, SourceControlProvider, WorkspaceRegistry, WorkflowArtifactStore]).pipe(
+      Effect.map(([tracker, provider, registry, artifacts]) => {
+        const sources = [
+          makeTrackerTriggerSource("github", tracker, registry.state, artifacts),
+          makeTrackerTriggerSource("linear", tracker, registry.state, artifacts),
+          ...(provider.triggerSources ?? []),
+        ];
         return combineTriggerSources([...sources, makeClockSource(sources)]);
       }),
     ),
-  ).pipe(Layer.provide(issueTracker));
+  ).pipe(Layer.provide(dependencies));
 
 function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // The credential store is stateful — its refresh gate and its minted-token cache only coordinate
@@ -433,7 +451,6 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(githubClient),
     Layer.provide(Linear.clientLayer),
     Layer.provide(credentials),
-    Layer.provide(workflowArtifacts),
   );
   const connections = connectionStoreLayer.pipe(
     Layer.provide(controlStore),
@@ -449,22 +466,27 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provideMerge(controlStore),
   );
   const issueTracker = issueTrackerAdapters.pipe(Layer.provide(registry));
-  const providerTriggerSources = providerTriggerSourcesLayer(issueTracker);
+  const providerTriggerSources = providerTriggerSourcesLayer(
+    Layer.mergeAll(issueTracker, registry, workflowArtifacts),
+  );
   const performanceIssueFiler = GitHub.performanceIssueFilerLayer(adapters.performanceIssueWorkspace).pipe(
     Layer.provide(githubClient),
     Layer.provide(registry),
   );
-  const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
-    runLedgerPublishingLayer.pipe(
-      Layer.provide(
-        Layer.unwrap(
-          Effect.map(ControlStore, (store) =>
-            store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
-          ),
-        ).pipe(Layer.provide(controlStore)),
-      ),
-      Layer.provide(daemonEventBusLayer),
-    );
+  const runLedger: Layer.Layer<
+    RunLedger,
+    E | PlatformError | SqlError,
+    R | FileSystem.FileSystem | Path.Path
+  > = runLedgerPublishingLayer.pipe(
+    Layer.provide(
+      Layer.unwrap(
+        Effect.map(ControlStore, (store) =>
+          store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
+        ),
+      ).pipe(Layer.provide(controlStore)),
+    ),
+    Layer.provide(daemonEventBusLayer),
+  );
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerRequirements = Layer.mergeAll(
@@ -486,14 +508,14 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const machineReadiness = machineReadinessLayer.pipe(
     Layer.provide(Layer.mergeAll(controlStore, registry, connections, harnessReadiness, plugins)),
   );
-  const coordination = Layer.effect(Coordination, makeControlStoreCoordination).pipe(
-    Layer.provide(controlStore),
+  const coordination = Layer.effect(Coordination, withParkNotices(makeControlStoreCoordination)).pipe(
+    Layer.provide(Layer.mergeAll(controlStore, issueTracker, registry)),
   );
   const workflowActionPlans = workflowActionPlanStoreLayer.pipe(Layer.provide(controlStore));
   const triggerSources: Layer.Layer<
     TriggerSources,
     E | PlatformError | SqlError,
-    R | Crypto.Crypto | FileSystem.FileSystem | Git | HttpClient.HttpClient | Path.Path
+    R | SecureRandom.SecureRandom | FileSystem.FileSystem | Git | HttpClient.HttpClient | Path.Path
   > = Layer.effect(
     TriggerSources,
     Effect.gen(function* () {
@@ -544,6 +566,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         harnessRuntime,
         issueTracker,
         registry,
+        plugins,
         runLedger,
         runRecorder,
         workflowActionPlans,
@@ -551,7 +574,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         workflowNotifications,
         slackWrite,
         triggerObservationStore,
-        triggerSources,
+        triggerObservation,
         adapters.worktrees,
       ),
     ),

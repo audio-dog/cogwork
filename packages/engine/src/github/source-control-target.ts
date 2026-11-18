@@ -1,5 +1,5 @@
 import type { ConnectionBindingId, ConnectionId, PrBaseDivergence } from "@cogwork/contracts";
-import type { RegisteredWorkspace } from "../projector";
+import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { type GitHubRepoRef, repoRefFromRepository } from "./client";
 
 export interface BotWakeMode {
@@ -35,7 +35,9 @@ const targetFromRepo = (
   };
 };
 
-export const sourceControlTargetFor = (workspace: RegisteredWorkspace): GitHubTargetConfig | null => {
+export const sourceControlTargetFor = (
+  workspace: WorkspaceIssueTrackerBinding,
+): GitHubTargetConfig | null => {
   const explicit = workspace.config.sourceControl;
   if (explicit) {
     if (explicit.type !== "github" || !workspace.repository) return null;

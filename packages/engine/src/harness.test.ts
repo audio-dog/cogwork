@@ -3,11 +3,11 @@ import { assert, describe, it } from "@effect/vitest";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
@@ -96,7 +96,6 @@ const request = {
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,

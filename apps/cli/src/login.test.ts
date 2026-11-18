@@ -1,25 +1,25 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
 import { CredentialStore } from "@cogwork/engine";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import type * as HttpServer from "effect/http/HttpServer";
 import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Redacted from "effect/Redacted";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type * as HttpServer from "effect/unstable/http/HttpServer";
-import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { afterEach, vi } from "vitest";
 import { makeFileStore } from "./credentials";
 import { BrowserOpener, browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear } from "./login";
@@ -28,7 +28,7 @@ const interruptionGate = Latch.makeUnsafe();
 
 const loginConfigFromServer = (server: HttpServer.HttpServer["Service"]): LinearLoginConfig => {
   const { address } = server;
-  if (address._tag === "UnixAddress") assert.fail("Expected an ephemeral TCP address");
+  if (address._tag === "UnixPathAddress") assert.fail("Expected an ephemeral TCP address");
   return { clientId: "client-1", redirectPort: address.port };
 };
 
@@ -116,7 +116,9 @@ const withLoginTest = <A, E, R>(
             }),
           ),
         ),
-        Layer.provideMerge(NodeServices.layer),
+        Layer.provideMerge(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+        ),
       ),
     ),
     Effect.provideService(FetchHttpClient.Fetch, routedFetch),
@@ -214,9 +216,9 @@ describe("browser opener", () => {
   it.effect("rejects a non-HTTPS authorization URL before spawning", () =>
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;
-      const outcome = yield* Effect.exit(opener.open("http://example.com/authorize"));
+      const error = yield* Effect.flip(opener.open("http://example.com/authorize"));
 
-      assert.isTrue(Exit.isFailure(outcome));
+      assert.include(error.message, "non-HTTPS URL");
     }).pipe(
       Effect.provide(
         browserOpenerLayer.pipe(

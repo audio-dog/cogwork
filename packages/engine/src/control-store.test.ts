@@ -21,11 +21,11 @@ import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
-import * as ChildProcess from "effect/unstable/process/ChildProcess";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { afterEach, vi } from "vitest";
 import {
   bootControlStoreLayer,
@@ -130,8 +130,8 @@ const expectedSchemaObjects = [
   { type: "index", name: "run_events_at" },
   { type: "index", name: "runs_started_at" },
   { type: "index", name: "trigger_admissions_item_revision_workflow_trigger" },
-  { type: "index", name: "workflow_action_artifacts_issue" },
   { type: "index", name: "workflow_action_artifacts_lineage" },
+  { type: "index", name: "workflow_action_artifacts_workspace_issue" },
   { type: "index", name: "workflow_action_plans_pending" },
   { type: "table", name: "connections" },
   { type: "table", name: "contribution_settings" },
@@ -1083,6 +1083,53 @@ layer(NodeServices.layer)((it) => {
       }),
     );
   });
+
+  it.effect("recreates a non-empty table that gains a required column", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* pokeConvergedStore(
+        storePath,
+        `ALTER TABLE plugin_installs DROP COLUMN principal;
+         INSERT INTO plugin_installs (plugin_id, resolved_identity, installed_at_millis)
+         VALUES ('plugin-1', 'identity', 1);`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(plugin_installs)")).some(
+          (column) => column.name === "principal",
+        ),
+      );
+      assert.deepStrictEqual(yield* query(storePath, "SELECT plugin_id FROM plugin_installs"), []);
+    }),
+  );
+
+  it.effect("drops the one-artifact-per-item index in place and keeps the stored artifacts", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const { dir, storePath } = yield* temporaryStore();
+      yield* pokeConvergedStore(
+        storePath,
+        `DROP INDEX workflow_action_artifacts_workspace_issue;
+         CREATE UNIQUE INDEX workflow_action_artifacts_issue ON workflow_action_artifacts (workspace, issue);
+         INSERT INTO workflow_action_artifacts (root, write_key, workspace, issue, artifact)
+         VALUES ('issue:repo:%23903', 'open', 'repo', '#943', '{}');`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      yield* poke(
+        storePath,
+        `INSERT INTO workflow_action_artifacts (root, write_key, workspace, issue, artifact)
+         VALUES ('issue:repo:%23943', 'push', 'repo', '#943', '{}');`,
+      );
+
+      assert.strictEqual(controlStoreBackups(yield* fs.readDirectory(dir)).length, 0);
+      assert.deepStrictEqual(
+        yield* query(storePath, "SELECT write_key FROM workflow_action_artifacts ORDER BY write_key"),
+        [{ write_key: "open" }, { write_key: "push" }],
+      );
+    }),
+  );
 
   it.effect("restores a missing index without replacing the store", () =>
     Effect.gen(function* () {

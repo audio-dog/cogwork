@@ -1,18 +1,20 @@
 import { Slack } from "@cogwork/engine";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as HttpServer from "effect/http/HttpServer";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
+import type * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Layer from "effect/Layer";
+import * as NetAddress from "effect/net/NetAddress";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import type * as Scope from "effect/Scope";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-import * as HttpServer from "effect/unstable/http/HttpServer";
-import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
-import type * as HttpServerResponse from "effect/unstable/http/HttpServerResponse";
 import { BrowserOpener } from "./login";
 import { type SlackLoginConfig, slackLoginLayer } from "./slack-login";
 
@@ -69,7 +71,7 @@ const signIn = (tokenBody: unknown) =>
       HttpServer.HttpServer,
       HttpServer.make({
         serve,
-        address: { _tag: "TcpAddress", hostname: "localhost", port: 39517 },
+        address: NetAddress.inetAddressUnsafe(NetAddress.ipv4Loopback, 39517),
       }),
     );
     const opened: Array<URL> = [];
@@ -102,7 +104,10 @@ const signIn = (tokenBody: unknown) =>
     );
     const result = yield* Effect.result(Context.get(context, Slack.SlackLogin).login);
     return { result, opened, tokenRequests };
-  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
+  }).pipe(
+    Effect.scoped,
+    Effect.provide(Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest)),
+  );
 
 const identity = {
   ok: true,

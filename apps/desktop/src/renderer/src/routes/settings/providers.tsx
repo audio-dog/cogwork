@@ -20,7 +20,7 @@ import { useTimeoutEffect } from "@react-hookz/web";
 import { RiAlertLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
-import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import type * as AsyncResult from "effect/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import { ProviderGlyphIcon } from "../../components/provider-glyph";
 import { useFocusFlash } from "../../components/settings-parts";

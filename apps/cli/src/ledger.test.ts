@@ -28,7 +28,7 @@ import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as GenericSqlClient from "effect/unstable/sql/SqlClient";
+import * as GenericSqlClient from "effect/sql/SqlClient";
 import { layer as ledgerLayer, runLedgerAppendDuration } from "./ledger";
 
 class TestStorePath extends Context.Service<TestStorePath, string>()(
@@ -130,7 +130,6 @@ const runPlan = (id: string, message = "Triage #7") =>
     skills: [],
     mcp: [],
     subagents: [],
-    commands: [],
     hooks: [],
     middleware: [],
     structuredOutput: null,

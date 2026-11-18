@@ -6,7 +6,6 @@ import {
   RiRobot2Line,
   RiServerLine,
   RiSparkling2Line,
-  RiTerminalBoxLine,
   RiUserLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
@@ -17,7 +16,6 @@ export const kindIcons: Record<ContributionKind, ComponentType> = {
   skill: RiSparkling2Line,
   subagent: RiRobot2Line,
   rules: RiFileTextLine,
-  command: RiTerminalBoxLine,
   hook: RiPulseLine,
 };
 
