@@ -85,7 +85,7 @@ const memberDisposition = (projectedMembers: ReadonlyArray<RunPlanMember>, membe
 export const harnessOptions = (operation: WorkflowOperation) =>
   Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value]));
 
-const admissionBody = (admission: TriggerAdmission, workflow: string) => {
+const workContextBody = (admission: TriggerAdmission, workflow: string) => {
   const payload = admission.event.payload;
   if (payload?._tag !== "GranolaNote") {
     return `Scheduled instant ${admission.event.revision} for Workflow ${workflow}.`;
@@ -108,11 +108,12 @@ const admissionBody = (admission: TriggerAdmission, workflow: string) => {
 };
 
 const workContextProse = ({ admission, workflow, lineageArtifacts }: RunPlanFacts) => {
-  const prose = admission.event.workContext ?? { body: admissionBody(admission, workflow.id), comments: [] };
+  const prose = admission.event.workContext ?? {
+    body: workContextBody(admission, workflow.id),
+    comments: [],
+  };
   if (lineageArtifacts.length === 0) return prose;
-  const artifacts = encodeArtifactContext(
-    lineageArtifacts.map(({ workspace, issue, url }) => ({ workspace, issue, url })),
-  );
+  const artifacts = encodeArtifactContext(lineageArtifacts);
   return { ...prose, body: [prose.body, "", "## Artifacts this lineage created", artifacts].join("\n") };
 };
 

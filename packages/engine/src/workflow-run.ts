@@ -523,12 +523,11 @@ export const make = Effect.gen(function* () {
     const workspace =
       registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
-    const itemWorkspace = itemWorkspaceOf(admission);
     const resultSchema = workflowOperationResultSchema(
       operation,
       catalogResult.catalog,
       outputWorkspaces,
-      itemWorkspace,
+      itemWorkspaceOf(admission),
     );
     const actionTools = engineToolsFor(operation, catalogResult.catalog);
     const issueSearchEnabled = actionTools.has("issue-search");
@@ -541,9 +540,13 @@ export const make = Effect.gen(function* () {
       (need) => !catalogResult.machine.readyNeeds.includes(need),
     );
     if (selectedHarness === null || hasMissingNeed) return "waiting" as const;
-    const options = harnessOptions(operation);
     const preflight = yield* Effect.result(
-      harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
+      harness.preflight(
+        selectedHarness,
+        operation.permissionProfile,
+        operation.model.model,
+        harnessOptions(operation),
+      ),
     );
     if (Result.isFailure(preflight)) return "waiting" as const;
     const projectedMembers = harness.projectedMembers(selectedHarness);
@@ -564,7 +567,6 @@ export const make = Effect.gen(function* () {
     const id = runId(SecureRandom.uuidV4Unsafe());
     const checkout = yield* prepareCheckout(admission, workspace, operation.permissionProfile);
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
-    const item = workItemId(keyOf(admission.event.key));
     const coordinationView = yield* coordination.read(admission.event.key);
     const handback =
       coordinationView.handback !== null && coordinationView.handback.atMillis > admission.event.atMillis
@@ -620,7 +622,7 @@ export const make = Effect.gen(function* () {
     const run: RunRecord = {
       id,
       workspace: runWorkspace,
-      workItem: item,
+      workItem: workItemId(keyOf(admission.event.key)),
       ...(admission.event.subject ? { subject: admission.event.subject } : {}),
       workflow: record.id,
       operation: operation.id,

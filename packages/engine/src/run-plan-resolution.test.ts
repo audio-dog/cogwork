@@ -132,6 +132,28 @@ const issueFacts: RunPlanFacts = {
 
 const requestOnly = "Run Workflow Operation: Implement";
 
+const issueWorkContext: (typeof RunPlan.Encoded)["workContext"] = {
+  reference: { workItem: "issue:cogwork:%2342", url: "https://example.test/issues/42" },
+  facts: {
+    assignees: [],
+    openBlockers: 0,
+    claim: {
+      by: "cogwork",
+      claimedAtMillis: 6_000,
+      operation: { workflow: "coding", operation: "implement" },
+      lineage,
+    },
+    priority: "high",
+  },
+  prose: {
+    body: "Make it a pure module.",
+    comments: [
+      { author: "Taylor", authorAssociation: "OWNER", body: "Keep it small.", createdAtMillis: 4_000 },
+    ],
+  },
+  observation: { generation: 7, observedAtMillis: 5_000 },
+};
+
 describe("resolveRunPlan", () => {
   it("resolves an Issue item's Run Plan from its facts", () => {
     assert.deepStrictEqual(encodePlan(resolveRunPlan(issueFacts)), {
@@ -180,27 +202,7 @@ describe("resolveRunPlan", () => {
         additionalProperties: false,
       },
       connections: [],
-      workContext: {
-        reference: { workItem: "issue:cogwork:%2342", url: "https://example.test/issues/42" },
-        facts: {
-          assignees: [],
-          openBlockers: 0,
-          claim: {
-            by: "cogwork",
-            claimedAtMillis: 6_000,
-            operation: { workflow: "coding", operation: "implement" },
-            lineage,
-          },
-          priority: "high",
-        },
-        prose: {
-          body: "Make it a pure module.",
-          comments: [
-            { author: "Taylor", authorAssociation: "OWNER", body: "Keep it small.", createdAtMillis: 4_000 },
-          ],
-        },
-        observation: { generation: 7, observedAtMillis: 5_000 },
-      },
+      workContext: issueWorkContext,
       sandbox: { workspace: "/worktrees/42", policy: "full" },
       persistence: { sessionKind: "opaque-handle" },
       provenance: {
@@ -208,19 +210,17 @@ describe("resolveRunPlan", () => {
         stamps: [],
         projectedNames: [],
         projection: [
-          ...[
-            "Harness Adapter",
-            "Instructions",
-            "Messages",
-            "Work Context",
-            "Middleware",
-            "Sandbox",
-            "Structured Output",
-            "Persistence",
-            "Provenance",
-          ].map((member) => ({ member, disposition: "projected" as const })),
-          { member: "Tools", disposition: "projected" as const },
-          { member: "Skills", disposition: "projected" as const },
+          { member: "Harness Adapter", disposition: "projected" },
+          { member: "Instructions", disposition: "projected" },
+          { member: "Messages", disposition: "projected" },
+          { member: "Work Context", disposition: "projected" },
+          { member: "Middleware", disposition: "projected" },
+          { member: "Sandbox", disposition: "projected" },
+          { member: "Structured Output", disposition: "projected" },
+          { member: "Persistence", disposition: "projected" },
+          { member: "Provenance", disposition: "projected" },
+          { member: "Tools", disposition: "projected" },
+          { member: "Skills", disposition: "projected" },
         ],
         observation: { generation: 7, observedAtMillis: 5_000 },
       },
@@ -259,37 +259,53 @@ describe("resolveRunPlan", () => {
     },
   });
 
+  const engineFramedWorkContext = (workItem: string, body: string, observedAtMillis: number) => ({
+    ...issueWorkContext,
+    reference: { workItem, url: null },
+    facts: { ...issueWorkContext.facts, priority: "medium" as const },
+    prose: { body, comments: [] },
+    observation: { generation: 7, observedAtMillis },
+  });
+
   it.each([
     {
       name: "a Granola note",
       facts: { ...issueFacts, admission: granolaAdmission },
-      body: [
-        "# Weekly sync",
-        "",
-        "## Attendees",
-        "Taylor\nAri",
-        "",
-        "## Calendar event",
-        "Weekly sync · 09:00",
-        "",
-        "## Summary",
-        "Ship the smaller change.",
-        "",
-        "## Transcript",
-        "Taylor: Ship it.\nAri: Agreed.",
-      ].join("\n"),
+      workContext: engineFramedWorkContext(
+        "granola-note:granola%2Fperson%40example.com:note-1",
+        [
+          "# Weekly sync",
+          "",
+          "## Attendees",
+          "Taylor\nAri",
+          "",
+          "## Calendar event",
+          "Weekly sync · 09:00",
+          "",
+          "## Summary",
+          "Ship the smaller change.",
+          "",
+          "## Transcript",
+          "Taylor: Ship it.\nAri: Agreed.",
+        ].join("\n"),
+        5_000,
+      ),
       message: requestOnly,
     },
     {
       name: "a schedule instant",
       facts: { ...issueFacts, admission: scheduleAdmission },
-      body: "Scheduled instant 1000 for Workflow coding.",
+      workContext: engineFramedWorkContext(
+        "schedule:coding:1000",
+        "Scheduled instant 1000 for Workflow coding.",
+        1_000,
+      ),
       message: requestOnly,
     },
     {
       name: "a handback with a note",
       facts: { ...issueFacts, handback },
-      body: "Make it a pure module.",
+      workContext: issueWorkContext,
       message: "Run Workflow Operation: Implement\n\nPerson's note: Use the smaller fix.",
     },
     {
@@ -304,41 +320,45 @@ describe("resolveRunPlan", () => {
           },
         ],
       },
-      body: [
-        "Make it a pure module.",
-        "",
-        "## Artifacts this lineage created",
-        '[{"workspace":"cogwork","issue":"#99","url":"https://example.test/issues/99"}]',
-      ].join("\n"),
+      workContext: {
+        ...issueWorkContext,
+        prose: {
+          ...issueWorkContext.prose,
+          body: [
+            "Make it a pure module.",
+            "",
+            "## Artifacts this lineage created",
+            '[{"workspace":"cogwork","issue":"#99","url":"https://example.test/issues/99"}]',
+          ].join("\n"),
+        },
+      },
       message: requestOnly,
     },
-  ])("frames the Work Context prose and message for $name", ({ facts, body, message }) => {
-    const plan = resolveRunPlan(facts);
+  ])("frames the Work Context and message for $name", ({ facts, workContext, message }) => {
+    const plan = encodePlan(resolveRunPlan(facts));
     assert.deepStrictEqual(
-      { body: plan.workContext.prose.body, messages: plan.messages.map(({ content }) => content) },
-      { body, messages: [message] },
+      { workContext: plan.workContext, messages: plan.messages },
+      {
+        workContext,
+        messages: [{ role: "user", content: message }],
+      },
     );
   });
 
   it("asks the agent to choose a Workspace when the item names none", () => {
-    assert.deepStrictEqual(resolveRunPlan({ ...issueFacts, admission: scheduleAdmission }).structuredOutput, {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      type: "object",
-      properties: {
-        summary: { type: "string" },
-        stuck: { type: "boolean" },
-        answers: { type: "object", additionalProperties: false },
-        inputs: {
-          type: "object",
-          properties: { pr_title: { type: "string" } },
-          required: ["pr_title"],
-          additionalProperties: false,
-        },
-        workspace: { type: "string", enum: ["none", "cogwork", "other"] },
+    const workspaceQuestion = Schema.decodeUnknownSync(
+      Schema.Struct({
+        required: Schema.Array(Schema.String),
+        properties: Schema.Struct({ workspace: Schema.Unknown }),
+      }),
+    );
+    assert.deepStrictEqual(
+      workspaceQuestion(resolveRunPlan({ ...issueFacts, admission: scheduleAdmission }).structuredOutput),
+      {
+        required: ["summary", "stuck", "answers", "inputs", "workspace"],
+        properties: { workspace: { type: "string", enum: ["none", "cogwork", "other"] } },
       },
-      required: ["summary", "stuck", "answers", "inputs", "workspace"],
-      additionalProperties: false,
-    });
+    );
   });
 
   it("lists no Tools and records both members unprojected when the Harness projects neither", () => {
