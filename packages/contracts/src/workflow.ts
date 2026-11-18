@@ -1416,48 +1416,63 @@ const operationCapabilityDiagnostics = (document: WorkflowDocument, catalog: Wor
     return [...profile, ...workspace];
   });
 
-const reachableKinds = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
+interface ReachedItem {
+  readonly operation: WorkflowNodeId;
+  readonly system: string | null;
+  readonly kind: string;
+}
+
+const sameReach = (left: ReachedItem, right: ReachedItem) =>
+  left.operation === right.operation && left.system === right.system && left.kind === right.kind;
+
+const reachableItems = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
   const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
-  const seeds = document.triggers.flatMap((trigger) => {
-    const kind = entries.get(trigger.entry)?.itemKind;
-    return kind === null || kind === undefined ? [] : [[trigger.start, kind] as const];
+  const seeds = document.triggers.flatMap((trigger): ReadonlyArray<ReachedItem> => {
+    const entry = entries.get(trigger.entry);
+    return entry?.itemKind ? [{ operation: trigger.start, system: entry.system, kind: entry.itemKind }] : [];
   });
-  const next = (known: ReadonlyArray<readonly [WorkflowNodeId, string]>) => {
-    const additions = known.flatMap(([operationId, kind]) =>
+  const next = (known: ReadonlyArray<ReachedItem>) => {
+    const additions = known.flatMap((item) =>
       document.operations
-        .filter(({ id }) => id === operationId)
+        .filter(({ id }) => id === item.operation)
         .flatMap((operation) =>
           operation.transitions.flatMap(({ handOff }) =>
-            handOff === null ? [] : [[handOff, kind] as const],
+            handOff === null ? [] : [{ ...item, operation: handOff }],
           ),
         ),
     );
     return [...known, ...additions].filter(
-      (entry, index, values) =>
-        values.findIndex(([operationId, kind]) => operationId === entry[0] && kind === entry[1]) === index,
+      (item, index, values) => values.findIndex((other) => sameReach(item, other)) === index,
     );
   };
   return Array.from({ length: document.operations.length }, () => null).reduce(next, seeds);
 };
 
+const appOf = (actsOnValue: string) => actsOnValue.split(".", 1)[0];
+
+const acceptsItem = (actsOn: ReadonlyArray<string>, { system, kind }: ReachedItem) =>
+  actsOn.some((value) => ["*", kind, `${system ?? appOf(value)}.${kind}`].includes(value));
+
+const itemName = ({ system, kind }: ReachedItem) => (system === null ? kind : `${system}.${kind}`);
+
 const itemKindDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
-  const kinds = reachableKinds(document, catalog);
+  const reached = reachableItems(document, catalog);
   return document.operations.flatMap((operation) => {
-    const operationKinds = kinds.filter(([id]) => id === operation.id).map(([, kind]) => kind);
-    const entries = actionEntries(operation, catalog);
-    const mismatch = entries.some(
-      ({ actsOn }) => !actsOn.includes("*") && operationKinds.some((kind) => !actsOn.includes(kind)),
-    );
-    return mismatch
-      ? [
-          diagnostic(
-            "item-kind-mismatch",
-            "incomplete",
-            `Operation ${operation.id} has an action that cannot act on its item kind`,
-            location("actions", { operation: operation.id }),
-          ),
-        ]
-      : [];
+    const operationItems = reached.filter((item) => item.operation === operation.id);
+    const actions = new Map(actionEntries(operation, catalog).map((entry) => [entry.key, entry]));
+    return Array.from(actions.values()).flatMap(({ key, actsOn }) => {
+      const refused = operationItems.find((item) => !acceptsItem(actsOn, item));
+      return refused
+        ? [
+            diagnostic(
+              "item-kind-mismatch",
+              "incomplete",
+              `Action ${key} in Operation ${operation.id} acts only on ${actsOn.join(", ")}, but ${itemName(refused)} reaches it`,
+              location("actions", { operation: operation.id }),
+            ),
+          ]
+        : [];
+    });
   });
 };
 

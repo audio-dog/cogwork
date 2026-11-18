@@ -252,19 +252,33 @@ const issueEntries = (system: IssueTrackerApp) => [
     "agent",
   ),
   currentIssueEntry(
-    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], ["issue"]),
+    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], [`${system}.issue`]),
     commentIssue,
   ),
   currentIssueEntry(
-    issueActionRow(system, "add-label", "Add a label", [], [issueParameter("label", true)], ["issue"]),
+    issueActionRow(
+      system,
+      "add-label",
+      "Add a label",
+      [],
+      [issueParameter("label", true)],
+      [`${system}.issue`],
+    ),
     addLabel,
   ),
   currentIssueEntry(
-    issueActionRow(system, "remove-label", "Remove a label", [], [issueParameter("label", true)], ["issue"]),
+    issueActionRow(
+      system,
+      "remove-label",
+      "Remove a label",
+      [],
+      [issueParameter("label", true)],
+      [`${system}.issue`],
+    ),
     removeLabel,
   ),
   currentIssueEntry(
-    issueActionRow(system, "close-this-issue", "Close this issue", [], [], ["issue"]),
+    issueActionRow(system, "close-this-issue", "Close this issue", [], [], [`${system}.issue`]),
     closeIssue,
   ),
 ];

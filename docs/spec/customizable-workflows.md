@@ -218,7 +218,7 @@ WorkflowDocument {
 | Incomplete | `missing-option` | A required Trigger or action parameter has no value. |
 | Incomplete | `profile-too-narrow` | An action needs `full` on a `read-only` Operation. |
 | Incomplete | `no-workspace` | An action needs a Workspace and the selection is `Listed []`. |
-| Incomplete | `item-kind-mismatch` | A Trigger's item kind can reach an action that cannot act on that kind. |
+| Incomplete | `item-kind-mismatch` | A Trigger's item kind can reach an action that cannot act on that kind. An action that acts only on one app's items (`actsOn` value `<app>.<kind>`, for example `github.issue`) also counts when a Trigger of another app reaches it. One finding per action. |
 | Incomplete | `filter-not-applicable` | A Trigger names a filter of another app or item kind than its entry. |
 | Advisory | `connection-not-ready`, `need-not-ready` | For a Trigger, an action, or a required need. |
 | Advisory | `harness-unavailable`, `no-harness` | The named Harness is not available; or the document says null and no default row exists. |

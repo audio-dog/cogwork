@@ -1,6 +1,7 @@
 import {
   keyOf,
   RunId,
+  validateWorkflow,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -20,6 +21,7 @@ import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalo
 import type { RegisteredWorkspace } from "./projector";
 import { SlackWrite } from "./slack-write";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { trackerTriggerEntries } from "./tracker-trigger-source";
 import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
@@ -143,6 +145,52 @@ describe("Issue Action entries", () => {
         assert.notInclude(cogworkKeys, key);
       }
     }
+  });
+
+  it("refuses each current-item action on an issue of the other tracker", () => {
+    const catalog = {
+      entries: issueTrackerApps.flatMap((system) => [
+        ...trackerTriggerEntries(system),
+        ...issueTrackerWorkflowCatalogContribution(system).entries,
+      ]),
+      instructionPackages: [],
+      harnesses: [],
+    };
+    const refusedActions = (triggerApp: IssueTrackerApp, actionApp: IssueTrackerApp) =>
+      validateWorkflow(
+        WorkflowDocument.make({
+          name: "Cross-tracker writes",
+          workspaces: { _tag: "Every" },
+          triggers: [
+            {
+              id: Schema.decodeSync(WorkflowNodeId)("labelled"),
+              entry: decodeEntry(`${triggerApp}.issue-has-label`),
+              parameters: [{ id: "label", value: "ready" }],
+              filters: [],
+              start: operation,
+            },
+          ],
+          operations: [writeOperation(actionApp)],
+        }),
+        catalog,
+      )
+        .filter(({ code }) => code === "item-kind-mismatch")
+        .map(({ message }) => message.split(" ")[1]);
+
+    assert.deepStrictEqual(refusedActions("linear", "github"), [
+      "github.comment-this-item",
+      "github.add-label",
+      "github.remove-label",
+      "github.close-this-issue",
+    ]);
+    assert.deepStrictEqual(refusedActions("github", "linear"), [
+      "linear.comment-this-item",
+      "linear.add-label",
+      "linear.remove-label",
+      "linear.close-this-issue",
+    ]);
+    assert.deepStrictEqual(refusedActions("github", "github"), []);
+    assert.deepStrictEqual(refusedActions("linear", "linear"), []);
   });
 
   for (const system of issueTrackerApps) {

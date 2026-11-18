@@ -549,6 +549,109 @@ describe("Workflow validator", () => {
     assert.deepStrictEqual(codesOf(filteredDocument(entry), filterCatalog), [code]);
   });
 
+  const [issueTrigger, issueAction] = baseCatalog.entries;
+  const appAction = (key: string, actsOn: ReadonlyArray<string>) => ({
+    ...issueAction,
+    key,
+    system: key.split(".", 1)[0],
+    actsOn,
+  });
+  const appCatalog = decodeCatalog({
+    ...baseCatalog,
+    entries: [
+      ...baseCatalog.entries,
+      { ...issueTrigger, key: "linear.issue-opened", system: "linear", connection: "linear/main" },
+      { ...issueTrigger, key: "schedule.sweep", system: null, connection: null },
+      appAction("github.add-label", ["github.issue"]),
+      appAction("github.close-this-issue", ["github.issue"]),
+      appAction("linear.comment-this-item", ["linear.issue"]),
+      appAction("github.open-pull-request", ["issue"]),
+    ],
+  });
+  const itemKindMessages = (document: WorkflowDocument) =>
+    validateWorkflow(document, appCatalog)
+      .filter(({ code }) => code === "item-kind-mismatch")
+      .map(({ message }) => message);
+  const startedBy = (trigger: string, action: string) =>
+    documentWith({
+      triggers: [{ ...baseDocument.triggers[0], entry: decodeCatalogKey(trigger) }],
+      operations: [
+        {
+          ...operation,
+          transitions: [{ ...transition, actions: [{ entry: decodeCatalogKey(action), parameters: [] }] }],
+        },
+      ],
+    });
+
+  it.each([
+    {
+      case: "a github action reached by a linear issue",
+      trigger: "linear.issue-opened",
+      action: "github.add-label",
+      messages: [
+        "Action github.add-label in Operation triage acts only on github.issue, but linear.issue reaches it",
+      ],
+    },
+    {
+      case: "a linear action reached by a github issue",
+      trigger: "github.issue-opened",
+      action: "linear.comment-this-item",
+      messages: [
+        "Action linear.comment-this-item in Operation triage acts only on linear.issue, but github.issue reaches it",
+      ],
+    },
+    {
+      case: "a github action reached by a github issue",
+      trigger: "github.issue-opened",
+      action: "github.add-label",
+      messages: [],
+    },
+    {
+      case: "a linear action reached by a linear issue",
+      trigger: "linear.issue-opened",
+      action: "linear.comment-this-item",
+      messages: [],
+    },
+    {
+      case: "an action of any app's issue reached by a linear issue",
+      trigger: "linear.issue-opened",
+      action: "github.open-pull-request",
+      messages: [],
+    },
+    {
+      case: "a github action reached by an issue of no named app",
+      trigger: "schedule.sweep",
+      action: "github.add-label",
+      messages: [],
+    },
+  ])("matches the item app for $case", ({ trigger, action, messages }) => {
+    assert.deepStrictEqual(itemKindMessages(startedBy(trigger, action)), messages);
+  });
+
+  it("carries the item app through a hand-off", () => {
+    const review = decodeNodeId("review");
+    const document = documentWith({
+      triggers: [{ ...baseDocument.triggers[0], entry: decodeCatalogKey("linear.issue-opened") }],
+      operations: [
+        { ...operation, transitions: [{ ...transition, handOff: review }] },
+        {
+          ...operation,
+          id: review,
+          transitions: [
+            {
+              ...transition,
+              actions: [{ entry: decodeCatalogKey("github.close-this-issue"), parameters: [] }],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.deepStrictEqual(itemKindMessages(document), [
+      "Action github.close-this-issue in Operation review acts only on github.issue, but linear.issue reaches it",
+    ]);
+  });
+
   it("produces every section 5 code", () => {
     diagnosticCases.forEach((testCase) => {
       assert.include(testCase.produce(), testCase.code);
