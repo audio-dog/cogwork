@@ -178,13 +178,24 @@ interface AdmissionExecutionState {
 
 type ClaimState = Data.TaggedEnum<{
   Idle: Record<never, never>;
-  Claimed: { readonly key: ReturnType<typeof operationKeyOf>; readonly run: RunId | null };
+  Claimed: {
+    readonly key: ReturnType<typeof operationKeyOf>;
+    readonly run: RunId | null;
+    readonly lineageParent: RunId | null;
+  };
   Attempted: { readonly run: RunId | null; readonly status: "succeeded" | "failed" };
 }>;
 const ClaimState = Data.taggedEnum<ClaimState>();
 type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
 
-const ownRunOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
+const resumedPlanHaltOutcome = {
+  Retry: "retry",
+  Parked: "completed",
+  AwaitingApproval: "completed",
+  HandedToYou: "completed",
+} as const;
+
+const resumedLineageParentOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
   admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
 
 const selectedWorkspaceIds = (
@@ -303,13 +314,12 @@ export const make = Effect.gen(function* () {
     return { path: checkout.path, branch } as const;
   });
 
-  const settle = (attempt: RunId, status: RunRecord["status"]) =>
-    Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
-      ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
-    );
-
   const settleRun = (attempt: RunId | null, status: RunRecord["status"]) =>
-    attempt === null ? Effect.void : settle(attempt, status);
+    attempt === null
+      ? Effect.void
+      : Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
+          ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
+        );
 
   const settleClaimed = Effect.fn("WorkflowRun.settleClaimed")(function* (
     claimed: Ref.Ref<ClaimState>,
@@ -319,7 +329,10 @@ export const make = Effect.gen(function* () {
       Idle: () => ({ run: null, next: ClaimState.Idle() }),
       Claimed: ({ key, run }) => ({
         run,
-        next: status === "interrupted" ? ClaimState.Claimed({ key, run: null }) : ClaimState.Idle(),
+        next:
+          status === "interrupted"
+            ? ClaimState.Claimed({ key, run: null, lineageParent: null })
+            : ClaimState.Idle(),
       }),
       Attempted: ({ run }) => ({ run, next: ClaimState.Idle() }),
     });
@@ -404,7 +417,9 @@ export const make = Effect.gen(function* () {
     yield* settleClaimed(claimed, exhausted ? "exhausted" : status);
     if (!exhausted) return "retry" as const;
     yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, work.key);
-    if (work.run !== null) yield* observationStore.putAll([parkedAdmission(admission, work.run)]);
+    if (work.lineageParent !== null) {
+      yield* observationStore.putAll([parkedAdmission(admission, work.lineageParent)]);
+    }
     return "completed" as const;
   });
 
@@ -463,7 +478,6 @@ export const make = Effect.gen(function* () {
         ? pendingPlan.operation
         : admission.subscription.operation;
     if (stalePlan) {
-      yield* settleRun(ownRunOf(admission, pendingPlan), "interrupted");
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
     const resumesPendingPlan = pendingPlan !== null && !stalePlan;
@@ -472,7 +486,8 @@ export const make = Effect.gen(function* () {
           plan: pendingPlan,
           work: ClaimState.Claimed({
             key: operationKeyOf(admission, pendingPlan.operation),
-            run: ownRunOf(admission, pendingPlan),
+            run: null,
+            lineageParent: resumedLineageParentOf(admission, pendingPlan),
           }),
         }
       : null;
@@ -483,17 +498,11 @@ export const make = Effect.gen(function* () {
       if (execution._tag === "Replan") {
         yield* settleClaimed(claimed, "interrupted");
       }
-      if (execution._tag === "Retry" || execution._tag === "Parked") {
-        yield* settleClaimed(claimed, "failed");
-        return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
-      }
-      if (execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou") {
-        yield* settleClaimed(claimed, "succeeded");
-        return "completed" as const;
+      if (execution._tag !== "Replan" && execution._tag !== "Complete") {
+        return resumedPlanHaltOutcome[execution._tag];
       }
       if (execution._tag === "Complete") {
         yield* recordClaimedAttempt(admission, claimed, resumed.work, { outcome: "succeeded" });
-        yield* settleClaimed(claimed, "succeeded");
         if (execution.handOff !== null) {
           return handOffAdmission(admission, execution.handOff, resumed.plan.attempt);
         }
@@ -561,7 +570,8 @@ export const make = Effect.gen(function* () {
     }
 
     const claim =
-      pendingClaim ?? (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null })));
+      pendingClaim ??
+      (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null, lineageParent: null })));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(SecureRandom.uuidV4Unsafe());
@@ -634,7 +644,7 @@ export const make = Effect.gen(function* () {
       startedAtMillis,
       endedAtMillis: null,
     };
-    const accepted = ClaimState.Claimed({ key, run: id });
+    const accepted = ClaimState.Claimed({ key, run: id, lineageParent: id });
     yield* Ref.set(claimed, accepted).pipe(
       Effect.andThen(ledger.acceptRun(run, plan)),
       Effect.uninterruptible,
@@ -908,10 +918,7 @@ export const make = Effect.gen(function* () {
                 by: "cogwork",
                 note: "The pull request received a new commit. Review the new head.",
               })
-              .pipe(
-                Effect.andThen(actionPlans.remove(plan.item, plan.workflow, plan.attempt)),
-                Effect.andThen(settle(plan.attempt, "interrupted")),
-              );
+              .pipe(Effect.andThen(actionPlans.remove(plan.item, plan.workflow, plan.attempt)));
           }),
         );
       },
@@ -1008,7 +1015,6 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* settle(plan.attempt, "succeeded");
     if (execution.handOff === null) {
       yield* complete(admission);
       return;
@@ -1106,7 +1112,6 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* settle(plan.attempt, "succeeded");
     yield* complete(admission);
   });
 

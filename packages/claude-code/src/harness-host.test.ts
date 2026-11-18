@@ -20,7 +20,7 @@ import {
   hostAuthentication,
   makeLiveHarness,
   makeRequest,
-  NativeSandboxSettings,
+  NativeSettings,
   name,
   resumedSession,
   sessionHandles,
@@ -168,7 +168,7 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
           yield* Effect.forEach(
             captures,
             ([profile, capture]) =>
-              Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings).pipe(
+              Schema.decodeUnknownEffect(NativeSettings)(capture.settings).pipe(
                 Effect.tap((settings) =>
                   Effect.sync(() => {
                     const readOnly = profile === "read-only";
@@ -180,6 +180,7 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
                       allowUnsandboxedCommands: false,
                       autoAllowBashIfSandboxed: !readOnly,
                     });
+                    assert.deepStrictEqual(settings.attribution, { commit: "", pr: "", sessionUrl: false });
                     assert.strictEqual(capture.settingSources, "");
                     assert.strictEqual(
                       capture.permissionMode,

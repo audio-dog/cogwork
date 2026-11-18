@@ -18,6 +18,7 @@ import {
   type RunHistory,
   RunId,
   type RunSummary,
+  RunWatchItem,
   resolveOperationSetting,
   type SchedulingState,
   WorkItemId,
@@ -429,9 +430,16 @@ export const withWatchReconnect = <A, R>(stream: Stream.Stream<A, WatchRpcError,
   );
 
 const watchStream = (
-  source: Stream.Stream<RunActivity, WatchRpcError>,
+  source: Stream.Stream<RunWatchItem, WatchRpcError>,
   seen: Ref.Ref<ReadonlyMap<string, number>>,
-) => withWatchReconnect(source.pipe(Stream.filterEffect(markSeen(seen))));
+) =>
+  withWatchReconnect(
+    source.pipe(
+      Stream.filter(RunWatchItem.guards.RunActivity),
+      Stream.map((item) => item.activity),
+      Stream.filterEffect(markSeen(seen)),
+    ),
+  );
 
 const overviewScreen = (board: Board) => `${clearScreen}${renderBoard(board).join("\n")}`;
 
