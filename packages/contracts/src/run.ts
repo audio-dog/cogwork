@@ -127,3 +127,9 @@ export const RunActivity = Schema.Struct({
   event: AgUiEvent,
 });
 export type RunActivity = typeof RunActivity.Type;
+
+export const RunWatchItem = Schema.TaggedUnion({
+  RunActivity: { activity: RunActivity },
+  HistoryEnd: {},
+});
+export type RunWatchItem = typeof RunWatchItem.Type;
