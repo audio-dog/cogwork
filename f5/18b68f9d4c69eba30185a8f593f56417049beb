@@ -1,0 +1,24 @@
+apps/desktop/GLOSSARY.md
+  s_db70251e22628d::t_1e305e0c8c3d9b 213-231
+  s_db70251e22628d::t_5c80a0c9a0e4d7 211-212,232
+packages/contracts/GLOSSARY.md
+  s_db70251e22628d::t_e36a54d4ba1d8c 12
+GLOSSARY-MAP.md
+  s_db70251e22628d::t_c9bae0782b34bb 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f518b68f9d4c69eba30185a8f593f56417049beb",
+  "prompts": {},
+  "sessions": {
+    "s_db70251e22628d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5926b48c-0fa9-4100-a8a8-e4bb9b9562c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
