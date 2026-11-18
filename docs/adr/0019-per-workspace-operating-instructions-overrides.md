@@ -111,8 +111,8 @@ mandatory — is unchanged.
   replacement.
 - Engine ADR 0007's assembler flow gains a source-resolution step, and the assembler must learn
   which Workspace a Run belongs to — today it receives no Workspace identity.
-- The **Operating-instructions package** glossary entries in `packages/contracts/CONTEXT.md` and
-  `packages/engine/CONTEXT.md` are updated with the override source and its failure rule.
+- The **Operating-instructions package** glossary entries in `packages/contracts/GLOSSARY.md` and
+  `packages/engine/GLOSSARY.md` are updated with the override source and its failure rule.
 - The colony Workspace gets forked `implement-agent` and `follow-up-agent` packages: copies of the
   shipped text with only the gate section changed — typecheck, build, and lint stay hard; the test
   step becomes targeted tests chosen by the agent's judgment; the baseline-failure proof applies to

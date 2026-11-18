@@ -57,7 +57,7 @@ needed ([harness.ts](../../packages/engine/src/harness.ts)). Each runner already
 only from that engine session: Codex and Cursor ask `SessionStore.resumeHandle`, while the provider
 runner folds the owned transcript. The session row already stores its creating `harness`, so no schema
 migration is needed ([session-store.ts](../../packages/engine/src/session-store.ts),
-[contracts context](../../packages/contracts/CONTEXT.md)).
+[contracts context](../../packages/contracts/GLOSSARY.md)).
 
 ## Current defect and integration point
 
@@ -96,7 +96,7 @@ Recommended order:
 
 The design documentation already records the intended invariant in
 [engine ADR 0002](../../packages/engine/docs/adr/0002-restart-recovery-resumes-sessions.md) and the
-[shared glossary](../../packages/contracts/CONTEXT.md). No source implementation was changed by this
+[shared glossary](../../packages/contracts/GLOSSARY.md). No source implementation was changed by this
 research.
 
 ## Sources
