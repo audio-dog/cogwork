@@ -1,0 +1,45 @@
+packages/contracts/src/workspace.test.ts
+  s_24ff93fadbb7ce::t_49369efc46572d 106
+packages/contracts/src/workspace.ts
+  s_24ff93fadbb7ce::t_14bc3b2ff5d0ca 106-115,126
+packages/engine/src/linear/client.ts
+  s_24ff93fadbb7ce::t_f750af7cdbd0e5 544
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_80a6934cf43642::t_3324b1d50711da 4,8,99-113
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_80a6934cf43642::t_092523d4ac7a76 37,157,436-439,490-492,496-498,502,528
+packages/engine/src/commands.test.ts
+  s_80a6934cf43642::t_06e6eda64c8c88 3,5,42,45,77-92
+packages/engine/src/commands.ts
+  s_80a6934cf43642::t_56926a86605414 15,20,113,125,133-134,140-145,150-151
+packages/engine/src/github/client.test.ts
+  s_80a6934cf43642::t_f19c397a4ec871 1130-1134,1137,1139,1144-1147
+packages/engine/src/projector.ts
+  s_80a6934cf43642::t_5abc3d0df7781f 7,18
+packages/ui/src/components/combobox.tsx
+  s_80a6934cf43642::t_3f617dc97fb78e 2,111,122-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6efd5bd6681e5283237089eec5381f2e9308c4ca",
+  "prompts": {},
+  "sessions": {
+    "s_24ff93fadbb7ce": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "545da300-91cc-4243-ada5-0eba814bce71",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_80a6934cf43642": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "882d461f-7b0b-4b53-924a-d83e3fa23500",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
