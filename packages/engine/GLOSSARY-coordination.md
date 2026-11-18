@@ -6,6 +6,10 @@ Part of the [engine glossary](./GLOSSARY.md).
 The authority-neutral fold over claims, attempts, parks, handbacks, source revisions, and lineage. Every item's records live in the Control store, issue-backed items included (ADR 0036). A **hand-off** means only a Workflow Transition routing to another Operation; coordination never uses it to mean escalation or explanation.
 _Avoid_: Coordination tracker, role write, hand-off explanation, follow-up marker
 
+**Refused claim**:
+A claim the coordination authority will not accept, such as a claim on an item whose source revision was never observed. Distinct from a *contended* claim (`claim-held`), which the scheduler avoids by offering only unclaimed admissions. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`.
+_Avoid_: Contended claim, stale claim (one we release), exhausted (a run that gave up after trying)
+
 **Park notice**:
 The one marked comment the Coordination module posts on a parked issue: the park reason and the Attention command that continues the item. It is Workflow output for a person, never a coordination record, so nothing reads it back. The raw failure behind an `exhausted` or `write-failed` park stays in Cogwork. The notice posts on a fiber that the Coordination layer owns, so a park returns before the tracker write ends. A notice that does not post is logged, and the park stands (ADR 0036).
 _Avoid_: Coordination comment (the deleted fixed-pipeline ledger), stuck comment (every park kind gets one)

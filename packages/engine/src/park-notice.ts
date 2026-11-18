@@ -21,7 +21,7 @@ const orList = new Intl.ListFormat("en", { type: "disjunction" });
 // These reasons carry raw failure text; the tracker can be public, so the text stays in Cogwork.
 const heldSummaries: Partial<Record<ParkReason["_tag"], string>> = {
   Exhausted:
-    "The Operation failed too many times in a row. Cogwork shows the last error under **Attention**.",
+    "The Operation failed and Cogwork stopped retrying it. Cogwork shows the last error under **Attention**.",
   WriteFailed: "A Workflow write failed. Cogwork shows the error under **Attention**.",
 };
 

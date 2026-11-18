@@ -1,5 +1,7 @@
 import {
   BranchName,
+  issueTrackerErrorIsPermanent,
+  type ParkReason,
   PluginContributionLoad,
   WorkItemId,
   WorkItemRef,
@@ -7,6 +9,7 @@ import {
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Match from "effect/Match";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -19,7 +22,7 @@ import { type PullRequestContext, SourceControlProvider } from "./source-control
 import type { TriggerAdmission } from "./trigger-observation";
 import type { buildWorkflowActionPlan } from "./workflow-action-plan";
 import { actionEntryFor } from "./workflow-action-registry";
-import { ticketSlug, WorktreeManager } from "./worktree";
+import { ticketSlug, type WorktreeError, WorktreeManager } from "./worktree";
 
 const workItemId = Schema.decodeSync(WorkItemId);
 
@@ -65,6 +68,18 @@ const runItemId = WorkItemRef.match({
   ScheduleInstant: () => workItemId("#workflow"),
   FanOutChild: () => workItemId("#workflow"),
 });
+
+const worktreeBlocked = ({ reason, branch, path, operation, unmergedPaths }: WorktreeError): ParkReason => ({
+  _tag: "WorktreeBlocked",
+  reason,
+  branch,
+  path,
+  operation,
+  unmergedPaths,
+});
+
+const exhaustedUnlessRetryable = (error: { readonly retryable: boolean; readonly message: string }) =>
+  error.retryable ? null : ({ _tag: "Exhausted", reason: error.message } satisfies ParkReason);
 
 export const makeWorkflowRunPreparation = Effect.fn("WorkflowRun.makePreparation")(function* () {
   const plugins = yield* PluginManager;
@@ -128,6 +143,19 @@ export const makeWorkflowRunPreparation = Effect.fn("WorkflowRun.makePreparation
     return { path: checkout.path, branch, operationInProgress: checkout.operationInProgress } as const;
   });
 
+  const preparationPark = (error: Effect.Error<ReturnType<typeof prepareCheckout>>) =>
+    Match.valueTags(error, {
+      WorktreeError: (failure) => (failure.retryable ? null : worktreeBlocked(failure)),
+      IssueTrackerError: (failure) =>
+        exhaustedUnlessRetryable({
+          retryable: !issueTrackerErrorIsPermanent(failure),
+          message: failure.message,
+        }),
+      GitError: exhaustedUnlessRetryable,
+      WorktreeFsError: exhaustedUnlessRetryable,
+      PlatformError: () => null,
+    });
+
   const runTools = Effect.fn("WorkflowRun.runTools")(function* (
     actionTools: ReturnType<typeof engineToolsFor>,
     toolWorkspaces: ReadonlyArray<RegisteredWorkspace>,
@@ -151,5 +179,5 @@ export const makeWorkflowRunPreparation = Effect.fn("WorkflowRun.makePreparation
     return { engineTools, pullRequestSnapshots };
   });
 
-  return { admittedSkills, prepareCheckout, runTools };
+  return { admittedSkills, prepareCheckout, preparationPark, runTools };
 });
