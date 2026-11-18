@@ -1,0 +1,116 @@
+GLOSSARY-MAP.md
+  h_46518a29d4dd91 18,20,49
+apps/desktop/GLOSSARY.md
+  h_46518a29d4dd91 211-232
+apps/desktop/src/renderer/src/components/attention-board-card.tsx
+  h_46518a29d4dd91 1-104
+apps/desktop/src/renderer/src/components/attention-board-context.tsx
+  h_46518a29d4dd91 1-125
+apps/desktop/src/renderer/src/components/attention-board-notification.tsx
+  h_46518a29d4dd91 1-128
+apps/desktop/src/renderer/src/components/attention-board-parked.tsx
+  h_46518a29d4dd91 1-590
+apps/desktop/src/renderer/src/components/attention-board-skipped.tsx
+  h_46518a29d4dd91 1-55
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  h_46518a29d4dd91 6-12
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  h_46518a29d4dd91 168,178,412-440
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  h_46518a29d4dd91 20-21,242-247
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  h_46518a29d4dd91 22-27,124-130,184-188
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  h_46518a29d4dd91 4-5
+packages/contracts/GLOSSARY-harness-contract.md
+  h_46518a29d4dd91 53
+packages/contracts/GLOSSARY-human-touchpoints.md
+  h_46518a29d4dd91 14
+packages/contracts/GLOSSARY.md
+  h_46518a29d4dd91 7-10,15-16,19-20,22-24,27-34
+packages/contracts/src/coordination.ts
+  h_46518a29d4dd91 149-155
+packages/engine/GLOSSARY-adapters.md
+  h_46518a29d4dd91 17-25,27-30
+packages/engine/GLOSSARY-coding-workflow.md
+  h_46518a29d4dd91 1-21
+packages/engine/GLOSSARY-coordination.md
+  h_46518a29d4dd91 9-12
+packages/engine/GLOSSARY-harness.md
+  h_46518a29d4dd91 6-7,17-20,22-27
+packages/engine/GLOSSARY-runs.md
+  h_46518a29d4dd91 17-20,29-39,41-47,53-56
+packages/engine/GLOSSARY-triggers.md
+  h_46518a29d4dd91 1-23
+packages/engine/GLOSSARY.md
+  h_46518a29d4dd91 4-6,16-19,21-22
+packages/engine/src/coordination-control-store.test.ts
+  h_46518a29d4dd91 106-133
+packages/engine/src/operation-result.ts
+  h_46518a29d4dd91 58
+packages/engine/src/park-notice.test.ts
+  h_46518a29d4dd91 120-137
+packages/engine/src/park-notice.ts
+  h_46518a29d4dd91 24
+packages/engine/src/workflow-attention.ts
+  h_46518a29d4dd91 34,39-51,61
+packages/engine/src/workflow-run-admission.test.ts
+  h_46518a29d4dd91 1-301
+packages/engine/src/workflow-run-admissions-fixtures.ts
+  h_46518a29d4dd91 1-76
+packages/engine/src/workflow-run-approval.test.ts
+  h_46518a29d4dd91 15-41,43-44,46-50,52,57,60,64,72-73,76-77,81,83-86,88,91,94,98,100,102-105,107-108,111,115,117-121,123,125-128,130-138,140,143,146,149-150,152,154-157,159-165,167-168,172,174-182,185-186,188,191-192,194-198,200-204,207-217,219-224,228-258,260-298,301-362,364-376,378-379,381-384,386-389,394,419-423,426-437
+packages/engine/src/workflow-run-attempts.ts
+  h_46518a29d4dd91 4,18,34-36,178-187,199-213,253,360
+packages/engine/src/workflow-run-checkout.test.ts
+  h_46518a29d4dd91 1-193
+packages/engine/src/workflow-run-coding-template.test.ts
+  h_46518a29d4dd91 1-252
+packages/engine/src/workflow-run-documents-fixtures.ts
+  h_46518a29d4dd91 1-309
+packages/engine/src/workflow-run-fan-out.test.ts
+  h_46518a29d4dd91 1-294
+packages/engine/src/workflow-run-fixtures.ts
+  h_46518a29d4dd91 1-286
+packages/engine/src/workflow-run-hand-back.test.ts
+  h_46518a29d4dd91 1-284
+packages/engine/src/workflow-run-hand-off.test.ts
+  h_46518a29d4dd91 1-220
+packages/engine/src/workflow-run-preparation.ts
+  h_46518a29d4dd91 3-4,12,25,72-83,146-158,182
+packages/engine/src/workflow-run-retry.test.ts
+  h_46518a29d4dd91 1-333
+packages/engine/src/workflow-run-run-plan.test.ts
+  h_46518a29d4dd91 1-426
+packages/engine/src/workflow-run-settled-run.test.ts
+  h_46518a29d4dd91 1-306
+packages/engine/src/workflow-run-settlement.test.ts
+  h_46518a29d4dd91 1-209
+packages/engine/src/workflow-run.ts
+  h_46518a29d4dd91 97,101,204-205,222-223,225-229
+packages/engine/src/worktree-ensure-reuse.test.ts
+  h_46518a29d4dd91 1-218
+packages/engine/src/worktree-ensure.test.ts
+  h_46518a29d4dd91 8,10-23
+packages/engine/src/worktree-fixtures.ts
+  h_46518a29d4dd91 1-206
+packages/engine/src/worktree-pull-request.test.ts
+  h_46518a29d4dd91 1-301
+packages/engine/src/worktree-reconcile.test.ts
+  h_46518a29d4dd91 1-180
+packages/engine/src/worktree-remove.test.ts
+  h_46518a29d4dd91 1-33
+packages/engine/src/worktree.ts
+  h_46518a29d4dd91 273,302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "25e3b235736b2c23c8b8d95163f892728e0524de",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
