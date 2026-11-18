@@ -1,0 +1,45 @@
+packages/engine/src/workflow-run-pending-plan.ts
+  s_0e65a8194b6f97::t_7eba8039947f62 1-194
+packages/engine/src/workflow-run-execution-context.ts
+  s_0e65a8194b6f97::t_0b667bfdc75e8f 1-55
+packages/engine/src/workflow-run-touchpoints.ts
+  s_0e65a8194b6f97::t_b32138173a03ec 1-203
+  s_0e65a8194b6f97::t_497511328f17ad 204-207
+packages/engine/src/workflow-run-attempts.ts
+  s_0e65a8194b6f97::t_ee97ed6e7ebc33 14
+  s_0e65a8194b6f97::t_b3df949da53a17 69
+  s_0e65a8194b6f97::t_b94b99f81a2eb6 290
+  s_0e65a8194b6f97::t_9761ca2c49b0c7 1-13,15-41,46-68,70-289,291-335
+  s_0e65a8194b6f97::t_1e3791f5872373 42-45
+  s_0e65a8194b6f97::t_cbd599d221ab60 336-340
+packages/engine/src/workflow-run-admission.ts
+  s_0e65a8194b6f97::t_3521a3d22cbcb1 1-56
+packages/engine/src/workflow-run-preparation.ts
+  s_0e65a8194b6f97::t_7afc0d27dc1d9b 71
+  s_0e65a8194b6f97::t_c36f40148bb67f 131-154
+  s_0e65a8194b6f97::t_4e97706dc0fecc 1-10,12,15-16,19-70,72-130,155
+  s_0e65a8194b6f97::t_03dbe7fe37956e 11,13-14,17-18
+packages/engine/src/workflow-run.ts
+  s_0e65a8194b6f97::t_1f62ee648410a6 86
+  s_0e65a8194b6f97::t_97fdca927a1d0d 7,29,40-41,44-45,47-49,87-99,329-336,342-344,400-403,420-421
+  s_0e65a8194b6f97::t_21160830605c7f 290-293
+  s_0e65a8194b6f97::t_fde08a06086c2c 100
+  s_0e65a8194b6f97::t_aee6e2c5e0fd7c 28,46
+  s_0e65a8194b6f97::t_7d89cdafc84d65 422-427
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6508b0895a0d598705d14278d658e7bb6afaea34",
+  "prompts": {},
+  "sessions": {
+    "s_0e65a8194b6f97": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c607c8d8-d41b-4332-af24-c8de0c241e5e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
