@@ -1,0 +1,39 @@
+packages/engine/src/run-plan-resolution.test.ts
+  s_181a4522502deb::t_7fa59c0d836300 4,15-21,97-104,110,113,144-149,176,355,373,383-386,410-438
+packages/engine/src/run-plan-resolution.ts
+  s_2a134bfa5128c5::t_31f572df5b64bd 7,15,22-23,26,29,31-64,81-100,178-194,264-270
+packages/engine/src/run-preparation.test.ts
+  s_181a4522502deb::t_f499049cc43af0 1-290
+packages/engine/src/run-preparation.ts
+  s_181a4522502deb::t_d8bf649137089b 1-192
+packages/engine/src/workflow-run-admission.ts
+  s_181a4522502deb::t_01a47fa4fb6607 1-65
+packages/engine/src/workflow-run-execution-context.ts
+  s_2a134bfa5128c5::t_fd781558e55af1 1-55
+packages/engine/src/workflow-run-settlement.ts
+  s_181a4522502deb::t_139dc0cf3d06e3 1-204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1794d07b29292fe1bbf90af8b36d6cf4a066ab07",
+  "prompts": {},
+  "sessions": {
+    "s_181a4522502deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a328bfe8-aef0-4149-87c5-88da6da1c6c0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_2a134bfa5128c5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7cafee69-4e2c-4f96-bf68-389b4b258dda",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
