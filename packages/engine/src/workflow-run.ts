@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
@@ -27,6 +26,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -631,7 +631,7 @@ export const make = Effect.gen(function* () {
       pendingClaim ?? (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null })));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
-    const id = runId(randomUUID());
+    const id = runId(SecureRandom.uuidV4Unsafe());
     const checkout = yield* prepareCheckout(admission, workspace, operation.permissionProfile);
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
     const item = workItemId(keyOf(admission.event.key));
@@ -729,7 +729,7 @@ export const make = Effect.gen(function* () {
         catalogResult.catalog,
         outputWorkspaces,
         itemWorkspace,
-      )["~standard"].jsonSchema.input({ target: "draft-2020-12" }),
+      ),
       connections: [],
       workContext: {
         reference: { workItem: item, url: admission.event.subject?.url ?? null },

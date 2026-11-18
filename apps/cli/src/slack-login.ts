@@ -4,15 +4,16 @@ import { ConnectionFailure } from "@cogwork/contracts";
 import { CredentialStore, Linear, Slack } from "@cogwork/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
+import type { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { awaitLoopbackAuthorization, BrowserOpener, browserOpenerLayer } from "./login";
 
 const slackClientId = "663911259169.12446984597813";
@@ -265,12 +266,14 @@ export const slackLoginLayer = (
     Slack.SlackLogin,
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;
-      const crypto = yield* Crypto.Crypto;
+      const random = yield* SecureRandom.SecureRandom;
+      const digest = yield* Digest.Digest;
       const client = yield* HttpClient.HttpClient;
       return {
         login: makeLogin(config).pipe(
           Effect.provideService(BrowserOpener, opener),
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideService(SecureRandom.SecureRandom, random),
+          Effect.provideService(Digest.Digest, digest),
           Effect.provideService(HttpClient.HttpClient, client),
         ),
       };

@@ -1,14 +1,15 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
 import { Slack } from "@cogwork/engine";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { BrowserOpener } from "./login";
 import { type SlackLoginConfig, slackLoginLayer } from "./slack-login";
 
@@ -129,6 +130,16 @@ describe("Slack browser login", () => {
       assert.strictEqual(tokenRequests[0]?.get("client_secret"), null);
       assert.strictEqual(tokenRequests[0]?.get("redirect_uri"), config.redirectUri);
       assert.strictEqual((tokenRequests[0]?.get("code_verifier")?.length ?? 0) > 0, true);
-    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer))),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(
+        Layer.mergeAll(
+          FetchHttpClient.layer,
+          NodeServices.layer,
+          NodeCrypto.layerSecureRandom,
+          NodeCrypto.layerDigest,
+        ),
+      ),
+    ),
   );
 });

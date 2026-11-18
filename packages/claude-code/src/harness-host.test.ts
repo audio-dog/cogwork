@@ -266,7 +266,7 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
       "probes authenticated Claude launch, Session resume, and native structured output when enabled",
       () =>
         Effect.gen(function* () {
-          const enabled = yield* Config.string("COGWORK_LIVE_CLAUDE_PROBE").pipe(Config.withDefault("0"));
+          const enabled = yield* Config.String("COGWORK_LIVE_CLAUDE_PROBE").pipe(Config.withDefault("0"));
           if (enabled !== "1") return;
           const handle = yield* Effect.acquireRelease(createTestSandbox(), destroyTestSandbox);
           const harness = Harness.make([claudeCodeRunner({ name, authentication: hostAuthentication })]);
