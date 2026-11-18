@@ -446,13 +446,10 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         "Structured Output",
         "Persistence",
         "Connections",
+        "Tools",
+        "Skills",
       ]);
       assert.deepStrictEqual(runner.planMiddleware, ["sandbox"]);
-      const toolRunner = externalHarnessRunner(
-        { ...descriptor([], new ControlledProbe()), declaredMembers: ["Tools"] },
-        { authentication: () => Effect.succeed({ mode: "host", secrets: {} }) },
-      );
-      assert.include(toolRunner.projectedMembers, "Tools");
     });
 
     it.effect(
@@ -490,7 +487,7 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         }),
     );
 
-    it.effect("renders only the Run Plan's engine tools, and only for a descriptor that declares Tools", () =>
+    it.effect("renders only the Run Plan's engine tools", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-engine-tool-" });
@@ -507,27 +504,25 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           tools: ["pull-request"],
           sandbox: { ...request.sandbox, workspace: checkout },
         });
-        const chatTools = (declaredMembers: ReadonlyArray<"Tools">) => {
-          const probe = new ControlledProbe();
-          return makeHarness({ ...descriptor(terminalEvents, probe), declaredMembers })
-            .run({
-              plan,
-              session: freshSession,
-              mcpCredentials: new Map(),
-              engineTools: [pullRequestTool, hiddenTool],
-            })
-            .pipe(
-              Stream.runDrain,
-              Effect.map(() => probe.chatOptions[0]?.tools?.map(({ name }) => name)),
-            );
-        };
+        const probe = new ControlledProbe();
 
-        assert.deepStrictEqual(yield* chatTools(["Tools"]), ["pull-request"]);
-        assert.deepStrictEqual(yield* chatTools([]), []);
+        yield* makeHarness(descriptor(terminalEvents, probe))
+          .run({
+            plan,
+            session: freshSession,
+            mcpCredentials: new Map(),
+            engineTools: [pullRequestTool, hiddenTool],
+          })
+          .pipe(Stream.runDrain);
+
+        assert.deepStrictEqual(
+          probe.chatOptions[0]?.tools?.map(({ name }) => name),
+          ["pull-request"],
+        );
       }),
     );
 
-    it.effect("supplies Run Plan Skills through chat() only for a descriptor that declares Skills", () =>
+    it.effect("supplies Run Plan Skills through chat()", () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-skills-checkout-" });
@@ -557,37 +552,29 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           sandbox: { ...request.sandbox, workspace: checkout },
         });
         const loaded: Array<string> = [];
-        const runCatalog = (declaredMembers: ReadonlyArray<"Tools" | "Skills">) => {
-          const probe = new ControlledProbe();
-          probe.inspect = (options) => {
-            const loadSkill = options.tools?.find(({ name }) => name === "load_skill")?.execute;
-            if (!loadSkill) return Promise.resolve();
-            const load = (name: string) =>
-              Promise.resolve(loadSkill({ name })).then(
-                (result) => {
-                  loaded.push(Predicate.hasProperty(result, "content") ? String(result.content) : "");
-                },
-                (refusal) => {
-                  loaded.push(String(refusal));
-                },
-              );
-            return load("release").then(() => load("release-notes"));
-          };
-          return makeHarness({ ...descriptor(terminalEvents, probe), declaredMembers })
-            .run({ plan, session: freshSession, mcpCredentials: new Map() })
-            .pipe(
-              Stream.runDrain,
-              Effect.map(() =>
-                (probe.chatOptions[0]?.systemPrompts ?? [])
-                  .map((prompt) => (typeof prompt === "string" ? prompt : prompt.content))
-                  .join("\n"),
-              ),
+        const probe = new ControlledProbe();
+        probe.inspect = (options) => {
+          const loadSkill = options.tools?.find(({ name }) => name === "load_skill")?.execute;
+          if (!loadSkill) return Promise.resolve();
+          const load = (name: string) =>
+            Promise.resolve(loadSkill({ name })).then(
+              (result) => {
+                loaded.push(Predicate.hasProperty(result, "content") ? String(result.content) : "");
+              },
+              (refusal) => {
+                loaded.push(String(refusal));
+              },
             );
+          return load("release").then(() => load("release-notes"));
         };
 
-        const catalog = yield* runCatalog(["Tools", "Skills"]);
-        const withheld = yield* runCatalog(["Tools"]);
+        yield* makeHarness(descriptor(terminalEvents, probe))
+          .run({ plan, session: freshSession, mcpCredentials: new Map() })
+          .pipe(Stream.runDrain);
 
+        const catalog = (probe.chatOptions[0]?.systemPrompts ?? [])
+          .map((prompt) => (typeof prompt === "string" ? prompt : prompt.content))
+          .join("\n");
         assert.include(catalog, "Cut a release.");
         assert.notInclude(catalog, "release-notes");
         assert.notInclude(catalog, "broken");
@@ -596,7 +583,6 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         assert.lengthOf(loaded, 2);
         assert.include(loaded[0], "Tag, then publish.");
         assert.include(loaded[1], "Skill release-notes is not in the Run Plan");
-        assert.notInclude(withheld, "Cut a release.");
         assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
       }),
     );

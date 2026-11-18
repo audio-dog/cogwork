@@ -7,10 +7,12 @@ import {
   SessionId,
 } from "@cogwork/contracts";
 import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwork/engine";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import { assert, describe, it, layer } from "@effect/vitest";
 import type { AcpJsonRpcStream } from "@tanstack/ai-acp";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -460,9 +462,10 @@ describe("interceptCursorTelemetry", () => {
 });
 
 layer(harnessRunnerLayer)("cursorRunner", (it) => {
-  it("declares programmatic resume and Cursor's lower runtime fidelity", () => {
+  it("declares programmatic resume, Tools and Skills, and Cursor's lower runtime fidelity", () => {
     const runner = cursorRunner({ name: cursorName });
     assert.strictEqual(runner.sessionKind, "opaque-handle");
+    assert.includeMembers([...runner.projectedMembers], ["Tools", "Skills"]);
     assert.deepStrictEqual(runner.capabilities.authenticationModes, ["host"]);
     assert.isFalse(runner.capabilities.session.humanAttach);
     assert.strictEqual(runner.capabilities.structuredOutput, "prompt-and-parse");
@@ -798,6 +801,54 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
         assert.isTrue(error.retryable);
       }),
     30_000,
+  );
+
+  it.effect(
+    "probes an authenticated Cursor Run that loads a Run Plan Skill through load_skill when enabled",
+    () =>
+      Effect.gen(function* () {
+        const enabled = yield* Config.string("COGWORK_LIVE_CURSOR_PROBE").pipe(Config.withDefault("0"));
+        if (enabled !== "1") return;
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-cursor-probe-checkout-" });
+        const skillRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-cursor-probe-skill-" });
+        const skillFile = `${skillRoot}/SKILL.md`;
+        yield* fs.writeFileString(
+          skillFile,
+          "---\nname: probe-canary\ndescription: Holds the secret word for the Cursor probe.\n---\nThe secret word is PERIWINKLE-42.",
+        );
+        const base = request(checkout);
+        const probeRequest = {
+          ...base,
+          plan: new RunPlan({
+            ...base.plan,
+            harness: { ...base.plan.harness, profile: "full" },
+            sandbox: { workspace: checkout, policy: "full" },
+            skills: [{ identity: "local:repo/skill/probe-canary", name: "probe-canary", source: skillFile }],
+            messages: [
+              {
+                role: "user",
+                content:
+                  "Load the Skill named probe-canary with the load_skill tool. Reply with only the secret word that Skill holds.",
+              },
+            ],
+            structuredOutput: null,
+          }),
+        } satisfies Harness.HarnessRequest;
+
+        const events = yield* Harness.make([cursorRunner({ name: cursorName })])
+          .run(probeRequest)
+          .pipe(Stream.runCollect, Effect.timeout("3 minutes"));
+        const answer = Array.from(events)
+          .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
+          .map(({ delta }) => delta ?? "")
+          .join("");
+
+        assert.include(answer, "PERIWINKLE-42");
+        assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
+      }).pipe(Effect.provide(NodeFileSystem.layer)),
+    // A real Cursor turn with a bridged tool call; the 5-second vitest default can never fit it.
+    240_000,
   );
 });
 

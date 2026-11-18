@@ -47,6 +47,7 @@ import { clockEntries } from "./clock-source";
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, CoordinationError, type CoordinationService, fold } from "./coordination";
 import * as CredentialStore from "./credential-store";
+import { externalHarnessDeclaration } from "./external-harness-runtime";
 import { githubSourceControlActionEntries } from "./github/provider";
 import {
   fullHarnessExecution,
@@ -1651,10 +1652,10 @@ describe("WorkflowRun", () => {
   });
 
   it.effect(
-    "admits a required Skill over a same-named Skill, and Plugin Skills, into the Run Plan of a Harness that projects Skills",
+    "admits a required Skill over a same-named Skill, and Plugin Skills, into the Run Plan of an External Harness",
     () =>
       Effect.gen(function* () {
-        const { plan } = yield* skillProgram(["Tools", "Skills"]);
+        const { plan } = yield* skillProgram(externalHarnessDeclaration.projectedMembers);
 
         assert.deepStrictEqual(
           plan?.skills.map(({ identity, name, source }) => ({ identity, name, source })),

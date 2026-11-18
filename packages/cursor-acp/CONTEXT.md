@@ -10,7 +10,7 @@ events.
 ## Language
 
 **cursorRunner**:
-The Cursor descriptor passed to the engine's shared External Harness runtime. It retains only Cursor's ACP transport, model and effort projection, telemetry acknowledgments, diagnostics, and optional token estimate. The shared runtime owns Workspace and MCP projection, host authentication, Sandbox lifecycle, chat streaming, event bridging, and cancellation. When a request references a Session, the descriptor hands its stored opaque handle to Cursor as `modelOptions.sessionId`. Cursor sessions support programmatic resume but no human attach command.
+The Cursor descriptor passed to the engine's shared External Harness runtime. It retains only Cursor's ACP transport, model and effort projection, telemetry acknowledgments, diagnostics, and optional token estimate. The shared runtime owns Workspace and MCP projection, `Tools` and `Skills` through TanStack's host tool bridge, host authentication, Sandbox lifecycle, chat streaming, event bridging, and cancellation. When a request references a Session, the descriptor hands its stored opaque handle to Cursor as `modelOptions.sessionId`. Cursor sessions support programmatic resume but no human attach command.
 _Avoid_: Harness, driver
 
 Cursor ACP has no journal or takeover capability. Driver loss is never treated as safe detachment.

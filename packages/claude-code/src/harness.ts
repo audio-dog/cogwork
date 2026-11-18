@@ -414,7 +414,6 @@ const descriptor = (
     catalog: managedCatalogOptions,
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
-    declaredMembers: ["Tools", "Skills"],
     inheritedEnvironment,
     makeAdapter: ({ model, request }) =>
       claudeCodeText(model, adapterConfig(executable, request, nativeSelection(request).effort)),

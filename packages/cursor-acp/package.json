@@ -10,6 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:cursor-live": "COGWORK_LIVE_CURSOR_PROBE=1 vitest run src/harness.test.ts",
     "models:sync": "tsx scripts/sync-models.ts",
     "models:check": "tsx scripts/sync-models.ts --check"
   },
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@cogwork/test-config": "workspace:*",
+    "@effect/platform-node": "catalog:effect",
     "@effect/vitest": "catalog:effect",
     "@tanstack/ai-persistence": "catalog:",
     "gpt-tokenizer": "^4.0.0",
