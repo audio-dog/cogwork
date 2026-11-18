@@ -38,10 +38,10 @@ import { granolaWorkflowCatalogContribution } from "./granola-source";
 import * as Harness from "./harness";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import { slackEntries } from "./slack-source";
-import { slackActionEntries } from "./slack-write";
 import { trackerTriggerEntries, trackerTriggerFilters } from "./tracker-trigger-source";
 import { SourceFailure } from "./trigger-source";
 import { Workflows, layer as workflowsLayer } from "./workflow";
+import { registeredActionRowsFor } from "./workflow-action-registry";
 import {
   cogworkWorkflowCatalogContribution,
   type WorkflowCatalogContribution,
@@ -91,7 +91,7 @@ const clockContribution: WorkflowCatalogContribution = {
 };
 
 const githubReviewContribution: WorkflowCatalogContribution = {
-  entries: [...githubSourceControlActionEntries, ...slackEntries, ...slackActionEntries],
+  entries: [...githubSourceControlActionEntries, ...slackEntries, ...registeredActionRowsFor("slack")],
   templates: [],
 };
 

@@ -71,6 +71,7 @@ import {
   type WorkflowActionPlanExecution,
 } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { actionEntryFor } from "./workflow-action-registry";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 import { ticketSlug, WorktreeManager } from "./worktree";
@@ -92,32 +93,18 @@ const encodeArtifactContext = Schema.encodeSync(
     ),
   ),
 );
-const issueSearchActionNames = new Set(["create-issue", "comment-issue", "comment-this-item"]);
-const namedPullRequestActionNames = new Set(["comment-on-named-pull-request", "post-review", "draft-review"]);
-
-const needsActionTool = (
+const engineToolsFor = (
   operation: Parameters<typeof workflowOperationResultSchema>[0],
   catalog: Parameters<typeof workflowOperationResultSchema>[1],
-  names: ReadonlySet<string>,
 ) => {
-  const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
-  return operation.transitions
-    .flatMap(({ actions }) => actions)
-    .some(({ entry }) => {
-      const catalogEntry = entries.get(entry);
-      return catalogEntry?.kind === "action" && names.has(entry.slice(entry.indexOf(".") + 1));
-    });
+  const actionKeys = new Set(catalog.entries.filter(({ kind }) => kind === "action").map(({ key }) => key));
+  return new Set(
+    operation.transitions
+      .flatMap(({ actions }) => actions)
+      .filter(({ entry }) => actionKeys.has(entry))
+      .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []),
+  );
 };
-
-const needsIssueSearch = (
-  operation: Parameters<typeof workflowOperationResultSchema>[0],
-  catalog: Parameters<typeof workflowOperationResultSchema>[1],
-) => needsActionTool(operation, catalog, issueSearchActionNames);
-
-const needsPullRequestTool = (
-  operation: Parameters<typeof workflowOperationResultSchema>[0],
-  catalog: Parameters<typeof workflowOperationResultSchema>[1],
-) => needsActionTool(operation, catalog, namedPullRequestActionNames);
 
 const agentInputIsMissing = (value: WorkflowAgentInputValue | undefined) =>
   value === undefined || (typeof value === "string" && value.trim().length === 0);
@@ -602,8 +589,9 @@ export const make = Effect.gen(function* () {
       outputWorkspaces,
       itemWorkspace,
     );
-    const issueSearchEnabled = needsIssueSearch(operation, catalogResult.catalog);
-    const pullRequestToolEnabled = needsPullRequestTool(operation, catalogResult.catalog);
+    const actionTools = engineToolsFor(operation, catalogResult.catalog);
+    const issueSearchEnabled = actionTools.has("issue-search");
+    const pullRequestToolEnabled = actionTools.has("pull-request");
     const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
       outputWorkspaces.includes(config.name),
     );
