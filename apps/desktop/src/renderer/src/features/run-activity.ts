@@ -6,15 +6,16 @@ import {
   agUiTextDelta,
   type RunActivity,
   type RunId,
+  RunWatchItem,
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomSubscribe, useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import * as Chunk from "effect/Chunk";
 import * as HashMap from "effect/HashMap";
 import * as Option from "effect/Option";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
-import * as Atom from "effect/unstable/reactivity/Atom";
-import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Atom from "effect/reactivity/Atom";
+import { RpcClientError } from "effect/rpc/RpcClientError";
 import { useCallback } from "react";
 import { runActivityAtom } from "../daemon/atoms";
 
@@ -312,10 +313,14 @@ type ActivityError = ActivityResult extends AsyncResult.AsyncResult<unknown, inf
 
 interface TranscriptSnapshot {
   readonly done: boolean;
+  readonly replaying: boolean;
   readonly entries: Iterable<TranscriptEntry>;
 }
 
 type TranscriptResult = AsyncResult.AsyncResult<TranscriptSnapshot, ActivityError>;
+
+export const transcriptReplaying = (result: TranscriptResult) =>
+  !AsyncResult.isSuccess(result) || result.value.replaying;
 
 export const makeTranscriptPump = () => {
   const cell: { source: TranscriptResult | null } = { source: null };
@@ -329,12 +334,14 @@ export const makeTranscriptPump = () => {
 
 interface TranscriptCell {
   fold: TranscriptFold;
+  replaying: boolean;
   source: ActivityResult | null;
   result: TranscriptResult;
 }
 
 const resetTranscriptCell = (cell: TranscriptCell, result: TranscriptResult) => {
   cell.fold = makeTranscriptFold();
+  cell.replaying = true;
   cell.result = result;
   return result;
 };
@@ -349,9 +356,13 @@ const streamReconnectable = (cause: Cause.Cause<ActivityError>) =>
   });
 
 const completeTranscriptCell = (cell: TranscriptCell) => {
-  cell.result = AsyncResult.success({ done: true, entries: cell.fold.entries });
+  cell.replaying = false;
+  cell.result = AsyncResult.success({ done: true, replaying: false, entries: cell.fold.entries });
   return cell.result;
 };
+
+const watchedActivities = (items: ReadonlyArray<RunWatchItem>) =>
+  items.filter(RunWatchItem.guards.RunActivity).map((item) => item.activity);
 
 const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
   if (current === cell.source) return cell.result;
@@ -368,28 +379,28 @@ const applyActivityResult = (cell: TranscriptCell, current: ActivityResult) => {
       }),
     );
   }
-  cell.fold = applyTranscriptActivities(cell.fold, current.value.items);
-  cell.result = AsyncResult.success(
-    {
-      done: current.value.done,
-      entries: cell.fold.entries,
-    },
-    current,
-  );
+  const { done, items } = current.value;
+  const historyEnded = done || items.some(RunWatchItem.guards.HistoryEnd);
+  cell.fold = applyTranscriptActivities(cell.fold, watchedActivities(items));
+  cell.replaying = cell.replaying && !historyEnded;
+  cell.result = AsyncResult.success({ done, replaying: cell.replaying, entries: cell.fold.entries }, current);
   return cell.result;
 };
 
-const runTranscript = Atom.family((runId: RunId) => {
+export const makeTranscriptSource = () => {
   const cell: TranscriptCell = {
     fold: makeTranscriptFold(),
+    replaying: true,
     source: null,
     result: AsyncResult.initial(),
   };
-  return {
-    atom: Atom.map(runActivityAtom(runId), (result) => applyActivityResult(cell, result)),
-    pump: makeTranscriptPump(),
-  };
-});
+  return (current: ActivityResult) => applyActivityResult(cell, current);
+};
+
+const runTranscript = Atom.family((runId: RunId) => ({
+  atom: Atom.map(runActivityAtom(runId), makeTranscriptSource()),
+  pump: makeTranscriptPump(),
+}));
 
 export function useRunTranscript(runId: RunId) {
   const transcript = runTranscript(runId);

@@ -39,6 +39,7 @@ export * as SessionStore from "./session-store";
 export * as Slack from "./slack-login";
 export * as SlackWrite from "./slack-write";
 export * as SourceControl from "./source-control";
+export * as SqliteSchema from "./sqlite-schema";
 export * as Tools from "./tools";
 export * as TriggerObservation from "./trigger-observation";
 export * as TriggerSource from "./trigger-source";

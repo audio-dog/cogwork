@@ -10,16 +10,16 @@ import {
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import type { OAuthClientInformationMixed, OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import type * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Layer from "effect/Layer";
+import type { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { awaitLoopbackAuthorization, BrowserOpener, browserOpenerLayer } from "./login";
 
 const oauthRequestDeadline = "30 seconds";
@@ -58,13 +58,9 @@ const runAuth = (
   );
 
 const makeLogin = Effect.fn("granola.login")(function* (config: GranolaLoginConfig, account: string) {
-  const crypto = yield* Crypto.Crypto;
+  const random = yield* SecureRandom.SecureRandom;
   const fetchFn = yield* FetchHttpClient.Fetch;
-  const state = Encoding.encodeBase64Url(
-    yield* crypto
-      .randomBytes(16)
-      .pipe(Effect.mapError(() => failure("Could not create a secure Granola OAuth state."))),
-  );
+  const state = Base64Url.encode(yield* random.randomBytes(16));
   const callback = redirectUri(config.redirectPort);
   const opener = yield* BrowserOpener;
   const session: {
@@ -218,13 +214,13 @@ export const granolaLoginLayer = (
     Granola.GranolaLogin,
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;
-      const crypto = yield* Crypto.Crypto;
+      const random = yield* SecureRandom.SecureRandom;
       const fetchFn = yield* FetchHttpClient.Fetch;
       return {
         login: (account: string) =>
           makeLogin(config, account).pipe(
             Effect.provideService(BrowserOpener, opener),
-            Effect.provideService(Crypto.Crypto, crypto),
+            Effect.provideService(SecureRandom.SecureRandom, random),
             Effect.provideService(FetchHttpClient.Fetch, fetchFn),
           ),
       };

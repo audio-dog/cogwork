@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
 import * as Effect from "effect/Effect";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 
 export class JsonEventStreamError extends Schema.TaggedError<JsonEventStreamError>()("JsonEventStreamError", {
   message: Schema.String,

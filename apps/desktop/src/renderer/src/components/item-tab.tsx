@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from "@remixicon/react";
-import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import type * as AsyncResult from "effect/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
 import { BoardResult, useBoard, useOperationName } from "../features/activity-session";

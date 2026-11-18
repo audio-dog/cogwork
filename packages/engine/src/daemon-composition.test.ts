@@ -12,24 +12,26 @@ import {
   WorkspaceId,
   WorkspaceRegistration,
 } from "@cogwork/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
+import * as NetAddress from "effect/net/NetAddress";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as RpcClient from "effect/rpc/RpcClient";
+import * as RpcServer from "effect/rpc/RpcServer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as Socket from "effect/socket/Socket";
+import * as SocketServer from "effect/socket/SocketServer";
 import * as TestClock from "effect/testing/TestClock";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import * as Socket from "effect/unstable/socket/Socket";
-import * as SocketServer from "effect/unstable/socket/SocketServer";
 import { vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import { Coordination } from "./coordination";
@@ -157,7 +159,7 @@ const contextAssemblerLayer = Layer.succeed(ContextAssembler.ContextAssembler, {
 
 const socketServerLayer = (socket: Socket.Socket) =>
   Layer.succeed(SocketServer.SocketServer, {
-    address: { _tag: "UnixAddress", path: "memory" },
+    address: NetAddress.unixPathAddress("memory"),
     run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
   });
 
@@ -437,7 +439,9 @@ const slackReviewServerTestLayer = () =>
   Layer.unwrap(
     Effect.map(SlackReviewServerFixture, ({ clientLayer, fetchStub, serverLayer }) =>
       Layer.merge(serverLayer, clientLayer).pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+        ),
         Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
       ),
     ),
@@ -570,7 +574,9 @@ const testLayer = () =>
   Layer.unwrap(
     Effect.map(Fixture, ({ clientLayer, fetchStub, serverLayer }) =>
       Layer.merge(serverLayer, clientLayer).pipe(
-        Layer.provide(NodeServices.layer),
+        Layer.provide(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+        ),
         Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
       ),
     ),
