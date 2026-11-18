@@ -1,0 +1,19 @@
+packages/engine/src/workflow-run-touchpoints.ts
+  s_c99bb291de3f49::t_fba274e8adaeb0 3,26-29,201-214,218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fbed6b8dbef3aede06471034a52dceac32809cce",
+  "prompts": {},
+  "sessions": {
+    "s_c99bb291de3f49": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4eb3f24-7b6f-4f75-986d-f729b467a0f0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
