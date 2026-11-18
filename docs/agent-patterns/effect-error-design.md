@@ -12,9 +12,9 @@ Errors are contracts. Choose the base class by who consumes the error, not by wh
   RPC tooling. The default for a port's published failures.
 - `Data.TaggedError(tag)<Fields>` — a plain class, no schema. For errors that are intentionally
   local to one module.
-- On the pinned rc line the API is `Schema.TaggedError`. `Schema.TaggedErrorClass` is the older-beta
+- On the pinned 4.1 release the API is `Schema.TaggedError`. `Schema.TaggedErrorClass` is the older-beta
   name — opencode, t3code, and the local `guide-error-handling.md` still carry it — and it does not
-  exist at `effect@4.0.0-rc.112`.
+  exist at `effect@4.1.4`.
 
 ## Choose the base class
 
@@ -154,13 +154,13 @@ no `reason` enum with one value that nothing branches on, no `retryable` nobody 
 ## Sources
 
 - `.repos/effect/packages/effect/src/Schema.ts`: `TaggedError`, `Literals`, `optional`.
-  `Schema.TaggedErrorClass` is absent on the rc line — the older-beta name appears in opencode,
+  `Schema.TaggedErrorClass` is absent on the pinned 4.1 release — the older-beta name appears in opencode,
   t3code, and `.agents/skills/effect-ts/references/guide-error-handling.md`; see the same warning in
   `effect-schema-unions.md`.
 - `.repos/effect/packages/effect/src/Data.ts`: `TaggedError` (constructor excludes `_tag` from
   args), `Error` (no `_tag`, no `catchTag` support).
 - `.repos/effect/packages/effect/src/Effect.ts`: `catchTag`, `catchTags`.
-- `.repos/effect/packages/effect/src/unstable/sql/SqlError.ts`: Effect's own namespaced-identifier
+- `.repos/effect/packages/effect/src/sql/SqlError.ts`: Effect's own namespaced-identifier
   convention. `.repos/effect/packages/platform/browser/src/Clipboard.ts`: a `Data.TaggedError`
   exemplar in Effect's own platform code.
 - `packages/contracts/src/issue-tracker.ts`: `IssueTrackerError` and

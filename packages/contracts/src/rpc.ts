@@ -1,6 +1,6 @@
+import * as Rpc from "effect/rpc/Rpc";
+import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as Schema from "effect/Schema";
-import * as Rpc from "effect/unstable/rpc/Rpc";
-import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { HarnessName, TrimmedNonEmptyString, WorkflowId, WorkItemId, WorkspaceId } from "./base-schemas";
 import {
   ConnectionBindingId,
@@ -26,7 +26,7 @@ import { HarnessCatalog, HarnessNotRegistered, HarnessReadiness } from "./harnes
 import { IssueTrackerError } from "./issue-tracker";
 import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
 import { PrincipalMiddleware } from "./principal";
-import { RunActivity, RunHistory, RunId, RunStatus, RunSummary } from "./run";
+import { RunHistory, RunId, RunStatus, RunSummary, RunWatchItem } from "./run";
 import {
   ContributionSettingRefused,
   ContributionSettingUpdate,
@@ -106,7 +106,7 @@ export const ResolveWatchTarget = Rpc.make("ResolveWatchTarget", {
 
 export const WatchActivity = Rpc.make("WatchActivity", {
   payload: { id: Schema.optional(RunId) },
-  success: RunActivity,
+  success: RunWatchItem,
   stream: true,
 });
 
@@ -349,13 +349,13 @@ export const CreateWorkflow = Rpc.make("CreateWorkflow", {
   payload: { document: WorkflowDocument },
   success: WorkflowRecord,
   error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
-});
+}).annotate(Rpc.ParseOptions, { onExcessProperty: "error" });
 
 export const EditWorkflow = Rpc.make("EditWorkflow", {
   payload: { id: WorkflowId, edits: WorkflowEditBatch },
   success: WorkflowRecord,
   error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
-});
+}).annotate(Rpc.ParseOptions, { onExcessProperty: "error" });
 
 export const PublishWorkflow = Rpc.make("PublishWorkflow", {
   payload: { id: WorkflowId, revision: Schema.Int },

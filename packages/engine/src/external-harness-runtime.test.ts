@@ -33,12 +33,12 @@ import {
 } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Predicate from "effect/Predicate";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { afterEach, vi } from "vitest";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";

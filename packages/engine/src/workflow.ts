@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   adviseReadiness,
   applyWorkflowEdits,
@@ -34,10 +33,11 @@ import {
   type WorkspaceId,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import { ControlStore } from "./control-store";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { Harness } from "./harness";
@@ -255,7 +255,7 @@ export const make = Effect.gen(function* () {
     yield* requireStore;
     const machine = yield* machineSource.current;
     const rows = yield* readStoredWorkflows();
-    const [unreadable, workflows] = yield* Effect.partition(rows, (row) => {
+    const [workflows, unreadable] = yield* Effect.partition(rows, (row) => {
       const id = storedWorkflowId(row);
       return Schema.decodeEffect(WorkflowIdSchema)(id).pipe(
         Effect.flatMap((workflowId) => decodeRecordFor(workflowId, machine)(row)),
@@ -278,7 +278,7 @@ export const make = Effect.gen(function* () {
     const principal = yield* Principal;
     const machine = yield* machineSource.current;
     const write = sql.withTransaction(
-      Schema.decodeEffect(WorkflowIdSchema)(randomUUID()).pipe(
+      Schema.decodeEffect(WorkflowIdSchema)(SecureRandom.uuidV4Unsafe()).pipe(
         Effect.flatMap((id) =>
           encodeWorkflowDocument(payload.document).pipe(
             Effect.tap(

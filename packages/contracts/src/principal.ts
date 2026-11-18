@@ -1,6 +1,6 @@
 import * as Context from "effect/Context";
+import * as RpcMiddleware from "effect/rpc/RpcMiddleware";
 import * as Schema from "effect/Schema";
-import * as RpcMiddleware from "effect/unstable/rpc/RpcMiddleware";
 import { makeBrand } from "./base-schemas";
 
 export const PrincipalId = makeBrand("PrincipalId");
