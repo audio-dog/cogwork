@@ -550,7 +550,7 @@ const HistoryPayload = Schema.Struct({
         nodes: Schema.Array(
           Schema.Struct({
             createdAt: Schema.String,
-            addedLabels: Schema.optional(Schema.Array(Schema.Struct({ name: Schema.String }))),
+            addedLabels: Schema.optional(Schema.NullOr(Schema.Array(Schema.Struct({ name: Schema.String })))),
           }),
         ),
         pageInfo: PageInfoNode,

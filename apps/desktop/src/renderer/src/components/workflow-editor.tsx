@@ -1,15 +1,10 @@
 import {
-  adviseReadiness,
-  applyWorkflowEdits,
   filterAppliesTo,
-  type MachineReadiness,
   type NeedIdentity,
   selectedHarnessCatalogModel,
-  validateWorkflow,
   type WorkflowCatalog,
   type WorkflowCatalogEntry,
   type WorkflowCatalogKey,
-  type WorkflowEdit,
   type WorkflowModelSelection,
   type WorkflowOperation,
   type WorkflowRecord,
@@ -60,7 +55,7 @@ import {
 } from "@remixicon/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { type ComponentType, createContext, type ReactNode, use, useRef, useState } from "react";
+import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
 import { kindIcons } from "../features/configuration-icons";
 import { kindLabelsPlural } from "../features/configuration-model";
 import {
@@ -73,13 +68,8 @@ import {
 } from "../features/operation-settings";
 import { documentNodeIds, freshNodeId, newWorkflowOperation } from "../features/workflow-defaults";
 import { importReviewMark } from "../features/workflow-import-review";
-import {
-  type NeedChoice,
-  type NeedKind,
-  useWorkflowSession,
-  type WorkflowClient,
-  type WorkflowHarnesses,
-} from "../features/workflow-session";
+import { type NeedChoice, type NeedKind, useWorkflowSession } from "../features/workflow-session";
+import { useWorkingCopy, WorkingCopyProvider } from "../features/working-copy-provider";
 import { BufferedInput, BufferedTextarea } from "./buffered-field";
 import {
   ImportReview,
@@ -87,10 +77,10 @@ import {
   ImportReviewProvider,
   useDismissImportReview,
 } from "./import-review";
-import { OperationOutcomes } from "./operation-outcomes";
+import { OperationOutcomes, operationIn } from "./operation-outcomes";
 import { ProviderPicker } from "./provider-picker";
 import { TraitsMenu } from "./traits-menu";
-import { appIconOf, appOf, CatalogMenu, type ListValues, ParameterMenu } from "./workflow-catalog-menu";
+import { appIconOf, appOf, CatalogMenu, ParameterMenu } from "./workflow-catalog-menu";
 import {
   blocksPublish,
   ProblemMark,
@@ -100,43 +90,16 @@ import {
   problemTargetId,
 } from "./workflow-problems";
 
-type Send = (edits: ReadonlyArray<WorkflowEdit>) => Promise<WorkflowRecord | null>;
-
-interface WorkflowEditorValue {
-  readonly state: { readonly workflow: WorkflowRecord };
-  readonly actions: WorkflowClient & { readonly send: Send };
-  readonly meta: {
-    readonly catalog: WorkflowCatalog | null;
-    readonly machine: MachineReadiness | null;
-    readonly workspaceLabels: ReadonlyMap<string, string>;
-    readonly harnesses: WorkflowHarnesses;
-    readonly needs: ReadonlyArray<NeedChoice>;
-    readonly listValues: ListValues;
-    readonly saveFailed: boolean;
-  };
-}
-
-const WorkflowEditorContext = createContext<WorkflowEditorValue | null>(null);
-
-const useWorkflowEditor = () => {
-  const value = use(WorkflowEditorContext);
-  if (!value) throw new Error("WorkflowEditor parts need a WorkflowEditor");
-  return value;
-};
-
 const decodeWorkspaceSelection = Schema.decodeUnknownSync(WorkflowWorkspaceSelection);
-
-const workspaceIds = (workflow: WorkflowRecord, machine: MachineReadiness | null) =>
-  workflow.workingCopy.workspaces._tag === "Listed"
-    ? workflow.workingCopy.workspaces.workspaces
-    : (machine?.workspaces.map(({ id }) => id) ?? []);
 
 function WorkspaceSelect() {
   const {
     state: { workflow },
     actions,
-    meta: { machine, workspaceLabels },
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
+  const {
+    state: { machine, workspaceLabels },
+  } = useWorkflowSession();
   const dismissImportReview = useDismissImportReview();
   const labelOf = (workspace: WorkspaceId) => workspaceLabels.get(workspace) ?? workspace;
   const current = workflow.workingCopy.workspaces;
@@ -165,7 +128,7 @@ function WorkspaceSelect() {
         const workspaces = decodeWorkspaceSelection(
           next === "every" ? { _tag: "Every" } : { _tag: "Listed", workspaces: selected ? [selected] : [] },
         );
-        actions.send([{ _tag: "SelectWorkspaces", workspaces }]);
+        actions.edit([{ _tag: "SelectWorkspaces", workspaces }]);
       }}
     >
       <ImportReview mark={importReviewMark.workspaces}>
@@ -188,9 +151,9 @@ function WorkspaceSelect() {
 
 function SaveFailure() {
   const {
-    meta: { saveFailed },
-  } = useWorkflowEditor();
-  if (!saveFailed) return null;
+    state: { saveStatus },
+  } = useWorkingCopy();
+  if (saveStatus === "saved") return null;
   return <span className="text-xs text-destructive">Not saved</span>;
 }
 
@@ -198,17 +161,14 @@ function EnabledSwitch() {
   const {
     state: { workflow },
     actions,
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
   const neverSaved = workflow.publishedRevision === null;
   return (
     <Switch
       checked={workflow.enabled}
       disabled={neverSaved && problemsOf(workflow).some(blocksPublish)}
       aria-label="Turn this Workflow on"
-      onCheckedChange={async (enabled) => {
-        if (enabled && neverSaved) await actions.publish(workflow.id, workflow.workingRevision);
-        await actions.switchEnabled(workflow.id, enabled);
-      }}
+      onCheckedChange={(enabled) => actions.switchEnabled(enabled)}
     />
   );
 }
@@ -217,14 +177,14 @@ function SaveButton() {
   const {
     state: { workflow },
     actions,
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
   return (
     <Button
       size="sm"
       disabled={
         workflow.publishedRevision === workflow.workingRevision || problemsOf(workflow).some(blocksPublish)
       }
-      onClick={() => actions.publish(workflow.id, workflow.workingRevision)}
+      onClick={() => actions.publish()}
     >
       Save
     </Button>
@@ -234,8 +194,8 @@ function SaveButton() {
 function MoreMenu() {
   const {
     state: { workflow },
-    actions,
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
+  const { actions } = useWorkflowSession();
   const navigate = useNavigate();
   return (
     <DropdownMenu>
@@ -264,7 +224,11 @@ function EditorHeader() {
   const {
     state: { workflow },
     actions,
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
+  const name = actions.field(
+    (current) => current.workingCopy.name,
+    (text) => [{ _tag: "Rename", name: text }],
+  );
   const problems = problemsOf(workflow);
   const workspaceProblems = problemsAt(problems, { trigger: null, operation: null, field: "workspaces" });
   return (
@@ -280,13 +244,10 @@ function EditorHeader() {
           <RiArrowLeftLine />
         </Button>
         <BufferedInput
-          value={workflow.workingCopy.name}
+          value={name.value}
           label="Workflow name"
           className="h-auto flex-1 font-heading text-2xl font-semibold tracking-tight"
-          save={async (name) => {
-            if (!name.trim()) return workflow.workingCopy.name;
-            return (await actions.send([{ _tag: "Rename", name }]))?.workingCopy.name ?? name;
-          }}
+          save={name.save}
         />
         <SaveFailure />
         <ProblemsButton problems={problems} workflowDocument={workflow.workingCopy} />
@@ -306,7 +267,7 @@ function TriggerStart({ trigger, label }: { readonly trigger: WorkflowTrigger; r
   const {
     state: { workflow },
     actions,
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
   const operations = workflow.workingCopy.operations;
   const start = operations.find(({ id }) => id === trigger.start);
   return (
@@ -331,7 +292,7 @@ function TriggerStart({ trigger, label }: { readonly trigger: WorkflowTrigger; r
             onValueChange={(next) => {
               const operation = operations.find(({ id }) => id === next);
               if (operation)
-                actions.send([{ _tag: "SetTriggerStart", trigger: trigger.id, start: operation.id }]);
+                actions.edit([{ _tag: "SetTriggerStart", trigger: trigger.id, start: operation.id }]);
             }}
           >
             {operations.map((operation) => (
@@ -356,10 +317,10 @@ function TriggerFilters({
   readonly trigger: WorkflowTrigger;
   readonly entry: WorkflowCatalogEntry;
 }) {
+  const { actions } = useWorkingCopy();
   const {
-    actions,
-    meta: { catalog },
-  } = useWorkflowEditor();
+    state: { catalog },
+  } = useWorkflowSession();
   const nameOf = (key: WorkflowCatalogKey) => catalogEntryOf(catalog, key)?.name ?? key;
   const addable =
     catalog?.entries.filter(
@@ -377,7 +338,7 @@ function TriggerFilters({
             variant="ghost"
             aria-label={`Remove filter ${nameOf(added.entry)}`}
             onClick={() =>
-              actions.send([{ _tag: "RemoveTriggerFilter", trigger: trigger.id, entry: added.entry }])
+              actions.edit([{ _tag: "RemoveTriggerFilter", trigger: trigger.id, entry: added.entry }])
             }
           >
             <RiCloseLine />
@@ -399,7 +360,7 @@ function TriggerFilters({
                   key={candidate.key}
                   label={candidate.name}
                   onClick={() =>
-                    actions.send([
+                    actions.edit([
                       { _tag: "AddTriggerFilter", trigger: trigger.id, filter: { entry: candidate.key } },
                     ])
                   }
@@ -419,8 +380,11 @@ function TriggerRow({ trigger }: { readonly trigger: WorkflowTrigger }) {
   const {
     state: { workflow },
     actions,
-    meta: { catalog, listValues },
-  } = useWorkflowEditor();
+    meta: { listValues },
+  } = useWorkingCopy();
+  const {
+    state: { catalog },
+  } = useWorkflowSession();
   const dismissImportReview = useDismissImportReview();
   const entry = catalogEntryOf(catalog, trigger.entry);
   const Icon = appIconOf(entry ? appOf(entry) : (trigger.entry.split(".")[0] ?? "cogwork"));
@@ -441,7 +405,7 @@ function TriggerRow({ trigger }: { readonly trigger: WorkflowTrigger }) {
             listValues={listValues}
             onChange={(value) => {
               dismissImportReview(importReviewMark.triggerParameter(trigger.id, parameter.id));
-              actions.send([
+              actions.edit([
                 {
                   _tag: "SetTriggerParameter",
                   trigger: trigger.id,
@@ -464,7 +428,7 @@ function TriggerRow({ trigger }: { readonly trigger: WorkflowTrigger }) {
           size="icon-sm"
           variant="ghost"
           aria-label={`Remove ${name}`}
-          onClick={() => actions.send([{ _tag: "RemoveTrigger", trigger: trigger.id }])}
+          onClick={() => actions.edit([{ _tag: "RemoveTrigger", trigger: trigger.id }])}
         >
           <RiCloseLine />
         </Button>
@@ -477,8 +441,11 @@ function Triggers() {
   const {
     state: { workflow },
     actions,
-    meta: { catalog, machine, listValues },
-  } = useWorkflowEditor();
+    meta: { listValues },
+  } = useWorkingCopy();
+  const {
+    state: { catalog, machine },
+  } = useWorkflowSession();
   const entries = catalog?.entries.filter(({ kind }) => kind === "trigger") ?? [];
   const start = orderedOperations(workflow)[0]?.id;
   return (
@@ -493,7 +460,7 @@ function Triggers() {
           listValues={listValues}
           onChoose={(choice) => {
             if (choice._tag !== "Entry") return;
-            actions.send([
+            actions.edit([
               {
                 _tag: "AddTrigger",
                 trigger: {
@@ -554,10 +521,10 @@ const modelSelections = (model: WorkflowModelSelection) =>
   model.options.length === 0 ? null : Object.fromEntries(model.options.map(({ id, value }) => [id, value]));
 
 function OperationModelPicker({ operation }: { readonly operation: WorkflowOperation }) {
+  const { actions } = useWorkingCopy();
   const {
-    actions,
-    meta: { harnesses },
-  } = useWorkflowEditor();
+    state: { harnesses },
+  } = useWorkflowSession();
   const dismissImportReview = useDismissImportReview();
   const catalogs = availableHarnessCatalogs(harnesses.catalogs);
   const providers = providerPickerCatalogs(catalogs, harnesses.readiness);
@@ -567,7 +534,7 @@ function OperationModelPicker({ operation }: { readonly operation: WorkflowOpera
   const options = model ? modelOptionStates(model, { own, inherited: null, effective: own ?? {} }) : [];
   const setModel = (selection: WorkflowModelSelection) => {
     dismissImportReview(importReviewMark.model(operation.id));
-    actions.send([{ _tag: "SetModel", operation: operation.id, model: selection }]);
+    actions.edit([{ _tag: "SetModel", operation: operation.id, model: selection }]);
   };
   return (
     <>
@@ -643,8 +610,8 @@ const useOperationTools = () => {
 
 function ToolItem({ need, children }: { readonly need: NeedChoice; readonly children?: ReactNode }) {
   const {
-    meta: { needs },
-  } = useWorkflowEditor();
+    state: { needs },
+  } = useWorkflowSession();
   const {
     state: { operation },
     actions: { toggle },
@@ -669,8 +636,8 @@ function ToolItem({ need, children }: { readonly need: NeedChoice; readonly chil
 
 function ToolsCascade() {
   const {
-    meta: { needs },
-  } = useWorkflowEditor();
+    state: { needs },
+  } = useWorkflowSession();
   return (
     <DropdownMenuGroup>
       {needGroups.map(({ kind, label, Icon }) => {
@@ -698,8 +665,8 @@ function ToolsCascade() {
 
 function ToolsSearch() {
   const {
-    meta: { needs },
-  } = useWorkflowEditor();
+    state: { needs },
+  } = useWorkflowSession();
   const {
     state: { query },
   } = useOperationTools();
@@ -720,17 +687,17 @@ function ToolsSearch() {
 }
 
 function OperationTools({ operation }: { readonly operation: WorkflowOperation }) {
+  const { actions } = useWorkingCopy();
   const {
-    actions,
-    meta: { needs },
-  } = useWorkflowEditor();
+    state: { needs },
+  } = useWorkflowSession();
   const dismissImportReview = useDismissImportReview();
   const [query, setQuery] = useState("");
   const nameOf = (identity: NeedIdentity) =>
     needs.find((need) => need.identity === identity)?.name ?? identity;
   const setRequires = (requires: ReadonlyArray<NeedIdentity>) => {
     dismissImportReview(importReviewMark.requires(operation.id));
-    actions.send([{ _tag: "SetRequires", operation: operation.id, requires }]);
+    actions.edit([{ _tag: "SetRequires", operation: operation.id, requires }]);
   };
   const toggle = (need: NeedChoice, checked: boolean) =>
     setRequires(
@@ -780,8 +747,18 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
   const {
     state: { workflow },
     actions,
-    meta: { catalog, machine, listValues },
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
+  const {
+    state: { catalog, machine },
+  } = useWorkflowSession();
+  const name = actions.field(
+    (current) => operationIn(current, operation)?.name ?? "",
+    (text) => [{ _tag: "RenameOperation", operation: operation.id, name: text }],
+  );
+  const instruction = actions.field(
+    (current) => operationIn(current, operation)?.instruction ?? "",
+    (text) => [{ _tag: "SetInstruction", operation: operation.id, instruction: text }],
+  );
   const problems = problemsOf(workflow);
   const operationProblems = problemsAt(problems, { operation: operation.id, question: null }).filter(
     ({ code }) => code !== "uncovered-outcome",
@@ -794,21 +771,17 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
       <div className="flex items-center gap-2 px-1">
         <RiRobot2Line className="size-4 shrink-0 text-muted-foreground" />
         <BufferedInput
-          value={operation.name}
+          value={name.value}
           label="Operation name"
           className="h-7 flex-1 text-sm font-medium"
-          save={async (name) => {
-            if (!name.trim()) return operation.name;
-            const updated = await actions.send([{ _tag: "RenameOperation", operation: operation.id, name }]);
-            return updated?.workingCopy.operations.find(({ id }) => id === operation.id)?.name ?? name;
-          }}
+          save={name.save}
         />
         <ProblemMark problems={operationProblems} workflowDocument={workflow.workingCopy} />
         <Button
           size="icon-sm"
           variant="ghost"
           aria-label={`Remove ${operation.name}`}
-          onClick={() => actions.send([{ _tag: "RemoveOperation", operation: operation.id }])}
+          onClick={() => actions.edit([{ _tag: "RemoveOperation", operation: operation.id }])}
         >
           <RiCloseLine />
         </Button>
@@ -817,19 +790,11 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
       <div className="flex flex-col gap-1.5 rounded-lg bg-background p-1.5">
         <BufferedTextarea
           rows={3}
-          value={operation.instruction}
+          value={instruction.value}
           label={`Instructions for ${operation.name}`}
           placeholder="Instructions"
           className="min-h-16 py-2 text-sm"
-          save={async (instruction) => {
-            const updated = await actions.send([
-              { _tag: "SetInstruction", operation: operation.id, instruction },
-            ]);
-            return (
-              updated?.workingCopy.operations.find(({ id }) => id === operation.id)?.instruction ??
-              instruction
-            );
-          }}
+          save={instruction.save}
         />
         <div className="flex flex-wrap items-center gap-1">
           <OperationModelPicker operation={operation} />
@@ -841,14 +806,12 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
         <OperationOutcomes.Provider
           value={{
             state: { operation },
-            actions: { send: actions.send },
             meta: {
               entries: catalog?.entries.filter(({ kind }) => kind === "action") ?? [],
               machine,
               handOffs: workflow.workingCopy.operations
                 .filter(({ id }) => id !== operation.id)
                 .map(({ id, name }) => ({ id, name })),
-              listValues,
               takenIds: documentNodeIds(workflow.workingCopy),
               problems,
               workflowDocument: workflow.workingCopy,
@@ -866,7 +829,7 @@ function Operations() {
   const {
     state: { workflow },
     actions,
-  } = useWorkflowEditor();
+  } = useWorkingCopy();
   return (
     <section aria-label="Operations" className="flex flex-col gap-1.5">
       {orderedOperations(workflow).map((operation) => (
@@ -876,7 +839,7 @@ function Operations() {
         variant="ghost"
         className="w-full justify-start rounded-xl bg-muted/50 py-3 font-normal text-muted-foreground hover:bg-muted"
         onClick={() =>
-          actions.send([
+          actions.edit([
             { _tag: "AddOperation", operation: newWorkflowOperation(documentNodeIds(workflow.workingCopy)) },
           ])
         }
@@ -889,7 +852,7 @@ function Operations() {
 }
 
 export function WorkflowEditor({
-  workflow: initial,
+  workflow,
   importReview = [],
   onPublished,
 }: {
@@ -897,129 +860,11 @@ export function WorkflowEditor({
   readonly importReview?: readonly string[];
   readonly onPublished?: () => void;
 }) {
-  const { state, actions } = useWorkflowSession();
-  const remote = state.workflows.find(({ id }) => id === initial.id) ?? initial;
-  const [preview, setPreview] = useState<WorkflowRecord | null>(null);
-  const [saveFailed, setSaveFailed] = useState(false);
   const [reviewMarks, setReviewMarks] = useState(importReview);
-  const accepted = useRef(remote);
-  const pending = useRef<
-    ReadonlyArray<{
-      readonly key: symbol;
-      readonly edits: Parameters<WorkflowClient["edit"]>[1];
-    }>
-  >([]);
-  const latestAccepted = () =>
-    remote.workingRevision > accepted.current.workingRevision ? remote : accepted.current;
-  const hasPreview = preview !== null && preview.workingRevision > remote.workingRevision;
-  const workflow = hasPreview
-    ? {
-        ...remote,
-        workingCopy: preview.workingCopy,
-        workingRevision: preview.workingRevision,
-        diagnostics: preview.diagnostics,
-        readiness: preview.readiness,
-      }
-    : remote;
-  const editQueue = useRef(Promise.resolve(workflow));
-  const refreshPreview = () => {
-    const base = latestAccepted();
-    const [first, ...rest] = pending.current;
-    if (!first) {
-      setPreview(base);
-      return;
-    }
-    const edits: Parameters<WorkflowClient["edit"]>[1] = [
-      first.edits[0],
-      ...first.edits.slice(1),
-      ...rest.flatMap((entry) => entry.edits),
-    ];
-    const applied = applyWorkflowEdits(base.workingCopy, edits);
-    if (applied._tag !== "Ok") {
-      setPreview(base);
-      return;
-    }
-    const catalog = state.catalog;
-    const machine = state.machine;
-    const diagnostics = catalog ? validateWorkflow(applied.value, catalog) : base.diagnostics;
-    const canAdvise = catalog !== null && machine !== null;
-    const readiness = canAdvise ? adviseReadiness(applied.value, catalog, machine) : base.readiness;
-    setPreview({
-      ...base,
-      workingCopy: applied.value,
-      workingRevision: base.workingRevision + pending.current.length,
-      diagnostics,
-      readiness,
-    });
-  };
-  const edit: WorkflowClient["edit"] = async (id, edits) => {
-    const key = Symbol();
-    pending.current = [...pending.current, { key, edits }];
-    refreshPreview();
-    const request = editQueue.current.then(() => actions.edit(id, edits));
-    const settled = request.then(
-      (next) => {
-        accepted.current = next;
-        pending.current = pending.current.filter((entry) => entry.key !== key);
-        setSaveFailed(false);
-        refreshPreview();
-        return next;
-      },
-      (error) => {
-        pending.current = pending.current.filter((entry) => entry.key !== key);
-        setSaveFailed(true);
-        refreshPreview();
-        throw error;
-      },
-    );
-    editQueue.current = settled.catch(() => accepted.current);
-    return settled;
-  };
-  const editorActions: WorkflowEditorValue["actions"] = {
-    ...actions,
-    edit,
-    send: async (edits) => {
-      const [first, ...rest] = edits;
-      if (!first) return null;
-      return edit(remote.id, [first, ...rest]);
-    },
-    publish: async (id) => {
-      const queued = await editQueue.current;
-      const latestRevision = Math.max(
-        remote.workingRevision,
-        queued.workingRevision,
-        accepted.current.workingRevision,
-      );
-      const published = await actions.publish(id, latestRevision);
-      onPublished?.();
-      return published;
-    },
-  };
-  const listValues: ListValues = async (entry, parameter) =>
-    (await actions.listOptions(entry.key, parameter.id, workspaceIds(workflow, state.machine))).map(
-      (option) => ({
-        value: option.value,
-        label: option.name,
-      }),
-    );
   const dismissImportReview = (mark: string) =>
     setReviewMarks((current) => current.filter((item) => item !== mark));
   return (
-    <WorkflowEditorContext
-      value={{
-        state: { workflow },
-        actions: editorActions,
-        meta: {
-          catalog: state.catalog,
-          machine: state.machine,
-          workspaceLabels: state.workspaceLabels,
-          harnesses: state.harnesses,
-          needs: state.needs,
-          listValues,
-          saveFailed,
-        },
-      }}
-    >
+    <WorkingCopyProvider workflow={workflow} onPublished={onPublished}>
       <ImportReviewProvider marks={reviewMarks} dismiss={dismissImportReview}>
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-8 py-8">
           <ImportReviewBanner />
@@ -1028,6 +873,6 @@ export function WorkflowEditor({
           <Operations />
         </div>
       </ImportReviewProvider>
-    </WorkflowEditorContext>
+    </WorkingCopyProvider>
   );
 }

@@ -37,7 +37,7 @@ _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
 `issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
-Each entry is the tracker's own identity for a person: a GitHub login, or a Linear user id (a UUID, never a username). The Workspace editor offers the people of the bound Connection by name and stores their identity. A register or update refuses an entry whose format is wrong for the tracker. A stored entry is not checked again on load, so an old value never fails the workspace: it matches no one, and the editor shows it as unknown so a person can remove it.
+Each entry is the tracker's own identity for a person: a GitHub login, or a Linear user id (a UUID, never a username), never a display name. The Workspace editor offers the people of the bound Connection by name and stores their identity. A register or update refuses an entry whose format is wrong for the tracker. A stored entry is not checked again on load, so an old value never fails the workspace: it matches no one, and the editor shows it as unknown so a person can remove it. When the gate is on, an unassigned issue is nobody's, so it is not eligible: assigning it is how a person opts in. A pull request belongs to the Work item its link key names; with no linked Work item, it belongs to its author.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
 **Bot allowlist**:
@@ -230,7 +230,7 @@ A Workflow document that Cogwork ships. Using one is *create* with its document,
 _Avoid_: Default Workflow (as a kind), preset, blueprint, built-in Workflow
 
 **Trigger and action catalog**:
-The engine-owned list of every Trigger entry and action entry a Workflow document may name, read through a query and never held as a constant in a client. Each entry is keyed by its connected app first (`github.create-issue`, `linear.issue-has-label`) and declares what it requires and its **parameters**; a Trigger entry also declares the item kind it yields, which fixes the Work context, and an action entry its target, the item kinds it acts on, and its **agent inputs**. A client that has only the RPC can author every Workflow the editor can.
+The engine-owned list of every Trigger entry and action entry a Workflow document may name, read through a query and never held as a constant in a client. Each entry is keyed by its connected app first (`github.create-issue`, `linear.issue-has-label`) and declares what it requires and its **parameters**; a Trigger entry also declares the item kind it yields, which fixes the Work context, and an action entry its target, the item kinds it acts on, and its **agent inputs**. An action that acts only on the current item of its own app names the app with the kind (`github.issue`). A client that has only the RPC can author every Workflow the editor can.
 _Avoid_: Bare *catalog* (spent — see **Plugin catalog**), Plugin catalog, Model catalog, connector list, `connectorOnly` (retired — an entry *requires*, and the catalog hides nothing)
 
 ### Triggers
