@@ -1,0 +1,35 @@
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_fc06a8384f08a4::t_509d9a24f20a73 38,69,84,116,162,164-166,242,246,254,287,308,310-313,370,447,487,521,563,585,615,709,757
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_fc06a8384f08a4::t_c41690e89a58b9 80,755,759
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  s_fc06a8384f08a4::t_aacb87f5a78454 90
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  s_fc06a8384f08a4::t_1b93dfd419e018 41,57-60
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_fc06a8384f08a4::t_6223c20a401758 29,298,300,424,494,496
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  s_fc06a8384f08a4::t_1a25011f56188e 67-77,82,84
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_fc06a8384f08a4::t_c7c348d4c47559 8,104,107-108,110-113,115-116,121-138
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_fc06a8384f08a4::t_8f9f164d2bdaac 18,88-89,116-119,130-135,138,151,156-163,183-186,243
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_fc06a8384f08a4::t_6f1cf446273499 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b73ade0626bc38274f01f241fc69f62e981095b5",
+  "prompts": {},
+  "sessions": {
+    "s_fc06a8384f08a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eae871b0-415d-42d6-ac9d-8684197856f5",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
