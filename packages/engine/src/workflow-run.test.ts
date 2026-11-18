@@ -97,7 +97,7 @@ import { WorkflowArtifactStore, memoryLayer as workflowArtifactStoreLayer } from
 import { cogworkWorkflowCatalogContribution } from "./workflow-catalog";
 import { make as makeNotifications, WorkflowNotifications } from "./workflow-notification";
 import { make as makeWorkflowRun } from "./workflow-run";
-import { PullRequestReadiness, WorktreeManager } from "./worktree";
+import { PullRequestReadiness, WorktreeError, WorktreeManager } from "./worktree";
 
 const decodeWorkflow = Schema.decodeSync(WorkflowId);
 const decodeNode = Schema.decodeSync(WorkflowNodeId);
@@ -815,6 +815,59 @@ const exerciseFanOut = Effect.fn("WorkflowRunTest.exerciseFanOut")(function* (
     [...summaries],
   );
 });
+
+const checkoutAdmission: TriggerAdmission = {
+  ...admission,
+  event: { ...admission.event, workspace: reviewWorkspace.config.name },
+};
+
+const checkoutDocument = WorkflowDocument.make({
+  ...document,
+  operations: document.operations.map((candidate) => ({ ...candidate, permissionProfile: "full" })),
+});
+
+class MergeInProgress extends Context.Service<MergeInProgress, Ref.Ref<boolean>>()(
+  "@cogwork/engine/workflow-run.test/MergeInProgress",
+) {
+  static readonly layer = Layer.effect(MergeInProgress, Ref.make(false));
+}
+
+const mergeWorktreeLayer = Layer.unwrap(
+  Effect.map(MergeInProgress, (mergeInProgress) =>
+    Layer.mock(WorktreeManager, {
+      ensure: (_workspace, _item, options) =>
+        Effect.flatMap(Ref.get(mergeInProgress), (merging) =>
+          merging && !options?.resume
+            ? Effect.fail(
+                new WorktreeError({
+                  reason: "operation-in-progress",
+                  branch: "workflow",
+                  operation: "merge",
+                  unmergedPaths: ["packages/engine/src/workflow-run.ts"],
+                  message: "branch workflow has a merge in progress",
+                  retryable: false,
+                }),
+              )
+            : Effect.succeed({
+                branch: BranchName.make("workflow"),
+                path: "/worktrees/workflow",
+                created: false,
+              }),
+        ),
+    }),
+  ),
+);
+
+const mergeTestLayer = Layer.mergeAll(requirements, mergeWorktreeLayer).pipe(
+  Layer.provideMerge(MergeInProgress.layer),
+);
+
+const checkoutProgram = (objects: ReadonlyArray<unknown>) =>
+  testProgram(
+    objects,
+    { registry: { ...emptyRegistry, workspaces: [reviewWorkspace] } },
+    workflowServiceWith(checkoutDocument),
+  );
 
 describe("WorkflowRun", () => {
   it.effect("fans each result element into one child item with inherited lineage", () =>
@@ -2684,6 +2737,50 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
+  it.effect("resumes a handed-back Run whose worktree has a merge in progress", () =>
+    Effect.gen(function* () {
+      const { runner, notifications } = yield* checkoutProgram([
+        {
+          summary: "Needs a decision",
+          stuck: true,
+          answers: { done: "yes" },
+          inputs: { notification: "Wait" },
+        },
+        { summary: "Merged", stuck: false, answers: { done: "yes" }, inputs: { notification: "Merged" } },
+      ]);
+      yield* runner.execute(checkoutAdmission);
+      yield* Ref.set(yield* MergeInProgress, true);
+
+      yield* runner.handBack({ item: checkoutAdmission.event.key, note: "Use the human decision" });
+      yield* runner.execute(checkoutAdmission);
+
+      assert.deepStrictEqual(
+        (yield* notifications.list).map(({ summary }) => summary),
+        ["Merged"],
+      );
+    }).pipe(Effect.provide(mergeTestLayer), Effect.scoped),
+  );
+
+  it.effect("refuses a fresh-Session Run on a worktree with a merge in progress", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* checkoutProgram([
+        { summary: "Merged", stuck: false, answers: { done: "yes" }, inputs: { notification: "Merged" } },
+      ]);
+      yield* Ref.set(yield* MergeInProgress, true);
+
+      const outcome = yield* runner.execute(checkoutAdmission);
+
+      assert.deepStrictEqual(
+        { outcome, runs: yield* (yield* RunLedger).listRuns(10) },
+        { outcome: "retry", runs: [] },
+      );
+      assert.include(
+        (yield* Ref.get(coordination.attempts))[0]?.reason ?? "",
+        "WorktreeError: branch workflow has a merge in progress",
+      );
+    }).pipe(Effect.provide(mergeTestLayer), Effect.scoped),
+  );
+
   it.effect("refuses handback without an active park", () =>
     Effect.gen(function* () {
       const { runner } = yield* testProgram([]);
@@ -3147,23 +3244,13 @@ describe("WorkflowRun", () => {
 
   it.effect("records a failed attempt and creates no Run when the checkout cannot be prepared", () =>
     Effect.gen(function* () {
-      const fullDocument = WorkflowDocument.make({
-        ...document,
-        operations: document.operations.map((candidate) => ({
-          ...candidate,
-          permissionProfile: "full" as const,
-        })),
-      });
       const { runner, coordination } = yield* testProgram(
         [],
         { registry: { ...emptyRegistry, workspaces: [reviewWorkspace] } },
-        workflowServiceWith(fullDocument),
+        workflowServiceWith(checkoutDocument),
       );
 
-      const outcome = yield* runner.execute({
-        ...admission,
-        event: { ...admission.event, workspace: reviewWorkspace.config.name },
-      });
+      const outcome = yield* runner.execute(checkoutAdmission);
 
       const attempts = yield* Ref.get(coordination.attempts);
       assert.deepStrictEqual(

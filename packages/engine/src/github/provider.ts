@@ -429,15 +429,6 @@ const make = (
         ),
       );
 
-  const markPullRequest = Effect.fn("github.markWorkflowPullRequest")(function* (
-    target: GitHubTarget,
-    pullNumber: number,
-    writeKey: string,
-  ) {
-    if (yield* commentsCarry(target, pullNumber, writeKey)) return;
-    yield* client.createComment(target, pullNumber, writeMarker(writeKey));
-  });
-
   const reviewsCarry = (target: GitHubTarget, pullNumber: number, writeKey: string) =>
     client
       .listReviews(target, pullNumber)
@@ -579,11 +570,7 @@ const make = (
         return workflowArtifact("PullRequestOpened", workspace, opened, input.origin);
       }),
     recordPullRequestPush: (workspace, pullRequest, origin) =>
-      Effect.gen(function* () {
-        const target = yield* sourceControlTarget(workspace).pipe(Effect.flatMap(authenticatedTarget));
-        yield* markPullRequest(target, pullRequest.number, origin.writeKey);
-        return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
-      }),
+      Effect.succeed(workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin)),
     commentPullRequest: writePullRequestComment,
     requestReview: (workspace, pullRequest, reviewer, origin) =>
       Effect.gen(function* () {
@@ -592,7 +579,6 @@ const make = (
         if (!requested.includes(reviewer)) {
           yield* client.requestReview(target, pullRequest.number, reviewer);
         }
-        yield* markPullRequest(target, pullRequest.number, origin.writeKey);
         return workflowArtifact("PullRequestUpdated", workspace, pullRequest, origin);
       }),
     commentNamedPullRequest: writePullRequestComment,
