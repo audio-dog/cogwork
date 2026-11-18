@@ -1,0 +1,21 @@
+packages/engine/src/github/host.test.ts
+  s_47c04d07fbabab::t_b478205235b915 145,147,152-153,160-162,164-168
+packages/engine/src/linear/client.ts
+  s_47c04d07fbabab::t_8b2819327e5621 945-950,952,956-957,961,963,967-972
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8b674e03f0ef4d187a4e4c4cc51de374770e3490",
+  "prompts": {},
+  "sessions": {
+    "s_47c04d07fbabab": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a2f3837e42b9640e6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
