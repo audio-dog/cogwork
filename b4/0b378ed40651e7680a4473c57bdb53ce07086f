@@ -1,0 +1,19 @@
+packages/engine/src/issue-tracker-router.test.ts
+  s_153b19de85ec06::t_da430cc6cb604a 151,166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b40b378ed40651e7680a4473c57bdb53ce07086f",
+  "prompts": {},
+  "sessions": {
+    "s_153b19de85ec06": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cdc1aa00-e61d-47d9-8d06-18da02a0d261",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
