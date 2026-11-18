@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_b3d4c44022f439::t_1427bd4aee95f4 1-182
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_fc06a8384f08a4::t_88d3040f3732d7 1-259
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_fc06a8384f08a4::t_81659418f5cc66 1-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "588f8fd9000f8cd2fad26ca812fef77c7cf7d1da",
+  "prompts": {},
+  "sessions": {
+    "s_b3d4c44022f439": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ab6ee9144cb09d8c3",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_fc06a8384f08a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eae871b0-415d-42d6-ac9d-8684197856f5",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
