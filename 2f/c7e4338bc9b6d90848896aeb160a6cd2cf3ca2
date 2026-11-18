@@ -1,0 +1,33 @@
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_181a4522502deb::t_d37dfba4ca4ef9 168,178,413,427,434
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_181a4522502deb::t_537475b55ccb06 242
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_181a4522502deb::t_5eb44a4983c4cd 187
+packages/engine/src/park-notice.test.ts
+  s_181a4522502deb::t_77e25fbe750dce 134
+packages/engine/src/park-notice.ts
+  s_181a4522502deb::t_878d3d7e38fbe4 24
+packages/engine/src/workflow-attention.ts
+  s_181a4522502deb::t_aec531e5f65e73 43,45,47,49
+packages/engine/src/workflow-run-checkout.test.ts
+  s_181a4522502deb::t_3dbf316765eeb3 125-128,134
+packages/engine/src/workflow-run-checkout.ts
+  s_181a4522502deb::t_0f63e88317c1e1 110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2fc7e4338bc9b6d90848896aeb160a6cd2cf3ca2",
+  "prompts": {},
+  "sessions": {
+    "s_181a4522502deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a328bfe8-aef0-4149-87c5-88da6da1c6c0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
