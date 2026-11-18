@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_2ec1aeb74aa0c8::t_66213542c595e6 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d285185aa5097999336b48f911611c2cde15e120",
+  "prompts": {},
+  "sessions": {
+    "s_2ec1aeb74aa0c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b6e0c882-cd3a-46d9-affe-649e3ef4013b",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
