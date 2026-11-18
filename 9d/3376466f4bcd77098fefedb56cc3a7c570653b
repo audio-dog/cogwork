@@ -1,0 +1,35 @@
+GLOSSARY-MAP.md
+  s_80f4ae44f10625::t_6e565c9f9c1325 18,20
+apps/desktop/GLOSSARY.md
+  s_80f4ae44f10625::t_d96caa613a6f98 211-232
+packages/contracts/GLOSSARY.md
+  s_80f4ae44f10625::t_b86552f9462c0d 11-16,18-19,21,23-24
+packages/engine/GLOSSARY-coordination.md
+  s_80f4ae44f10625::t_716322c138aa5d 28-36
+packages/engine/GLOSSARY-daemon.md
+  s_80f4ae44f10625::t_c556d3d068e2b3 45-73
+packages/engine/GLOSSARY-harness.md
+  s_80f4ae44f10625::t_723b68677693af 44-47
+packages/engine/GLOSSARY-runs.md
+  s_80f4ae44f10625::t_fcd318ac250de3 37-56
+packages/engine/GLOSSARY.md
+  s_80f4ae44f10625::t_e7ebe30fac2e45 14-16,19
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_80f4ae44f10625::t_e23cfe9dbcdd37 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d3376466f4bcd77098fefedb56cc3a7c570653b",
+  "prompts": {},
+  "sessions": {
+    "s_80f4ae44f10625": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f59364b-028b-4084-b695-a3c1e9c9e0f6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
