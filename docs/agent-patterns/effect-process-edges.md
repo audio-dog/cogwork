@@ -108,7 +108,7 @@ A Node `Readable` does not need even that: `NodeStream.fromReadable({ evaluate: 
 
 The caller side follows: `ipc.ts` opens a child `Scope.fork` per renderer session, runs the socket in it, and closes the scope on `destroyed`. Do not reintroduce the hand-written version (a `Map` keyed by renderer id with manual teardown).
 
-This does not move any protocol logic. The CONTEXT.md rule that `main` is a dumb pipe — never decoding RPC, all client logic in the renderer — constrains what main understands, not how it owns its socket. A scope-owned `Socket` relaying opaque frames is still a dumb pipe.
+This does not move any protocol logic. The GLOSSARY.md rule that `main` is a dumb pipe — never decoding RPC, all client logic in the renderer — constrains what main understands, not how it owns its socket. A scope-owned `Socket` relaying opaque frames is still a dumb pipe.
 
 ## A subprocess is acquired, and its release is a kill ladder
 
@@ -163,7 +163,7 @@ The same edge discipline applies inside harness adapters: cursor-acp reads its `
 - `apps/desktop/src/renderer/src/daemon/protocol.ts`: the renderer exemplar — scope-owned subscriptions, `Deferred` connection gate, exponential jittered reconnect.
 - `apps/desktop/src/main/engine-supervisor.ts`, `daemon-bridge.ts`, `socket-probe.ts`, `wait-for-socket.ts`, `ipc.ts`, `quit.ts`: the main-process exemplars — kill ladder, scope-owned sockets, per-renderer scopes, `SubscriptionRef` status, idempotent shutdown.
 - `apps/desktop/src/main/index.ts`: the one remaining raw `spawn` (injected as the supervisor's `SpawnEngine`).
-- `apps/desktop/CONTEXT.md` ("Engine supervisor", "RPC relay"): the behavioral spec, including the dumb-pipe rule this pattern preserves.
+- `apps/desktop/GLOSSARY.md` ("Engine supervisor", "RPC relay"): the behavioral spec, including the dumb-pipe rule this pattern preserves.
 - `packages/engine/src/daemon.ts`: the shared-credential-store comment — the memoization invariant a second runtime must not break.
 - `.repos/opencode/packages/core/src/cross-spawn-spawner.ts`: the production SIGTERM→SIGKILL release ladder and `NodeStream.fromReadable` stdout.
 - `.repos/opencode/packages/core/src/effect/runtime.ts` and `memo-map.ts`: one module-level `MemoMap` shared by every runtime.

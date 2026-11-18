@@ -1,6 +1,6 @@
 # Claude Code (harness adapter)
 
-The Claude-specific [harness runner](../engine/CONTEXT.md). It implements the engine harness contract through the installed Claude Code CLI with TanStack AI's Claude Code adapter. The engine knows nothing about Claude Code; this package knows nothing about scheduling.
+The Claude-specific [harness runner](../engine/GLOSSARY.md). It implements the engine harness contract through the installed Claude Code CLI with TanStack AI's Claude Code adapter. The engine knows nothing about Claude Code; this package knows nothing about scheduling.
 
 ## Language
 

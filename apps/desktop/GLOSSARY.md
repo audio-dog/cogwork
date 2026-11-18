@@ -3,12 +3,12 @@
 The Electron app that is the primary **daemon host** on a laptop (product ADR 0008). It supervises
 the engine as a bundled Node child, keeps a single window that hides instead of quitting, and gives
 the renderer a typed seam to the daemon without ever handing it the socket. It speaks the shared
-kernel ([contracts](../../packages/contracts/CONTEXT.md)) over the same RPC transport the
-[cli](../cli/CONTEXT.md) uses.
+kernel ([contracts](../../packages/contracts/GLOSSARY.md)) over the same RPC transport the
+[cli](../cli/GLOSSARY.md) uses.
 
 Built with electron-vite + electron-builder. The renderer stack is React + TanStack Router with
 Effect AtomRpc (`@effect/atom-react`) for daemon read-model state and zustand for local chrome; UI
-primitives come from [ui](../../packages/ui/CONTEXT.md) (shadcn + Tailwind v4). See product ADR 0009.
+primitives come from [ui](../../packages/ui/GLOSSARY.md) (shadcn + Tailwind v4). See product ADR 0009.
 
 ## Language
 
