@@ -807,7 +807,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
     "probes an authenticated Cursor Run that loads a Run Plan Skill through load_skill when enabled",
     () =>
       Effect.gen(function* () {
-        const enabled = yield* Config.string("COGWORK_LIVE_CURSOR_PROBE").pipe(Config.withDefault("0"));
+        const enabled = yield* Config.String("COGWORK_LIVE_CURSOR_PROBE").pipe(Config.withDefault("0"));
         if (enabled !== "1") return;
         const fs = yield* FileSystem.FileSystem;
         const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-cursor-probe-checkout-" });
