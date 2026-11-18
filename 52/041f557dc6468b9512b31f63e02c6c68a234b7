@@ -1,0 +1,70 @@
+.pre-commit-config.yaml
+  h_46518a29d4dd91 4,12-30
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  h_46518a29d4dd91 38,42,69,84-85,87-88,98,102,105,116,162,164-166,242-264,267,287,308,310-313,347,359,370,380,447-454,458,461,472,487,489-492,496,500,510,521,547,563,572,585,600,615,621,709,718,729,757,759-762,778,781,796,799
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  h_46518a29d4dd91 58,71-72,80,83,99-102,131,154-156,164,171,180,187,197-198,227-231,247,250,270,295,320,322-323,341,363,383-387,408,431,444-448,463,524,526-527,537,613-614,639-640,668-669,690,692-693,700,750-761,774,777,784,793,797,832,842,855,867,876
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  h_46518a29d4dd91 1-100
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  h_46518a29d4dd91 1-76
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  h_46518a29d4dd91 20,29,265-275,278-288,290-291,295-304,307-322,326,329-331,335-340,342-346,353,358,361,364,366,369-370,375,381-387,393-394,396,406-417,423-424,428,430-431,436-437,441-443,445-446,450-455,457,461-463,466-468,470-478,484-485,491-496,543,583,618-621,637,645,647,679,705,707-709,715-718,721,723-725,727,731,739-741,750-751,766-769,783-784,798-800,809-812,818-821,825-832,838,858
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  h_46518a29d4dd91 40-45,178-179
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  h_46518a29d4dd91 1-189
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  h_46518a29d4dd91 1-201
+apps/desktop/src/renderer/src/features/working-copy.ts
+  h_46518a29d4dd91 1-273
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  h_46518a29d4dd91 15,145-154
+apps/desktop/src/renderer/src/testing/working-copies.ts
+  h_46518a29d4dd91 1-25
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  h_46518a29d4dd91 1-126
+docs/spec/customizable-workflows.md
+  h_46518a29d4dd91 221
+packages/contracts/CONTEXT.md
+  h_46518a29d4dd91 40,233
+packages/contracts/src/workflow.test.ts
+  h_46518a29d4dd91 552-638
+packages/contracts/src/workflow.ts
+  h_46518a29d4dd91 1419-1428,1430-1432,1434-1435,1437,1440,1445,1451-1461,1463,1465-1479
+packages/engine/CONTEXT.md
+  h_46518a29d4dd91 34
+packages/engine/src/github/provider.test.ts
+  h_46518a29d4dd91 1-118
+packages/engine/src/github/provider.ts
+  h_46518a29d4dd91 583
+packages/engine/src/linear/client.test.ts
+  h_46518a29d4dd91 6-15,18-19,25,30-44,73,76-92
+packages/engine/src/linear/client.ts
+  h_46518a29d4dd91 553
+packages/engine/src/run-plan-resolution.test.ts
+  h_46518a29d4dd91 1-390
+packages/engine/src/run-plan-resolution.ts
+  h_46518a29d4dd91 1-196
+packages/engine/src/workflow-actions-issue.test.ts
+  h_46518a29d4dd91 4,24,150-206
+packages/engine/src/workflow-actions-issue.ts
+  h_46518a29d4dd91 143,233-244,267-268,273,277,280
+packages/engine/src/workflow-run.test.ts
+  h_46518a29d4dd91 100,819-871,2740-2783,3250,3253
+packages/engine/src/workflow-run.ts
+  h_46518a29d4dd91 56,291,314,541,555-560,592-598,600,617,619-623,626-628,630-636,643
+scripts/check-file-tokens.mjs
+  h_46518a29d4dd91 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "52041f557dc6468b9512b31f63e02c6c68a234b7",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
