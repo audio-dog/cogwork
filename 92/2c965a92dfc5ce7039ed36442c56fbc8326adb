@@ -1,0 +1,151 @@
+.agents/skills/create-patterns/SKILL.md
+  s_29681a8d215569::t_144a547f8da312 18
+.agents/skills/test-audit/SKILL.md
+  s_29681a8d215569::t_4e004f93d6b932 21
+AGENTS.md
+  s_29681a8d215569::t_7b4c0b6b71dc2a 108-109
+CODING_STANDARDS.md
+  s_29681a8d215569::t_aef48759760957 11
+GLOSSARY-MAP.md
+  s_29681a8d215569::t_daa96bf6d67166 6-7,17-23,27
+README.md
+  s_29681a8d215569::t_b831b5a37e180b 24-32
+apps/cli/GLOSSARY.md
+  s_29681a8d215569::t_52e4ab176af634 6-7
+apps/desktop/GLOSSARY.md
+  s_29681a8d215569::t_f5c34a0aaad5b1 6-7,11
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_29681a8d215569::t_47eeb109a5ab94 11,35
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_29681a8d215569::t_aa332bac842a95 114-115
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  s_29681a8d215569::t_437f88d31acc57 25
+docs/agent-patterns/effect-error-design.md
+  s_29681a8d215569::t_0d2d7efdbaf630 121,167
+docs/agent-patterns/effect-process-edges.md
+  s_29681a8d215569::t_ea80e8585eeaac 111,166
+docs/agent-patterns/effect-schema-unions.md
+  s_29681a8d215569::t_3546c64f41c9aa 86,146,158
+docs/agents/domain.md
+  s_29681a8d215569::t_1869f6e8cbfde6 7-9,16,21,24,26-33,36-47,66
+docs/agents/product.md
+  s_29681a8d215569::t_70a67a07ef87b4 14
+docs/agents/technical-disposition-engine-and-trust.md
+  s_29681a8d215569::t_f082a7f3cf995e 1-100
+docs/agents/technical-disposition-evidence-and-scope.md
+  s_29681a8d215569::t_e88323949b19d7 1-102
+docs/agents/technical-disposition-failures-and-limits.md
+  s_29681a8d215569::t_c857df96bc1271 1-95
+docs/agents/technical-disposition.md
+  s_29681a8d215569::t_bc12a4c11bf462 13,26,30-31,63,82-91
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_29681a8d215569::t_4ab25c359ff4fc 5,23
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_29681a8d215569::t_c09e6c46caaf3f 60,99
+docs/spec/performance-observability.md
+  s_29681a8d215569::t_22ebde00701fe6 150
+docs/spec/trusted-bot-wake-signal.md
+  s_29681a8d215569::t_c650f7fc38f88a 8
+packages/claude-code/GLOSSARY.md
+  s_29681a8d215569::t_9f1f83c0670b89 3
+packages/codex-cli/GLOSSARY.md
+  s_29681a8d215569::t_a0175710b4446b 3
+packages/contracts/GLOSSARY-client-rpc.md
+  s_29681a8d215569::t_4a5da96c3616ee 1,3
+packages/contracts/GLOSSARY-configuration.md
+  s_29681a8d215569::t_1221e1119c9c7c 1,3,57-91
+packages/contracts/GLOSSARY-contributions.md
+  s_29681a8d215569::t_a20e3fb47aedc9 1,3
+packages/contracts/GLOSSARY-coordination.md
+  s_29681a8d215569::t_aba18d8ec287d0 1,3
+packages/contracts/GLOSSARY-credentials.md
+  s_29681a8d215569::t_f05957a44dd961 1,3
+packages/contracts/GLOSSARY-daemon-status.md
+  s_29681a8d215569::t_825d49d08315a5 1,3
+packages/contracts/GLOSSARY-harness-contract.md
+  s_29681a8d215569::t_8fc336a5016e04 1,3
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_80f4ae44f10625::t_c3d14bcb9f21e2 1,3
+packages/contracts/GLOSSARY-operations.md
+  s_29681a8d215569::t_857386c19da128 1,3
+packages/contracts/GLOSSARY-runs.md
+  s_29681a8d215569::t_82426854beddda 1,3
+packages/contracts/GLOSSARY-triggers.md
+  s_29681a8d215569::t_ee518f2cc31771 1,3
+packages/contracts/GLOSSARY-work.md
+  s_29681a8d215569::t_61cdfee88bfc61 1,3
+packages/contracts/GLOSSARY-workflows.md
+  s_29681a8d215569::t_697d274b1cf271 1,3
+packages/contracts/GLOSSARY.md
+  s_29681a8d215569::t_39f6a53e56d2ff 9,11-23
+packages/cursor-acp/GLOSSARY.md
+  s_29681a8d215569::t_5d8d100e7fca7a 3
+packages/engine/GLOSSARY-adapters.md
+  s_29681a8d215569::t_5ac253630d2fe3 1-47
+packages/engine/GLOSSARY-coordination.md
+  s_29681a8d215569::t_b1fb3e45f9d087 1-27
+packages/engine/GLOSSARY-daemon.md
+  s_29681a8d215569::t_514f7ea154aadb 1-44
+packages/engine/GLOSSARY-harness.md
+  s_29681a8d215569::t_a9446992d71909 1,3
+packages/engine/GLOSSARY-performance.md
+  s_29681a8d215569::t_f091ee49f5739e 1-40
+packages/engine/GLOSSARY-runs.md
+  s_29681a8d215569::t_d8ed585866d230 1-36
+packages/engine/GLOSSARY-sandbox.md
+  s_29681a8d215569::t_56df77e45a89e1 1-35
+packages/engine/GLOSSARY.md
+  s_29681a8d215569::t_487cc31a198235 1-20
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_29681a8d215569::t_b0e578ed91b246 5,26
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_29681a8d215569::t_34033656427a2d 3
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_29681a8d215569::t_43ddadd8ee3c8f 3
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_29681a8d215569::t_89527e78cc868c 38
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_29681a8d215569::t_e3ced7a7a487a9 36,126,128
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_29681a8d215569::t_f461fa661fc79e 35
+packages/engine/src/connection-verify.ts
+  s_29681a8d215569::t_4ad3728528893e 13
+packages/engine/src/workflow-run-admission.ts
+  s_80f4ae44f10625::t_4245e88ea50be6 1
+packages/engine/src/workflow-run-attempts.ts
+  s_80f4ae44f10625::t_44e309ebc64920 1-9,15-16,20,23-32,49-71,77-107,109-111,113-122,124-126,128-133,135-175,178-186,188-201,203-215,217-228,230-243,246-254,256,258-306,308,310-327,329-347,349-366
+packages/engine/src/workflow-run-execution-context.ts
+  s_29681a8d215569::t_b545896f75b0a4 1,3-15,17-52,54
+packages/engine/src/workflow-run-pending-plan.ts
+  s_29681a8d215569::t_9eaf0a81e5cdce 5,25,32,35,38-42,44,48-64,66-77,79-83,85-101,103-146,148-158,160,162-172,174-179,181-191,193-194
+packages/engine/src/workflow-run-preparation.ts
+  s_80f4ae44f10625::t_a91d6d63d3b334 5,8,14,16-18,20-21,23-24,27-50,84-89,91-112,114-135,137-144,146-156,159-179,181-183
+packages/engine/src/workflow-run-touchpoints.ts
+  s_29681a8d215569::t_4b7dbd070dce97 3-4,6-7,14-15,17,19-22,24-26,28-29,32-42,44-72,74-77,79-110,112-129,131-155,157-158,160-191,193-207
+packages/engine/src/workflow-run.ts
+  s_29681a8d215569::t_1a0f4dc3be3205 1-12,14,16,18,22-23,25-26,28-30,33-41,44-54,63-72,74,76-77,79-80,85-101,104-348,402,405,408-416,422-429
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "922c965a92dfc5ce7039ed36442c56fbc8326adb",
+  "prompts": {},
+  "sessions": {
+    "s_29681a8d215569": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67e3ec62-d199-4055-8473-67279da8a613",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_80f4ae44f10625": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f59364b-028b-4084-b695-a3c1e9c9e0f6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
