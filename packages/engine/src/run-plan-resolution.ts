@@ -126,7 +126,7 @@ const gitOperationFact = (inProgress: GitOperationInProgress | null) => {
     gitOperationInProgress: {
       operation,
       unmergedPaths,
-      instruction: `A Run of this work item left this ${operation} in progress in the worktree. Finish or abort it before any other work.`,
+      instruction: `This ${operation} was in progress in the worktree when the last Run of this work item ended. Finish or abort it before any other work.`,
     },
   };
 };

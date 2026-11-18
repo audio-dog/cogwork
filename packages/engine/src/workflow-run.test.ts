@@ -2837,7 +2837,7 @@ describe("WorkflowRun", () => {
     operation: "merge",
     unmergedPaths: ["packages/engine/src/workflow-run.ts"],
     instruction:
-      "A Run of this work item left this merge in progress in the worktree. Finish or abort it before any other work.",
+      "This merge was in progress in the worktree when the last Run of this work item ended. Finish or abort it before any other work.",
   } satisfies RunPlanGitOperationInProgress;
 
   const continuations = [

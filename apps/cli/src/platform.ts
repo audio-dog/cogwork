@@ -160,19 +160,23 @@ export const gitLayer = Layer.effect(
         retryable: true,
       });
 
-    const gitPathExists = (worktreePath: string, statePath: string) =>
+    const readGitPathWith = <A>(
+      worktreePath: string,
+      statePath: string,
+      read: (resolved: string) => Effect.Effect<A, PlatformError.PlatformError>,
+      missing: A,
+    ) =>
       gitPath(worktreePath, statePath).pipe(
         Effect.flatMap((resolved) =>
-          fs.exists(resolved).pipe(Effect.catch(recoverNotFound(false, gitPathFailure(statePath)))),
+          read(resolved).pipe(Effect.catch(recoverNotFound(missing, gitPathFailure(statePath)))),
         ),
       );
 
+    const gitPathExists = (worktreePath: string, statePath: string) =>
+      readGitPathWith(worktreePath, statePath, (resolved) => fs.exists(resolved), false);
+
     const readGitPath = (worktreePath: string, statePath: string) =>
-      gitPath(worktreePath, statePath).pipe(
-        Effect.flatMap((resolved) =>
-          fs.readFileString(resolved).pipe(Effect.catch(recoverNotFound("", gitPathFailure(statePath)))),
-        ),
-      );
+      readGitPathWith(worktreePath, statePath, (resolved) => fs.readFileString(resolved), "");
 
     const operationIdentity = (worktreePath: string, identityPaths: ReadonlyArray<string>) =>
       Effect.forEach(identityPaths, (identityPath) => readGitPath(worktreePath, identityPath)).pipe(

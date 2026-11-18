@@ -949,24 +949,28 @@ const operationFixtures: ReadonlyArray<{
   readonly head: string;
   readonly command: (branch: string) => string;
   readonly identity: (revisions: OperationRevisions) => string;
+  readonly headDuring: (revisions: OperationRevisions) => string;
 }> = [
   {
     operation: "merge",
     head: "MERGE_HEAD",
     command: (branch) => `git merge origin/${branch}`,
     identity: ({ theirs }) => theirs,
+    headDuring: ({ ours }) => ours,
   },
   {
     operation: "rebase",
     head: "REBASE_HEAD",
     command: (branch) => `git rebase origin/${branch}`,
     identity: ({ theirs, ours }) => `${theirs},${ours}`,
+    headDuring: ({ theirs }) => theirs,
   },
   {
     operation: "cherry-pick",
     head: "CHERRY_PICK_HEAD",
     command: (branch) => `git cherry-pick origin/${branch}`,
     identity: ({ theirs }) => theirs,
+    headDuring: ({ ours }) => ours,
   },
 ];
 
@@ -1089,7 +1093,7 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
 
     it.effect.each(operationFixtures)(
       "reports a $operation in progress, its identity, and its unmerged paths",
-      ({ operation, head, command, identity }) =>
+      ({ operation, head, command, identity, headDuring }) =>
         Effect.gen(function* () {
           const git = yield* Git.Git;
           const { root, worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
@@ -1107,7 +1111,7 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
           assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
             operation,
             identity: identity(revisions),
-            head: yield* revision(worktree, "HEAD"),
+            head: headDuring(revisions),
             unmergedPaths: ["shared.txt"],
           });
         }).pipe(Effect.scoped),
@@ -1163,7 +1167,7 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
         assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
           operation: "rebase",
           identity: `${revisions.onto},${revisions.original}`,
-          head: yield* revision(worktree, "HEAD"),
+          head: revisions.original,
           unmergedPaths: [],
         });
       }).pipe(Effect.scoped),

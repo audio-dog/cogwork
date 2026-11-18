@@ -313,7 +313,7 @@ export const make = Effect.gen(function* () {
     return yield* replayOntoRemote(worktreePath, remote, branch, divergence);
   });
 
-  const recordedOperationInProgress = Effect.fn("Worktree.recordedOperationInProgress")(function* (
+  const acceptRecordedOperation = Effect.fn("Worktree.acceptRecordedOperation")(function* (
     worktreePath: string,
     branch: string,
   ) {
@@ -340,7 +340,7 @@ export const make = Effect.gen(function* () {
       Effect.catchTag("GitError", (error) => logUnrecordedOperation(worktreePath, error)),
     );
 
-  const prepare = Effect.fn("Worktree.ensure")(function* (
+  const acquire = Effect.fn("Worktree.acquire")(function* (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
     options?: EnsureOptions,
@@ -367,7 +367,7 @@ export const make = Effect.gen(function* () {
       ? "registered"
       : yield* recoverUnregisteredPath(repoPath, root, branch, worktreePath);
     const registered = targetState === "registered";
-    const operationInProgress = registered ? yield* recordedOperationInProgress(worktreePath, branch) : null;
+    const operationInProgress = registered ? yield* acceptRecordedOperation(worktreePath, branch) : null;
     const keepsWorktreeAsItIs = registered && (operationInProgress !== null || options?.resume);
 
     if (keepsWorktreeAsItIs) {
@@ -411,7 +411,7 @@ export const make = Effect.gen(function* () {
 
   const ensure = (workspace: RegisteredWorkspace, item: WorkItemRef, options?: EnsureOptions) =>
     Effect.uninterruptibleMask((restore) =>
-      restore(prepare(workspace, item, options)).pipe(
+      restore(acquire(workspace, item, options)).pipe(
         Effect.tap((ensured) => Effect.addFinalizer(() => recordOperationLeft(ensured.path))),
       ),
     );
