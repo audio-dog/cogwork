@@ -1,8 +1,10 @@
 import {
   BranchName,
   type HarnessName,
+  type MachineReadiness,
   PluginContributionLoad,
   RunId,
+  type WorkflowDocument,
   type WorkflowOperation,
   WorkItemId,
   WorkItemRef,
@@ -48,6 +50,16 @@ const runItemId = WorkItemRef.match({
   ScheduleInstant: () => workItemId("#workflow"),
   FanOutChild: () => workItemId("#workflow"),
 });
+
+export const selectedWorkspaceIds = (
+  document: WorkflowDocument,
+  workspaces: ReadonlyArray<RegisteredWorkspace>,
+) => {
+  const registered = workspaces.map(({ config }) => config.name);
+  return document.workspaces._tag === "Every"
+    ? registered
+    : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
+};
 
 export interface RunPreparationInput {
   readonly admission: TriggerAdmission;
@@ -95,10 +107,12 @@ export const make = Effect.gen(function* () {
 
   const preflight = Effect.fn("RunPreparation.preflight")(function* (
     operation: WorkflowOperation,
-    defaultHarness: HarnessName | null,
+    machine: Pick<MachineReadiness, "defaultHarness" | "readyNeeds">,
   ) {
-    const name = operation.model.harness ?? defaultHarness;
+    const name = operation.model.harness ?? machine.defaultHarness;
     if (name === null) return HarnessPreflight.Unselected();
+    const need = operation.requires.find((required) => !machine.readyNeeds.includes(required));
+    if (need !== undefined) return HarnessPreflight.NeedMissing({ need });
     return yield* harness
       .preflight(name, operation.permissionProfile, operation.model.model, harnessOptions(operation))
       .pipe(

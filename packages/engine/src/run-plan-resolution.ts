@@ -12,7 +12,6 @@ import {
   type SessionKind,
   type WorkflowActionArtifact,
   type WorkflowCatalog,
-  type WorkflowDocument,
   type WorkflowOperation,
   type WorkflowRecord,
   WorkItemId,
@@ -23,7 +22,6 @@ import * as Data from "effect/Data";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { AssembledContext } from "./context-assembler";
-import type { RegisteredWorkspace } from "./projector";
 import type { TriggerAdmission } from "./trigger-observation";
 import { type EngineToolName, itemWorkspaceOf } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
@@ -37,6 +35,7 @@ export interface PreparedHarness {
 
 export type HarnessPreflight = Data.TaggedEnum<{
   Unselected: Record<never, never>;
+  NeedMissing: { readonly need: NeedIdentity };
   Failed: { readonly name: HarnessName; readonly message: string };
   Passed: PreparedHarness;
 }>;
@@ -55,14 +54,10 @@ export type RunPlanResolution = Data.TaggedEnum<{
 }>;
 export const RunPlanResolution = Data.taggedEnum<RunPlanResolution>();
 
-export interface HarnessFacts {
-  readonly operation: WorkflowOperation;
-  readonly readyNeeds: ReadonlyArray<NeedIdentity>;
-  readonly harness: HarnessPreflight;
-}
-
-export interface RunPlanFacts extends HarnessFacts {
+export interface RunPlanFacts {
   readonly id: RunId;
+  readonly operation: WorkflowOperation;
+  readonly harness: HarnessPreflight;
   readonly admission: TriggerAdmission;
   readonly workflow: Pick<WorkflowRecord, "id" | "publishedRevision">;
   readonly catalog: WorkflowCatalog;
@@ -73,12 +68,11 @@ export interface RunPlanFacts extends HarnessFacts {
   readonly lineageArtifacts: ReadonlyArray<Pick<WorkflowActionArtifact, "workspace" | "issue" | "url">>;
   readonly claim: Claim;
   readonly handback: HandbackRecord | null;
-  readonly toolNeeds: ReadonlySet<EngineToolName>;
   readonly skills: RunPlan["skills"];
   readonly subagents: RunPlan["subagents"];
 }
 
-export const engineToolsFor = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
+const engineToolsFor = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
   const actionKeys = new Set(catalog.entries.filter(({ kind }) => kind === "action").map(({ key }) => key));
   return new Set(
     operation.transitions
@@ -86,16 +80,6 @@ export const engineToolsFor = (operation: WorkflowOperation, catalog: WorkflowCa
       .filter(({ entry }) => actionKeys.has(entry))
       .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []),
   );
-};
-
-export const selectedWorkspaceIds = (
-  document: WorkflowDocument,
-  workspaces: ReadonlyArray<RegisteredWorkspace>,
-) => {
-  const registered = workspaces.map(({ config }) => config.name);
-  return document.workspaces._tag === "Every"
-    ? registered
-    : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
 };
 
 const workItemId = Schema.decodeSync(WorkItemId);
@@ -175,22 +159,14 @@ const operationMessage = (operation: WorkflowOperation, handback: HandbackRecord
   return note ? `${request}\n\nPerson's note: ${note}` : request;
 };
 
-const missingNeed = ({ operation, readyNeeds }: HarnessFacts) => {
-  const need = operation.requires.find((required) => !readyNeeds.includes(required));
-  return need === undefined ? null : RunPlanRejection.MissingNeed({ need });
-};
+export const readyHarness = HarnessPreflight.$match({
+  Unselected: () => Result.fail(RunPlanRejection.NoHarness()),
+  NeedMissing: ({ need }) => Result.fail(RunPlanRejection.MissingNeed({ need })),
+  Failed: ({ name, message }) => Result.fail(RunPlanRejection.PreflightFailed({ harness: name, message })),
+  Passed: (harness): Result.Result<PreparedHarness, RunPlanRejection> => Result.succeed(harness),
+});
 
-export const readyHarness = (facts: HarnessFacts) => {
-  const missing = missingNeed(facts);
-  return HarnessPreflight.$match(facts.harness, {
-    Unselected: () => Result.fail(RunPlanRejection.NoHarness()),
-    Failed: ({ name, message }) =>
-      Result.fail(missing ?? RunPlanRejection.PreflightFailed({ harness: name, message })),
-    Passed: (harness) => (missing === null ? Result.succeed(harness) : Result.fail(missing)),
-  });
-};
-
-const planOf = (facts: RunPlanFacts, harness: PreparedHarness) => {
+const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: ReadonlySet<EngineToolName>) => {
   const { admission, operation, instructions } = facts;
   const observation = {
     generation: facts.workflow.publishedRevision ?? 0,
@@ -218,7 +194,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness) => {
     },
     messages: [{ role: "user", content: operationMessage(operation, facts.handback) }],
     tools: harness.projectedMembers.includes("Tools")
-      ? engineToolOrder.filter((tool) => facts.toolNeeds.has(tool))
+      ? engineToolOrder.filter((tool) => toolNeeds.has(tool))
       : [],
     skills: facts.skills,
     mcp: [],
@@ -262,9 +238,11 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness) => {
   });
 };
 
-export const resolveRunPlan = (facts: RunPlanFacts) =>
-  Result.match(readyHarness(facts), {
+export const resolveRunPlan = (facts: RunPlanFacts) => {
+  const toolNeeds = engineToolsFor(facts.operation, facts.catalog);
+  return Result.match(readyHarness(facts.harness), {
     onFailure: (reason) => RunPlanResolution.Rejected({ reason }),
     onSuccess: (harness) =>
-      RunPlanResolution.Accepted({ plan: planOf(facts, harness), toolNeeds: facts.toolNeeds }),
+      RunPlanResolution.Accepted({ plan: planOf(facts, harness, toolNeeds), toolNeeds }),
   });
+};

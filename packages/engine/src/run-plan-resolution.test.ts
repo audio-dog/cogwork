@@ -35,7 +35,15 @@ const operation = Schema.decodeSync(WorkflowOperation)({
   forEach: null,
   questions: [],
   transitions: [
-    { when: [], actions: [{ entry: "github.open-pull-request", parameters: [] }], handOff: null },
+    {
+      when: [],
+      actions: [
+        { entry: "github.open-pull-request", parameters: [] },
+        { entry: "github.create-issue", parameters: [] },
+        { entry: "github.comment-on-named-pull-request", parameters: [] },
+      ],
+      handOff: null,
+    },
   ],
   hints: [],
 });
@@ -56,6 +64,38 @@ const catalog = Schema.decodeSync(WorkflowCatalog)({
       workspaceSource: "item-else-agent",
       permissionProfile: "full",
       agentInputs: ["pr_title"],
+      emits: [],
+    },
+    {
+      key: "github.create-issue",
+      name: "Create an issue",
+      kind: "action",
+      system: "github",
+      connection: null,
+      requires: [],
+      parameters: [],
+      itemKind: null,
+      actsOn: ["*"],
+      requiresWorkspace: true,
+      workspaceSource: "item-else-agent",
+      permissionProfile: "full",
+      agentInputs: [],
+      emits: [],
+    },
+    {
+      key: "github.comment-on-named-pull-request",
+      name: "Comment on a named pull request",
+      kind: "action",
+      system: "github",
+      connection: null,
+      requires: [],
+      parameters: [],
+      itemKind: null,
+      actsOn: ["*"],
+      requiresWorkspace: true,
+      workspaceSource: "item-else-agent",
+      permissionProfile: "full",
+      agentInputs: [],
       emits: [],
     },
   ],
@@ -107,7 +147,6 @@ const issueFacts: RunPlanFacts = {
   admission: issueAdmission,
   workflow: { id: Schema.decodeSync(WorkflowId)("coding"), publishedRevision: 7 },
   operation,
-  readyNeeds: [],
   catalog,
   outputWorkspaces: [workspace("cogwork"), workspace("other")],
   harness: HarnessPreflight.Passed(passedHarness),
@@ -128,7 +167,6 @@ const issueFacts: RunPlanFacts = {
     lineage: issueAdmission.lineage,
   },
   handback: null,
-  toolNeeds: new Set(["pull-request", "issue-search"]),
   skills: [{ identity: "skill:tdd", name: "tdd", source: "/skills/tdd/SKILL.md" }],
   subagents: [
     {
@@ -409,8 +447,6 @@ describe("resolveRunPlan", () => {
   });
 
   const githubNeed = Schema.decodeSync(NeedIdentity)("connection:github");
-  const needsGithub = { ...issueFacts, operation: { ...operation, requires: [githubNeed] } };
-  const preflightFailed = HarnessPreflight.Failed({ name: harnessName, message: "Harness signed out" });
 
   it.each([
     {
@@ -420,18 +456,16 @@ describe("resolveRunPlan", () => {
     },
     {
       name: "a required need is not ready",
-      facts: needsGithub,
+      facts: { ...issueFacts, harness: HarnessPreflight.NeedMissing({ need: githubNeed }) },
       reason: RunPlanRejection.MissingNeed({ need: githubNeed }),
     },
     {
       name: "Harness preflight fails",
-      facts: { ...issueFacts, harness: preflightFailed },
+      facts: {
+        ...issueFacts,
+        harness: HarnessPreflight.Failed({ name: harnessName, message: "Harness signed out" }),
+      },
       reason: RunPlanRejection.PreflightFailed({ harness: harnessName, message: "Harness signed out" }),
-    },
-    {
-      name: "a required need is not ready and preflight fails",
-      facts: { ...needsGithub, harness: preflightFailed },
-      reason: RunPlanRejection.MissingNeed({ need: githubNeed }),
     },
   ])("rejects the Run Plan when $name", ({ facts, reason }) => {
     assert.deepStrictEqual(resolveRunPlan(facts), RunPlanResolution.Rejected({ reason }));

@@ -30,14 +30,12 @@ import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import {
-  engineToolsFor,
   type RunPlanRejection,
   RunPlanResolution,
   readyHarness,
   resolveRunPlan,
-  selectedWorkspaceIds,
 } from "./run-plan-resolution";
-import { make as makeRunPreparation } from "./run-preparation";
+import { make as makeRunPreparation, selectedWorkspaceIds } from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
 import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } from "./trigger-observation";
 import { Recheck } from "./trigger-source";
@@ -52,7 +50,7 @@ import {
   parkedAdmission,
   resumedLineageParentOf,
 } from "./workflow-run-admission";
-import { make as makeEngineToolsFor } from "./workflow-run-engine-tools";
+import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
 import { make as makeExecutionContext } from "./workflow-run-execution-context";
 import { ClaimState, make as makeSettlement } from "./workflow-run-settlement";
 import { make as makeTouchpoints, touchpoint } from "./workflow-run-touchpoint";
@@ -88,7 +86,7 @@ export const make = Effect.gen(function* () {
   const triggerObservation = yield* TriggerObservation;
   const preparation = yield* makeRunPreparation;
   const { executionContext, pullRequestBuildInput } = yield* makeExecutionContext;
-  const makeEngineTools = yield* makeEngineToolsFor;
+  const runEngineTools = yield* makeRunEngineTools;
   const previousResultIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
 
   const touchpointGate = Semaphore.makeUnsafe(1);
@@ -183,16 +181,11 @@ export const make = Effect.gen(function* () {
       outputWorkspaces,
       itemWorkspaceOf(admission),
     );
-    const actionTools = engineToolsFor(operation, catalogResult.catalog);
     const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
       outputWorkspaces.includes(config.name),
     );
-    const harnessFacts = {
-      operation,
-      readyNeeds: catalogResult.machine.readyNeeds,
-      harness: yield* preparation.preflight(operation, catalogResult.machine.defaultHarness),
-    };
-    const ready = readyHarness(harnessFacts);
+    const preflight = yield* preparation.preflight(operation, catalogResult.machine);
+    const ready = readyHarness(preflight);
     if (Result.isFailure(ready)) return yield* declineRun(ready.failure);
     const selectedHarness = ready.success.name;
     const skills = yield* preparation.admittedSkills(workspace, operation.requires);
@@ -222,8 +215,9 @@ export const make = Effect.gen(function* () {
       pendingPlanAttempt: resumed?.plan.attempt ?? null,
     });
     const resolution = resolveRunPlan({
-      ...harnessFacts,
       id,
+      operation,
+      harness: preflight,
       admission,
       workflow: record,
       catalog: catalogResult.catalog,
@@ -234,7 +228,6 @@ export const make = Effect.gen(function* () {
       lineageArtifacts: prepared.lineageArtifacts,
       claim,
       handback: prepared.handback,
-      toolNeeds: actionTools,
       skills,
       subagents: prepared.subagents,
     });
@@ -261,7 +254,7 @@ export const make = Effect.gen(function* () {
       Effect.uninterruptible,
     );
 
-    const engineTools = yield* makeEngineTools(toolNeeds, toolWorkspaces);
+    const engineTools = yield* runEngineTools(toolNeeds, toolWorkspaces);
     const eventsExit = yield* harness
       .run({ plan, session: prepared.session, mcpCredentials: new Map(), engineTools: engineTools.tools })
       .pipe(

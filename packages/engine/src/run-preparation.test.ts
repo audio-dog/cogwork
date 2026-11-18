@@ -245,34 +245,46 @@ describe("Run preparation", () => {
           resumedSession: prepared.session === priorSession,
           ensuredWithResume: yield* Ref.get(yield* EnsuredCheckouts),
           handback: prepared.handback,
-          checkout: prepared.checkout,
         },
         {
           resumedSession: resumes,
           ensuredWithResume: [resumes],
           handback: handbacks[0] ?? null,
-          checkout: { path: "/worktrees/42", branch: "42" },
         },
       );
     }).pipe(Effect.provide(testLayer(handbacks)), Effect.scoped),
   );
 
+  const githubNeed = Schema.decodeSync(NeedIdentity)("connection:github");
   const requiringOperation = (harness: HarnessName | null) => ({
     ...operation,
-    requires: [Schema.decodeSync(NeedIdentity)("connection:github")],
+    requires: [githubNeed],
     model: { ...operation.model, harness },
   });
 
   it.effect.each([
-    { name: "no Harness is selected", harness: null, preflight: HarnessPreflight.Unselected() },
+    {
+      name: "no Harness is selected",
+      harness: null,
+      readyNeeds: [githubNeed],
+      preflight: HarnessPreflight.Unselected(),
+    },
+    {
+      name: "a required need is not ready, without probing the Harness",
+      harness: signedOutHarness,
+      readyNeeds: [],
+      preflight: HarnessPreflight.NeedMissing({ need: githubNeed }),
+    },
     {
       name: "the Harness preflight fails",
       harness: signedOutHarness,
+      readyNeeds: [githubNeed],
       preflight: HarnessPreflight.Failed({ name: signedOutHarness, message: "Harness signed out" }),
     },
     {
       name: "the Harness preflight passes",
       harness: harnessName,
+      readyNeeds: [githubNeed],
       preflight: HarnessPreflight.Passed({
         name: harnessName,
         projectedMembers: ["Tools"],
@@ -280,11 +292,14 @@ describe("Run preparation", () => {
         sessionKind: "owned-transcript",
       }),
     },
-  ])("reports $name", ({ harness, preflight }) =>
+  ])("reports $name", ({ harness, readyNeeds, preflight }) =>
     Effect.gen(function* () {
       const preparation = yield* makeRunPreparation;
 
-      assert.deepStrictEqual(yield* preparation.preflight(requiringOperation(harness), null), preflight);
+      assert.deepStrictEqual(
+        yield* preparation.preflight(requiringOperation(harness), { defaultHarness: null, readyNeeds }),
+        preflight,
+      );
     }).pipe(Effect.provide(testLayer([])), Effect.scoped),
   );
 });
