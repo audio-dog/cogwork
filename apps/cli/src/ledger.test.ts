@@ -538,6 +538,20 @@ describe("sqlite RunLedger", () => {
       }),
     );
 
+    it.effect("keeps a settled Run's status and end time when asked to change them", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        yield* ledger.insertRun(record("settled", 1000, { status: "crashed", endedAtMillis: 2000 }));
+
+        yield* ledger.updateRun(runId("settled"), { status: "succeeded", usage: null, endedAtMillis: 3000 });
+
+        assert.deepInclude(yield* ledger.getRun(runId("settled")), {
+          status: "crashed",
+          endedAtMillis: 2000,
+        });
+      }),
+    );
+
     it.effect("crashes the item's running runs and counts crashes until a success resets them", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger.CoreRunLedger;

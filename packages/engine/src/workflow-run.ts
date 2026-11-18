@@ -233,9 +233,6 @@ type ClaimState = Data.TaggedEnum<{
 const ClaimState = Data.taggedEnum<ClaimState>();
 type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
 
-const ownRunOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
-  admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
-
 const selectedWorkspaceIds = (
   document: Parameters<typeof buildWorkflowActionPlan>[0]["document"],
   workspaces: ReadonlyArray<RegisteredWorkspace>,
@@ -373,13 +370,12 @@ export const make = Effect.gen(function* () {
     return { path: checkout.path, branch } as const;
   });
 
-  const settle = (attempt: RunId, status: RunRecord["status"]) =>
-    Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
-      ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
-    );
-
   const settleRun = (attempt: RunId | null, status: RunRecord["status"]) =>
-    attempt === null ? Effect.void : settle(attempt, status);
+    attempt === null
+      ? Effect.void
+      : Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
+          ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
+        );
 
   const settleClaimed = Effect.fn("WorkflowRun.settleClaimed")(function* (
     claimed: Ref.Ref<ClaimState>,
@@ -533,7 +529,6 @@ export const make = Effect.gen(function* () {
         ? pendingPlan.operation
         : admission.subscription.operation;
     if (stalePlan) {
-      yield* settleRun(ownRunOf(admission, pendingPlan), "interrupted");
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
     const resumesPendingPlan = pendingPlan !== null && !stalePlan;
@@ -542,7 +537,7 @@ export const make = Effect.gen(function* () {
           plan: pendingPlan,
           work: ClaimState.Claimed({
             key: operationKeyOf(admission, pendingPlan.operation),
-            run: ownRunOf(admission, pendingPlan),
+            run: null,
           }),
         }
       : null;
@@ -1045,10 +1040,7 @@ export const make = Effect.gen(function* () {
                 by: "cogwork",
                 note: "The pull request received a new commit. Review the new head.",
               })
-              .pipe(
-                Effect.andThen(actionPlans.remove(plan.item, plan.workflow, plan.attempt)),
-                Effect.andThen(settle(plan.attempt, "interrupted")),
-              );
+              .pipe(Effect.andThen(actionPlans.remove(plan.item, plan.workflow, plan.attempt)));
           }),
         );
       },
@@ -1145,7 +1137,6 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* settle(plan.attempt, "succeeded");
     if (execution.handOff === null) {
       yield* complete(admission);
       return;
@@ -1243,7 +1234,6 @@ export const make = Effect.gen(function* () {
       outcome: "succeeded",
       lineage: admission.lineage,
     });
-    yield* settle(plan.attempt, "succeeded");
     yield* complete(admission);
   });
 

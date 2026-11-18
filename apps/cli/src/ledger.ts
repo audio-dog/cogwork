@@ -410,9 +410,20 @@ const make = Effect.fn("ledger.make")(function* () {
 
     updateRun: Effect.fn("RunLedger.updateRun")(function* (runId: RunId, patch: RunLedger.RunUpdate) {
       const runIds = yield* writeIds("updateRun", () =>
-        db.update(runs).set(runColumns(patch)).where(eq(runs.id, runId)).returning({ id: runs.id }).all(),
+        db
+          .update(runs)
+          .set(runColumns(patch))
+          .where(and(eq(runs.id, runId), eq(runs.status, "running")))
+          .returning({ id: runs.id })
+          .all(),
       );
-      yield* RunLedger.logRunsSettled(runIds, patch.status);
+      if (runIds.length > 0) return yield* RunLedger.logRunsSettled(runIds, patch.status);
+      const kept = yield* readRows("updateRun", () =>
+        db.select({ status: runs.status }).from(runs).where(eq(runs.id, runId)).all(),
+      );
+      yield* Effect.forEach(kept, ({ status }) => RunLedger.logSettledRunKept(status, patch.status), {
+        discard: true,
+      });
     }),
 
     setRunSession: (runId: RunId, session: SessionId) =>

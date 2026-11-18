@@ -397,6 +397,23 @@ describe("RunLedger (memory)", () => {
   });
 
   it.layer(layerMemory)((it) => {
+    it.effect("keeps a settled Run's status and end time when asked to change them", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger;
+        yield* ledger.insertRun(record("settled", 1000));
+        yield* ledger.crashRunning(workspace, workItem, 2000);
+
+        yield* ledger.updateRun(runId("settled"), { status: "succeeded", usage: null, endedAtMillis: 3000 });
+
+        assert.deepInclude(yield* ledger.getRun(runId("settled")), {
+          status: "crashed",
+          endedAtMillis: 2000,
+        });
+      }),
+    );
+  });
+
+  it.layer(layerMemory)((it) => {
     it.effect("marks only the item's running runs as crashed", () =>
       Effect.gen(function* () {
         const ledger = yield* RunLedger;
