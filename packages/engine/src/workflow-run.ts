@@ -28,7 +28,7 @@ import { Harness } from "./harness";
 import { acceptOperationResult, harnessStreamFailed } from "./operation-result";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry";
-import { completeActionPlanExecution, RunCompletionRoute } from "./run-completion";
+import { actionPlanCompletion, RunCompletionRoute } from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import {
   type RunPlanRejection,
@@ -130,9 +130,7 @@ export const make = Effect.gen(function* () {
     const pendingClaim = resumed === null ? null : yield* claimItem(admission, claimed, resumed.work);
     if (resumed !== null) {
       if (yield* parkCappedLineage(admission, resumed.work.key)) return "completed" as const;
-      const completion = completeActionPlanExecution(
-        yield* executeWorkflowActionPlan(resumed.plan, admission),
-      );
+      const completion = actionPlanCompletion(yield* executeWorkflowActionPlan(resumed.plan, admission));
       yield* settleCompletion(admission, claimed, resumed.work, completion);
       if (!RunCompletionRoute.$is("Replan")(completion.route)) {
         return yield* followCompletion(admission, completion, resumed.plan.attempt);

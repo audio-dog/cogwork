@@ -16,7 +16,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
 import { failureDetail, RefusedResult, refusalForAgent, refusalForPerson } from "./operation-result";
-import { completeActionPlanExecution, type RunCompletion, RunCompletionRoute } from "./run-completion";
+import { actionPlanCompletion, type RunCompletion, RunCompletionRoute } from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
@@ -274,7 +274,7 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
       HandOff: ({ node }) => Effect.succeed(handOffAdmission(admission, node, lineageParent)),
       Retry: () => Effect.succeed("retry" as const),
       Replan: () => Effect.succeed(admission),
-      Halt: () => Effect.succeed("completed" as const),
+      Park: () => Effect.succeed("completed" as const),
     });
 
   const actOnResult = Effect.fn("WorkflowRun.actOnResult")(function* ({
@@ -349,7 +349,7 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
       value: { object: actionPlan, raw: encodeActionPlan(actionPlan) },
     };
     yield* recorder.record(run, actionPlanEvent);
-    const completion = completeActionPlanExecution(yield* executeWorkflowActionPlan(actionPlan, admission));
+    const completion = actionPlanCompletion(yield* executeWorkflowActionPlan(actionPlan, admission));
     yield* settleCompletion(admission, claimed, accepted, completion);
     return yield* followCompletion(admission, completion, run.id);
   });

@@ -7,7 +7,7 @@ export type RunCompletionRoute = Data.TaggedEnum<{
   HandOff: { readonly node: WorkflowNodeId };
   Retry: Record<never, never>;
   Replan: Record<never, never>;
-  Halt: Record<never, never>;
+  Park: Record<never, never>;
 }>;
 export const RunCompletionRoute = Data.taggedEnum<RunCompletionRoute>();
 
@@ -22,15 +22,15 @@ type UnfinishedExecution = Exclude<WorkflowActionPlanExecution["_tag"], "Complet
 const unfinishedCompletion: Record<UnfinishedExecution, RunCompletion> = {
   Retry: { settle: "failed", attempt: null, route: RunCompletionRoute.Retry() },
   Replan: { settle: "interrupted", attempt: null, route: RunCompletionRoute.Replan() },
-  AwaitingApproval: { settle: "succeeded", attempt: null, route: RunCompletionRoute.Halt() },
-  HandedToYou: { settle: "succeeded", attempt: null, route: RunCompletionRoute.Halt() },
-  Parked: { settle: "failed", attempt: null, route: RunCompletionRoute.Halt() },
+  AwaitingApproval: { settle: "succeeded", attempt: null, route: RunCompletionRoute.Park() },
+  HandedToYou: { settle: "succeeded", attempt: null, route: RunCompletionRoute.Park() },
+  Parked: { settle: "failed", attempt: null, route: RunCompletionRoute.Park() },
 };
 
 const completedRoute = (handOff: WorkflowNodeId | null) =>
   handOff === null ? RunCompletionRoute.Complete() : RunCompletionRoute.HandOff({ node: handOff });
 
-export const completeActionPlanExecution = (execution: WorkflowActionPlanExecution): RunCompletion =>
+export const actionPlanCompletion = (execution: WorkflowActionPlanExecution): RunCompletion =>
   execution._tag === "Complete"
     ? { settle: "succeeded", attempt: "succeeded", route: completedRoute(execution.handOff) }
     : unfinishedCompletion[execution._tag];

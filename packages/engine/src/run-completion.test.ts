@@ -1,7 +1,7 @@
 import { WorkflowNodeId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { completeActionPlanExecution, type RunCompletion, RunCompletionRoute } from "./run-completion";
+import { actionPlanCompletion, type RunCompletion, RunCompletionRoute } from "./run-completion";
 import type { WorkflowActionPlanExecution } from "./workflow-action-plan";
 
 const review = Schema.decodeSync(WorkflowNodeId)("review");
@@ -26,18 +26,18 @@ const cases: ReadonlyArray<readonly [string, WorkflowActionPlanExecution, RunCom
   [
     "AwaitingApproval",
     { _tag: "AwaitingApproval" },
-    { settle: "succeeded", attempt: null, route: RunCompletionRoute.Halt() },
+    { settle: "succeeded", attempt: null, route: RunCompletionRoute.Park() },
   ],
   [
     "HandedToYou",
     { _tag: "HandedToYou" },
-    { settle: "succeeded", attempt: null, route: RunCompletionRoute.Halt() },
+    { settle: "succeeded", attempt: null, route: RunCompletionRoute.Park() },
   ],
-  ["Parked", { _tag: "Parked" }, { settle: "failed", attempt: null, route: RunCompletionRoute.Halt() }],
+  ["Parked", { _tag: "Parked" }, { settle: "failed", attempt: null, route: RunCompletionRoute.Park() }],
 ];
 
-describe("completeActionPlanExecution", () => {
+describe("actionPlanCompletion", () => {
   it.each(cases)("%s settles, records, and routes", (_name, execution, expected) => {
-    assert.deepStrictEqual(completeActionPlanExecution(execution), expected);
+    assert.deepStrictEqual(actionPlanCompletion(execution), expected);
   });
 });
