@@ -1,0 +1,26 @@
+packages/engine/src/linear/client.ts
+  s_24ff93fadbb7ce::t_efeb0223630f93 533
+packages/engine/src/linear/client.test.ts
+  s_24ff93fadbb7ce::t_5c23e874203a80 1-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "197badda925075872f3eb7adcfcd8e71ff1d5c7d",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_24ff93fadbb7ce": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "545da300-91cc-4243-ada5-0eba814bce71",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
