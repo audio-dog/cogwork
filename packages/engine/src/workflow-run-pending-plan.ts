@@ -11,6 +11,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
 import { WorkspaceRegistry } from "./registry";
+import { completeActionPlanExecution, RunCompletionRoute } from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
@@ -164,18 +165,18 @@ export const makeWorkflowRunPendingPlans = Effect.fn("WorkflowRun.makePendingPla
     admission: TriggerAdmission,
     execution: WorkflowActionPlanExecution,
   ) {
-    if (execution._tag !== "Complete") return;
-    const key = operationKeyOf(admission, plan.operation);
+    const { attempt, route } = completeActionPlanExecution(execution);
+    if (attempt === null) return;
     yield* coordination.recordAttempt(admission.event.key, {
-      operation: key,
-      outcome: "succeeded",
+      operation: operationKeyOf(admission, plan.operation),
+      outcome: attempt,
       lineage: admission.lineage,
     });
-    if (execution.handOff === null) {
-      yield* complete(admission);
+    if (RunCompletionRoute.$is("HandOff")(route)) {
+      yield* executeAdmission(handOffAdmission(admission, route.node, plan.attempt));
       return;
     }
-    yield* executeAdmission(handOffAdmission(admission, execution.handOff, plan.attempt));
+    yield* complete(admission);
   });
 
   const executeClaimedPlan = Effect.fn("WorkflowRun.executeClaimedPlan")(
