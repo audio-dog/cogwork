@@ -1,0 +1,195 @@
+.agents/skills/create-patterns/SKILL.md
+  s_db70251e22628d::t_5dcc9216efc3ba 18
+.agents/skills/test-audit/SKILL.md
+  s_db70251e22628d::t_4315d51a31d9e1 21
+.pre-commit-config.yaml
+  s_db70251e22628d::t_5feef4000755a7 4,12-30
+AGENTS.md
+  s_db70251e22628d::t_db4050192ab44c 108-109
+CODING_STANDARDS.md
+  s_db70251e22628d::t_9e330ed0883c86 11
+GLOSSARY-MAP.md
+  s_db70251e22628d::t_d535200cd66853 6-7,17-23,27
+README.md
+  s_db70251e22628d::t_911d7d5bcc9143 24-32
+apps/cli/GLOSSARY.md
+  s_db70251e22628d::t_57ddb8c0f808fe 6-7
+apps/desktop/GLOSSARY.md
+  s_db70251e22628d::t_aa626795263b6d 6-7,11
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_db70251e22628d::t_001d1db2b3a719 38,42,69,84-85,87-88,98,102,105,116,162,164-166,242-264,267,287,308,310-313,347,359,370,380,447-454,458,461,472,487,489-492,496,500,510,521,547,563,572,585,600,615,621,709,718,729,757,759-762,778,781,796,799
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_db70251e22628d::t_8e0ab046f4d849 58,71-72,80,83,99-102,131,154-156,164,171,180,187,197-198,227-231,247,250,270,295,320,322-323,341,363,383-387,408,431,444-448,463,524,526-527,537,613-614,639-640,668-669,690,692-693,700,750-761,774,777,784,793,797,832,842,855,867,876
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  s_db70251e22628d::t_02e93222223c4a 1-100
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  s_db70251e22628d::t_751a318b6232fe 1-76
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_db70251e22628d::t_c350272405feb1 20,29,265-275,278-288,290-291,295-304,307-322,326,329-331,335-340,342-346,353,358,361,364,366,369-370,375,381-387,393-394,396,406-417,423-424,428,430-431,436-437,441-443,445-446,450-455,457,461-463,466-468,470-478,484-485,491-496,543,583,618-621,637,645,647,679,705,707-709,715-718,721,723-725,727,731,739-741,750-751,766-769,783-784,798-800,809-812,818-821,825-832,838,858
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_db70251e22628d::t_3bac49e3aaac04 40-45,178-179
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  s_db70251e22628d::t_fd1d6a62de979e 1-189
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_db70251e22628d::t_e25607a3522684 1-201
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_db70251e22628d::t_fb24816753687d 1-273
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_db70251e22628d::t_a1b0a2dcecf908 15,145-154
+apps/desktop/src/renderer/src/testing/working-copies.ts
+  s_db70251e22628d::t_ecf74185eeabfb 1-25
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_db70251e22628d::t_39102d0403a521 1-126
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_db70251e22628d::t_8128279d944c59 11,35
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_db70251e22628d::t_0c0e2ac1d8c4dc 114-115
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  s_db70251e22628d::t_83ad854efaa21f 25
+docs/agent-patterns/effect-error-design.md
+  s_db70251e22628d::t_2d7c82b0fd9a6e 121,167
+docs/agent-patterns/effect-process-edges.md
+  s_db70251e22628d::t_a0be30c6d78c95 111,166
+docs/agent-patterns/effect-schema-unions.md
+  s_db70251e22628d::t_310a11294a9aa4 86,146,158
+docs/agents/domain.md
+  s_db70251e22628d::t_3d5a858bad3c5e 7-9,16,21,24,26-33,36-47,66
+docs/agents/product.md
+  s_db70251e22628d::t_0449802b94cc87 14
+docs/agents/technical-disposition-engine-and-trust.md
+  s_db70251e22628d::t_701e92d7dfbfb4 1-100
+docs/agents/technical-disposition-evidence-and-scope.md
+  s_db70251e22628d::t_c57c074996c934 1-102
+docs/agents/technical-disposition-failures-and-limits.md
+  s_db70251e22628d::t_e1218577915772 1-95
+docs/agents/technical-disposition.md
+  s_db70251e22628d::t_82f95f27abb176 13,26,30-31,63,82-91
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_db70251e22628d::t_6489d1609f6dc8 5,23
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_db70251e22628d::t_d98d12283a1ba1 60,99
+docs/spec/customizable-workflows.md
+  s_db70251e22628d::t_6f22c5d1fc713b 221
+docs/spec/performance-observability.md
+  s_db70251e22628d::t_6e16f37dd23858 150
+docs/spec/trusted-bot-wake-signal.md
+  s_db70251e22628d::t_ed98d17ea2e08f 8
+packages/claude-code/GLOSSARY.md
+  s_db70251e22628d::t_cb29e7722facdd 3
+packages/codex-cli/GLOSSARY.md
+  s_db70251e22628d::t_9413568dbaf260 3
+packages/contracts/GLOSSARY-client-rpc.md
+  s_db70251e22628d::t_a719d9e9fe4308 1-19
+packages/contracts/GLOSSARY-configuration.md
+  s_db70251e22628d::t_2c09408b42ae02 1,3
+packages/contracts/GLOSSARY-contributions.md
+  s_db70251e22628d::t_8f24ddf5457e6b 1-56
+packages/contracts/GLOSSARY-coordination.md
+  s_db70251e22628d::t_a0fbb0d71f6b2d 1-33
+packages/contracts/GLOSSARY-credentials.md
+  s_db70251e22628d::t_48e4ba753ceb89 1-7
+packages/contracts/GLOSSARY-daemon-status.md
+  s_db70251e22628d::t_6b3d9794c9b3e0 1-19
+packages/contracts/GLOSSARY-harness-contract.md
+  s_db70251e22628d::t_b7d891dec22975 1-82
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_db70251e22628d::t_d13fdcacf2f3ec 1-27
+packages/contracts/GLOSSARY-operations.md
+  s_db70251e22628d::t_bbb58a0ef61ace 1-121
+packages/contracts/GLOSSARY-runs.md
+  s_db70251e22628d::t_d234303af34028 1-62
+packages/contracts/GLOSSARY-triggers.md
+  s_db70251e22628d::t_e6f14752a65dca 1-47
+packages/contracts/GLOSSARY-work.md
+  s_db70251e22628d::t_810f1e6bfbab47 1-46
+packages/contracts/GLOSSARY-workflows.md
+  s_db70251e22628d::t_768f94a139386e 1-40
+packages/contracts/GLOSSARY.md
+  s_db70251e22628d::t_5414790cbb015a 1-23
+packages/contracts/src/workflow.test.ts
+  s_db70251e22628d::t_7aa197ddcf01be 552-638
+packages/contracts/src/workflow.ts
+  s_db70251e22628d::t_c781cc0d51e871 1419-1428,1430-1432,1434-1435,1437,1440,1445,1451-1461,1463,1465-1479
+packages/cursor-acp/GLOSSARY.md
+  s_db70251e22628d::t_8acf51e407d20e 3
+packages/engine/GLOSSARY-adapters.md
+  s_db70251e22628d::t_4942f0cd4e5103 1-47
+packages/engine/GLOSSARY-coordination.md
+  s_db70251e22628d::t_2d1b8d9eae5a30 1-27
+packages/engine/GLOSSARY-daemon.md
+  s_db70251e22628d::t_cd1d0aae5f48e1 1-44
+packages/engine/GLOSSARY-harness.md
+  s_db70251e22628d::t_9dc006a2d09fcb 1,3
+packages/engine/GLOSSARY-performance.md
+  s_db70251e22628d::t_6ed7efd5684182 1-40
+packages/engine/GLOSSARY-runs.md
+  s_db70251e22628d::t_abf46e92d6febc 1-36
+packages/engine/GLOSSARY-sandbox.md
+  s_db70251e22628d::t_374e97cc78c604 1-35
+packages/engine/GLOSSARY.md
+  s_db70251e22628d::t_370c9adde08ac7 1-20
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_db70251e22628d::t_a44dac3d5aec5f 5,26
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_db70251e22628d::t_ba350aa9ce2a84 3
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_db70251e22628d::t_77659ccea1bca7 3
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_db70251e22628d::t_c0d5540db56b5a 38
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_db70251e22628d::t_ae941f9b86e0f3 36,126,128
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_db70251e22628d::t_ac9d6bd813740c 35
+packages/engine/src/connection-verify.ts
+  s_db70251e22628d::t_c35dce20ab41b4 13
+packages/engine/src/github/provider.test.ts
+  s_db70251e22628d::t_47835ac8242a42 1-118
+packages/engine/src/github/provider.ts
+  s_db70251e22628d::t_1397111125197f 583
+packages/engine/src/linear/client.test.ts
+  s_db70251e22628d::t_20bd4aa1833a88 1-61
+packages/engine/src/linear/client.ts
+  s_db70251e22628d::t_d4f687fb7811b1 533
+packages/engine/src/run-plan-resolution.test.ts
+  s_db70251e22628d::t_6d5350649c2029 1-390
+packages/engine/src/run-plan-resolution.ts
+  s_db70251e22628d::t_83d55a3eddb98f 1-196
+packages/engine/src/workflow-actions-issue.test.ts
+  s_db70251e22628d::t_7a0efe24a93d5b 4,24,150-206
+packages/engine/src/workflow-actions-issue.ts
+  s_db70251e22628d::t_00e5bdc33419a0 143,233-244,267-268,273,277,280
+packages/engine/src/workflow-run-admission.ts
+  s_db70251e22628d::t_0d865398e66b06 1-56
+packages/engine/src/workflow-run-attempts.ts
+  s_db70251e22628d::t_2b04bc0ce3e9bf 1-340
+packages/engine/src/workflow-run-execution-context.ts
+  s_db70251e22628d::t_066ab7f6b36e8e 1-55
+packages/engine/src/workflow-run-pending-plan.ts
+  s_db70251e22628d::t_38a174f78e6ac0 1-194
+packages/engine/src/workflow-run-preparation.ts
+  s_db70251e22628d::t_0f9162bd2d06a6 1-155
+packages/engine/src/workflow-run-touchpoints.ts
+  s_db70251e22628d::t_32c674cd80a3bc 1-207
+packages/engine/src/workflow-run.test.ts
+  s_db70251e22628d::t_e0eda2b7db2e3c 101,820-872,2746-2789,3256,3259
+packages/engine/src/workflow-run.ts
+  s_db70251e22628d::t_b74a41006cbfb6 7,28-29,34,40-41,44-49,86-100,175,184-189,221-227,229,246,248-252,255-257,259-265,272,290-293,329-336,342-344,400-403,420-427
+scripts/check-file-tokens.mjs
+  s_db70251e22628d::t_cd97ecfba96ccd 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "252d4c43d4c07d44723d42c084031ebcfa2082e5",
+  "prompts": {},
+  "sessions": {
+    "s_db70251e22628d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5926b48c-0fa9-4100-a8a8-e4bb9b9562c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
