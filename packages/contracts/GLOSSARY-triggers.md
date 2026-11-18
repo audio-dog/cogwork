@@ -1,6 +1,6 @@
-# Triggers
+# Contracts glossary: Triggers
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Trigger**:
 A Workflow's start rule: one Trigger entry, its parameter values, its **Trigger filters**, and the Operation it starts. Every Trigger is level-triggered: it fires once for each new **source revision** of a Work item. The parameters and filters on one Trigger must all match; any one Trigger of a Workflow may start it. An issue Trigger matches open issues only: a closed or canceled issue never matches, with or without a filter.

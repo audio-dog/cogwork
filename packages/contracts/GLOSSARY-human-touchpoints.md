@@ -1,6 +1,6 @@
-# Human touchpoints
+# Contracts glossary: Human touchpoints
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Human touchpoint**:
 A point where a Workflow reaches the person instead of a shared system: the Cogwork action entries *Notify me*, *Wait for my approval*, and *Hand to me*, and the parks the engine makes by itself. An author routes to them like any output action, and every client shows them on the **Board**. Human gates are the author's choice; the engine adds no approval gate of its own.

@@ -1,6 +1,6 @@
-# Operations
+# Contracts glossary: Operations
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Operation**:
 One unit of agent work in a Workflow: each Run executes one Operation, with one Work item's context in and one typed **Operation result** out. An Operation has no kind — any registered Harness runs any Operation — and the one thing that varies is its **permission profile**. Triage, implement, and follow-up are the coding pipeline's Operations.

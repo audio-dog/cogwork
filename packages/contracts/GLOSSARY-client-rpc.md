@@ -1,6 +1,6 @@
-# Client RPC
+# Contracts glossary: Client RPC
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Query RPC / command RPC**:
 The two kinds of RPC a client sends the daemon. A *query* reads daemon state and changes nothing. A *command* changes daemon state or behavior — cancel a Run, edit or publish a Workflow, or pause the scheduler. The split follows CQS/CQRS and gives the trust boundary one place to guard commands more strictly than queries. `DaemonQueries` and `DaemonCommands` are the two groups; `DaemonRpcs` is their merge.

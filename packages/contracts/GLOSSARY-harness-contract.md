@@ -1,6 +1,6 @@
-# Harness contract
+# Contracts glossary: Harness contract
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Harness**:
 A coding agent (Cursor, Claude Code, …) the control plane drives to do work in a checkout, identified by a branded `HarnessName`. A harness bundles its own model access and tools.

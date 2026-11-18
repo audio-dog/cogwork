@@ -1,6 +1,6 @@
-# Daemon status (read models)
+# Contracts glossary: Daemon status (read models)
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Daemon status**:
 The snapshot the daemon reports over RPC: health, uptime, scheduler stats, per-workspace info, and load failures.

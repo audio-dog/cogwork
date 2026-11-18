@@ -1,6 +1,6 @@
-# Coordination
+# Contracts glossary: Coordination
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Claim**:
 A coordination record marking an item as being worked: `by`, `claimedAtMillis`, an optional operation, and its **lineage**. Persisted in the Control store for every item, tracker items included (ADR 0036), so it survives a daemon restart; crash recovery releases one a stopped daemon left behind.

@@ -1,6 +1,6 @@
-# Runs
+# Contracts glossary: Runs
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Run plan**:
 The immutable, engine-validated resolution of one Operation and its Work Context. Its members, named after TanStack AI: Harness Adapter, Instructions, Messages, Work Context, Tools, Skills, MCP, Subagents, Hooks, Middleware, Sandbox (optional Workspace and Policy), Structured Output, Persistence, Connections, and Provenance. Messages contain the resolved user turn. Instructions stay separate. Work Context freezes the admitting snapshot's coordination facts and the work item's prose — its body and comment thread, read through the issue-tracker port at admission — beside the work-item reference (ADR 0030).

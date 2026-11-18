@@ -1,6 +1,6 @@
-# Configuration: Contribution kinds
+# Contracts glossary: Contributions
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Contribution kind**:
 One of the five types a Plugin may bundle and Customize may show: **MCP server, Skill, Subagent, Rules, Hook**. Command is not a kind, and Cogwork does not read `commands/` files (ADR 0037). The test is that a contribution kind is authored by a human as a file and renders as a row in Customize. Everything else an agent receives is engine-owned and appears only as a Run Plan member — Tools, Connections, Middleware, Operating Instructions, Work Context, Sandbox Policy, Harness are all deliberately *not* contribution kinds.

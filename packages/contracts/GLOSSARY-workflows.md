@@ -1,6 +1,6 @@
-# Workflows
+# Contracts glossary: Workflows
 
-Part of the [Contracts (shared kernel)](CONTEXT.md) glossary.
+Part of the [contracts glossary](./GLOSSARY.md).
 
 **Workflow**:
 A person's reusable automation: one or more **Triggers**, the **Operations** they start, and the **Transitions** that route each Operation's answers, over a **Workspace selection**. The engine owns the routing; agent judgement is what separates one Operation from the next. Workflows compose through what they create — an issue, a pull request, or a comment one Workflow makes can trip another's Trigger.
