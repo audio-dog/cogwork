@@ -1669,8 +1669,13 @@ describe("WorkflowRun", () => {
           ],
         );
         assert.deepStrictEqual(
-          { ...plan?.provenance.projection.find(({ member }) => member === "Skills") },
-          { member: "Skills", disposition: "projected" },
+          plan?.provenance.projection
+            .filter(({ member }) => member === "Tools" || member === "Skills")
+            .map(({ member, disposition }) => ({ member, disposition })),
+          [
+            { member: "Tools", disposition: "projected" },
+            { member: "Skills", disposition: "projected" },
+          ],
         );
       }).pipe(Effect.provide(requirements), Effect.scoped),
   );

@@ -838,7 +838,7 @@ layer(harnessRunnerLayer)("cursorRunner", (it) => {
 
         const events = yield* Harness.make([cursorRunner({ name: cursorName })])
           .run(probeRequest)
-          .pipe(Stream.runCollect, Effect.timeout("3 minutes"));
+          .pipe(Stream.runCollect);
         const answer = Array.from(events)
           .filter(AgUiEvent.guards.TEXT_MESSAGE_CONTENT)
           .map(({ delta }) => delta ?? "")

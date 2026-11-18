@@ -59,7 +59,7 @@ subjects, and this note cites the code.
 ## Members
 
 **Skills.**
-- ACP: no channel. ACP `session/new` takes only `cwd` and `mcpServers`. `@tanstack/ai-acp` skips agent
+- ACP: no native channel. ACP `session/new` takes only `cwd` and `mcpServers`. `@tanstack/ai-acp` skips agent
   Skills and plugins with a warning. It links git Skills only into a `skillsDir` inside the worktree.
 - ACP, 2026-11-18 ([#985](https://github.com/taylorfsteele/cogwork/issues/985)): ACP now carries
   Skills through the tool bridge. `acpCompatible` gives `chat()` tools to `agent acp` as an HTTP MCP
