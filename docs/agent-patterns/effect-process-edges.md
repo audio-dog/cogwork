@@ -126,7 +126,7 @@ const child = yield* Effect.acquireRelease(spawnEngine(command), (proc) => {
 
 The exit event becomes awaitable by completing a `Deferred` from `child.once("exit", ...)` at spawn time. Release never fails and never hangs; closing the owning scope (the `ManagedRuntime`'s, on `will-quit`) is the whole shutdown story.
 
-Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/unstable/process` — v4's rename of `Command`; `effect/unstable/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs its subprocesses through `ChildProcessSpawner`; the injected `spawn` in `apps/desktop/src/main/index.ts` is the only shipping raw `spawn` in the repo — the remaining migration.
+Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/process` — v4's rename of `Command`; `effect/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs its subprocesses through `ChildProcessSpawner`; the injected `spawn` in `apps/desktop/src/main/index.ts` is the only shipping raw `spawn` in the repo — the remaining migration.
 
 ## Status is a SubscriptionRef, restarts are a Schedule
 
@@ -156,7 +156,7 @@ The same edge discipline applies inside harness adapters: cursor-acp reads its `
 - `.repos/effect/packages/effect/src/Effect.ts`: `callback` — `resume` takes an Effect, and the register may return a cleanup effect that runs on interruption.
 - `.repos/effect/packages/effect/src/Stream.ts`: `callback` hands the adapter a `Queue` and scopes its registration effect; `fromReadableStream`, `fromAsyncIterable`.
 - `.repos/effect/packages/platform/node-shared/src/NodeStream.ts` and `NodeSocket.ts` (import from `@effect/platform-node`): `fromReadable`; `makeNet` with `openTimeout` and a scope-finalized teardown.
-- `.repos/effect/packages/effect/src/unstable/process/ChildProcess.ts` and `ChildProcessSpawner.ts`: the v4 subprocess API.
+- `.repos/effect/packages/effect/src/process/ChildProcess.ts` and `ChildProcessSpawner.ts`: the v4 subprocess API.
 - `.repos/effect/ai-docs/src/01_effect/06_running/10_run-main.ts` and `20_layer-launch.ts`: the two entrypoint shapes.
 - `.repos/effect/ai-docs/src/04_integration/10_managed-runtime.ts`: shared `MemoMap`, one runtime for a non-Effect host, dispose on shutdown signal.
 - `apps/cli/src/main.ts`: the in-repo `runMain` entrypoint.

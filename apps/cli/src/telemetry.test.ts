@@ -9,13 +9,14 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
+import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/http";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
+import type * as NetAddress from "effect/net/NetAddress";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Tracer from "effect/Tracer";
-import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 import { telemetryLayer } from "./telemetry";
 
 const requests = Metric.counter("cogwork_telemetry_test_requests_total", {
@@ -25,8 +26,8 @@ const requests = Metric.counter("cogwork_telemetry_test_requests_total", {
 const configLayer = (env: Readonly<Record<string, string>> = {}) =>
   ConfigProvider.layer(ConfigProvider.fromEnv({ env }));
 
-const collectorEndpoint = (address: HttpServer.Address) =>
-  address._tag === "UnixAddress"
+const collectorEndpoint = (address: NetAddress.SocketAddress) =>
+  address._tag === "UnixPathAddress"
     ? Effect.die("collector address unavailable")
     : Effect.succeed(`http://127.0.0.1:${address.port}`);
 

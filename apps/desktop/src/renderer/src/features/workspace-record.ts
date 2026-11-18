@@ -190,7 +190,7 @@ export const workspaceRecordWritable = (workspace: WorkspaceState) =>
   WorkspaceState.guards.Registered(workspace);
 
 export const workspaceIdentity = (workspace: WorkspaceState) =>
-  WorkspaceState.match<WorkspaceId | null>(workspace, {
+  WorkspaceState.match(workspace, {
     Registered: ({ name }) => name,
     Failed: ({ name }) => name ?? null,
   });

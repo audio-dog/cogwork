@@ -1,6 +1,6 @@
+import * as Rpc from "effect/rpc/Rpc";
+import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as Schema from "effect/Schema";
-import * as Rpc from "effect/unstable/rpc/Rpc";
-import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { HarnessName, TrimmedNonEmptyString, WorkflowId, WorkItemId, WorkspaceId } from "./base-schemas";
 import {
   ConnectionBindingId,
@@ -357,13 +357,13 @@ export const CreateWorkflow = Rpc.make("CreateWorkflow", {
   payload: { document: WorkflowDocument },
   success: WorkflowRecord,
   error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
-});
+}).annotate(Rpc.ParseOptions, { onExcessProperty: "error" });
 
 export const EditWorkflow = Rpc.make("EditWorkflow", {
   payload: { id: WorkflowId, edits: WorkflowEditBatch },
   success: WorkflowRecord,
   error: Schema.Union([ControlStoreFailure, WorkflowFailure]),
-});
+}).annotate(Rpc.ParseOptions, { onExcessProperty: "error" });
 
 export const PublishWorkflow = Rpc.make("PublishWorkflow", {
   payload: { id: WorkflowId, revision: Schema.Int },

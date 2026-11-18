@@ -17,14 +17,8 @@ export interface HarnessAlert {
   readonly parked: number;
 }
 
-interface HarnessProblem {
-  readonly problem: string;
-  readonly signIn: string | null;
-  readonly detail: string | null;
-}
-
 const harnessProblem = (label: string) =>
-  HarnessState.match<HarnessProblem | null>({
+  HarnessState.match({
     Ready: () => null,
     NotSignedIn: ({ signIn }) => ({
       problem: "is not signed in",
