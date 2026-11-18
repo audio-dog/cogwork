@@ -1,0 +1,29 @@
+apps/cli/src/ledger.ts
+  s_fc0a437ee7234f::t_575e21aa69272a 413-422,424-426
+packages/engine/src/run-ledger.ts
+  s_fc0a437ee7234f::t_cad79f7bbc8c56 157-159,257-260,262-263
+packages/engine/src/workflow-run.ts
+  s_fc0a437ee7234f::t_df22a457fb60f3 374-378,540,1043
+apps/cli/src/ledger.test.ts
+  s_fc0a437ee7234f::t_8db70a9b6abe5d 541-554
+packages/engine/src/run-ledger.test.ts
+  s_fc0a437ee7234f::t_acfd5c99be845c 400-416
+packages/engine/src/workflow-run.test.ts
+  s_fc0a437ee7234f::t_45cbb0ab1987df 8,71,2289-2292,2539,2615,2617,2632-2633,2795,2823,2825,2840-2841,3046,3088,3222-3430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b6e30a42c7c5c164027c305e5e7f4420a3efcdb4",
+  "prompts": {},
+  "sessions": {
+    "s_fc0a437ee7234f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8031f72a-bd60-4f3e-9a6b-e06f89f088ff",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
