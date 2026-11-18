@@ -77,7 +77,7 @@ import {
   ImportReviewProvider,
   useDismissImportReview,
 } from "./import-review";
-import { OperationOutcomes } from "./operation-outcomes";
+import { OperationOutcomes, operationIn } from "./operation-outcomes";
 import { ProviderPicker } from "./provider-picker";
 import { TraitsMenu } from "./traits-menu";
 import { appIconOf, appOf, CatalogMenu, ParameterMenu } from "./workflow-catalog-menu";
@@ -751,14 +751,12 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
   const {
     state: { catalog, machine },
   } = useWorkflowSession();
-  const operationIn = (current: WorkflowRecord) =>
-    current.workingCopy.operations.find(({ id }) => id === operation.id);
   const name = actions.field(
-    (current) => operationIn(current)?.name ?? "",
+    (current) => operationIn(current, operation)?.name ?? "",
     (text) => [{ _tag: "RenameOperation", operation: operation.id, name: text }],
   );
   const instruction = actions.field(
-    (current) => operationIn(current)?.instruction ?? "",
+    (current) => operationIn(current, operation)?.instruction ?? "",
     (text) => [{ _tag: "SetInstruction", operation: operation.id, instruction: text }],
   );
   const problems = problemsOf(workflow);

@@ -87,7 +87,7 @@ describe("WorkingCopyDaemon over the daemon RPC contract", () => {
     }).pipe(Effect.provide(contractLayer)),
   );
 
-  it.effect("dies before it sends a batch the contract cannot encode", () =>
+  it.effect("dies before it sends a batch the contract cannot encode, as the in-memory daemon does", () =>
     Effect.gen(function* () {
       const daemon = yield* WorkingCopyDaemon;
 

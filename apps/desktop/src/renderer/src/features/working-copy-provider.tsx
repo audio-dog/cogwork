@@ -64,14 +64,24 @@ export const workingCopiesAtom = Atom.keepAlive(
   ),
 );
 
-export const WorkingCopiesContext = createContext<WorkingCopiesClient | null>(null);
+const WorkingCopiesContext = createContext<WorkingCopiesClient | null>(null);
+
+export function WorkingCopiesProvider({
+  client,
+  children,
+}: {
+  readonly client: WorkingCopiesClient | null;
+  readonly children: ReactNode;
+}) {
+  return <WorkingCopiesContext value={client}>{children}</WorkingCopiesContext>;
+}
 
 export function DaemonWorkingCopiesProvider({ children }: { readonly children: ReactNode }) {
   const result = useAtomValue(workingCopiesAtom);
   return (
-    <WorkingCopiesContext value={AsyncResult.isSuccess(result) ? result.value : null}>
+    <WorkingCopiesProvider client={AsyncResult.isSuccess(result) ? result.value : null}>
       {children}
-    </WorkingCopiesContext>
+    </WorkingCopiesProvider>
   );
 }
 

@@ -35,7 +35,7 @@ import {
   RiCloseLine,
   RiErrorWarningLine,
 } from "@remixicon/react";
-import { createContext, Fragment, type ReactNode, use, useState } from "react";
+import { createContext, Fragment, type ReactNode, type Ref, use, useState } from "react";
 import { freshNodeId, yesOrNoQuestion } from "../features/workflow-defaults";
 import { type Answers, answersKey, outcomeEdits, transitionAt } from "../features/workflow-edits";
 import { importReviewMark } from "../features/workflow-import-review";
@@ -48,7 +48,6 @@ import {
   type CatalogChoice,
   CatalogMenu,
   type HandOffTarget,
-  type ListValues,
   ParameterMenu,
 } from "./workflow-catalog-menu";
 import { ProblemMark, problemsAt, problemTargetId } from "./workflow-problems";
@@ -67,10 +66,9 @@ export interface OperationOutcomesValue {
 
 interface OperationOutcomesContextValue extends OperationOutcomesValue {
   readonly state: OperationOutcomesValue["state"] & { readonly justPicked: string | null };
-  readonly actions: ReturnType<typeof useWorkingCopy>["actions"] & {
+  readonly actions: {
     readonly pick: (when: Answers, choice: CatalogChoice) => void;
   };
-  readonly meta: OperationOutcomesValue["meta"] & { readonly listValues: ListValues };
 }
 
 const OperationOutcomesContext = createContext<OperationOutcomesContextValue | null>(null);
@@ -83,7 +81,7 @@ const useOperationOutcomes = () => {
 
 const pickKey = (when: Answers, entry: WorkflowCatalogEntry["key"]) => `${answersKey(when)}|${entry}`;
 
-const operationIn = (record: WorkflowRecord, operation: WorkflowOperation) =>
+export const operationIn = (record: WorkflowRecord, operation: WorkflowOperation) =>
   record.workingCopy.operations.find(({ id }) => id === operation.id);
 
 const questionIn = (record: WorkflowRecord, operation: WorkflowOperation, question: WorkflowQuestion) =>
@@ -115,13 +113,7 @@ function Provider({
     setJustPicked(choice.entry.agentInputs.length > 0 ? pickKey(when, choice.entry.key) : null);
   };
   return (
-    <OperationOutcomesContext
-      value={{
-        state: { ...value.state, justPicked },
-        actions: { ...workingCopy.actions, pick },
-        meta: { ...value.meta, listValues: workingCopy.meta.listValues },
-      }}
-    >
+    <OperationOutcomesContext value={{ ...value, state: { ...value.state, justPicked }, actions: { pick } }}>
       {children}
     </OperationOutcomesContext>
   );
@@ -167,8 +159,11 @@ const outcomeIsEmpty = (state: OutcomeContextValue["state"]) =>
 
 function AddActionMenu({ children }: { readonly children: ReactNode }) {
   const {
-    meta: { entries, machine, handOffs, listValues },
+    meta: { entries, machine, handOffs },
   } = useOperationOutcomes();
+  const {
+    meta: { listValues },
+  } = useWorkingCopy();
   const { actions } = useOutcome();
   if (!machine) return null;
   return (
@@ -244,11 +239,11 @@ const fieldLabel = (field: string) => {
   return `${words.slice(0, 1).toUpperCase()}${words.slice(1)}`;
 };
 
-function HintField({ field, focus }: { readonly field: string; readonly focus: boolean }) {
+function HintField({ field, ref }: { readonly field: string; readonly ref?: Ref<HTMLTextAreaElement> }) {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const hint = actions.field(
     (record) =>
       operationIn(record, operation)?.hints.find((candidate) => candidate.field === field)?.text ?? "",
@@ -256,7 +251,7 @@ function HintField({ field, focus }: { readonly field: string; readonly focus: b
   );
   return (
     <BufferedTextarea
-      ref={focus ? focusOnAttach : undefined}
+      ref={ref}
       rows={1}
       label={`What the agent writes for the ${fieldLabel(field).toLowerCase()}`}
       value={hint.value}
@@ -289,7 +284,7 @@ function Instructions({ entry }: { readonly entry: WorkflowCatalogEntry }) {
               {fieldLabel(field)}
             </span>
           ) : null}
-          <HintField field={field} focus={focusFirst && index === 0} />
+          <HintField field={field} ref={focusFirst && index === 0 ? focusOnAttach : undefined} />
         </Fragment>
       ))}
     </div>
@@ -310,9 +305,12 @@ function ReviewedActionParameter({
 function ActionLine({ action, index }: { readonly action: WorkflowAction; readonly index: number }) {
   const {
     state: { operation },
-    actions,
-    meta: { entries, listValues },
+    meta: { entries },
   } = useOperationOutcomes();
+  const {
+    actions,
+    meta: { listValues },
+  } = useWorkingCopy();
   const { state } = useOutcome();
   const dismissImportReview = useDismissImportReview();
   const entry = entries.find(({ key }) => key === action.entry);
@@ -367,9 +365,9 @@ function ActionLine({ action, index }: { readonly action: WorkflowAction; readon
 function HandOffLine({ target }: { readonly target: WorkflowOperation["id"] }) {
   const {
     state: { operation },
-    actions,
     meta: { workflowDocument },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const { state } = useOutcome();
   const name = workflowDocument.operations.find(({ id }) => id === target)?.name ?? target;
   return (
@@ -444,9 +442,9 @@ function OutcomeName({
 }) {
   const {
     state: { operation },
-    actions,
     meta: { problems, workflowDocument },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const name = actions.field(
     (record) =>
       questionIn(record, operation, question)?.choices.find(({ id }) => id === choice.id)?.name ?? "",
@@ -484,9 +482,9 @@ function OutcomeName({
 function QuestionLine({ question }: { readonly question: WorkflowQuestion }) {
   const {
     state: { operation },
-    actions,
     meta: { problems, workflowDocument },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const label = `Question ${operation.questions.indexOf(question) + 1}`;
   const text = actions.field(
     (record) => questionIn(record, operation, question)?.text ?? "",
@@ -519,8 +517,8 @@ function QuestionLine({ question }: { readonly question: WorkflowQuestion }) {
 function QuestionBlock({ question }: { readonly question: WorkflowQuestion }) {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   return (
     <div
       id={problemTargetId({ operation: operation.id, question: question.id })}
@@ -561,8 +559,8 @@ function QuestionBlock({ question }: { readonly question: WorkflowQuestion }) {
 function EveryTime() {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   return (
     <div className="border-b bg-muted/30 last:border-b-0">
       <Outcome when={[]}>
@@ -583,8 +581,8 @@ function EveryTime() {
 function Combinations() {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const combined = operation.transitions.filter(({ when }) => when.length > 1);
   if (combined.length === 0) return null;
   return (
@@ -613,8 +611,8 @@ function Combinations() {
 function CombinationLevel({ prefix, after }: { readonly prefix: Answers; readonly after: number }) {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const last = operation.questions.length - 1;
   const atTop = prefix.length === 0;
   const canJoin = (index: number) => index > after && !(atTop && index === last);
@@ -706,9 +704,9 @@ function UncoveredNotice() {
 function Footer() {
   const {
     state: { operation },
-    actions,
     meta: { takenIds },
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   return (
     <>
       <div className="flex flex-wrap items-center gap-1">
@@ -755,8 +753,8 @@ const cardinalityChoices = [
 function Cardinality() {
   const {
     state: { operation },
-    actions,
   } = useOperationOutcomes();
+  const { actions } = useWorkingCopy();
   const forEach = operation.forEach;
   const noun = actions.field(
     (record) => operationIn(record, operation)?.forEach ?? "",

@@ -38,7 +38,7 @@ export class WorkingCopyDaemon extends Context.Service<WorkingCopyDaemon, Workin
   "@cogwork/desktop/daemon/working-copy-daemon/WorkingCopyDaemon",
 ) {}
 
-export const daemonCallDeadline = "30 seconds";
+const daemonCallDeadline = "30 seconds";
 
 export const boundDaemonCall = <A, E extends { readonly _tag: string; readonly message: string }>(
   call: Effect.Effect<A, E>,
@@ -54,9 +54,10 @@ const recordsOf = (events: ReadonlyArray<DaemonEvent>) =>
 export const make = Effect.gen(function* () {
   const client = yield* DaemonAtomRpc;
   const registry = yield* AtomRegistry.AtomRegistry;
-  const listed = AtomRegistry.toStreamResult(registry, workflowsAtom).pipe(
-    Stream.flatMap(({ workflows }) => Stream.fromIterable(workflows)),
-    Stream.catchCause(() => Stream.empty),
+  const listed = AtomRegistry.toStream(registry, workflowsAtom).pipe(
+    Stream.flatMap((result) =>
+      Stream.fromIterable(AsyncResult.isSuccess(result) ? result.value.workflows : []),
+    ),
   );
   const changed = AtomRegistry.toStream(registry, daemonEventAtom).pipe(
     Stream.flatMap((result) =>

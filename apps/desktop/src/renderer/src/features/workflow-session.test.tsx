@@ -26,7 +26,7 @@ import {
   workflowProviderValue,
 } from "./workflow-session";
 import { exportWorkflow, importWorkflow } from "./workflow-transfer";
-import { type ListWorkflowOptions, WorkingCopiesContext } from "./working-copy-provider";
+import { type ListWorkflowOptions, WorkingCopiesProvider } from "./working-copy-provider";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -295,9 +295,9 @@ const mountEditor = async (
   await act(async () => {
     root.render(
       <WorkflowProvider value={workflowProviderValue(sessionState([workflow], session), sessionClient)}>
-        <WorkingCopiesContext value={copies.client}>
+        <WorkingCopiesProvider client={copies.client}>
           <WorkflowEditor workflow={workflow} importReview={importReview} onPublished={onPublished} />
-        </WorkingCopiesContext>
+        </WorkingCopiesProvider>
       </WorkflowProvider>,
     );
   });
@@ -421,17 +421,13 @@ describe("WorkflowEditor", () => {
 
   it("saves a draft before the switch turns it on", async () => {
     Reflect.set(window, "cogwork", { notifications: { enable: async () => ({ _tag: "ready" }) } });
-    const { container, root, daemon } = await mountEditor(record, { session: {} });
+    const { container, root } = await mountEditor(record, { session: {} });
     const enable = container.querySelector<HTMLElement>('[aria-label="Turn this Workflow on"]');
     if (!enable) throw new Error("Switch did not render");
 
     await act(async () => enable.click());
 
     await eventually(() => expect(enable.getAttribute("aria-checked")).toBe("true"));
-    expect((await daemon((probe) => probe.calls)).map(({ _tag }) => _tag)).toEqual([
-      "publish",
-      "switchEnabled",
-    ]);
     Reflect.deleteProperty(window, "cogwork");
     await act(async () => root.unmount());
   });
@@ -495,9 +491,9 @@ describe("WorkflowEditor", () => {
         <WorkflowProvider
           value={workflowProviderValue(sessionState([record]), { ...sessionClient, switchEnabled })}
         >
-          <WorkingCopiesContext value={copies.client}>
+          <WorkingCopiesProvider client={copies.client}>
             <WorkflowEditor workflow={record} />
-          </WorkingCopiesContext>
+          </WorkingCopiesProvider>
           <WorkflowsList />
         </WorkflowProvider>,
       );

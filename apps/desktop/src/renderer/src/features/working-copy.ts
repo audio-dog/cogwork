@@ -15,6 +15,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as RcMap from "effect/RcMap";
 import * as Schema from "effect/Schema";
@@ -84,6 +85,8 @@ const emptySession: SessionState = { pending: [], saveStatus: "saved" };
 
 const sessionIdleTimeToLive = "1 minute";
 
+const replyDeadline = "2 minutes";
+
 const decodeEdits = Schema.decodeUnknownEffect(WorkflowEditBatch);
 
 const withRecord = (state: WorkingCopiesState, record: WorkflowRecord): WorkingCopiesState => {
@@ -110,15 +113,10 @@ const settledEdit = (
   entry: PendingEdit,
   exit: Exit.Exit<WorkflowRecord, WorkingCopyDaemonError>,
 ) =>
-  Exit.isSuccess(exit)
-    ? withSession(withRecord(state, exit.value), id, (session) => ({
-        pending: withoutPending(session, entry),
-        saveStatus: "saved",
-      }))
-    : withSession(state, id, (session) => ({
-        pending: withoutPending(session, entry),
-        saveStatus: "not-saved",
-      }));
+  withSession(Exit.isSuccess(exit) ? withRecord(state, exit.value) : state, id, (session) => ({
+    pending: withoutPending(session, entry),
+    saveStatus: Exit.isSuccess(exit) ? "saved" : "not-saved",
+  }));
 
 const snapshotOf = (record: WorkflowRecord, session: SessionState | undefined): WorkingCopySnapshot => ({
   accepted: record,
@@ -129,11 +127,15 @@ const snapshotOf = (record: WorkflowRecord, session: SessionState | undefined): 
 const needsPublishBeforeSwitch = (record: WorkflowRecord, enabled: boolean) =>
   enabled && record.publishedRevision === null;
 
+const daemonErrorOf = (cause: Cause.Cause<WorkingCopyDaemonError>) =>
+  Option.getOrElse(
+    Cause.findErrorOption(cause),
+    () => new WorkingCopyDaemonError({ message: Cause.pretty(cause) }),
+  );
+
 const runJob = (job: Job) =>
   job.call.pipe(
-    Effect.catchDefect((defect) =>
-      Effect.fail(new WorkingCopyDaemonError({ message: Cause.pretty(Cause.die(defect)) })),
-    ),
+    Effect.catchCause((cause) => Effect.fail(daemonErrorOf(cause))),
     Effect.onExit((exit) => job.settle(exit).pipe(Effect.andThen(Deferred.done(job.reply, exit)))),
     Effect.ignore,
   );
@@ -146,10 +148,18 @@ export const make = Effect.gen(function* () {
   yield* daemon.changes.pipe(Stream.runForEach(acceptRecord), Effect.forkScoped);
 
   const sessions = yield* RcMap.make({
-    lookup: (_id: WorkflowId) =>
+    lookup: (id: WorkflowId) =>
       Queue.unbounded<Job>().pipe(
         Effect.tap((queue) =>
           Queue.take(queue).pipe(Effect.flatMap(runJob), Effect.forever, Effect.forkScoped),
+        ),
+        Effect.tap(() =>
+          Effect.addFinalizer(() =>
+            SubscriptionRef.update(state, (current) => ({
+              ...current,
+              sessions: new Map([...current.sessions].filter(([open]) => open !== id)),
+            })),
+          ),
         ),
         Effect.flatMap((queue) => Effect.map(Semaphore.make(1), (order): Session => ({ queue, order }))),
       ),
@@ -170,6 +180,10 @@ export const make = Effect.gen(function* () {
           ),
         ),
         Effect.flatMap(([, reply]) => Deferred.await(reply)),
+        Effect.timeout(replyDeadline),
+        Effect.catchTag("TimeoutError", () =>
+          Effect.fail(new WorkingCopyDaemonError({ message: `No reply within ${replyDeadline}` })),
+        ),
       ),
     );
 
@@ -226,7 +240,7 @@ export const make = Effect.gen(function* () {
   });
 
   const snapshots = (id: WorkflowId) =>
-    SubscriptionRef.changes(state).pipe(
+    Stream.unwrap(Effect.map(RcMap.get(sessions, id), () => SubscriptionRef.changes(state))).pipe(
       Stream.map(({ records, sessions }) => ({ record: records.get(id), session: sessions.get(id) })),
       Stream.changesWith((left, right) => left.record === right.record && left.session === right.session),
       Stream.flatMap(({ record, session }) =>

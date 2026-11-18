@@ -5,6 +5,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { WorkingCopyDaemon } from "../daemon/working-copy-daemon";
@@ -100,23 +101,41 @@ describe("WorkingCopies", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
-  it.effect("turns a daemon defect into a failed call instead of an empty reply", () =>
+  it.effect("fails a call whose daemon reply dies or is interrupted, and keeps the queue working", () =>
     Effect.gen(function* () {
       const copies = yield* WorkingCopies;
+      const died = yield* Effect.exit(copies.edit(workflowId, [{ _tag: "Rename", name: "Triage" }]));
+      const interrupted = yield* Effect.exit(copies.edit(workflowId, [{ _tag: "Rename", name: "Triage" }]));
 
-      const exit = yield* Effect.exit(copies.edit(workflowId, [{ _tag: "Rename", name: "Triage" }]));
+      assert.deepStrictEqual(
+        [died, interrupted].map((exit) => Option.getOrNull(Exit.findErrorOption(exit))?._tag),
+        ["WorkingCopyDaemonError", "WorkingCopyDaemonError"],
+      );
 
-      assert.strictEqual(Option.getOrNull(Exit.findErrorOption(exit))?._tag, "WorkingCopyDaemonError");
+      const answered = yield* Effect.exit(copies.edit(workflowId, [{ _tag: "Rename", name: "Triage" }]));
+      assert.isTrue(Exit.isSuccess(answered));
     }).pipe(
       Effect.provide(
         workingCopiesLayer.pipe(
           Layer.provide(
-            Layer.succeed(WorkingCopyDaemon)({
-              edit: () => Effect.die(new Error("encode failed")),
-              publish: () => Effect.die(new Error("unused")),
-              switchEnabled: () => Effect.die(new Error("unused")),
-              changes: Stream.make(draft),
-            }),
+            Layer.effect(WorkingCopyDaemon)(
+              Effect.map(
+                Ref.make<ReadonlyArray<Effect.Effect<WorkflowRecord>>>([
+                  Effect.die(new Error("encode failed")),
+                  Effect.interrupt,
+                ]),
+                (replies) =>
+                  WorkingCopyDaemon.of({
+                    edit: () =>
+                      Ref.modify(replies, ([next, ...rest]) => [next ?? Effect.succeed(draft), rest]).pipe(
+                        Effect.flatten,
+                      ),
+                    publish: () => Effect.die(new Error("unused")),
+                    switchEnabled: () => Effect.die(new Error("unused")),
+                    changes: Stream.make(draft),
+                  }),
+              ),
+            ),
           ),
         ),
       ),

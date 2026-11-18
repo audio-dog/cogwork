@@ -14,7 +14,7 @@ import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { WorkingCopyDaemon, WorkingCopyDaemonError } from "../daemon/working-copy-daemon";
 
-export type DaemonCall =
+type DaemonCall =
   | { readonly _tag: "edit"; readonly id: WorkflowId; readonly edits: WorkflowEditBatch }
   | { readonly _tag: "publish"; readonly id: WorkflowId; readonly revision: number }
   | { readonly _tag: "switchEnabled"; readonly id: WorkflowId; readonly enabled: boolean };
