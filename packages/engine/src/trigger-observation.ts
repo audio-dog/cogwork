@@ -22,6 +22,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
@@ -705,6 +706,7 @@ export const make = Effect.gen(function* () {
               sweptAt.get(keyOf(admission.event.key)) ?? 0,
             ),
             loadWorkContext: Effect.succeed(admission.event.workContext),
+            pullRequest: admission.event.pullRequest,
           };
         }),
       ),
@@ -799,11 +801,15 @@ export const make = Effect.gen(function* () {
   ) {
     const now = yield* Clock.currentTimeMillis;
     const observed = yield* assigneeGate.withPermit(refreshWorkspaceAssignees(workspace, now));
-    const closing =
+    const numbered =
       workspace.config.issueTracker.type === "github"
-        ? pullRequest.closingIssueNumbers.map((number) => WorkItemId.make(`#${number}`))
+        ? [...pullRequest.closingIssueNumbers, ...(/^\d+/.exec(pullRequest.headRef) ?? [])].map((number) =>
+            WorkItemId.make(`#${number}`),
+          )
         : [];
-    return [...new Set([...observed.keys(), ...closing])].filter((id) => pullMatchesLinkKey(id, pullRequest));
+    return [...new Set([...observed.keys(), ...numbered])].filter((id) =>
+      pullMatchesLinkKey(id, pullRequest),
+    );
   });
 
   const ownsPullRequest = Effect.fn("TriggerObservation.ownsPullRequest")(function* (
@@ -814,10 +820,10 @@ export const make = Effect.gen(function* () {
     if (pullRequest === undefined) return false;
     const linked = yield* pullRequestLinkedItems(workspace, pullRequest);
     if (linked.length === 0) return allowlist.includes(pullRequest.author);
-    const owned = yield* Effect.forEach(linked, (itemId) =>
+    const owned = yield* Effect.findFirst(linked, (itemId) =>
       hasAllowlistedAssignee(workspace, allowlist, itemId),
     );
-    return owned.includes(true);
+    return Option.isSome(owned);
   });
 
   const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (

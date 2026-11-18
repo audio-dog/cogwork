@@ -177,7 +177,11 @@ const linearTrackerItem: TrackerItem = {
 };
 const trackerUnavailable = () =>
   Effect.fail(
-    new IssueTrackerError({ reason: "unavailable", retryable: false, message: "not a tracker item" }),
+    new IssueTrackerError({
+      reason: "unavailable",
+      retryable: false,
+      message: "closing numbers are not Linear items",
+    }),
   );
 const pullRequestGateCases = [
   {
@@ -190,6 +194,12 @@ const pullRequestGateCases = [
     case: "declines a pull request linked only to a teammate's item, even from an allowlisted author",
     options: { observedItems: [selectedTrackerItem, teammateTrackerItem] },
     pullRequest: { author: "owner", headRef: "3-fix", closingIssueNumbers: [] },
+    admitted: false,
+  },
+  {
+    case: "declines a pull request whose branch names a teammate's item outside the snapshot",
+    options: { exactAssignees: (itemId: WorkItemId) => Effect.succeed(itemId === "#42" ? ["teammate"] : []) },
+    pullRequest: { author: "owner", headRef: "42-fix", closingIssueNumbers: [] },
     admitted: false,
   },
   {
@@ -211,7 +221,7 @@ const pullRequestGateCases = [
     admitted: false,
   },
   {
-    case: "admits a pull request linked to a Linear item by its branch prefix",
+    case: "admits a pull request linked to a Linear item by its branch prefix, without reading closing numbers",
     options: {
       workspace: workspaceTrackedBy({ type: "linear", teams: ["FEL"], assigneeAllowlist: ["linear-owner"] }),
       observedItems: [linearTrackerItem],
@@ -1058,6 +1068,94 @@ describe("TriggerObservation", () => {
 
       assert.strictEqual(Option.isSome(result), admitted);
       assert.strictEqual(yield* Ref.get(observed), admitted ? 1 : 0);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("sweeps a parked pull request through an assignee-gated Workspace", () =>
+    Effect.gen(function* () {
+      const start = Date.UTC(2026, 0, 1);
+      yield* TestClock.setTime(start);
+      const sweepDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...selectedDocument,
+        triggers: [
+          {
+            id: "sweep",
+            entry: "schedule.sweep",
+            parameters: [
+              { id: "hour", value: "0" },
+              { id: "minute", value: "1" },
+              { id: "zone", value: "UTC" },
+              { id: "source", value: "workflow" },
+              { id: "state", value: "parked" },
+              { id: "idle-days", value: "30" },
+            ],
+            start: "summarize",
+          },
+        ],
+      });
+      const pullRequestKey = { _tag: "PullRequest", workspace: selectedWorkspaceId, number: 7 } as const;
+      const pullRequest = { author: "owner", headRef: "feature", closingIssueNumbers: [] };
+      const store = yield* makeMemoryTriggerObservationStore;
+      yield* store.putAll([
+        {
+          event: {
+            ...selectedEvent,
+            key: pullRequestKey,
+            entry: yield* Schema.decodeEffect(WorkflowCatalogKey)("github.pull-request-checks-failed"),
+            revision: "pull-7",
+            atMillis: start - 60 * 86_400_000,
+            pullRequest,
+          },
+          subscription,
+          lineage: { ...lineage, root: yield* Schema.decodeEffect(LineageId)(keyOf(pullRequestKey)) },
+        },
+      ]);
+      const processed = yield* Ref.make<string | null>(null);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const unparked = coordinationService(processed, yield* Ref.make(0), sourceRevision);
+      const parked = {
+        ...unparked,
+        read: (ref) =>
+          unparked.read(ref).pipe(
+            Effect.map((view) => ({
+              ...view,
+              park: { reason: { _tag: "Stuck", summary: "parked" }, atMillis: start - 60 * 86_400_000 },
+            })),
+          ),
+      } satisfies CoordinationService;
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(yield* Ref.make(record(true, sweepDocument)))),
+        Effect.provideService(Coordination, parked),
+        Effect.provideService(TriggerSources, [clockSource]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, {
+          ...(yield* makeEmptyIssueTracker),
+          observe: () => Effect.succeed([selectedTrackerItem]),
+        }),
+        Effect.provideService(
+          WorkspaceRegistry,
+          readOnlyRegistry({ workspaces: [selectedWorkspace], failures: [] }),
+        ),
+      );
+      const changed = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Effect.yieldNow;
+      yield* observation.refresh;
+      yield* TestClock.adjust("1 minute");
+      const settled = yield* Fiber.join(changed).pipe(
+        Effect.timeoutOption("10 seconds"),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* TestClock.adjust("10 seconds");
+      const [swept] = Option.getOrElse(yield* Fiber.join(settled), () => []);
+
+      assert.deepStrictEqual(swept?.event.cause, { _tag: "Clock" });
+      assert.deepStrictEqual(swept?.event.key, pullRequestKey);
+      assert.deepStrictEqual(swept?.event.pullRequest, pullRequest);
     }).pipe(Effect.scoped),
   );
 

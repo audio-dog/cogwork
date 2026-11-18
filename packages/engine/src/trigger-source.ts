@@ -85,6 +85,7 @@ export interface SweepCandidate {
   readonly subject?: RunSubject | undefined;
   readonly lastTouchedAtMillis: number;
   readonly loadWorkContext?: Effect.Effect<RunPlanWorkContextProse | undefined, SourceFailure>;
+  readonly pullRequest?: TriggerEvent["pullRequest"];
 }
 
 export interface TriggerReadPort {
