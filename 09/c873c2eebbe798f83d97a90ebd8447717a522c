@@ -1,0 +1,27 @@
+packages/contracts/src/workflow.ts
+  s_c99bb291de3f49::t_8b5510fc6a976e 276
+packages/engine/src/daemon-composition-fixtures.ts
+  s_c99bb291de3f49::t_f0712edf32d73f 84
+packages/engine/src/workflow-run-checkout.test.ts
+  s_c99bb291de3f49::t_150e21dc95da9b 35-40,156-207
+packages/engine/src/workflow-run-touchpoints.ts
+  s_c99bb291de3f49::t_5d5fc63d3e3bfb 23,42,196-213,222
+packages/engine/src/worktree.ts
+  s_c99bb291de3f49::t_2e359097d32db3 146,150-155,512
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "09c873c2eebbe798f83d97a90ebd8447717a522c",
+  "prompts": {},
+  "sessions": {
+    "s_c99bb291de3f49": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4eb3f24-7b6f-4f75-986d-f729b467a0f0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
