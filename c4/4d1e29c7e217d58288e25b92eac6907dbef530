@@ -1,0 +1,29 @@
+packages/cursor-acp/src/harness.test.ts
+  s_29681a8d215569::t_0764a7b012179e 810
+pnpm-lock.yaml
+  s_c965e7623f9257::t_72e07424c4336d 725
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c44d1e29c7e217d58288e25b92eac6907dbef530",
+  "prompts": {},
+  "sessions": {
+    "s_29681a8d215569": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67e3ec62-d199-4055-8473-67279da8a613",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c965e7623f9257": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b777e272-02f9-4c52-a3ee-3333c10e1ee4",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
