@@ -1,6 +1,7 @@
 import {
   type HandbackRecord,
   HarnessName,
+  NeedIdentity,
   RunId,
   RunPlan,
   WorkflowCatalog,
@@ -11,7 +12,13 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
-import { type RunPlanFacts, resolveRunPlan } from "./run-plan-resolution";
+import {
+  HarnessPreflight,
+  type RunPlanFacts,
+  RunPlanRejection,
+  RunPlanResolution,
+  resolveRunPlan,
+} from "./run-plan-resolution";
 import { TriggerAdmission } from "./trigger-observation";
 
 const encodePlan = Schema.encodeSync(RunPlan);
@@ -87,19 +94,23 @@ const issueAdmission = Schema.decodeSync(TriggerAdmission)({
   lineage,
 });
 
+const harnessName = Schema.decodeSync(HarnessName)("claude-code");
+const passedHarness = {
+  name: harnessName,
+  projectedMembers: ["Tools", "Skills"],
+  middleware: ["sandbox", "persistence"],
+  sessionKind: "opaque-handle",
+} as const;
+
 const issueFacts: RunPlanFacts = {
   id: Schema.decodeSync(RunId)("run-1"),
   admission: issueAdmission,
   workflow: { id: Schema.decodeSync(WorkflowId)("coding"), publishedRevision: 7 },
   operation,
+  readyNeeds: [],
   catalog,
   outputWorkspaces: [workspace("cogwork"), workspace("other")],
-  harness: {
-    name: Schema.decodeSync(HarnessName)("claude-code"),
-    projectedMembers: ["Tools", "Skills"],
-    middleware: ["sandbox", "persistence"],
-    sessionKind: "opaque-handle",
-  },
+  harness: HarnessPreflight.Passed(passedHarness),
   workspaceCheckout: "/worktrees/42",
   instructions: {
     layers: [{ kind: "rules", source: "rules/house.md", content: "House rules." }],
@@ -130,6 +141,12 @@ const issueFacts: RunPlanFacts = {
   ],
 };
 
+const resolvedPlan = (facts: RunPlanFacts) =>
+  RunPlanResolution.$match(resolveRunPlan(facts), {
+    Accepted: ({ plan }) => plan,
+    Rejected: ({ reason }) => assert.fail(`Run Plan rejected: ${reason._tag}`),
+  });
+
 const requestOnly = "Run Workflow Operation: Implement";
 
 const issueWorkContext: (typeof RunPlan.Encoded)["workContext"] = {
@@ -156,7 +173,7 @@ const issueWorkContext: (typeof RunPlan.Encoded)["workContext"] = {
 
 describe("resolveRunPlan", () => {
   it("resolves an Issue item's Run Plan from its facts", () => {
-    assert.deepStrictEqual(encodePlan(resolveRunPlan(issueFacts)), {
+    assert.deepStrictEqual(encodePlan(resolvedPlan(issueFacts)), {
       id: "run-1",
       operation: "implement",
       harness: { name: "claude-code", model: "opus", options: { effort: "high" }, profile: "full" },
@@ -335,7 +352,7 @@ describe("resolveRunPlan", () => {
       message: requestOnly,
     },
   ])("frames the Work Context and message for $name", ({ facts, workContext, message }) => {
-    const plan = encodePlan(resolveRunPlan(facts));
+    const plan = encodePlan(resolvedPlan(facts));
     assert.deepStrictEqual(
       { workContext: plan.workContext, messages: plan.messages },
       {
@@ -353,7 +370,7 @@ describe("resolveRunPlan", () => {
       }),
     );
     assert.deepStrictEqual(
-      workspaceQuestion(resolveRunPlan({ ...issueFacts, admission: scheduleAdmission }).structuredOutput),
+      workspaceQuestion(resolvedPlan({ ...issueFacts, admission: scheduleAdmission }).structuredOutput),
       {
         required: ["summary", "stuck", "answers", "inputs", "workspace"],
         properties: { workspace: { type: "string", enum: ["none", "cogwork", "other"] } },
@@ -363,7 +380,10 @@ describe("resolveRunPlan", () => {
 
   it("lists no Tools and records both members unprojected when the Harness projects neither", () => {
     const plan = encodePlan(
-      resolveRunPlan({ ...issueFacts, harness: { ...issueFacts.harness, projectedMembers: [] } }),
+      resolvedPlan({
+        ...issueFacts,
+        harness: HarnessPreflight.Passed({ ...passedHarness, projectedMembers: [] }),
+      }),
     );
     assert.deepStrictEqual(
       {
@@ -386,5 +406,34 @@ describe("resolveRunPlan", () => {
         ],
       },
     );
+  });
+
+  const githubNeed = Schema.decodeSync(NeedIdentity)("connection:github");
+  const needsGithub = { ...issueFacts, operation: { ...operation, requires: [githubNeed] } };
+  const preflightFailed = HarnessPreflight.Failed({ name: harnessName, message: "Harness signed out" });
+
+  it.each([
+    {
+      name: "no Harness is selected",
+      facts: { ...issueFacts, harness: HarnessPreflight.Unselected() },
+      reason: RunPlanRejection.NoHarness(),
+    },
+    {
+      name: "a required need is not ready",
+      facts: needsGithub,
+      reason: RunPlanRejection.MissingNeed({ need: githubNeed }),
+    },
+    {
+      name: "Harness preflight fails",
+      facts: { ...issueFacts, harness: preflightFailed },
+      reason: RunPlanRejection.PreflightFailed({ harness: harnessName, message: "Harness signed out" }),
+    },
+    {
+      name: "a required need is not ready and preflight fails",
+      facts: { ...needsGithub, harness: preflightFailed },
+      reason: RunPlanRejection.MissingNeed({ need: githubNeed }),
+    },
+  ])("rejects the Run Plan when $name", ({ facts, reason }) => {
+    assert.deepStrictEqual(resolveRunPlan(facts), RunPlanResolution.Rejected({ reason }));
   });
 });
