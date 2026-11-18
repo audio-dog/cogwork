@@ -36,20 +36,22 @@ import {
 import {
   WorkflowAttention,
   WorkflowCatalogKey,
-  WorkflowCatalogResult,
-  WorkflowDiagnostic,
   WorkflowDocument,
-  WorkflowEditBatch,
-  WorkflowFailure,
-  WorkflowList,
   WorkflowNotification,
   WorkflowNotificationId,
+  WorkflowTouchpointFailure,
+} from "./workflow";
+import {
+  WorkflowCatalogResult,
+  WorkflowFailure,
+  WorkflowList,
   WorkflowOptionList,
   WorkflowRecord,
   WorkflowSwitchResult,
   WorkflowTemplate,
-  WorkflowTouchpointFailure,
-} from "./workflow";
+} from "./workflow-catalog";
+import { WorkflowDiagnostic } from "./workflow-diagnostic";
+import { WorkflowEditBatch } from "./workflow-edit";
 import {
   GitHubPriorityField,
   WorkspaceRegistration,

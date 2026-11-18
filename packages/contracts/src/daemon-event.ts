@@ -6,7 +6,7 @@ import { ControlStore, ReadyToMergeItem, SchedulerStats } from "./daemon";
 import { HarnessReadiness } from "./harness";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
-import { WorkflowRecord } from "./workflow";
+import { WorkflowRecord } from "./workflow-catalog";
 import { WorkspaceRegistration } from "./workspace";
 
 export const ReadModelItem = Schema.TaggedUnion({
