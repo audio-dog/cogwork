@@ -408,6 +408,35 @@ describe("AttentionClientProvider", () => {
     await act(async () => root.unmount());
   });
 
+  it("shows what to do, the worktree path, and the unmerged files for a blocked worktree", async () => {
+    const { container, root } = await renderAttention({
+      snapshot: snapshot(
+        attentionWith(
+          {
+            _tag: "WorktreeBlocked",
+            reason: "operation-in-progress",
+            branch: "947",
+            path: "/worktrees/947",
+            operation: "merge",
+            unmergedPaths: ["src/a.ts", "src/b.ts"],
+          },
+          ["hand-back"],
+          null,
+        ),
+      ),
+      client: defaultClient(),
+    });
+
+    const text = container.textContent ?? "";
+    expect(text).toContain(
+      "Branch 947 has a merge in progress. Finish or abort it in the worktree, then hand back.",
+    );
+    expect(text).toContain("/worktrees/947");
+    expect(text).toContain("src/a.ts");
+    expect(text).toContain("src/b.ts");
+    await act(async () => root.unmount());
+  });
+
   it("dismisses a notification through the client", async () => {
     const dismiss = vi.fn<AttentionClient["dismiss"]>();
     const { container, root } = await renderAttention({

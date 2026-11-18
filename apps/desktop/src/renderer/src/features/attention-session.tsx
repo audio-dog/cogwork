@@ -17,7 +17,8 @@ import {
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { type ReactNode, useState } from "react";
-import { Attention, type AttentionLayout } from "../components/attention-board";
+import { Attention } from "../components/attention-board";
+import type { AttentionLayout } from "../components/attention-board-context";
 import type { CatalogIcon } from "./workflow-catalog";
 import type {
   Artifact,
@@ -238,6 +239,15 @@ const reasonOf = (
     WriteFailed: ({ step, error }) => ({ tag: "write-failed", step, error }) as const,
     DraftOutcomeUnknown: ({ step }) => ({ tag: "draft-outcome-unknown", step }) as const,
     NoWorkspaceRecognized: () => ({ tag: "no-workspace-recognized" }) as const,
+    WorktreeBlocked: ({ reason, branch, operation, path, unmergedPaths }) =>
+      ({
+        tag: "worktree-blocked",
+        reason,
+        branch,
+        operation: operation ?? null,
+        path: path ?? null,
+        unmergedPaths: unmergedPaths ?? [],
+      }) as const,
     AwaitingApproval: ({ digest, revision }) =>
       ({ tag: "awaiting-approval", digest, builtOn: revision }) as const,
     HandedToYou: () =>

@@ -31,9 +31,23 @@ export const parkCommandsByReason = {
   WriteFailed: ["hand-back"],
   DraftOutcomeUnknown: ["hand-back"],
   NoWorkspaceRecognized: ["hand-back"],
+  WorktreeBlocked: ["hand-back"],
   AwaitingApproval: ["approve", "reject", "hand-back"],
   HandedToYou: ["choose-answer", "hand-back"],
 } satisfies Record<ParkReason["_tag"], ReadonlyArray<WorkflowParkCommand>>;
+
+type WorktreeBlocked = Extract<ParkReason, { readonly _tag: "WorktreeBlocked" }>;
+
+const worktreeBlockedSummaries = {
+  "operation-in-progress": ({ branch, operation }: WorktreeBlocked) =>
+    `Branch ${branch} has a ${operation ?? "Git operation"} in progress in its worktree. Finish or abort it, then hand back.`,
+  diverged: ({ branch }: WorktreeBlocked) =>
+    `Branch ${branch} has diverged from its remote. Reconcile the branch in its worktree, then hand back.`,
+  detached: ({ branch }: WorktreeBlocked) =>
+    `The worktree for branch ${branch} is not registered with Git and can hold uncommitted work. Move or remove it, then hand back.`,
+  "unsafe-branch": ({ branch }: WorktreeBlocked) =>
+    `Branch ${branch} does not resolve below the worktree root. Use a different branch, then hand back.`,
+} satisfies Record<WorktreeBlocked["reason"], (reason: WorktreeBlocked) => string>;
 
 const summaryByReason = {
   Stuck: (reason: Extract<ParkReason, { readonly _tag: "Stuck" }>) => reason.summary,
@@ -44,6 +58,7 @@ const summaryByReason = {
   WriteFailed: (reason: Extract<ParkReason, { readonly _tag: "WriteFailed" }>) => reason.error,
   DraftOutcomeUnknown: () => "Slack draft outcome is unknown; check Slack before continuing",
   NoWorkspaceRecognized: () => "No Workspace was recognized",
+  WorktreeBlocked: (reason: WorktreeBlocked) => worktreeBlockedSummaries[reason.reason](reason),
   AwaitingApproval: () => "The plan is waiting for approval",
   HandedToYou: () => "The Operation handed this item to you",
 } satisfies {

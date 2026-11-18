@@ -19,7 +19,15 @@ export type ParkReason =
   | { readonly tag: "missing-operation" }
   | { readonly tag: "plan-rejected"; readonly reason: string }
   | { readonly tag: "draft-outcome-unknown"; readonly step: string }
-  | { readonly tag: "no-workspace-recognized" };
+  | { readonly tag: "no-workspace-recognized" }
+  | {
+      readonly tag: "worktree-blocked";
+      readonly reason: "detached" | "diverged" | "operation-in-progress" | "unsafe-branch";
+      readonly branch: string;
+      readonly operation: string | null;
+      readonly path: string | null;
+      readonly unmergedPaths: readonly string[];
+    };
 
 export type ParkTag = ParkReason["tag"];
 
@@ -116,6 +124,24 @@ export type PlanEdits = Readonly<Record<string, string>>;
 
 type ReasonOf<Tag extends ParkTag> = Extract<ParkReason, { readonly tag: Tag }>;
 
+type WorktreeBlocked = ReasonOf<"worktree-blocked">;
+
+const worktreeBlockedInstructions = {
+  "operation-in-progress": ({ branch, operation }: WorktreeBlocked) =>
+    `Branch ${branch} has a ${operation ?? "Git operation"} in progress. Finish or abort it in the worktree, then hand back.`,
+  diverged: ({ branch }: WorktreeBlocked) =>
+    `Branch ${branch} has diverged from its remote. Reconcile the branch in the worktree, then hand back.`,
+  detached: () =>
+    "Git does not register this worktree path, and it can hold uncommitted work. Move or remove it, then hand back.",
+  "unsafe-branch": ({ branch }: WorktreeBlocked) =>
+    `Branch ${branch} does not resolve below the worktree root. Use a different branch, then hand back.`,
+} satisfies Record<WorktreeBlocked["reason"], (reason: WorktreeBlocked) => string>;
+
+export const worktreeBlockedLines = ({ path, unmergedPaths }: WorktreeBlocked) => [
+  ...(path === null ? [] : [path]),
+  ...unmergedPaths.map((file) => `Unmerged: ${file}`),
+];
+
 interface ReasonSpec<Tag extends ParkTag> {
   readonly label: string;
   readonly urgency: number;
@@ -168,6 +194,11 @@ const reasonSpecs: { readonly [Tag in ParkTag]: ReasonSpec<Tag> } = {
     label: "No Workspace",
     urgency: 2,
     detail: () => null,
+  },
+  "worktree-blocked": {
+    label: "Worktree blocked",
+    urgency: 1,
+    detail: (reason) => worktreeBlockedInstructions[reason.reason](reason),
   },
 };
 
