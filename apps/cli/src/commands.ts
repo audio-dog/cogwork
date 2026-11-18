@@ -18,6 +18,7 @@ import {
   type RunHistory,
   RunId,
   type RunSummary,
+  RunWatchItem,
   resolveOperationSetting,
   type SchedulingState,
   WorkItemId,
@@ -25,6 +26,10 @@ import {
 } from "@cogwork/contracts";
 import { Daemon, Registry, readControlStore } from "@cogwork/engine";
 import * as Console from "effect/Console";
+import * as Argument from "effect/cli/Argument";
+import * as CliError from "effect/cli/CliError";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -32,15 +37,11 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import { RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Argument from "effect/unstable/cli/Argument";
-import * as CliError from "effect/unstable/cli/CliError";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
-import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import { SocketErrorReason, SocketOpenError } from "effect/unstable/socket/Socket";
+import { SocketErrorReason, SocketOpenError } from "effect/socket/Socket";
 import { defaultControlStorePath, defaultCredentialsPath, defaultSocketPath } from "./paths";
 import { installProcessProfileIpc } from "./process-profile-ipc";
 import { clientLayer, type DaemonOptions, type DaemonRpcTimeout, makeDaemonClient, serverLayer } from "./rpc";
@@ -53,70 +54,70 @@ import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";
 const defaultPollInterval = Duration.minutes(1);
 const defaultDrainGrace = Duration.minutes(5);
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
 
-const controlStoreFlag = Flag.string("control-store").pipe(
+const controlStoreFlag = Flag.String("control-store").pipe(
   Flag.withDescription("Path to the machine-local Control store"),
   Flag.withDefault(defaultControlStorePath),
 );
 
-const credentialsFlag = Flag.string("credentials").pipe(
+const credentialsFlag = Flag.String("credentials").pipe(
   Flag.withDescription("Path to the stored OAuth credential file (0600)"),
   Flag.withDefault(defaultCredentialsPath),
 );
 
-const pollIntervalFlag = Flag.integer("poll-interval").pipe(
+const pollIntervalFlag = Flag.Int("poll-interval").pipe(
   Flag.withDescription("Seconds between issue-tracker polls (higher values conserve GitHub API quota)"),
   Flag.withDefault(Duration.toSeconds(defaultPollInterval)),
 );
 
-const drainGraceFlag = Flag.integer("drain-grace").pipe(
+const drainGraceFlag = Flag.Int("drain-grace").pipe(
   Flag.withDescription(
     "Seconds in-flight runs get to finish after a stop signal (a second signal ends the wait)",
   ),
   Flag.withDefault(Duration.toSeconds(defaultDrainGrace)),
 );
 
-const telemetryFlag = Flag.choice("telemetry", ["on", "off"]).pipe(Flag.withDefault("on"));
-const performanceWorkspaceFlag = Flag.string("performance-workspace").pipe(
+const telemetryFlag = Flag.Literals("telemetry", ["on", "off"]).pipe(Flag.withDefault("on"));
+const performanceWorkspaceFlag = Flag.String("performance-workspace").pipe(
   Flag.withDescription("Workspace that receives machine-local performance evidence"),
   Flag.optional,
 );
 
-const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to inspect"));
+const runIdFlag = Flag.String("id").pipe(Flag.withDescription("Run id to inspect"));
 
-const watchIdFlag = Flag.string("id").pipe(
+const watchIdFlag = Flag.String("id").pipe(
   Flag.withDescription("Follow a single run id directly"),
   Flag.optional,
 );
 
-const watchWorkItemArg = Argument.string("work-item").pipe(
+const watchWorkItemArg = Argument.String("work-item").pipe(
   Argument.withDescription("Work item to watch; resolves to its running run, else its most recent run"),
   Argument.optional,
 );
 
-const daemonLimitKeyArgument = Argument.choice("limit", [
+const daemonLimitKeyArgument = Argument.Literals("limit", [
   "global-concurrency",
   "per-workspace-concurrency",
   "daily-budget",
 ]);
 
-const daemonLimitValueArgument = Argument.integer("value");
-const contributionSettingArgument = Argument.string("contribution");
-const contributionSettingValueArgument = Argument.choice("value", ["on", "off"]);
-const contributionSettingScopeFlag = Flag.choice("scope", ["profile", "overlay"]).pipe(
+const daemonLimitValueArgument = Argument.Int("value");
+const contributionSettingArgument = Argument.String("contribution");
+const contributionSettingValueArgument = Argument.Literals("value", ["on", "off"]);
+const contributionSettingScopeFlag = Flag.Literals("scope", ["profile", "overlay"]).pipe(
   Flag.withDefault("profile"),
 );
-const contributionSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
-const operationSettingArgument = Argument.choice("setting", OperationSettingName.literals);
-const operationSettingValueArgument = Argument.string("value");
-const operationSettingScopeFlag = Flag.choice("scope", ["profile", "host", "overlay"]).pipe(
+const contributionSettingWorkspaceFlag = Flag.String("workspace").pipe(Flag.optional);
+const operationSettingArgument = Argument.Literals("setting", OperationSettingName.literals);
+const operationSettingValueArgument = Argument.String("value");
+const operationSettingScopeFlag = Flag.Literals("scope", ["profile", "host", "overlay"]).pipe(
   Flag.withDefault("profile"),
 );
-const operationSettingWorkspaceFlag = Flag.string("workspace").pipe(Flag.optional);
+const operationSettingWorkspaceFlag = Flag.String("workspace").pipe(Flag.optional);
 
 export { formatDaemonLimits } from "./status";
 
@@ -429,14 +430,21 @@ export const withWatchReconnect = <A, R>(stream: Stream.Stream<A, WatchRpcError,
   );
 
 const watchStream = (
-  source: Stream.Stream<RunActivity, WatchRpcError>,
+  source: Stream.Stream<RunWatchItem, WatchRpcError>,
   seen: Ref.Ref<ReadonlyMap<string, number>>,
-) => withWatchReconnect(source.pipe(Stream.filterEffect(markSeen(seen))));
+) =>
+  withWatchReconnect(
+    source.pipe(
+      Stream.filter(RunWatchItem.guards.RunActivity),
+      Stream.map((item) => item.activity),
+      Stream.filterEffect(markSeen(seen)),
+    ),
+  );
 
 const overviewScreen = (board: Board) => `${clearScreen}${renderBoard(board).join("\n")}`;
 
 const watchOverview = (source: Stream.Stream<DaemonEvent, WatchRpcError>) =>
-  withWatchReconnect(source.pipe(Stream.scan(initialBoard, applyDaemonEvent))).pipe(
+  withWatchReconnect(source.pipe(Stream.scan(() => initialBoard, applyDaemonEvent))).pipe(
     Stream.runForEach((board) => Console.log(overviewScreen(board))),
   );
 

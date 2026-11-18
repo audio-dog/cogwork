@@ -5,6 +5,7 @@ import {
   ControlStoreFailure,
   HandbackRecord,
   HarnessName,
+  IssueTrackerType,
   keyOf,
   LineageId,
   localOwnerId,
@@ -36,13 +37,13 @@ import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { clockEntries } from "./clock-source";
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, CoordinationError, type CoordinationService, fold } from "./coordination";
@@ -67,7 +68,7 @@ import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
 import { defaultRunBudget } from "./provider-runner";
 import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry } from "./registry";
-import { RunLedger } from "./run-ledger";
+import { RunLedger, type RunLedgerService } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { SlackWrite } from "./slack-write";
 import {
@@ -76,6 +77,7 @@ import {
   type SourceControlProviderService,
 } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { LogProbe } from "./testing/log-probe";
 import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
@@ -660,6 +662,13 @@ const issueSearchService = (baseCatalogResult: Effect.Success<WorkflowsService["
     }),
   } satisfies WorkflowsService;
 };
+
+const probedRequirements = Layer.merge(requirements, LogProbe.captureLayer);
+
+const refusedRunUpdates = Effect.fn("WorkflowRunTest.refusedRunUpdates")(function* () {
+  const entries = yield* (yield* LogProbe).entries;
+  return entries.filter(({ message }) => JSON.stringify(message).includes("refused a status change"));
+});
 
 const testProgram = (
   objects: ReadonlyArray<unknown>,
@@ -2285,8 +2294,12 @@ describe("WorkflowRun", () => {
         (yield* Ref.get(coordination.handbacks))[0]?.note,
         "The pull request received a new commit. Review the new head.",
       );
-      assert.strictEqual((yield* (yield* RunLedger).getRun(attempt))?.status, "interrupted");
-    }).pipe(Effect.provide(requirements), Effect.scoped),
+      assert.deepInclude(yield* (yield* RunLedger).getRun(attempt), {
+        status: "succeeded",
+        endedAtMillis: 2,
+      });
+      assert.isEmpty(yield* refusedRunUpdates());
+    }).pipe(Effect.provide(probedRequirements), Effect.scoped),
   );
 
   it.effect("rejects an approval plan as Stop and records the person's note", () =>
@@ -2532,7 +2545,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("replans the frozen operation after handback and interrupts its prior Run", () =>
+  it.effect("replans the frozen operation after handback and keeps its prior Run's status", () =>
     Effect.gen(function* () {
       const publish = decodeNode("publish");
       const [summarize] = document.operations;
@@ -2608,9 +2621,9 @@ describe("WorkflowRun", () => {
         branch: null,
         session: priorSession,
         usage: null,
-        status: "running",
+        status: "failed",
         startedAtMillis: 1,
-        endedAtMillis: null,
+        endedAtMillis: 2,
       });
       yield* (yield* WorkflowActionPlanStore).create(pending);
       yield* coordination.service.handBack(admission.event.key, {
@@ -2625,15 +2638,16 @@ describe("WorkflowRun", () => {
         summary: "Published",
       });
       assert.deepInclude(yield* ledger.getRun(pending.attempt), {
-        status: "interrupted",
-        endedAtMillis: 0,
+        status: "failed",
+        endedAtMillis: 2,
       });
       const resumed = (yield* ledger.listRuns(10)).find(({ id }) => id !== pending.attempt);
       assert.strictEqual(resumed?.session, priorSession);
       const resumedPlan = resumed === undefined ? null : yield* ledger.getRunPlan(resumed.id);
       assert.include(resumedPlan?.messages[0]?.content ?? "", "Person's note: Use the repaired Workspace");
       assert.strictEqual(yield* Ref.get(coordination.claims), 1);
-    }).pipe(Effect.provide(requirements), Effect.scoped),
+      assert.isEmpty(yield* refusedRunUpdates());
+    }).pipe(Effect.provide(probedRequirements), Effect.scoped),
   );
 
   it.effect("resumes a stuck Operation session with the person's note", () =>
@@ -2788,7 +2802,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("interrupts the Run for a plan withdrawn by a new source revision", () =>
+  it.effect("keeps the Run's status when a new source revision withdraws its plan", () =>
     Effect.gen(function* () {
       const staleAttempt = decodeRun("stale-plan");
       const stalePlan = WorkflowActionPlan.make({
@@ -2816,9 +2830,9 @@ describe("WorkflowRun", () => {
         branch: null,
         session: null,
         usage: null,
-        status: "running",
+        status: "succeeded",
         startedAtMillis: 1,
-        endedAtMillis: null,
+        endedAtMillis: 2,
       });
       yield* (yield* WorkflowActionPlanStore).create(stalePlan);
       const { runner } = yield* testProgram([
@@ -2833,10 +2847,11 @@ describe("WorkflowRun", () => {
       yield* runner.execute(admission);
 
       assert.deepInclude(yield* ledger.getRun(staleAttempt), {
-        status: "interrupted",
-        endedAtMillis: 0,
+        status: "succeeded",
+        endedAtMillis: 2,
       });
-    }).pipe(Effect.provide(requirements), Effect.scoped),
+      assert.isEmpty(yield* refusedRunUpdates());
+    }).pipe(Effect.provide(probedRequirements), Effect.scoped),
   );
 
   const refusedResults = [
@@ -3039,10 +3054,10 @@ describe("WorkflowRun", () => {
   );
 
   it.effect(
-    "settles the Run on each fresh or resumed Action plan failure and parks the item at exhaustion",
+    "settles the fresh Run once and parks the item when resumed Action plan failures exhaust it",
     () =>
       Effect.gen(function* () {
-        const { runner, coordination } = yield* testProgram(
+        const { runner, coordination, observationStore } = yield* testProgram(
           [
             {
               summary: "All clear",
@@ -3081,7 +3096,7 @@ describe("WorkflowRun", () => {
         assert.deepStrictEqual(results, [
           { outcome: "retry", statuses: ["failed"] },
           { outcome: "retry", statuses: ["failed"] },
-          { outcome: "completed", statuses: ["exhausted"] },
+          { outcome: "completed", statuses: ["failed"] },
         ]);
         const attempts = yield* Ref.get(coordination.attempts);
         assert.deepStrictEqual(
@@ -3090,6 +3105,13 @@ describe("WorkflowRun", () => {
         );
         assert.include(attempts[0]?.reason ?? "", "Control store unavailable");
         assert.strictEqual((yield* Ref.get(coordination.parks)).at(-1)?.reason._tag, "Exhausted");
+        const [run] = yield* ledger.listRuns(10);
+        assert.isDefined(run);
+        if (!run) return;
+        assert.deepStrictEqual(
+          (yield* observationStore.admissions).map(({ lineage }) => lineage.parent),
+          [LineageId.make(run.id)],
+        );
       }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -3214,5 +3236,219 @@ describe("WorkflowRun", () => {
         { statuses: ["interrupted"], attempts: [] },
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  const commentIssueEntry = decodeEntry("github.comment-issue");
+
+  const commentIssueCatalogEntry = {
+    key: commentIssueEntry,
+    name: "Comment on an issue",
+    kind: "action" as const,
+    system: "github",
+    connection: "github",
+    requires: [],
+    parameters: [],
+    itemKind: null,
+    actsOn: ["*"],
+    requiresWorkspace: true,
+    workspaceSource: "agent",
+    permissionProfile: "read-only" as const,
+    agentInputs: ["issue", "comment"],
+    emits: [],
+  } satisfies WorkflowCatalogEntry;
+
+  const commentStep = (position: number, status: "pending" | "completed") =>
+    WorkflowActionPlanStep.make({
+      position,
+      entry: commentIssueEntry,
+      parameters: [],
+      inputs: { issue: "#12", comment: `Step ${position}` },
+      target: {
+        _tag: "ExistingIssue",
+        workspace: reviewWorkspace.config.name,
+        app: IssueTrackerType.make("github"),
+        issueTracker: reviewWorkspace.config.issueTracker,
+        repository: null,
+        issue: decodeWorkItem("#12"),
+      },
+      writeKey: `settled-run:${position}`,
+      status,
+      failures: 0,
+      artifact: null,
+    });
+
+  const commentProbe = Effect.fn("WorkflowRunTest.commentProbe")(function* (failuresBeforeSuccess: number) {
+    const comments = yield* Ref.make<ReadonlyArray<string>>([]);
+    const failuresLeft = yield* Ref.make(failuresBeforeSuccess);
+    const tracker = {
+      ...(yield* makeEmptyIssueTracker),
+      commentIssue: (_workspace, issue, body) =>
+        Ref.getAndUpdate(failuresLeft, (left) => Math.max(0, left - 1)).pipe(
+          Effect.flatMap((left) =>
+            left > 0
+              ? Effect.fail(
+                  new IssueTrackerError({
+                    reason: "unavailable",
+                    retryable: true,
+                    message: "GitHub unavailable",
+                  }),
+                )
+              : Ref.update(comments, (current) => [...current, `${issue}:${body}`]),
+          ),
+        ),
+    } satisfies IssueTrackerService;
+    return { comments, tracker };
+  });
+
+  const settledRunMechanisms = [
+    {
+      name: "crash recovery at boot",
+      status: "crashed",
+      settle: (ledger: RunLedgerService) =>
+        ledger.crashRunning(decodeWorkspace(workflow), decodeWorkItem(keyOf(admission.event.key)), 5),
+    },
+    {
+      name: "a drain",
+      status: "interrupted",
+      settle: (ledger: RunLedgerService) => ledger.interruptRunning(0, 5),
+    },
+  ] as const;
+
+  it.effect.each(settledRunMechanisms)(
+    "keeps a Run settled by $name when its pending Action plan resumes and completes",
+    ({ status, settle }) =>
+      Effect.gen(function* () {
+        const { comments, tracker } = yield* commentProbe(0);
+        const { runner } = yield* testProgram([], { issueTracker: tracker });
+        const ledger = yield* RunLedger;
+        const attempt = decodeRun("settled-run");
+        yield* ledger.insertRun({
+          id: attempt,
+          workspace: decodeWorkspace(workflow),
+          workItem: decodeWorkItem(keyOf(admission.event.key)),
+          operation: "implement",
+          harness: harnessName,
+          branch: null,
+          session: null,
+          usage: null,
+          status: "running",
+          startedAtMillis: 1,
+          endedAtMillis: null,
+        });
+        yield* (yield* WorkflowActionPlanStore).create(
+          WorkflowActionPlan.make({
+            item: keyOf(admission.event.key),
+            workflow,
+            attempt,
+            operation,
+            revision: admission.event.revision,
+            createdAtMillis: 1,
+            consumedHandbackAtMillis: 0,
+            digest: "settled-run",
+            summary: "Two comments",
+            answers: {},
+            lineage: admission.lineage,
+            handOff: null,
+            steps: [commentStep(0, "completed"), commentStep(1, "pending")],
+          }),
+        );
+        yield* settle(ledger);
+        yield* TestClock.adjust("1 minute");
+
+        assert.strictEqual(yield* runner.execute(admission), "completed");
+
+        assert.deepStrictEqual(yield* Ref.get(comments), ["#12:Step 1"]);
+        assert.deepInclude(yield* ledger.getRun(attempt), { status, endedAtMillis: 5 });
+        assert.lengthOf(yield* ledger.listRuns(10), 1);
+        assert.isNull(yield* ledger.latestSeq(attempt));
+        assert.isEmpty(yield* refusedRunUpdates());
+      }).pipe(Effect.provide(probedRequirements), Effect.scoped),
+  );
+
+  it.effect("keeps a Run settled failed by a retryable write failure when a later resume completes", () =>
+    Effect.gen(function* () {
+      const commentDocument = WorkflowDocument.make({
+        ...document,
+        workspaces: { _tag: "Every" },
+        operations: document.operations.map((candidate) => ({
+          ...candidate,
+          transitions: candidate.transitions.map((transition) => ({
+            ...transition,
+            actions: [{ entry: commentIssueEntry, parameters: [] }],
+          })),
+        })),
+      });
+      const { comments, tracker } = yield* commentProbe(1);
+      const { runner } = yield* testProgram(
+        [
+          {
+            summary: "Comment ready",
+            stuck: false,
+            answers: { done: "yes" },
+            workspace: reviewWorkspace.config.name,
+            inputs: { issue: "#12", comment: "Captured" },
+          },
+        ],
+        { issueTracker: tracker, registry: { ...emptyRegistry, workspaces: [reviewWorkspace] } },
+        workflowServiceFor(commentDocument, [commentIssueCatalogEntry]),
+      );
+      const ledger = yield* RunLedger;
+
+      assert.strictEqual(yield* runner.execute(admission), "retry");
+      const [settled] = yield* ledger.listRuns(10);
+      assert.isDefined(settled);
+      if (!settled) return;
+      assert.strictEqual(settled.status, "failed");
+      const seqBeforeResume = yield* ledger.latestSeq(settled.id);
+      yield* TestClock.adjust("1 minute");
+
+      assert.strictEqual(yield* runner.execute(admission), "completed");
+
+      assert.deepStrictEqual(yield* Ref.get(comments), ["#12:Captured"]);
+      const runs = yield* ledger.listRuns(10);
+      assert.deepStrictEqual(
+        runs.map(({ id, status, endedAtMillis }) => ({ id, status, endedAtMillis })),
+        [{ id: settled.id, status: "failed", endedAtMillis: settled.endedAtMillis }],
+      );
+      assert.strictEqual(yield* ledger.latestSeq(settled.id), seqBeforeResume);
+      assert.isEmpty(yield* refusedRunUpdates());
+    }).pipe(Effect.provide(probedRequirements), Effect.scoped),
+  );
+
+  it.effect("keeps a Run settled at approval when the approved plan resumes", () =>
+    Effect.gen(function* () {
+      const waitingDocument = yield* documentWithTransition({
+        when: [{ question: decodeNode("done"), choice: decodeNode("yes") }],
+        actions: [{ entry: waitForApprovalEntry, parameters: [] }],
+        handOff: null,
+      });
+      const { runner, observationStore } = yield* testProgram(
+        [
+          {
+            summary: "Ready",
+            stuck: false,
+            answers: { done: "yes" },
+            inputs: { approval_request: "Run this plan" },
+          },
+        ],
+        {},
+        workflowServiceFor(waitingDocument, [waitForApprovalCatalogEntry]),
+      );
+      yield* observationStore.putAll([admission]);
+      yield* runner.execute(admission);
+      const plan = yield* (yield* WorkflowActionPlanStore).pending(keyOf(admission.event.key), workflow);
+      assert.isNotNull(plan);
+      if (plan === null) return;
+      const ledger = yield* RunLedger;
+      const settled = yield* ledger.getRun(plan.attempt);
+      assert.deepInclude(settled, { status: "succeeded" });
+      yield* TestClock.adjust("1 minute");
+
+      yield* runner.approve({ item: admission.event.key, attempt: plan.attempt, digest: plan.digest });
+
+      assert.isNull(yield* (yield* WorkflowActionPlanStore).pending(keyOf(admission.event.key), workflow));
+      assert.deepStrictEqual(yield* ledger.getRun(plan.attempt), settled);
+      assert.isEmpty(yield* refusedRunUpdates());
+    }).pipe(Effect.provide(probedRequirements), Effect.scoped),
   );
 });

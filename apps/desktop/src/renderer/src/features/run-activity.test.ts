@@ -1,6 +1,6 @@
 import { type AgUiEvent, DaemonEvent, type RunActivity } from "@cogwork/contracts";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Schema from "effect/Schema";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
 import { describe, expect, it, vi } from "vitest";
 import {
   applyRunPreview,
@@ -147,8 +147,8 @@ describe("foldTranscript", () => {
     const pump = makeTranscriptPump();
     const pull = vi.fn();
     const refresh = vi.fn();
-    const first = AsyncResult.success({ done: false, entries: [] });
-    const second = AsyncResult.success({ done: false, entries: [] });
+    const first = AsyncResult.success({ done: false, replaying: true, entries: [] });
+    const second = AsyncResult.success({ done: false, replaying: true, entries: [] });
 
     pump(first, pull, refresh);
     pump(first, pull, refresh);

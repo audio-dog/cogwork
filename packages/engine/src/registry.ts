@@ -11,7 +11,7 @@ import {
   type WorkspaceUpdate,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
-import * as Crypto from "effect/Crypto";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -20,7 +20,7 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import { type ScanAuthoringTreesRequest, scanAuthoringTrees } from "./authoring-tree";
 import { bootControlStoreLayer, ControlStore, readOnlyControlStoreClientLayer } from "./control-store";
 import { Git, type GitError } from "./git";
@@ -640,7 +640,7 @@ const foldRegistration = (state: RegistryState, change: WorkspaceRegistrationCha
 export const layer = (controlStorePath: string, userAgentsDir: string) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const crypto = yield* Crypto.Crypto;
+      const random = yield* SecureRandom.SecureRandom;
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const git = yield* Git;
@@ -732,7 +732,7 @@ export const layer = (controlStorePath: string, userAgentsDir: string) =>
               if (existing) {
                 return registrationError(`Workspace checkout path is already registered as ${existing.id}`);
               }
-              return crypto.randomUUIDv7.pipe(
+              return random.uuidV7().pipe(
                 Effect.flatMap(decodeWorkspaceId),
                 Effect.mapError((error) => registrationError(error)),
               );

@@ -126,11 +126,11 @@ const targetLabel = (target: WorkflowActionTarget) =>
   });
 
 const targetApp = (target: WorkflowActionTarget) =>
-  WorkflowActionTarget.match<CatalogIcon | null>(target, {
-    Cogwork: () => "cogwork",
+  WorkflowActionTarget.match(target, {
+    Cogwork: (): CatalogIcon => "cogwork",
     NoWorkspace: () => null,
-    SlackChannel: () => "slack",
-    SlackMessage: () => "slack",
+    SlackChannel: (): CatalogIcon => "slack",
+    SlackMessage: (): CatalogIcon => "slack",
     CurrentIssue: ({ app }) => catalogIcon(app),
     ExistingIssue: ({ app }) => catalogIcon(app),
     NewIssue: ({ app }) => catalogIcon(app),
@@ -224,8 +224,12 @@ const choicesFor = (
   });
 };
 
-const reasonOf = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>, catalog: WorkflowCatalog) =>
-  ParkReasonSchema.match<ParkReason>(park.reason, {
+const reasonOf = (
+  park: WorkflowPark,
+  workflows: ReadonlyArray<WorkflowRecord>,
+  catalog: WorkflowCatalog,
+): ParkReason =>
+  ParkReasonSchema.match(park.reason, {
     Stuck: ({ summary }) => ({ tag: "stuck", summary }) as const,
     Exhausted: ({ reason }) => ({ tag: "exhausted", failure: reason }) as const,
     HopCap: () => ({ tag: "hop-cap" }) as const,

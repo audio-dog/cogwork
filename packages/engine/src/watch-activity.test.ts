@@ -1,5 +1,5 @@
 import type { AgUiEvent, RunRecord } from "@cogwork/contracts";
-import { BranchName, HarnessName, RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import { BranchName, HarnessName, RunId, RunWatchItem, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -68,8 +68,20 @@ const recordWatching = (rec: RunRecord, events: ReadonlyArray<AgUiEvent>) =>
 const seed = (rec: RunRecord, events: ReadonlyArray<AgUiEvent>) =>
   Effect.flatMap(RunRecorder, (recorder) => Effect.forEach(events, (item) => recorder.record(rec, item)));
 
+const watchActivities = (id: RunId | undefined) =>
+  Stream.unwrap(Daemon.watchActivity(id)).pipe(
+    Stream.filter(RunWatchItem.guards.RunActivity),
+    Stream.map((item) => item.activity),
+  );
+
+const watchItemLabel = (item: RunWatchItem) =>
+  RunWatchItem.match(item, {
+    RunActivity: ({ activity }) => `seq ${activity.seq}`,
+    HistoryEnd: () => "history end",
+  });
+
 describe("watchActivity", () => {
-  it.effect("seeds scoped watchers from ledger history before live events", () =>
+  it.effect("seeds scoped watchers from ledger history, then marks the end of history, then goes live", () =>
     Effect.gen(function* () {
       const ledger = yield* RunLedger.RunLedger;
       const recorder = yield* RunRecorder;
@@ -83,23 +95,25 @@ describe("watchActivity", () => {
         event({ type: "TEXT_MESSAGE_CONTENT", delta: "lo" }),
       ]);
 
-      const ready = yield* Deferred.make<void>();
+      const historyEnded = yield* Deferred.make<void>();
       const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
-        Stream.tap((item) => (item.seq === 2 ? Deferred.succeed(ready, undefined) : Effect.void)),
-        Stream.take(4),
+        Stream.tap((item) =>
+          RunWatchItem.guards.HistoryEnd(item) ? Deferred.succeed(historyEnded, undefined) : Effect.void,
+        ),
+        Stream.take(5),
         Stream.runCollect,
         Effect.forkChild,
       );
 
-      yield* Deferred.await(ready);
+      yield* Deferred.await(historyEnded);
       yield* recorder.record(rec, event({ type: "TEXT_MESSAGE_CONTENT", delta: "!" }));
 
       const seen = yield* Fiber.join(fiber);
-      assert.deepStrictEqual(
-        seen.map((item) => item.seq),
-        [0, 1, 2, 3],
+      assert.deepStrictEqual(seen.map(watchItemLabel), ["seq 0", "seq 1", "seq 2", "history end", "seq 3"]);
+      assert.strictEqual(
+        reconstructText(seen.filter(RunWatchItem.guards.RunActivity).map((item) => item.activity)),
+        "Hello!",
       );
-      assert.strictEqual(reconstructText(seen), "Hello!");
     }).pipe(Effect.provide(layer), Effect.scoped),
   );
 
@@ -117,7 +131,7 @@ describe("watchActivity", () => {
       ]);
 
       const ready = yield* Deferred.make<void>();
-      const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
+      const fiber = yield* watchActivities(id).pipe(
         Stream.tap((item) => (item.seq === 1 ? Deferred.succeed(ready, undefined) : Effect.void)),
         Stream.take(3),
         Stream.runCollect,
@@ -177,7 +191,7 @@ describe("watchActivity", () => {
           ),
       };
 
-      const seen = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
+      const seen = yield* watchActivities(id).pipe(
         Stream.take(3),
         Stream.runCollect,
         Effect.provideService(RunRecorder, racing),
@@ -205,7 +219,7 @@ describe("watchActivity", () => {
       ]);
       yield* ledger.updateRun(id, { status: "succeeded", usage: null, endedAtMillis: 2000 });
 
-      const replayed = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(Stream.runCollect);
+      const replayed = yield* watchActivities(id).pipe(Stream.runCollect);
 
       assert.deepStrictEqual([...replayed], live);
       assert.strictEqual(reconstructText([...replayed]), "done");
@@ -240,7 +254,7 @@ describe("watchActivity", () => {
       ]);
       yield* ledger.updateRun(id, { status: "succeeded", usage: null, endedAtMillis: 2000 });
 
-      const replayed = [...(yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(Stream.runCollect))];
+      const replayed = [...(yield* watchActivities(id).pipe(Stream.runCollect))];
       assert.deepStrictEqual(replayed, live);
 
       const replayedReasoning = replayed.find((item) => item.event.type === "REASONING_MESSAGE_CONTENT");
@@ -279,7 +293,7 @@ describe("watchActivity", () => {
       yield* ledger.insertRun(rec);
       yield* seed(rec, [event({ type: "RUN_STARTED" })]);
 
-      const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(Stream.runCollect, Effect.forkChild);
+      const fiber = yield* watchActivities(id).pipe(Stream.runCollect, Effect.forkChild);
 
       yield* Effect.yieldNow;
       yield* eventBus.publishActivity(
@@ -306,7 +320,7 @@ describe("watchActivity", () => {
       yield* ledger.insertRun(rec);
       yield* seed(rec, [event({ type: "RUN_STARTED" })]);
 
-      const collect = () => Stream.unwrap(Daemon.watchActivity(id)).pipe(Stream.runCollect, Effect.forkChild);
+      const collect = () => watchActivities(id).pipe(Stream.runCollect, Effect.forkChild);
       const first = yield* collect();
       const second = yield* collect();
 
@@ -341,7 +355,7 @@ describe("watchActivity", () => {
       yield* ledger.insertRun(rec);
       yield* seed(rec, [started]);
 
-      const fiber = yield* Stream.unwrap(Daemon.watchActivity(undefined)).pipe(
+      const fiber = yield* watchActivities(undefined).pipe(
         Stream.take(1),
         Stream.runCollect,
         Effect.forkChild,

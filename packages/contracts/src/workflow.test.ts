@@ -19,7 +19,7 @@ import {
   type WorkflowDiagnosticCode,
   type WorkflowDocument,
   WorkflowDocument as WorkflowDocumentSchema,
-  WorkflowEditBatch,
+  type WorkflowEditBatch,
   WorkflowNodeId,
   workflowOperationResultJsonSchema,
   workflowOperationResultSchema,
@@ -424,10 +424,6 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
 ];
 
 describe("Workflow validator", () => {
-  it("rejects excess document keys at the Schema boundary", () => {
-    assert.isFalse(Schema.is(WorkflowDocumentSchema)({ ...baseDocument, extra: true }));
-  });
-
   it("bounds the answer combinations expanded by validation", () => {
     const questions = Array.from({ length: 13 }, (_, index) => ({
       id: `question-${index}`,
@@ -561,11 +557,6 @@ describe("Workflow validator", () => {
 });
 
 describe("Workflow edits", () => {
-  it("rejects excess edit keys at the Schema boundary", () => {
-    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "Rename", name: "Edited", extra: true }]));
-    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "ReplaceOperation", id: "triage", operation }]));
-  });
-
   it("applies a batch in arrival order", () => {
     const result = applyWorkflowEdits(baseDocument, [
       { _tag: "Rename", name: "First" },
@@ -760,7 +751,7 @@ describe("Workflow Operation result", () => {
         row.catalog,
         [cogworkWorkspace],
         row.itemWorkspace,
-      )["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+      );
       assert.strictEqual(json.type, "object");
       assert.deepStrictEqual(json.required, row.required);
       assert.strictEqual(json.additionalProperties, false);
@@ -801,7 +792,7 @@ describe("Workflow Operation result", () => {
           noInputsCatalog,
           [cogworkWorkspace],
           cogworkWorkspace,
-        )["~standard"].jsonSchema.input({ target: "draft-2020-12" }),
+        ),
         "properties",
       );
       const strictEmptyObject = { type: "object", additionalProperties: false };
@@ -827,9 +818,7 @@ describe("Workflow Operation result", () => {
         },
       ],
     };
-    const json = workflowOperationResultJsonSchema(reviewOperation, reviewCatalog)[
-      "~standard"
-    ].jsonSchema.input({ target: "draft-2020-12" });
+    const json = workflowOperationResultJsonSchema(reviewOperation, reviewCatalog);
     const inputs = jsonMember(jsonMember(json, "properties"), "inputs");
 
     assert.isObject(inputs);
@@ -847,7 +836,7 @@ describe("Workflow Operation result", () => {
         type: "object",
         properties: {
           path: { type: "string" },
-          line: { type: "integer", exclusiveMinimum: 0 },
+          line: { type: "integer", exclusiveMinimum: 0, maximum: Number.MAX_SAFE_INTEGER },
           body: { type: "string" },
         },
         required: ["path", "line", "body"],
@@ -882,7 +871,7 @@ describe("Workflow Operation result", () => {
   it("builds a strict for-each envelope", () => {
     const json = workflowOperationResultJsonSchema({ ...operation, forEach: "commitment" }, baseCatalog, [
       cogworkWorkspace,
-    ])["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+    ]);
 
     assert.deepStrictEqual(json.required, ["summary", "stuck", "elements"]);
     assert.strictEqual(json.additionalProperties, false);

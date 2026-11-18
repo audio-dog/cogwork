@@ -1,13 +1,14 @@
 import type { OAuthAppConfig } from "@cogwork/contracts";
 import { LinearClient as LinearSdk } from "@linear/sdk";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import {
   CredentialError,
   type StoredToken,
@@ -41,9 +42,8 @@ export const redirectUriFor = (oauth: OAuthAppConfig) =>
 const utf8 = new TextEncoder();
 
 export const codeChallenge = Effect.fn("linear.oauth.codeChallenge")(function* (verifier: string) {
-  const crypto = yield* Crypto.Crypto;
-  const digest = yield* crypto.digest("SHA-256", utf8.encode(verifier));
-  return Encoding.encodeBase64Url(digest);
+  const digest = yield* Digest.Digest;
+  return Base64Url.encode(yield* digest.digest(Digest.sha256, utf8.encode(verifier)));
 });
 
 export interface PkcePair {
@@ -52,14 +52,14 @@ export interface PkcePair {
 }
 
 export const makePkce = Effect.fn("linear.oauth.pkce")(function* () {
-  const crypto = yield* Crypto.Crypto;
-  const verifier = Encoding.encodeBase64Url(yield* crypto.randomBytes(32));
+  const random = yield* SecureRandom.SecureRandom;
+  const verifier = Base64Url.encode(yield* random.randomBytes(32));
   return { verifier, challenge: yield* codeChallenge(verifier) } satisfies PkcePair;
 });
 
 export const makeState = Effect.fn("linear.oauth.state")(function* () {
-  const crypto = yield* Crypto.Crypto;
-  return Encoding.encodeBase64Url(yield* crypto.randomBytes(16));
+  const random = yield* SecureRandom.SecureRandom;
+  return Base64Url.encode(yield* random.randomBytes(16));
 });
 
 export interface AuthorizeParams {

@@ -16,7 +16,10 @@ export const LocalContribution = Schema.Struct({
 });
 export type LocalContribution = typeof LocalContribution.Type;
 
-export const PluginContributionAuthority = Schema.TemplateLiteral(["plugin:", TrimmedNonEmptyString]);
+export const PluginContributionAuthority = Schema.TemplateLiteral([
+  "plugin:",
+  Schema.toType(TrimmedNonEmptyString),
+]);
 export type PluginContributionAuthority = typeof PluginContributionAuthority.Type;
 
 export const FileContribution = Schema.Struct({

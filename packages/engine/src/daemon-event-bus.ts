@@ -45,8 +45,11 @@ class ObservedSlidingStrategy<A> extends PubSub.SlidingStrategy<A> {
     subscribers: PubSub.PubSub.Subscribers<A>,
     elements: Iterable<A>,
     isShutdown: Parameters<PubSub.SlidingStrategy<A>["handleSurplus"]>[3],
+    ended: Parameters<PubSub.SlidingStrategy<A>["handleSurplus"]>[4],
   ) {
-    return super.handleSurplus(pubsub, subscribers, elements, isShutdown).pipe(Effect.tap(() => this.onDrop));
+    return super
+      .handleSurplus(pubsub, subscribers, elements, isShutdown, ended)
+      .pipe(Effect.tap(() => this.onDrop));
   }
 }
 

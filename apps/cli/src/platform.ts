@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { ContextFs, Git, Worktree, WorktreeFs } from "@cogwork/engine";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -7,10 +7,10 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import type * as PlatformError from "effect/PlatformError";
+import * as ChildProcess from "effect/process/ChildProcess";
+import { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Record from "effect/Record";
 import * as Stream from "effect/Stream";
-import * as ChildProcess from "effect/unstable/process/ChildProcess";
-import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 
 const describe = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 const timeoutMessage = (command: string, deadline: string) => `${command} timed out after ${deadline}`;
@@ -340,7 +340,7 @@ export const worktreeFsLayer = Layer.effect(
             }
 
             const resolvedTarget = path.join(realParent, path.basename(target));
-            const quarantine = `${resolvedTarget}.cogwork-debris-${randomUUID()}`;
+            const quarantine = `${resolvedTarget}.cogwork-debris-${SecureRandom.uuidV4Unsafe()}`;
             const gitEntry = path.join(quarantine, ".git");
             return Effect.uninterruptible(
               fs.rename(resolvedTarget, quarantine).pipe(

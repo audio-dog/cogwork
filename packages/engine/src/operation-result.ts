@@ -39,7 +39,9 @@ export const acceptOperationResult = <S extends Schema.ConstraintDecoder<unknown
   readonly capabilities: HarnessCapabilityProfile | null;
 }) =>
   Result.mapError(
-    Schema.decodeUnknownResult(input.schema, { errors: "all" })(input.event?.value.object),
+    Schema.decodeUnknownResult(input.schema, { errors: "all", onExcessProperty: "error" })(
+      input.event?.value.object,
+    ),
     (error): RefusedResult => RefusedResult.SchemaMismatch({ issues: formatIssues(error.issue).issues }),
   );
 

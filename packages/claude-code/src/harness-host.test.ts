@@ -20,7 +20,7 @@ import {
   hostAuthentication,
   makeLiveHarness,
   makeRequest,
-  NativeSandboxSettings,
+  NativeSettings,
   name,
   resumedSession,
   sessionHandles,
@@ -168,7 +168,7 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
           yield* Effect.forEach(
             captures,
             ([profile, capture]) =>
-              Schema.decodeUnknownEffect(NativeSandboxSettings)(capture.settings).pipe(
+              Schema.decodeUnknownEffect(NativeSettings)(capture.settings).pipe(
                 Effect.tap((settings) =>
                   Effect.sync(() => {
                     const readOnly = profile === "read-only";
@@ -180,6 +180,7 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
                       allowUnsandboxedCommands: false,
                       autoAllowBashIfSandboxed: !readOnly,
                     });
+                    assert.deepStrictEqual(settings.attribution, { commit: "", pr: "", sessionUrl: false });
                     assert.strictEqual(capture.settingSources, "");
                     assert.strictEqual(
                       capture.permissionMode,
@@ -266,7 +267,7 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
       "probes authenticated Claude launch, Session resume, and native structured output when enabled",
       () =>
         Effect.gen(function* () {
-          const enabled = yield* Config.string("COGWORK_LIVE_CLAUDE_PROBE").pipe(Config.withDefault("0"));
+          const enabled = yield* Config.String("COGWORK_LIVE_CLAUDE_PROBE").pipe(Config.withDefault("0"));
           if (enabled !== "1") return;
           const handle = yield* Effect.acquireRelease(createTestSandbox(), destroyTestSandbox);
           const harness = Harness.make([claudeCodeRunner({ name, authentication: hostAuthentication })]);

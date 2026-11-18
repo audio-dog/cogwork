@@ -1,3 +1,4 @@
+// @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createHash, type Hash } from "node:crypto";
 import {
   AgUiEvent,
@@ -590,7 +591,7 @@ const allPathsExternalDiff = "all-paths-external-diff";
 type ExternalDiffScope = typeof allPathsExternalDiff | ReadonlySet<string>;
 
 const externalDiffScope = Effect.fn("Tools.externalDiffScope")(function* (sandbox: WorktreeSandbox) {
-  const hasEnvironmentExternalDiff = yield* Config.string("GIT_EXTERNAL_DIFF").pipe(
+  const hasEnvironmentExternalDiff = yield* Config.String("GIT_EXTERNAL_DIFF").pipe(
     Config.option,
     Effect.match({
       onFailure: () => true,
