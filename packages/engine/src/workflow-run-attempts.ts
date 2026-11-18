@@ -1,16 +1,34 @@
-import type { RunId, RunRecord } from "@cogwork/contracts";
-import { keyOf } from "@cogwork/contracts";
+import {
+  type AgUiEvent,
+  keyOf,
+  type RunId,
+  type RunRecord,
+  WorkflowActionPlan,
+  type WorkflowOperationElement,
+} from "@cogwork/contracts";
 import type * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
 import { RefusedResult, refusalForAgent, refusalForPerson } from "./operation-result";
 import { RunLedger } from "./run-ledger";
+import { RunRecorder } from "./run-recorder";
 import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
 import type { WorkflowActionPlanDecodeError } from "./workflow-action-entry";
-import { type operationKeyOf, parkedAdmission } from "./workflow-run-admission";
+import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
+import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import {
+  fanOutAdmission,
+  handOffAdmission,
+  type operationKeyOf,
+  parkedAdmission,
+} from "./workflow-run-admission";
+
+const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 
 export type ClaimState = Data.TaggedEnum<{
   Idle: Record<never, never>;
@@ -24,17 +42,43 @@ export type ClaimState = Data.TaggedEnum<{
 export const ClaimState = Data.taggedEnum<ClaimState>();
 export type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
 
+type BuildInput = Parameters<typeof buildWorkflowActionPlan>[0];
+
+export type PullRequestBuildInput = (
+  runBranch: string | null,
+) => Pick<BuildInput, "sourceControl" | "worktrees" | "runBranch">;
+
+export type AcceptedOutput =
+  | BuildInput["output"]
+  | { readonly elements: ReadonlyArray<WorkflowOperationElement> };
+
+export interface AcceptedResult {
+  readonly admission: TriggerAdmission;
+  readonly claimed: Ref.Ref<ClaimState>;
+  readonly accepted: ClaimedWork;
+  readonly run: RunRecord;
+  readonly output: AcceptedOutput;
+  readonly startedAtMillis: number;
+  readonly plan: Pick<
+    BuildInput,
+    "document" | "operation" | "catalog" | "workspaces" | "workflowRevision" | "pullRequestSnapshots"
+  >;
+}
+
 const planRefusal = {
   invalid: { status: "failed", result: (message: string) => RefusedResult.ActionPlanRefused({ message }) },
   declined: { status: "declined", result: (reason: string) => RefusedResult.PullRequestDeclined({ reason }) },
 } as const;
 
-export const make = Effect.fn("WorkflowRunSettlement.make")(function* (
-  previousResultIssues: Ref.Ref<ReadonlyMap<string, string>>,
+export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(function* (
+  pullRequestBuildInput: PullRequestBuildInput,
 ) {
   const coordination = yield* Coordination;
   const ledger = yield* RunLedger;
+  const recorder = yield* RunRecorder;
+  const actionPlans = yield* WorkflowActionPlanStore;
   const observationStore = yield* TriggerObservationStore;
+  const previousResultIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
 
   const settleRun = (attempt: RunId | null, status: RunRecord["status"]) =>
     attempt === null
@@ -186,19 +230,111 @@ export const make = Effect.fn("WorkflowRunSettlement.make")(function* (
     });
   });
 
+  const actOnResult = Effect.fn("WorkflowRun.actOnResult")(function* ({
+    admission,
+    claimed,
+    accepted,
+    run,
+    output,
+    startedAtMillis,
+    plan,
+  }: AcceptedResult) {
+    if ("elements" in output) {
+      const children = output.elements.map((element, position) => ({
+        admission: fanOutAdmission(admission, run.id, position, element),
+        element,
+      }));
+      const acceptPlans = (plans: ReadonlyArray<WorkflowActionPlan>) =>
+        actionPlans.createAll(plans).pipe(
+          Effect.andThen(
+            Effect.forEach(
+              children,
+              ({ admission: child }) =>
+                coordination.observe(child.event.key, child.event.revision, child.event.cause),
+              { discard: true },
+            ),
+          ),
+          Effect.andThen(recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" })),
+          Effect.andThen(settleClaimed(claimed, "succeeded")),
+          Effect.andThen(
+            observationStore.fanOut(
+              admission,
+              children.map(({ admission: child }) => child),
+              closeRevision(admission),
+            ),
+          ),
+          Effect.map(() => "completed" as const),
+        );
+      return yield* Effect.forEach(children, ({ admission: child, element }) =>
+        buildWorkflowActionPlan({
+          ...plan,
+          admission: child,
+          output: element,
+          attempt: run.id,
+          createdAtMillis: startedAtMillis,
+          ...pullRequestBuildInput(run.branch),
+        }),
+      ).pipe(
+        Effect.matchEffect({
+          onFailure: (error) => refusePlan(admission, claimed, accepted, error),
+          onSuccess: acceptPlans,
+        }),
+      );
+    }
+
+    const actionPlanResult = yield* Effect.result(
+      buildWorkflowActionPlan({
+        ...plan,
+        admission,
+        output,
+        attempt: run.id,
+        createdAtMillis: yield* Clock.currentTimeMillis,
+        ...pullRequestBuildInput(run.branch),
+      }),
+    );
+    if (Result.isFailure(actionPlanResult)) {
+      return yield* refusePlan(admission, claimed, accepted, actionPlanResult.failure);
+    }
+    const actionPlan = yield* actionPlans.create(actionPlanResult.success);
+    const actionPlanEvent: AgUiEvent = {
+      type: "CUSTOM",
+      name: "workflow.action-plan",
+      value: { object: actionPlan, raw: encodeActionPlan(actionPlan) },
+    };
+    yield* recorder.record(run, actionPlanEvent);
+    const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
+    if (execution._tag === "Replan") {
+      yield* settleClaimed(claimed, "interrupted");
+      return admission;
+    }
+    if (execution._tag !== "Complete") {
+      const status =
+        execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou" ? "succeeded" : "failed";
+      yield* settleClaimed(claimed, status);
+      return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
+    }
+    yield* recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" });
+    yield* settleClaimed(claimed, "succeeded");
+    if (execution.handOff !== null) {
+      return handOffAdmission(admission, execution.handOff, run.id);
+    }
+    yield* complete(admission);
+    return "completed" as const;
+  });
+
   return {
+    previousResultIssues,
     settleClaimed,
     recordClaimedAttempt,
     claimItem,
-    closeRevision,
     complete,
     parkCappedLineage,
     skipNoLongerMatching,
     rejectPlan,
     refuseResult,
-    refusePlan,
     recoverClaimed,
-  } as const;
+    actOnResult,
+  };
 });
 
-export type WorkflowRunSettlement = Effect.Success<ReturnType<typeof make>>;
+export type WorkflowRunAttempts = Effect.Success<ReturnType<typeof makeWorkflowRunAttempts>>;

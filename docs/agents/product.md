@@ -11,7 +11,7 @@ Neither restates the other.
 
 - **The roadmap-turn test.** If the next three tickets all landed, would this sentence need
   editing? If yes it belongs on a map or a ticket, not here.
-- **The cache test.** Could an agent find this by reading the code, a `CONTEXT.md`, or the issue
+- **The cache test.** Could an agent find this by reading the code, a `GLOSSARY.md`, or the issue
   tracker? Then it does not live here. This document caches only what the environment cannot
   tell you: why the thing exists, what it refuses to be, and who it is for.
 - **Slice-level status lives on the tracker.** For "is X built yet", read the issue tracker or

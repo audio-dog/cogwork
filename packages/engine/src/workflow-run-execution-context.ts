@@ -14,18 +14,18 @@ import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 import { WorktreeManager } from "./worktree";
 
-export const make = Effect.gen(function* () {
+export const makeWorkflowRunExecutionContext = Effect.fn("WorkflowRun.makeExecutionContext")(function* () {
   const coordination = yield* Coordination;
-  const issueTracker = yield* IssueTracker;
   const ledger = yield* RunLedger;
+  const notifications = yield* WorkflowNotifications;
   const actionPlans = yield* WorkflowActionPlanStore;
   const artifacts = yield* WorkflowArtifactStore;
-  const notifications = yield* WorkflowNotifications;
+  const issueTracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
-  const slack = yield* SlackWrite;
-  const observationStore = yield* TriggerObservationStore;
   const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
   const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
+  const observationStore = yield* TriggerObservationStore;
+  const slack = yield* SlackWrite;
   const harnessContext = yield* Effect.context<HarnessRunnerEnv>();
   const coreExecutionContext = harnessContext.pipe(
     Context.add(Coordination, coordination),
@@ -51,5 +51,5 @@ export const make = Effect.gen(function* () {
     ...(worktrees ? { worktrees } : {}),
     ...(runBranch ? { runBranch } : {}),
   });
-  return { executionContext, pullRequestBuildInput } as const;
+  return { executionContext, pullRequestBuildInput };
 });

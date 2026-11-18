@@ -22,7 +22,7 @@ declares only Full, that is the only permission choice for a Cursor Run, includi
 
 ## Consequences
 
-This reverses the refuse-everything posture previously documented in `packages/cursor-acp/CONTEXT.md`
+This reverses the refuse-everything posture previously documented in `packages/cursor-acp/GLOSSARY.md`
 — do not "fix" Cursor back to hidden. The Full declaration trusts Cursor's own permission mode the
 same way ADR 0023 trusts Codex's hooks. Revisit when TanStack AI / ACP gains an enforceable
 permission mapping or an isolated Sandbox provider lands; either can justify adding the Read only

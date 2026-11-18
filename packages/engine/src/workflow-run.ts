@@ -4,7 +4,7 @@ import {
   keyOf,
   RunId,
   type RunRecord,
-  WorkflowActionPlan,
+  type WorkflowActionPlan,
   WorkflowTouchpointFailure,
   WorkItemId,
   WorkspaceId,
@@ -41,25 +41,20 @@ import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } fr
 import { Recheck } from "./trigger-source";
 import { Workflows } from "./workflow";
 import { itemWorkspaceOf } from "./workflow-action-entry";
-import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
+import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
-import {
-  fanOutAdmission,
-  handOffAdmission,
-  operationKeyOf,
-  parkedAdmission,
-  resumedLineageParentOf,
-} from "./workflow-run-admission";
+import { handOffAdmission, operationKeyOf, parkedAdmission } from "./workflow-run-admission";
+import { ClaimState, makeWorkflowRunAttempts } from "./workflow-run-attempts";
 import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
-import { make as makeExecutionContext } from "./workflow-run-execution-context";
-import { ClaimState, make as makeSettlement } from "./workflow-run-settlement";
-import { make as makeTouchpoints, touchpoint } from "./workflow-run-touchpoint";
+import { makeWorkflowRunExecutionContext } from "./workflow-run-execution-context";
+import { touchpointFailure } from "./workflow-run-pending-plan";
+import { makeWorkflowRunTouchpoints } from "./workflow-run-touchpoints";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
-const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
+
 export type WorkflowRunOutcome = "completed" | "retry" | "skipped" | "waiting";
 
 interface AdmissionExecutionState {
@@ -74,6 +69,9 @@ const resumedPlanHaltOutcome = {
   HandedToYou: "completed",
 } as const;
 
+const resumedLineageParentOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
+  admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
+
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
   const coordination = yield* Coordination;
@@ -84,25 +82,23 @@ export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
   const observationStore = yield* TriggerObservationStore;
   const triggerObservation = yield* TriggerObservation;
-  const preparation = yield* makeRunPreparation;
-  const { executionContext, pullRequestBuildInput } = yield* makeExecutionContext;
-  const runEngineTools = yield* makeRunEngineTools;
-  const previousResultIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
-
-  const touchpointGate = Semaphore.makeUnsafe(1);
+  const { executionContext, pullRequestBuildInput } = yield* makeWorkflowRunExecutionContext();
   const {
+    previousResultIssues,
+    settleClaimed,
+    recordClaimedAttempt,
     claimItem,
-    closeRevision,
     complete,
     parkCappedLineage,
-    recordClaimedAttempt,
-    recoverClaimed,
-    refusePlan,
-    refuseResult,
-    rejectPlan,
-    settleClaimed,
     skipNoLongerMatching,
-  } = yield* makeSettlement(previousResultIssues);
+    rejectPlan,
+    refuseResult,
+    recoverClaimed,
+    actOnResult,
+  } = yield* makeWorkflowRunAttempts(pullRequestBuildInput);
+  const preparation = yield* makeRunPreparation;
+  const runEngineTools = yield* makeRunEngineTools;
+  const touchpointGate = Semaphore.makeUnsafe(1);
 
   const declineRun = (reason: RunPlanRejection) =>
     Effect.logDebug("Run Plan rejected", { reason }).pipe(Effect.map(() => "waiting" as const));
@@ -292,99 +288,22 @@ export const make = Effect.gen(function* () {
       return "completed" as const;
     }
 
-    const reviewedPullRequests = yield* engineTools.reviewedPullRequests;
-
-    if ("elements" in decoded.success) {
-      const children = decoded.success.elements.map((element, position) => ({
-        admission: fanOutAdmission(admission, run.id, position, element),
-        element,
-      }));
-      const acceptPlans = (plans: ReadonlyArray<WorkflowActionPlan>) =>
-        actionPlans.createAll(plans).pipe(
-          Effect.andThen(
-            Effect.forEach(
-              children,
-              ({ admission: child }) =>
-                coordination.observe(child.event.key, child.event.revision, child.event.cause),
-              { discard: true },
-            ),
-          ),
-          Effect.andThen(recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" })),
-          Effect.andThen(settleClaimed(claimed, "succeeded")),
-          Effect.andThen(
-            observationStore.fanOut(
-              admission,
-              children.map(({ admission: child }) => child),
-              closeRevision(admission),
-            ),
-          ),
-          Effect.map(() => "completed" as const),
-        );
-      return yield* Effect.forEach(children, ({ admission: child, element }) =>
-        buildWorkflowActionPlan({
-          admission: child,
-          document,
-          operation,
-          catalog: catalogResult.catalog,
-          workspaces: registryState.workspaces,
-          output: element,
-          attempt: run.id,
-          createdAtMillis: startedAtMillis,
-          workflowRevision: record.publishedRevision ?? record.workingRevision,
-          ...pullRequestBuildInput(run.branch),
-          pullRequestSnapshots: reviewedPullRequests,
-        }),
-      ).pipe(
-        Effect.matchEffect({
-          onFailure: (error) => refusePlan(admission, claimed, accepted, error),
-          onSuccess: acceptPlans,
-        }),
-      );
-    }
-
-    const actionPlanResult = yield* Effect.result(
-      buildWorkflowActionPlan({
-        admission,
+    return yield* actOnResult({
+      admission,
+      claimed,
+      accepted,
+      run,
+      output: decoded.success,
+      startedAtMillis,
+      plan: {
         document,
         operation,
         catalog: catalogResult.catalog,
         workspaces: registryState.workspaces,
-        output: decoded.success,
-        attempt: run.id,
-        createdAtMillis: yield* Clock.currentTimeMillis,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
-        ...pullRequestBuildInput(run.branch),
-        pullRequestSnapshots: reviewedPullRequests,
-      }),
-    );
-    if (Result.isFailure(actionPlanResult)) {
-      return yield* refusePlan(admission, claimed, accepted, actionPlanResult.failure);
-    }
-    const actionPlan = yield* actionPlans.create(actionPlanResult.success);
-    const actionPlanEvent: AgUiEvent = {
-      type: "CUSTOM",
-      name: "workflow.action-plan",
-      value: { object: actionPlan, raw: encodeActionPlan(actionPlan) },
-    };
-    yield* recorder.record(run, actionPlanEvent);
-    const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
-    if (execution._tag === "Replan") {
-      yield* settleClaimed(claimed, "interrupted");
-      return admission;
-    }
-    if (execution._tag !== "Complete") {
-      const status =
-        execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou" ? "succeeded" : "failed";
-      yield* settleClaimed(claimed, status);
-      return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
-    }
-    yield* recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" });
-    yield* settleClaimed(claimed, "succeeded");
-    if (execution.handOff !== null) {
-      return handOffAdmission(admission, execution.handOff, run.id);
-    }
-    yield* complete(admission);
-    return "completed" as const;
+        pullRequestSnapshots: yield* engineTools.reviewedPullRequests,
+      },
+    });
   });
 
   const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (admission: TriggerAdmission) {
@@ -440,22 +359,34 @@ export const make = Effect.gen(function* () {
       Effect.map(({ outcome }) => outcome),
     );
 
-  const { refreshReviewPlans, approve, reject, chooseAnswer, handBack } = yield* makeTouchpoints({
-    executeAdmission,
+  const touchpoints = yield* makeWorkflowRunTouchpoints({
     complete,
+    executeAdmission,
     pullRequestBuildInput,
   });
+
+  const touchpoint = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    effect.pipe(
+      Effect.mapError((error) =>
+        Schema.is(WorkflowTouchpointFailure)(error)
+          ? error
+          : touchpointFailure("unavailable", error instanceof Error ? error.message : String(error)),
+      ),
+    );
 
   const runTouchpoint = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     touchpointGate.withPermit(touchpoint(effect).pipe(Effect.provide(executionContext)));
 
   return {
     execute: executeAdmission,
-    refreshReviewPlans: () => touchpointGate.withPermit(refreshReviewPlans()),
-    approve: (payload: Parameters<typeof approve>[0]) => runTouchpoint(approve(payload)),
-    reject: (payload: Parameters<typeof reject>[0]) => runTouchpoint(reject(payload)),
-    chooseAnswer: (payload: Parameters<typeof chooseAnswer>[0]) => runTouchpoint(chooseAnswer(payload)),
-    handBack: (payload: Parameters<typeof handBack>[0]) => runTouchpoint(handBack(payload)),
+    refreshReviewPlans: () => touchpointGate.withPermit(touchpoints.refreshReviewPlans()),
+    approve: (payload: Parameters<typeof touchpoints.approve>[0]) =>
+      runTouchpoint(touchpoints.approve(payload)),
+    reject: (payload: Parameters<typeof touchpoints.reject>[0]) => runTouchpoint(touchpoints.reject(payload)),
+    chooseAnswer: (payload: Parameters<typeof touchpoints.chooseAnswer>[0]) =>
+      runTouchpoint(touchpoints.chooseAnswer(payload)),
+    handBack: (payload: Parameters<typeof touchpoints.handBack>[0]) =>
+      runTouchpoint(touchpoints.handBack(payload)),
   } as const;
 });
 

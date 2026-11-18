@@ -8,7 +8,7 @@ Other documents hold the other rules:
 - `docs/agent-patterns/` — the Effect patterns.
 - `AGENTS.md` — the Control store and skill loading.
 - `apps/desktop/AGENTS.md` — the design system, Tailwind, and the React Compiler.
-- `CONTEXT-MAP.md` and each `CONTEXT.md` — the domain words.
+- `GLOSSARY-MAP.md` and each `GLOSSARY.md` — the domain words.
 
 ## Suppressions
 

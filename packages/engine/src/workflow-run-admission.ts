@@ -1,10 +1,4 @@
-import {
-  keyOf,
-  LineageId,
-  type RunId,
-  type WorkflowActionPlan,
-  type WorkflowOperationElement,
-} from "@cogwork/contracts";
+import { keyOf, LineageId, type RunId, type WorkflowOperationElement } from "@cogwork/contracts";
 import type { TriggerAdmission } from "./trigger-observation";
 
 export const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
@@ -60,6 +54,3 @@ export const fanOutAdmission = (
     },
   } satisfies TriggerAdmission;
 };
-
-export const resumedLineageParentOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
-  admission.event.key._tag === "FanOutChild" ? null : plan.attempt;

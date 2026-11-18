@@ -21,15 +21,15 @@ The project is pre-release, local, and single-user today.
 
 | Package | Role |
 |---|---|
-| [**contracts**](./packages/contracts/CONTEXT.md) | Shared schemas and orchestration vocabulary |
-| [**engine**](./packages/engine/CONTEXT.md) | Daemon, scheduler, executor, owned runner, worktrees, and service adapters |
-| [**cli**](./apps/cli/CONTEXT.md) | `cogwork` client and headless daemon host |
-| [**desktop**](./apps/desktop/CONTEXT.md) | Electron mission-control app and primary laptop daemon host |
-| [**claude-code**](./packages/claude-code/CONTEXT.md) | Claude Code harness adapter |
-| [**codex-cli**](./packages/codex-cli/CONTEXT.md) | Codex CLI harness adapter |
-| [**cursor-acp**](./packages/cursor-acp/CONTEXT.md) | Cursor harness adapter over ACP |
+| [**contracts**](./packages/contracts/GLOSSARY.md) | Shared schemas and orchestration vocabulary |
+| [**engine**](./packages/engine/GLOSSARY.md) | Daemon, scheduler, executor, owned runner, worktrees, and service adapters |
+| [**cli**](./apps/cli/GLOSSARY.md) | `cogwork` client and headless daemon host |
+| [**desktop**](./apps/desktop/GLOSSARY.md) | Electron mission-control app and primary laptop daemon host |
+| [**claude-code**](./packages/claude-code/GLOSSARY.md) | Claude Code harness adapter |
+| [**codex-cli**](./packages/codex-cli/GLOSSARY.md) | Codex CLI harness adapter |
+| [**cursor-acp**](./packages/cursor-acp/GLOSSARY.md) | Cursor harness adapter over ACP |
 
-Start with the [Context Map](./CONTEXT-MAP.md) for how the major contexts connect. Detailed product
+Start with the [Context Map](./GLOSSARY-MAP.md) for how the major contexts connect. Detailed product
 direction lives in [Product](./docs/agents/product.md), and operation playbooks live in
 [`packages/engine/operating-instructions`](./packages/engine/operating-instructions/).
 
