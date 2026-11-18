@@ -56,10 +56,6 @@ The work-specific facts supplied to a run, in one frozen shape for each item kin
 **The engine supplies them; the agent never fetches its own brief.** The work item's prose — and, for follow-up, its pull request's description and review comments — is read once, at admission, and frozen into the Run Plan, so a Run starts with its brief and a tracker MCP server is at most optional context. A steer posted mid-Run reaches the next round, not this one. See ADR 0030.
 _Avoid_: Operating instructions, prompt template, workflow settings
 
-**Resource reference**:
-A typed pointer from frozen Work Context prose to one resource in an external system, such as a Figma frame, derived by the Engine at admission. Each one makes a ready MCP server that **reads** its system a required need of that Run. A server only declares which systems it reads, so the requirement stays the Engine's and no Plugin marks itself required.
-_Avoid_: Link, attachment, design spec, conditional need
-
 The relationship is:
 
 ```text
@@ -107,14 +103,6 @@ _Avoid_: Operation priority (that's the fixed operation order), severity, weight
 **Triage role**:
 A label value a coding Workflow's Triggers can match and its Transitions can add, such as `needs-triage` or `ready-for-agent`. The engine gives the value no built-in meaning.
 _Avoid_: Status, state, label (when you mean the role's meaning)
-
-**Requirements digest**:
-The requirement details triage resolves from a work item's linked artifacts — final copy, design node links, decisions made in chat threads — and inlines into its proposal, so the work item becomes a self-contained brief. Context acquisition is triage's job, done once; an implement Run consults an external system only where the digest points at it. See ADR 0029.
-_Avoid_: Brief (the whole item and thread — the digest is the part triage adds), work context (the engine-supplied facts, not tracker content), triage proposal (the digest rides in it)
-
-**Review requirements**:
-The judgment reviews a work item's shape demands, named by triage in its proposal and honored by the implement Run. Selection, never exemption: the security review runs on every diff regardless of what triage named. See ADRs 0027 and 0029.
-_Avoid_: Review policy, gate (the local gate is checks, not reviews), required needs (the Operation definition's contract, not per-item flags)
 
 **Blocked / blocker / blocking**:
 An item is *blocked* when its issue tracker reports one or more open **blockers** — upstream items that must close before it can be worked — and it is *blocking* the items downstream of it. Blocking is the issue tracker's own dependency relation (GitHub issue dependencies today; Linear blocking relations when its adapter reads them), read per adapter. A blocked item is held out of the implementation operation until its blockers close, then becomes eligible on its own — no human acts. Neither eligible, claimed, nor needs-human.

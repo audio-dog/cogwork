@@ -18,18 +18,6 @@ _Avoid_: State / event, *filter* (that is a **Trigger filter**), *condition* for
 An author-set, typed value on a Trigger or an output action — a label, a channel, a schedule time, a review event — with fixed choices or a live list a Connection supplies. Only the author sets one; where the agent must choose, the author asks a **question** and routes on its answer.
 _Avoid_: Option (that is a **model option**), *filter* (that is a **Trigger filter**), setting, argument
 
-**Catch-up window**:
-An occurrence entry's parameter that bounds how far back its Trigger source reads after the daemon was down. Events older than the window are skipped, and the read model reports them.
-_Avoid_: Replay window, backfill
-
-**Quiet period**:
-An ambient Slack Trigger's parameter: how long a conversation must stay silent before the Trigger fires, so one Run reads a finished exchange. Beside it, *at most every* bounds how often one conversation fires.
-_Avoid_: Debounce, delay, cooldown (that is *at most every*)
-
-**Sweep**:
-A schedule Trigger with a selector over Work items that already exist — their source, state, and idle time — that gives each selected item one Run. Each sweep starts a new lineage, and the idle time bounds how fast it can repeat.
-_Avoid_: Batch, cron job, scan
-
 **Trigger source**:
 The observer of one source — the issue tracker, source control, Granola, Slack, or the clock — that emits Trigger events for its subscriptions. It sees subscriptions (an entry, its parameter values, and its Workspaces), never Workflows, and writes nothing; the engine admits its events and pairs them with Triggers. Receiving events instead of polling is a change inside one source, never a second model.
 _Avoid_: Sensor (the self-correction layer's health watcher), connector, listener, webhook

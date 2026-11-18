@@ -25,3 +25,12 @@ _Avoid_: Branch divergence (that's the branch versus its own remote, not the bas
 **Workspace registry**:
 The Control-store-backed set of registered workspaces and Workspace-input failures, held in a cell folded from workspace management acts. Register mints each `WorkspaceId`. Loading resolves the selected worktree remote (`origin` by default) and derives one GitHub `owner/repository` for any GitHub tracker or source control provider; register, update, refresh, and re-bind therefore follow the checkout instead of stored repository text. A required missing or unsupported remote makes that Workspace input fail. Update replaces the mutable non-path record and leaves Private workspace overlays intact. Re-bind changes only its checkout path. Deregister removes it from the cell before the next scheduler pick, while a Run already holding its workspace value finishes normally. Each act publishes the matching workspace change or removal. The engine's view of which repos it is driving.
 _Avoid_: Config store. Distinct from the harness runner map, which is also a "registry" of sorts.
+
+**Refused claim**:
+A claim the coordination authority will not accept, such as a claim on an item whose source revision was never observed. Distinct from a *contended* claim (`claim-held`), which the scheduler avoids by offering only unclaimed admissions. A refused claim is not *exhausted*: no run started, so there is no attempt record and no `RunStatus`.
+_Avoid_: Contended claim, stale claim (one we release), exhausted (a run that gave up after trying)
+
+**Round summary**:
+What a follow-up round tells the reviewer, posted by the engine to the pull request under the actor identity with the coordination marker attached. The one control-plane write that lands on the pull request rather than the issue tracker; the marker is what keeps it out of the human-feedback signal, and it stays the engine's to attach.
+**A round speaks to answer a question, never to narrate a state.** A round that pushed always posts. A round that pushed nothing returns a `speak` decision and posts only when it declines or answers something a person or a trusted bot asked — a nit it judged wrong, a finding it judged a false positive — so the asker learns why and does not raise it twice. A round that nobody asked anything of stays silent. Its summary still reaches the coordination comment either way, so a silent round is traceable.
+_Avoid_: Round comment, agent note (that's free-text operator prose), coordination detail (that lives on the tracker and carries the reason an item parked)

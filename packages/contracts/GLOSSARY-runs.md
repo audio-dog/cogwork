@@ -49,10 +49,6 @@ _Avoid_: Retry (interruption and crash are not attempts), Run takeover
 A successor driver adopting the same live native invocation and continuing the same Run after driver loss. It requires an exact delivery log, persistent native status, durable cancellation, distributed locking and fencing, and scheduled reaping. Cogwork does not enable it.
 _Avoid_: Session resume, retry, replacement Run, human attach
 
-**Harness switch**:
-A run selecting a different harness from the branch's latest session. It begins a new session with the full operating instructions while preserving the worktree, branch, code progress, claim, and historical run records; only conversation continuity is discarded. Switching back never resurrects an older session from that harness.
-_Avoid_: Session migration, session transfer, cross-harness resume
-
 **Exhausted / stuck**:
 The two failure outcomes that stop spending tokens after work starts. A Run is *exhausted* after three consecutive failed attempts for one Workflow Operation. An agent is *stuck* when its result reports it cannot proceed; the item parks at once with the summary. A new qualifying source revision can clear the park as a handback. Both are distinct from *blocked*, which is unresolved dependencies before an attempt.
 _Avoid_: Blocked (dependencies now), failed (the single, still-retryable attempt status).

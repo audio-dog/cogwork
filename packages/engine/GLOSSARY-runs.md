@@ -34,3 +34,15 @@ _Avoid_: Fixed Operation resolution, stage resolution, prompt assembly, decline 
 **Action entry**:
 One registered output action: its catalog row, the target it freezes, the write it performs, its phase in the Action plan's fixed order (approval, write, notify, terminal), and the engine Tools a Run needs to use it. Registered once under its full catalog key; the Trigger and action catalog's action rows derive from the registry, so a row cannot exist without its write. The row also gives the entry's **Workspace source**: where its target's Workspace comes from — the item, else the agent's choice (`item-else-agent`), or the agent's choice only (`agent`). The target producer reads the Workspace through that field, and the Operation result asks the agent for a Workspace only when the field says the agent chooses it.
 _Avoid_: Action executor (one field), catalog row (one field), handler, action definition
+
+**Refused result**:
+The typed reason the engine does not accept an **Operation result**. Its kinds are: the result does not match the schema (each issue's path and message), the action plan refuses it (the plan's message), pull request readiness declines it (the readiness reason), and the Harness stream fails before it gives a result. Each kind has two renderings. The agent text tells the next attempt what to change, through the `previous-result-issues` Run Plan resource. The person text is plain language for the attempt record and the `Exhausted` park reason that Attention shows; it never holds an Effect `Cause` dump. A refused result is a failed attempt, so three in a row make the item *exhausted*.
+_Avoid_: Refused claim (a claim coordination will not accept), decode issues (only one kind), error string
+
+**Resource reference**:
+A typed pointer from frozen Work Context prose to one resource in an external system, such as a Figma frame, derived by the Engine at admission. Each one makes a ready MCP server that **reads** its system a required need of that Run. A server only declares which systems it reads, so the requirement stays the Engine's and no Plugin marks itself required.
+_Avoid_: Link, attachment, design spec, conditional need
+
+**Harness switch**:
+A run selecting a different harness from the branch's latest session. It begins a new session with the full operating instructions while preserving the worktree, branch, code progress, claim, and historical run records; only conversation continuity is discarded. Switching back never resurrects an older session from that harness.
+_Avoid_: Session migration, session transfer, cross-harness resume
