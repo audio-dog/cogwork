@@ -37,6 +37,7 @@ _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
 `issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
+Each entry is the tracker's own identity for a person: a GitHub login, or a Linear user id (a UUID, never a username). The Workspace editor offers the people of the bound Connection by name and stores their identity. A register or update refuses an entry whose format is wrong for the tracker. A stored entry is not checked again on load, so an old value never fails the workspace: it matches no one, and the editor shows it as unknown so a person can remove it.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
 **Bot allowlist**:

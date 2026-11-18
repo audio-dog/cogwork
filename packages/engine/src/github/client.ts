@@ -227,7 +227,7 @@ const PullFileSchema = Schema.Struct({
 const CompareSchema = Schema.Struct({ files: Schema.Array(PullFileSchema) });
 
 const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
-const GitHubCollaboratorsSchema = Schema.Array(GitHubUserSchema);
+const GitHubUsersSchema = Schema.Array(GitHubUserSchema);
 const GitHubLabelsSchema = Schema.Array(Schema.Struct({ name: Schema.String }));
 const RequestedReviewersSchema = Schema.Struct({ users: Schema.Array(GitHubUserSchema) });
 
@@ -1336,23 +1336,28 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
     });
   });
 
-  const listCollaborators = Effect.fn("github.listCollaborators")(function* (repo: GitHubRepoRef) {
+  const listUserLogins = (repo: GitHubRepoRef, pathFor: (page: number) => string) => {
     const collect: (page?: number) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError> = Effect.fn(
-      "github.collectCollaboratorPages",
+      "github.collectUserPages",
     )(function* (page = 1) {
-      const json = yield* fetchJson(
-        repo,
-        repoPath(repo, `/collaborators?affiliation=all&per_page=100&page=${page}`),
-      );
+      const json = yield* fetchJson(repo, repoPath(repo, pathFor(page)));
       const users = yield* Effect.mapError(
-        Schema.decodeUnknownEffect(GitHubCollaboratorsSchema)(json),
+        Schema.decodeUnknownEffect(GitHubUsersSchema)(json),
         toUnavailable,
       );
       const current = users.map(({ login }) => login);
       if (current.length < 100) return current;
       return [...current, ...(yield* collect(page + 1))];
     });
-    return yield* withPaginationDeadline(collect());
+    return withPaginationDeadline(collect());
+  };
+
+  const listCollaborators = Effect.fn("github.listCollaborators")(function* (repo: GitHubRepoRef) {
+    return yield* listUserLogins(repo, (page) => `/collaborators?affiliation=all&per_page=100&page=${page}`);
+  });
+
+  const listAssignees = Effect.fn("github.listAssignees")(function* (repo: GitHubRepoRef) {
+    return yield* listUserLogins(repo, (page) => `/assignees?per_page=100&page=${page}`);
   });
 
   const listLabels = Effect.fn("github.listLabels")(function* (repo: GitHubRepoRef) {
@@ -1730,6 +1735,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
       }),
     createComment,
     listCollaborators,
+    listAssignees,
     listLabels,
     listRequestedReviewers,
     requestReview,

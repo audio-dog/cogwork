@@ -1,6 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
-import { IssueTrackerConfig, linearTeams, SourceControlConfig } from "./workspace";
+import { WorkspaceState } from "./daemon-event";
+import { IssueTrackerConfig, linearTeams, SourceControlConfig, WorkspaceUpdate } from "./workspace";
 
 const tracker = (over: Partial<typeof IssueTrackerConfig.Encoded>) =>
   Schema.decodeSync(IssueTrackerConfig)({ type: "linear", ...over });
@@ -78,6 +80,49 @@ describe("GitHub priority source", () => {
         type: "github",
         priority: { project: 1, field: "Priority" },
       }),
+    );
+  });
+});
+
+describe("assignee allowlist identities", () => {
+  const linearUserId = "5f8c1a2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b";
+  const update = (type: string, assigneeAllowlist: ReadonlyArray<string>) => ({
+    name: "cogwork",
+    issueTracker: { type, connectionId: `${type}/acme`, assigneeAllowlist },
+  });
+  const refusal = (input: unknown) => {
+    const exit = Schema.decodeUnknownExit(WorkspaceUpdate)(input);
+    return Exit.isFailure(exit) ? String(exit.cause) : null;
+  };
+
+  it.each([
+    ["linear", [linearUserId], null],
+    ["linear", ["taylor.steele"], "a Linear user id, got taylor.steele"],
+    ["github", ["taylorfsteele", "cogwork-bot"], null],
+    ["github", ["a b"], "a GitHub login, got a b"],
+  ] as const)("decodes a %s update with %j to refusal %s", (type, entries, expected) => {
+    const outcome = refusal(update(type, entries));
+    if (expected === null) return assert.isNull(outcome);
+    assert.include(outcome, expected);
+  });
+
+  it("still publishes a stored workspace whose allowlist holds a username", () => {
+    const state = Schema.decodeUnknownSync(WorkspaceState)({
+      _tag: "Registered",
+      name: "cogwork",
+      checkoutPath: "/repos/cogwork",
+      issueTracker: "linear",
+      record: {
+        ...update("linear", ["taylor.steele"]),
+        checkoutPath: "/repos/cogwork",
+        linearHistory: false,
+      },
+      contributions: [],
+    });
+
+    assert.deepStrictEqual(
+      WorkspaceState.guards.Registered(state) ? state.record.issueTracker.assigneeAllowlist : null,
+      ["taylor.steele"],
     );
   });
 });

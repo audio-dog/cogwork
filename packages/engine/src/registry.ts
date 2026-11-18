@@ -5,7 +5,8 @@ import {
   TrimmedNonEmptyString,
   WorkspaceConfig,
   WorkspaceId,
-  WorkspaceRegistration,
+  WorkspaceRecord,
+  type WorkspaceRegistration,
   WorkspaceRegistrationError,
   WorkspaceRegistryError,
   type WorkspaceUpdate,
@@ -166,7 +167,7 @@ const decodeLegacyGitHubRepositoryOption = Schema.decodeUnknownOption(
 );
 const decodeWorkspaceBindingColumns = Schema.decodeUnknownEffect(WorkspaceBindingColumns);
 const decodeWorkspaceConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
-const decodeWorkspaceRegistration = Schema.decodeUnknownEffect(WorkspaceRegistration);
+const decodeWorkspaceRecord = Schema.decodeUnknownEffect(WorkspaceRecord);
 const encodeIssueTracker = Schema.encodeSync(Schema.fromJsonString(IssueTrackerConfig));
 const encodeSourceControl = Schema.encodeSync(Schema.fromJsonString(SourceControlConfig));
 const encodeMcpSkills = Schema.encodeSync(Schema.fromJsonString(McpSkills));
@@ -316,7 +317,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   const binding = yield* decodeWorkspaceBindingColumns(row).pipe(
     Effect.mapError((error) => registrationError(error)),
   );
-  const record = yield* decodeWorkspaceRegistration({
+  const record = yield* decodeWorkspaceRecord({
     name: row.name,
     checkoutPath: row.checkoutPath,
     issueTracker: input.issueTracker,

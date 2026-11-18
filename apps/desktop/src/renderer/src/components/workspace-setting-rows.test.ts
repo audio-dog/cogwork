@@ -34,7 +34,7 @@ describe("workspace Connection choices", () => {
     expect(connectionItems([], "github")).toEqual([]);
   });
 
-  it("replaces the Connection when the tracker system changes", () => {
+  it("replaces the Connection and clears the assignee allowlist when the tracker system changes", () => {
     const github = Connection.make({
       id: connectionIdOf("github", "acme"),
       system: "github",
@@ -57,10 +57,12 @@ describe("workspace Connection choices", () => {
     expect(trackerSelectionPatch([github, revokedLinear, linear], "linear")).toEqual({
       issueTrackerType: "linear",
       issueTrackerConnectionId: linear.id,
+      assigneeAllowlist: [],
     });
     expect(trackerSelectionPatch([github, revokedLinear], "linear")).toEqual({
       issueTrackerType: "linear",
       issueTrackerConnectionId: "unbound",
+      assigneeAllowlist: [],
     });
   });
 

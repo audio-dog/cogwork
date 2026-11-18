@@ -18,6 +18,7 @@ import * as Registry from "./registry";
 
 const registration = Schema.decodeSync(WorkspaceRegistration);
 const workspaceUpdate = Schema.decodeSync(WorkspaceUpdate);
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const githubRegistration = (name: string, checkoutPath: string) =>
   registration({
@@ -222,6 +223,36 @@ layer(NodeServices.layer)((it) => {
           auth: { type: "credential-store" },
         },
       ]);
+    }),
+  );
+
+  it.effect("still loads a stored assignee allowlist entry that is not a tracker identity", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-allowlist-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "allowlist");
+      const context = yield* Layer.build(registryLayerAt(storePath));
+      const change = yield* Context.get(context, Registry.WorkspaceManagement).register(
+        registration({ name: "allowlist", checkoutPath, issueTracker: { type: "linear", teams: ["ENG"] } }),
+      );
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+      const storedTracker = yield* encodeJson({
+        type: "linear",
+        teams: ["ENG"],
+        assigneeAllowlist: ["taylor.steele"],
+      });
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces SET issue_tracker = ${storedTracker}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+
+      const reloadedContext = yield* Layer.build(registryLayerAt(storePath));
+      const state = yield* Context.get(reloadedContext, Registry.WorkspaceRegistry).state;
+
+      assert.deepStrictEqual(state.failures, []);
+      assert.deepStrictEqual(state.workspaces[0]?.record?.issueTracker.assigneeAllowlist, ["taylor.steele"]);
     }),
   );
 

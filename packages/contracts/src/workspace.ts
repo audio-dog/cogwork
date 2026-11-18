@@ -25,6 +25,12 @@ export type GitHubPriorityField = typeof GitHubPriorityField.Type;
 export const GitHubPrioritySource = Schema.Struct({ field: GitHubIssueFieldId });
 export type GitHubPrioritySource = typeof GitHubPrioritySource.Type;
 
+export const IssueTrackerPerson = Schema.Struct({
+  identity: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+});
+export type IssueTrackerPerson = typeof IssueTrackerPerson.Type;
+
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
@@ -83,14 +89,45 @@ const workspaceUpdateFields = {
   concurrency: Schema.optional(WorkspaceConcurrency),
 } as const;
 
-export const WorkspaceUpdate = Schema.Struct(workspaceUpdateFields);
+const assigneeIdentityFormats = new Map([
+  [
+    "github",
+    {
+      expected: "a GitHub login",
+      matches: Schema.is(
+        Schema.String.check(Schema.isPattern(/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/)),
+      ),
+    },
+  ],
+  ["linear", { expected: "a Linear user id", matches: Schema.is(Schema.String.check(Schema.isUUID())) }],
+]);
+
+const assigneeAllowlistIssue = (issueTracker: IssueTrackerConfig) => {
+  const format = assigneeIdentityFormats.get(issueTracker.type);
+  if (!format) return undefined;
+  const invalid = (issueTracker.assigneeAllowlist ?? []).filter((entry) => !format.matches(entry));
+  if (invalid.length === 0) return undefined;
+  return {
+    path: ["issueTracker", "assigneeAllowlist"],
+    issue: `Expected each assignee allowlist entry to be ${format.expected}, got ${invalid.join(", ")}`,
+  };
+};
+
+const assigneeAllowlistFitsTracker = Schema.makeFilter(
+  (workspace: { readonly issueTracker: IssueTrackerConfig }) =>
+    assigneeAllowlistIssue(workspace.issueTracker),
+);
+
+export const WorkspaceUpdate = Schema.Struct(workspaceUpdateFields).check(assigneeAllowlistFitsTracker);
 export type WorkspaceUpdate = typeof WorkspaceUpdate.Type;
 export type WorkspaceUpdateInput = Schema.Codec.Encoded<typeof WorkspaceUpdate>;
 
-export const WorkspaceRegistration = Schema.Struct({
+export const WorkspaceRecord = Schema.Struct({
   ...workspaceUpdateFields,
   checkoutPath: TrimmedNonEmptyString,
 });
+
+export const WorkspaceRegistration = WorkspaceRecord.check(assigneeAllowlistFitsTracker);
 export type WorkspaceRegistration = typeof WorkspaceRegistration.Type;
 export type WorkspaceRegistrationInput = Schema.Codec.Encoded<typeof WorkspaceRegistration>;
 

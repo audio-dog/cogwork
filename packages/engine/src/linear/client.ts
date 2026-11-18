@@ -523,6 +523,26 @@ query IssueHistory($id: String!, $after: String) {
   }
 }`;
 
+const activeUsersQuery = `
+query ActiveUsers($after: String) {
+  users(first: 250, after: $after, filter: { active: { eq: true } }) {
+    nodes { id name displayName }
+    pageInfo { hasNextPage endCursor }
+  }
+}`;
+
+const ActiveUsersPayload = Schema.Struct({
+  users: Schema.Struct({
+    nodes: Schema.Array(
+      Schema.Struct({ id: Schema.String, name: Schema.String, displayName: Schema.String }),
+    ),
+    pageInfo: PageInfoNode,
+  }),
+});
+const decodeActiveUsers = Schema.decodeUnknownEffect(ActiveUsersPayload);
+
+export type LinearUser = (typeof ActiveUsersPayload.Type)["users"]["nodes"][number];
+
 const HistoryPayload = Schema.Struct({
   issue: Schema.NullOr(
     Schema.Struct({
@@ -1020,6 +1040,19 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     return applied.at(-1) ?? null;
   });
 
+  const listActiveUsers = Effect.fn("linear.listActiveUsers")(function* (ref: LinearTeamRef) {
+    const collect: (after?: string | null) => Effect.Effect<ReadonlyArray<LinearUser>, IssueTrackerError> =
+      Effect.fn("linear.collectActiveUserPages")(function* (after = null) {
+        const data = yield* rawData(ref, activeUsersQuery, { after });
+        const { users } = yield* Effect.mapError(decodeActiveUsers(data), toUnavailable);
+        if (!users.pageInfo.hasNextPage) return users.nodes;
+        const cursor = users.pageInfo.endCursor;
+        if (cursor === null) return yield* unavailable("Linear user page missing cursor");
+        return [...users.nodes, ...(yield* collect(cursor))];
+      });
+    return yield* withPaginationDeadline("user", collect());
+  });
+
   const mutate = Effect.fn("linear.mutate")(function* (
     ref: LinearTeamRef,
     operation: string,
@@ -1246,6 +1279,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     createIssue,
     readTriggerProse,
     listLabels,
+    listActiveUsers,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);

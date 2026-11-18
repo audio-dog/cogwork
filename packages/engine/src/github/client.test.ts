@@ -1144,6 +1144,24 @@ describe("GitHub client", () => {
     }).pipe(withFetchClient(fetch));
   });
 
+  it.effect("lists assignable users from every page", () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({ login: `assignee-${index}` }));
+    const fetch = vi.fn<typeof globalThis.fetch>((input) => {
+      const url = new URL(typeof input === "string" || input instanceof URL ? String(input) : input.url);
+      if (!url.pathname.endsWith("/assignees")) return Promise.resolve(jsonResponse([], 404));
+      return Promise.resolve(
+        jsonResponse(url.searchParams.get("page") === "1" ? firstPage : [{ login: "taylor" }]),
+      );
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const assignees = yield* client.listAssignees(repo);
+      assert.lengthOf(assignees, 101);
+      assert.strictEqual(assignees.at(-1), "taylor");
+    }).pipe(withFetchClient(fetch));
+  });
+
   it.effect("lists repository labels from every page", () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => ({
       name: `label-${index}`,
