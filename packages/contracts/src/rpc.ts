@@ -26,7 +26,7 @@ import { HarnessCatalog, HarnessNotRegistered, HarnessReadiness } from "./harnes
 import { IssueTrackerError } from "./issue-tracker";
 import { PluginFailure, PluginId, PluginMutationResult, PluginOverview } from "./plugin";
 import { PrincipalMiddleware } from "./principal";
-import { RunActivity, RunHistory, RunId, RunStatus, RunSummary } from "./run";
+import { RunHistory, RunId, RunStatus, RunSummary, RunWatchItem } from "./run";
 import {
   ContributionSettingRefused,
   ContributionSettingUpdate,
@@ -113,7 +113,7 @@ export const ResolveWatchTarget = Rpc.make("ResolveWatchTarget", {
 
 export const WatchActivity = Rpc.make("WatchActivity", {
   payload: { id: Schema.optional(RunId) },
-  success: RunActivity,
+  success: RunWatchItem,
   stream: true,
 });
 

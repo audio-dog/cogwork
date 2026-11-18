@@ -11,6 +11,7 @@ import {
   PrincipalMiddleware,
   type RunActivity,
   type RunId,
+  RunWatchItem,
   type WorkspaceId,
 } from "@cogwork/contracts";
 
@@ -136,7 +137,12 @@ export const daemonInfoLayer = Layer.effect(
   Effect.map(Clock.currentTimeMillis, (startedAtMillis) => ({ startedAtMillis })),
 );
 
-const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
+const watchedActivity = (activity: RunActivity) => ({ _tag: "RunActivity", activity }) satisfies RunWatchItem;
+
+const historyEnd = { _tag: "HistoryEnd" } satisfies RunWatchItem;
+
+const endsRun = (item: RunWatchItem) =>
+  RunWatchItem.guards.RunActivity(item) && agUiIsTerminal(item.activity.event);
 
 type ControlStoreSeedEvent = Omit<
   Extract<DaemonEvent, { readonly _tag: "ControlStoreChanged" }>,
@@ -179,7 +185,7 @@ const pluginSeedEvent = (plugins: PluginSeedEvent["plugins"]) =>
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
   const bus = yield* DaemonEventBus;
-  if (id === undefined) return bus.activity;
+  if (id === undefined) return bus.activity.pipe(Stream.map(watchedActivity));
 
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
@@ -187,13 +193,18 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   const run = yield* ledger.getRun(id);
   if (run === null) return Stream.empty;
   const historyHead = (yield* ledger.latestSeq(id)) ?? -1;
-  const history = recorder.replay(run).pipe(Stream.takeWhile((item) => item.seq <= historyHead));
+  const history = recorder.replay(run).pipe(
+    Stream.takeWhile((item) => item.seq <= historyHead),
+    Stream.map(watchedActivity),
+    Stream.concat(Stream.make(historyEnd)),
+  );
   const live = runActivityStream(Stream.fromSubscription(subscription)).pipe(
     Stream.filter((item) => item.runId === id && item.seq > historyHead),
+    Stream.map(watchedActivity),
   );
   const settled = run.status !== "running";
   const base = settled ? history : Stream.concat(history, live);
-  return base.pipe(Stream.takeUntil(isTerminalActivity));
+  return base.pipe(Stream.takeUntil(endsRun));
 });
 
 const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {

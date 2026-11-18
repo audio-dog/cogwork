@@ -3,7 +3,6 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
-import { slackActionEntries } from "./slack-write";
 import { SourceControlProvider } from "./source-control";
 import { type TriggerSource, TriggerSources } from "./trigger-source";
 import { registeredActionRowsFor } from "./workflow-action-registry";
@@ -44,7 +43,7 @@ export const workflowCatalogContributionsLayer = Layer.effect(
       ...issueTrackerApps.map(issueTrackerWorkflowCatalogContribution),
       sourceControl.workflowCatalogContribution,
       ...sources.map(sourceContribution),
-      { entries: slackActionEntries, templates: [] },
+      { entries: registeredActionRowsFor("slack"), templates: [] },
     ];
   }),
 );
