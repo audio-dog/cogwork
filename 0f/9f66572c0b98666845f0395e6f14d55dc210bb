@@ -1,0 +1,213 @@
+apps/desktop/src/renderer/src/components/attention-board-card.tsx
+  s_27a74563e8df5a::t_d8ecff8ca914ac 1-104
+apps/desktop/src/renderer/src/components/attention-board-context.tsx
+  s_3bf70b136abae0::t_1d6c944a0f1991 1-125
+apps/desktop/src/renderer/src/components/attention-board-notification.tsx
+  s_3bf70b136abae0::t_d4de4e7264338f 1-128
+apps/desktop/src/renderer/src/components/attention-board-parked.tsx
+  s_4f7df5fa13d96d::t_21de2b420f03df 1-590
+apps/desktop/src/renderer/src/components/attention-board-skipped.tsx
+  s_4f7df5fa13d96d::t_1878bed8db2b75 1-55
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_3bf70b136abae0::t_bbbdf3aa4e1ec9 6-12
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_181a4522502deb::t_ef18ccce5ca9b1 411-439
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_4f7df5fa13d96d::t_d52e54c08dfe60 20-21,242-250
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_181a4522502deb::t_3a235102c57a04 22-30,127-144,198-202
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_4f7df5fa13d96d::t_51cebd5f15da60 4-5
+packages/contracts/CONTEXT-client-rpc.md
+  s_27a74563e8df5a::t_a2089c108878a6 1-19
+packages/contracts/CONTEXT-configuration-contribution-kinds.md
+  s_27a74563e8df5a::t_6493d48bfa8cf0 1-56
+packages/contracts/CONTEXT-configuration-plugins.md
+  s_27a74563e8df5a::t_6e7d7bae9e9920 1-38
+packages/contracts/CONTEXT-configuration-settings.md
+  s_27a74563e8df5a::t_a8b6296d61093e 1-56
+packages/contracts/CONTEXT-coordination.md
+  s_27a74563e8df5a::t_8607874e9a01b3 1-33
+packages/contracts/CONTEXT-credentials.md
+  s_27a74563e8df5a::t_025fa8cf386fd9 1-7
+packages/contracts/CONTEXT-daemon-status.md
+  s_27a74563e8df5a::t_c9c04e9b159b67 1-19
+packages/contracts/CONTEXT-harness-contract.md
+  s_27a74563e8df5a::t_57a2d9cd7eb530 1-82
+packages/contracts/CONTEXT-human-touchpoints.md
+  s_27a74563e8df5a::t_e97e5aacc95455 1-27
+packages/contracts/CONTEXT-operations.md
+  s_27a74563e8df5a::t_81b299c2ed6f8a 1-121
+packages/contracts/CONTEXT-runs.md
+  s_27a74563e8df5a::t_eea81796fac338 1-62
+packages/contracts/CONTEXT-triggers.md
+  s_27a74563e8df5a::t_9508ad8092d873 1-47
+packages/contracts/CONTEXT-work.md
+  s_27a74563e8df5a::t_38e61b1baa7c56 1-45
+packages/contracts/CONTEXT-workflows.md
+  s_27a74563e8df5a::t_b99c3932e9acd4 1-40
+packages/contracts/CONTEXT.md
+  s_27a74563e8df5a::t_c62b2d577cacf6 9-24
+packages/contracts/src/coordination.ts
+  s_59dfc69c946e56::t_84458467367a45 149-155
+packages/engine/src/coordination-control-store.test.ts
+  s_181a4522502deb::t_35108637cfc214 106-133
+packages/engine/src/operation-result.ts
+  s_9b5f8aaaf40448::t_97bf327e255b9f 58
+packages/engine/src/park-notice.test.ts
+  s_181a4522502deb::t_4e5781f73c87b0 120-137
+packages/engine/src/workflow-attention.ts
+  s_59dfc69c946e56::t_d83921746fd3c9 34,39-51,61
+packages/engine/src/workflow-run-admission.test.ts
+  s_59dfc69c946e56::t_7979c2e76dfb9c 1-301
+packages/engine/src/workflow-run-admission.ts
+  s_ff202a7196ae4b::t_2a36e842a8faf6 1-65
+packages/engine/src/workflow-run-admissions-fixtures.ts
+  s_6d03ee9d1e369f::t_9731f579e4f7bc 1-76
+packages/engine/src/workflow-run-approval.test.ts
+  s_3bb6e28f89492a::t_5cb6dea3bd13d3 15-41,43-44,46-50,52,57,60,64,72-73,76-77,81,83-86,88,91,94,98,100,102-105,107-108,111,115,117-121,123,125-128,130-138,140,143,146,149-150,152,154-157,159-165,167-168,172,174-182,185-186,188,191-192,194-198,200-204,207-217,219-224,228-258,260-298,301-362,364-376,378-379,381-384,386-389,394,419-423,426-437
+packages/engine/src/workflow-run-checkout.test.ts
+  s_3bb6e28f89492a::t_689b692a10cf08 1-190
+packages/engine/src/workflow-run-checkout.ts
+  s_47f23ca3fbb8d2::t_3a9cf830b95989 1-136
+packages/engine/src/workflow-run-claim.ts
+  s_47f23ca3fbb8d2::t_a54bcea3b0fa45 1-213
+packages/engine/src/workflow-run-coding-template.test.ts
+  s_3bb6e28f89492a::t_8789384b1c49af 1-252
+packages/engine/src/workflow-run-documents-fixtures.ts
+  s_6d03ee9d1e369f::t_2c927984eb17a0 1-309
+packages/engine/src/workflow-run-execute.ts
+  s_47f23ca3fbb8d2::t_71a0c64f95e7ac 1-467
+packages/engine/src/workflow-run-fan-out.test.ts
+  s_59dfc69c946e56::t_d6239f76aa60a4 1-294
+packages/engine/src/workflow-run-fixtures.ts
+  s_3bb6e28f89492a::t_f7ae99bb029096 1-286
+packages/engine/src/workflow-run-hand-back.test.ts
+  s_59dfc69c946e56::t_14688f41ef8986 1-284
+packages/engine/src/workflow-run-hand-off.test.ts
+  s_59dfc69c946e56::t_2bdc8ad4ab0c6f 1-220
+packages/engine/src/workflow-run-retry.test.ts
+  s_59dfc69c946e56::t_1e0f00d9577107 1-333
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_59dfc69c946e56::t_51301857ec8607 1-420
+packages/engine/src/workflow-run-settled-run.test.ts
+  s_59dfc69c946e56::t_5231151bb46eea 1-306
+packages/engine/src/workflow-run-settlement.test.ts
+  s_6d03ee9d1e369f::t_8609327f001b6f 1-209
+packages/engine/src/workflow-run-skills.ts
+  s_47f23ca3fbb8d2::t_e12b62be010c82 1-33
+packages/engine/src/workflow-run-touchpoint.ts
+  s_47f23ca3fbb8d2::t_16eb1c84b6056f 1-379
+packages/engine/src/workflow-run.ts
+  s_47f23ca3fbb8d2::t_750acbdae8e027 1,10-11,15-16,20-25,68-72,128-131
+packages/engine/src/worktree-ensure-reuse.test.ts
+  s_27a74563e8df5a::t_d9f0ff0f298a41 1-218
+packages/engine/src/worktree-ensure.test.ts
+  s_27a74563e8df5a::t_371591a99ae517 8,10-23
+packages/engine/src/worktree-fixtures.ts
+  s_4f7df5fa13d96d::t_6035c63d3574af 1-206
+packages/engine/src/worktree-pull-request.test.ts
+  s_27a74563e8df5a::t_e755a39fdf9b24 1-301
+packages/engine/src/worktree-reconcile.test.ts
+  s_27a74563e8df5a::t_3ed8796df28581 1-180
+packages/engine/src/worktree-remove.test.ts
+  s_27a74563e8df5a::t_1047a89b75a49f 1-33
+packages/engine/src/worktree.ts
+  s_e13c453c293725::t_425abb6a95a2c7 273,302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0f9f66572c0b98666845f0395e6f14d55dc210bb",
+  "prompts": {},
+  "sessions": {
+    "s_181a4522502deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a328bfe8-aef0-4149-87c5-88da6da1c6c0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_27a74563e8df5a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a1c9d2d292db2e023",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_3bb6e28f89492a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a110059d3c862da3d",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_3bf70b136abae0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a42a88c490adfcd5b",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_47f23ca3fbb8d2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a5a9d8900a6a5f57e",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_4f7df5fa13d96d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a2f662d0f1d3a618a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_59dfc69c946e56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5fdd8ce9-a219-4870-b997-c41a9600be55",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_6d03ee9d1e369f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4f02a430b5b61864",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_9b5f8aaaf40448": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df4e8a73-7601-4a02-a53d-a834b2084a26",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e13c453c293725": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae705ca-9889-4b1b-9d41-f2e4665c886a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_ff202a7196ae4b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ac6a0be0d637afb90",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
