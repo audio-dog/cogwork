@@ -30,7 +30,7 @@ A read-model projection of Cogwork-opened pull requests that are open, not draft
 _Avoid_: Classification, merge stage, role
 
 **Assignee ownership gate**:
-A per-workspace Trigger-observation precondition: when `issueTracker.assigneeAllowlist` is set, an observed item is admitted only when an assignee is on the list. Absent means no gate. The bound Connection's account is distinct from whose work the daemon may take.
+A per-workspace Trigger-observation precondition: when `issueTracker.assigneeAllowlist` is set, an observed tracker item is admitted only when an assignee is on the list. A pull request is admitted only when a work item that its link key names has an assignee on the list. When no work item is linked, the pull request author must be on the list. A pull request event without its author and link key is not admitted. Absent means no gate. The bound Connection's account is distinct from whose work the daemon may take.
 _Avoid_: Assignee filter (it gates every Workflow, not just a view), permission check
 
 **Scheduler**:

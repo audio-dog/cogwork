@@ -246,7 +246,12 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
           }) satisfies TriggerEvent,
       );
   });
-  return [...conditionEvents, ...occurrenceEvents];
+  const pullRequest = {
+    author: pull.authorLogin,
+    headRef: pull.headRef,
+    closingIssueNumbers: pull.closingIssueNumbers,
+  };
+  return [...conditionEvents, ...occurrenceEvents].map((event) => ({ ...event, pullRequest }));
 });
 
 const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(function* (

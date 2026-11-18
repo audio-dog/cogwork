@@ -57,6 +57,21 @@ export const ticketSlug = (id: string) => kebab(id) || `u--${codePointSlug(id)}`
 export const branchBelongsToTicketSlug = (branch: string, slug: string) =>
   branch === slug || (branch.startsWith(`${slug}-`) && !branch.startsWith(`${slug}--`));
 
+interface LinkKeyPull {
+  readonly headRef: string;
+  readonly closingIssueNumbers: ReadonlyArray<number>;
+}
+
+const numericIssue = /^#(\d+)$/;
+
+export const pullClosesWorkItem = (id: string, pull: LinkKeyPull) => {
+  const match = numericIssue.exec(id);
+  return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
+};
+
+export const pullMatchesLinkKey = (id: string, pull: LinkKeyPull) =>
+  pullClosesWorkItem(id, pull) || branchBelongsToTicketSlug(pull.headRef, ticketSlug(id));
+
 export const slugify = (title: string) => kebab(title);
 
 export const branchName = (item: WorkItemRef) => {

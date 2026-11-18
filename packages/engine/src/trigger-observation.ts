@@ -12,7 +12,8 @@ import {
   type WorkflowCatalogKey,
   type WorkflowDocument,
   type WorkflowRecord,
-  type WorkItemId,
+  WorkItemId,
+  WorkItemRef,
   type WorkspaceId,
 } from "@cogwork/contracts";
 import * as EffectCause from "effect/Cause";
@@ -48,6 +49,7 @@ import {
   TriggerSubscription,
 } from "./trigger-source";
 import { Workflows } from "./workflow";
+import { pullMatchesLinkKey } from "./worktree";
 
 export const TriggerAdmission = Schema.Struct({
   event: TriggerEvent,
@@ -161,6 +163,7 @@ const checkpointOf = (admission: TriggerAdmission) =>
     : admission.event.atMillis;
 const assigneeSnapshotTtl = 60_000;
 const trackerSystems = ["github", "linear"] as const;
+const ungated = () => Effect.succeed(true);
 const freshAssignees = (snapshot: AssigneeSnapshot | undefined, now: number) =>
   snapshot && now - snapshot.atMillis < assigneeSnapshotTtl ? snapshot.assignees : null;
 
@@ -781,6 +784,42 @@ export const make = Effect.gen(function* () {
     return yield* assigneeGate.withPermit(refreshItemAssignees(workspace, itemId, now));
   });
 
+  const hasAllowlistedAssignee = Effect.fn("TriggerObservation.hasAllowlistedAssignee")(function* (
+    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
+    allowlist: ReadonlyArray<string>,
+    itemId: WorkItemId,
+  ) {
+    const assignees = yield* itemAssignees(workspace, itemId);
+    return assignees.some((assignee) => allowlist.includes(assignee));
+  });
+
+  const pullRequestLinkedItems = Effect.fn("TriggerObservation.pullRequestLinkedItems")(function* (
+    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
+    pullRequest: NonNullable<TriggerEvent["pullRequest"]>,
+  ) {
+    const now = yield* Clock.currentTimeMillis;
+    const observed = yield* assigneeGate.withPermit(refreshWorkspaceAssignees(workspace, now));
+    const closing =
+      workspace.config.issueTracker.type === "github"
+        ? pullRequest.closingIssueNumbers.map((number) => WorkItemId.make(`#${number}`))
+        : [];
+    return [...new Set([...observed.keys(), ...closing])].filter((id) => pullMatchesLinkKey(id, pullRequest));
+  });
+
+  const ownsPullRequest = Effect.fn("TriggerObservation.ownsPullRequest")(function* (
+    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
+    allowlist: ReadonlyArray<string>,
+    pullRequest: TriggerEvent["pullRequest"],
+  ) {
+    if (pullRequest === undefined) return false;
+    const linked = yield* pullRequestLinkedItems(workspace, pullRequest);
+    if (linked.length === 0) return allowlist.includes(pullRequest.author);
+    const owned = yield* Effect.forEach(linked, (itemId) =>
+      hasAllowlistedAssignee(workspace, allowlist, itemId),
+    );
+    return owned.includes(true);
+  });
+
   const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (
     event: TriggerEvent,
   ) {
@@ -790,9 +829,15 @@ export const make = Effect.gen(function* () {
     if (workspace === undefined) return false;
     const allowlist = workspace.config.issueTracker.assigneeAllowlist;
     if (allowlist === undefined) return true;
-    if (event.key._tag !== "Issue") return true;
-    const assignees = yield* itemAssignees(workspace, event.key.id);
-    return assignees.some((assignee) => allowlist.includes(assignee));
+    return yield* WorkItemRef.match(event.key, {
+      Issue: ({ id }) => hasAllowlistedAssignee(workspace, allowlist, id),
+      PullRequest: () => ownsPullRequest(workspace, allowlist, event.pullRequest),
+      GranolaNote: ungated,
+      SlackMessage: ungated,
+      SlackConversation: ungated,
+      ScheduleInstant: ungated,
+      FanOutChild: ungated,
+    });
   });
 
   const publishedSubscriptions = Effect.fn("TriggerObservation.publishedSubscriptions")(function* () {

@@ -36,7 +36,7 @@ Because that account is the person's own, it cannot tell Cogwork's writes from t
 _Avoid_: Bot id, owner (that's the allowlist), principal (that's an RPC caller)
 
 **Assignee allowlist**:
-`issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
+`issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. A pull request is eligible only when a work item that its link key names has an allowlisted assignee; when no work item is linked, its author must be on the list. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
 **Bot allowlist**:
