@@ -17,7 +17,7 @@ lives in a separate safekeep repo: [taylorfsteele/sync](https://github.com/taylo
 - [contracts](./packages/contracts/GLOSSARY.md) — shared kernel: the schemas and vocabulary every other orchestration context speaks (`WorkItem`, `Run`, `Claim`, harness terms, Workflows).
 - [engine](./packages/engine/GLOSSARY.md) — the runtime machinery: daemon, reconcile, scheduler, executor, harness dispatch, worktrees, and the issue-tracker and source-control-provider adapters.
 - [cli](./apps/cli/GLOSSARY.md) — `cogwork`, the client and headless daemon host: subcommands, RPC transport, workspace loading, live watch. On a laptop the desktop app is the primary daemon host (see product ADR 0008).
-- [desktop](./apps/desktop/GLOSSARY.md) — the Electron mission-control shell: primary daemon host on a laptop, supervising the engine as a bundled Node child and giving the renderer a typed IPC seam to the daemon (see product ADRs 0008/0009).
+- [desktop](./apps/desktop/GLOSSARY.md) — the Electron mission-control shell: primary daemon host on a laptop, supervising the engine as a bundled Node child and giving the renderer a typed IPC seam to the daemon (see product ADRs 0008/0009). It owns its settings surfaces: Plugins, Customize, Connections, and Workspaces.
 - [cursor-acp](./packages/cursor-acp/GLOSSARY.md) — the Cursor harness adapter: bridges the engine's harness contract to the Cursor agent over ACP.
 - [claude-code](./packages/claude-code/GLOSSARY.md) — the Claude Code harness adapter: drives an installed, host-authenticated Claude Code CLI through the TanStack adapter.
 - [codex-cli](./packages/codex-cli/GLOSSARY.md) — the Codex harness adapter: drives an installed, host-authenticated Codex CLI through the TanStack Codex adapter.
