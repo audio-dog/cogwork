@@ -32,6 +32,12 @@ class MergeInProgress extends Context.Service<MergeInProgress, Ref.Ref<boolean>>
 const mergeWorktreeLayer = Layer.unwrap(
   Effect.map(MergeInProgress, (mergeInProgress) =>
     Layer.mock(WorktreeManager, {
+      operationInProgress: () =>
+        Effect.map(Ref.get(mergeInProgress), (merging) =>
+          merging
+            ? { operation: "merge" as const, unmergedPaths: ["packages/engine/src/workflow-run.ts"] }
+            : null,
+        ),
       ensure: (_workspace, _item, options) =>
         Effect.flatMap(Ref.get(mergeInProgress), (merging) =>
           merging && !options?.resume
@@ -145,6 +151,58 @@ describe("WorkflowRun", () => {
           },
         );
       }).pipe(Effect.provide(mergeTestLayer), Effect.scoped),
+  );
+
+  it.effect("refuses Hand Back on a WorktreeBlocked park while the merge is still in progress", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* checkoutProgram([]);
+      yield* Ref.set(yield* MergeInProgress, true);
+      yield* runner.execute(checkoutAdmission);
+
+      const handBack = yield* runner
+        .handBack({ item: checkoutAdmission.event.key })
+        .pipe(
+          Effect.match({ onFailure: ({ reason, message }) => ({ reason, message }), onSuccess: () => null }),
+        );
+
+      assert.deepStrictEqual(
+        {
+          failure: handBack,
+          parks: (yield* Ref.get(coordination.parks)).map(({ reason }) => reason._tag),
+          handbacks: yield* Ref.get(coordination.handbacks),
+        },
+        {
+          failure: {
+            reason: "worktree-blocked",
+            message:
+              "Hand Back needs the worktree at /worktrees/workflow: branch workflow has a merge in progress (unmerged paths: packages/engine/src/workflow-run.ts). Finish or abort it first.",
+          },
+          parks: ["WorktreeBlocked"],
+          handbacks: [],
+        },
+      );
+    }).pipe(Effect.provide(mergeTestLayer), Effect.scoped),
+  );
+
+  it.effect("hands back a WorktreeBlocked park after the merge is aborted and reaches the harness", () =>
+    Effect.gen(function* () {
+      const { runner, notifications } = yield* checkoutProgram([
+        { summary: "Merged", stuck: false, answers: { done: "yes" }, inputs: { notification: "Merged" } },
+      ]);
+      yield* Ref.set(yield* MergeInProgress, true);
+      yield* runner.execute(checkoutAdmission);
+      yield* Ref.set(yield* MergeInProgress, false);
+
+      const handBack = yield* runner
+        .handBack({ item: checkoutAdmission.event.key })
+        .pipe(Effect.match({ onFailure: ({ reason }) => reason, onSuccess: () => "handed back" }));
+      yield* runner.execute(checkoutAdmission);
+
+      assert.deepStrictEqual(
+        { handBack, notifications: (yield* notifications.list).map(({ summary }) => summary) },
+        { handBack: "handed back", notifications: ["Merged"] },
+      );
+    }).pipe(Effect.provide(mergeTestLayer), Effect.scoped),
   );
 
   it.effect("retries a retryable checkout failure and parks it as Exhausted at the attempt limit", () =>

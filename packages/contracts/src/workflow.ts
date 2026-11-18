@@ -273,6 +273,7 @@ export class WorkflowTouchpointFailure extends Schema.TaggedError<WorkflowTouchp
       "not-awaiting-approval",
       "not-handed-to-you",
       "invalid-edits",
+      "worktree-blocked",
       "unavailable",
     ]),
     message: TrimmedNonEmptyString,

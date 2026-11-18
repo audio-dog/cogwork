@@ -143,15 +143,18 @@ const unresolvableMessage = (remote: string, branch: string, divergence: BranchD
     "a human needs to decide how to reconcile the branch.",
   ].join(" ");
 
-const operationMessage = (branch: string, operation: GitOperationInProgress) => {
+export const operationInProgressSummary = (branch: string, operation: GitOperationInProgress) => {
   const conflicts = operation.unmergedPaths.length
     ? `unmerged paths: ${operation.unmergedPaths.join(", ")}`
     : "no unmerged paths remain";
-  return [
-    `branch ${branch} has a ${operation.operation} in progress (${conflicts}).`,
+  return `branch ${branch} has a ${operation.operation} in progress (${conflicts}).`;
+};
+
+const operationMessage = (branch: string, operation: GitOperationInProgress) =>
+  [
+    operationInProgressSummary(branch, operation),
     "The worktree was left as it was; a human needs to finish or abort the operation.",
   ].join(" ");
-};
 
 export const make = Effect.gen(function* () {
   const git = yield* Git;
@@ -506,6 +509,7 @@ export const make = Effect.gen(function* () {
 
   return {
     ensure,
+    operationInProgress: git.operationInProgress,
     pullRequestReadiness,
     pushBranch,
     pushBranchIfAhead,
