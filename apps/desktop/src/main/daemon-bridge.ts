@@ -1,6 +1,6 @@
 import { NodeSocket } from "@effect/platform-node";
 import { Deferred, Effect, Scope } from "effect";
-import * as Socket from "effect/unstable/socket/Socket";
+import * as Socket from "effect/socket/Socket";
 import { type DaemonReachabilityError, waitForDaemonListening } from "./wait-for-socket";
 
 export interface DaemonBridgeSink {
@@ -30,34 +30,40 @@ export const createDaemonBridgePort = Effect.fn("DaemonBridge.createPort")(funct
 ) {
   const scope = yield* Effect.scope;
   const socket = yield* NodeSocket.makeNet({ path: socketPath, openTimeout: connectTimeout });
-  const write = yield* socket.writer;
+  const writer = yield* socket.writer;
   const connected = yield* Deferred.make<void, BridgeFailure>();
   yield* Scope.addFinalizer(scope, Deferred.interrupt(connected));
   yield* Effect.forkIn(
     waitForDaemonListening(socketPath).pipe(
       Effect.andThen(
-        socket.run((frame) => sink.onData(frame), {
-          onOpen: Deferred.succeed(connected, undefined),
-        }),
-      ),
-      Effect.matchEffect({
-        onFailure: (error) =>
-          Deferred.isDone(connected).pipe(
-            Effect.flatMap((wasConnected) =>
-              wasConnected
-                ? Effect.sync(() => sink.onClosed(closedReason(error)))
-                : Deferred.fail(connected, error),
+        Effect.scoped(
+          Socket.readerBytes(socket).pipe(
+            Effect.tap(() => Deferred.succeed(connected, undefined)),
+            Effect.flatMap((pull) =>
+              pull.pipe(
+                Effect.flatMap((frames) => Effect.sync(() => frames.forEach(sink.onData))),
+                Effect.forever,
+              ),
             ),
-            Effect.asVoid,
           ),
-        onSuccess: () => Effect.sync(() => sink.onClosed(null)),
-      }),
+        ),
+      ),
+      Effect.catch((error: BridgeFailure) =>
+        Deferred.isDone(connected).pipe(
+          Effect.flatMap((wasConnected) =>
+            wasConnected
+              ? Effect.sync(() => sink.onClosed(closedReason(error)))
+              : Deferred.fail(connected, error),
+          ),
+          Effect.asVoid,
+        ),
+      ),
     ),
     scope,
   );
 
   return {
     connect: Deferred.await(connected),
-    send: write,
+    send: (frame: string) => writer.write(frame),
   } satisfies DaemonBridgePort;
 });

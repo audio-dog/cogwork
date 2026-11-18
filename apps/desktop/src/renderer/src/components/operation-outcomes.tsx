@@ -39,7 +39,9 @@ import {
 import { createContext, Fragment, type ReactNode, use, useState } from "react";
 import { freshNodeId, yesOrNoQuestion } from "../features/workflow-defaults";
 import { type Answers, answersKey, outcomeEdits, transitionAt } from "../features/workflow-edits";
+import { importReviewMark } from "../features/workflow-import-review";
 import { BufferedInput, BufferedTextarea } from "./buffered-field";
+import { ImportReview, useDismissImportReview } from "./import-review";
 import {
   appIconOf,
   appOf,
@@ -288,6 +290,17 @@ function Instructions({ entry }: { readonly entry: WorkflowCatalogEntry }) {
   );
 }
 
+function ReviewedActionParameter({
+  mark,
+  children,
+}: {
+  readonly mark: string | null;
+  readonly children: ReactNode;
+}) {
+  if (mark === null) return children;
+  return <ImportReview mark={mark}>{children}</ImportReview>;
+}
+
 function ActionLine({ action, index }: { readonly action: WorkflowAction; readonly index: number }) {
   const {
     state: { operation },
@@ -295,27 +308,44 @@ function ActionLine({ action, index }: { readonly action: WorkflowAction; readon
     meta: { entries, listValues },
   } = useOperationOutcomes();
   const { state } = useOutcome();
+  const dismissImportReview = useDismissImportReview();
   const entry = entries.find(({ key }) => key === action.entry);
   const Icon = appIconOf(entry ? appOf(entry) : "cogwork");
   const name = entry?.name ?? action.entry;
+  const transitionIndex = operation.transitions.findIndex(
+    (transition) => answersKey(transition.when) === answersKey(state.when),
+  );
   return (
     <div className="group/action grid grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto] items-start gap-2 rounded-md px-1.5 hover:bg-muted/40">
       <span className="flex min-h-[26px] min-w-0 flex-wrap items-center gap-1.5 text-xs">
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate">{name}</span>
         {entry?.parameters.map((parameter) => (
-          <ParameterMenu
+          <ReviewedActionParameter
             key={parameter.id}
-            entry={entry}
-            parameter={parameter}
-            value={action.parameters.find(({ id }) => id === parameter.id)?.value ?? ""}
-            listValues={listValues}
-            onChange={(value) =>
-              actions.send(
-                outcomeEdits.setActionParameter(operation, state.when, index, parameter.id, value, entries),
-              )
+            mark={
+              transitionIndex < 0
+                ? null
+                : importReviewMark.actionParameter(operation.id, transitionIndex, index, parameter.id)
             }
-          />
+          >
+            <ParameterMenu
+              entry={entry}
+              parameter={parameter}
+              value={action.parameters.find(({ id }) => id === parameter.id)?.value ?? ""}
+              listValues={listValues}
+              onChange={(value) => {
+                if (transitionIndex >= 0) {
+                  dismissImportReview(
+                    importReviewMark.actionParameter(operation.id, transitionIndex, index, parameter.id),
+                  );
+                }
+                actions.send(
+                  outcomeEdits.setActionParameter(operation, state.when, index, parameter.id, value, entries),
+                );
+              }}
+            />
+          </ReviewedActionParameter>
         ))}
       </span>
       {entry ? <Instructions entry={entry} /> : <span />}

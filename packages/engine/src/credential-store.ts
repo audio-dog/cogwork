@@ -232,7 +232,7 @@ const annotateAccount =
     effect.pipe(Effect.annotateLogs({ account }), Effect.annotateSpans({ account }));
 
 const redactedEnv = (name: string) =>
-  Config.redacted(name).pipe(Effect.orElseSucceed(() => Redacted.make("")));
+  Config.Redacted(name).pipe(Effect.orElseSucceed(() => Redacted.make("")));
 
 const envCredential = Effect.fn("CredentialStore.env")(function* (account: CredentialAccount) {
   const configured = yield* redactedEnv(account.tokenEnv);

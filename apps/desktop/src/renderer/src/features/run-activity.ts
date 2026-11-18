@@ -13,9 +13,9 @@ import * as Cause from "effect/Cause";
 import * as Chunk from "effect/Chunk";
 import * as HashMap from "effect/HashMap";
 import * as Option from "effect/Option";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
-import * as Atom from "effect/unstable/reactivity/Atom";
-import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
+import * as Atom from "effect/reactivity/Atom";
+import { RpcClientError } from "effect/rpc/RpcClientError";
 import { useCallback } from "react";
 import { runActivityAtom } from "../daemon/atoms";
 

@@ -157,4 +157,4 @@ A struct built from fields at run time can be empty. An empty `Schema.Struct({})
 - `packages/engine/src/run-ledger.ts`: `workspace`/`workItem` are branded now; `branch` is the remaining raw-string parameter on the same signatures.
 - `packages/contracts/CONTEXT.md` ("Harness event"): the recorded openness decision the pattern preserves.
 - `.repos/t3code/packages/contracts/src/baseSchemas.ts`: `makeEntityId` (the same brand factory) and `ForwardCompatibleArray`, a principled decode-time forward-compatibility transform.
-- `.repos/opencode/packages/opencode/src/session/schema.ts`: prefix-checked brands (note: opencode pins an older beta; `Schema.TaggedErrorClass` there is `Schema.TaggedError` on the rc line — verify names against `.repos/effect` before copying).
+- `.repos/opencode/packages/opencode/src/session/schema.ts`: prefix-checked brands (note: opencode pins an older beta; `Schema.TaggedErrorClass` there is `Schema.TaggedError` on the pinned 4.1 release — verify names against `.repos/effect` before copying).

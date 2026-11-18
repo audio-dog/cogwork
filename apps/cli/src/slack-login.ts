@@ -4,15 +4,18 @@ import { ConnectionFailure } from "@cogwork/contracts";
 import { CredentialStore, Linear, Slack } from "@cogwork/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as Clock from "effect/Clock";
-import * as Crypto from "effect/Crypto";
+import * as Digest from "effect/crypto/Digest";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+import type * as HttpServer from "effect/http/HttpServer";
+import type * as HttpServerError from "effect/http/HttpServerError";
 import * as Layer from "effect/Layer";
+import type { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
-import type { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { awaitLoopbackAuthorization, BrowserOpener, browserOpenerLayer } from "./login";
 
 const slackClientId = "663911259169.12446984597813";
@@ -61,19 +64,38 @@ const requestDeadline = "30 seconds";
 const failure = (message: string) =>
   new ConnectionFailure({ operation: "login Slack", connectionId: null, message });
 
+const SlackError = Schema.Struct({ ok: Schema.Literal(false), error: Schema.String });
+
+// Slack places a rotating user token at the top level or under authed_user, depending on the grant.
+const rotatingTokenFields = {
+  access_token: Schema.optional(Schema.NonEmptyString),
+  refresh_token: Schema.optional(Schema.NonEmptyString),
+  expires_in: Schema.optional(Schema.Finite.check(Schema.isGreaterThan(0))),
+};
+
 const TokenResponse = Schema.Struct({
   ok: Schema.Literal(true),
-  access_token: Schema.NonEmptyString,
-  refresh_token: Schema.NonEmptyString,
-  expires_in: Schema.Finite.check(Schema.isGreaterThan(0)),
   scope: Schema.optional(Schema.String),
   team: Schema.Struct({ id: Schema.NonEmptyString }),
   authed_user: Schema.Struct({
     id: Schema.NonEmptyString,
     scope: Schema.optional(Schema.String),
+    ...rotatingTokenFields,
   }),
   app_id: Schema.optional(Schema.NonEmptyString),
+  ...rotatingTokenFields,
 });
+
+const ExchangeResponse = Schema.Union([SlackError, TokenResponse]);
+
+interface RotatingTokens {
+  readonly access_token?: string;
+  readonly refresh_token?: string;
+  readonly expires_in?: number;
+}
+
+const isRotatingGrant = <T extends RotatingTokens>(tokens: T): tokens is T & Required<RotatingTokens> =>
+  tokens.access_token !== undefined && tokens.refresh_token !== undefined && tokens.expires_in !== undefined;
 
 const RefreshResponse = Schema.Struct({
   ok: Schema.Literal(true),
@@ -83,7 +105,7 @@ const RefreshResponse = Schema.Struct({
   scope: Schema.optional(Schema.String),
 });
 
-const decodeTokenResponse = Schema.decodeUnknownEffect(TokenResponse);
+const decodeExchangeResponse = Schema.decodeUnknownEffect(ExchangeResponse);
 const decodeRefreshResponse = Schema.decodeUnknownEffect(RefreshResponse);
 
 const scopesOf = (scope: string) => scope.split(/[\s,]+/).filter(Boolean);
@@ -109,6 +131,25 @@ const readBody = Effect.fn("slack.oauth.readBody")(function* (
   return yield* response.json.pipe(
     Effect.mapError(() => failure(`${operation} returned an unreadable body`)),
   );
+});
+
+const fieldsOf = (body: unknown) =>
+  typeof body === "object" && body !== null ? Object.keys(body).join(", ") : typeof body;
+
+const decodeGrant = Effect.fn("slack.oauth.decodeGrant")(function* (body: unknown) {
+  const identity = yield* decodeExchangeResponse(body).pipe(
+    Effect.mapError(() =>
+      failure(`Slack token exchange returned an unexpected payload with fields: ${fieldsOf(body)}`),
+    ),
+  );
+  if (!identity.ok) return yield* failure(`Slack token exchange failed: ${identity.error}`);
+  const grant = [identity, identity.authed_user].find(isRotatingGrant);
+  if (!grant) {
+    return yield* failure(
+      "Slack token exchange returned no refresh token; turn on token rotation for the Slack app",
+    );
+  }
+  return { identity, grant };
 });
 
 const execute = <A, R>(effect: Effect.Effect<A, ConnectionFailure, R>, timedOut: string) =>
@@ -142,17 +183,23 @@ const exchange = Effect.fn("slack.oauth.exchange")(function* (
       .pipe(
         Effect.mapError(() => failure("Slack token exchange could not be reached")),
         Effect.flatMap((response) => readBody(response, "Slack token exchange")),
-        Effect.flatMap((body) =>
-          decodeTokenResponse(body).pipe(
-            Effect.mapError(() => failure("Slack token exchange returned an unexpected payload")),
-          ),
-        ),
+        Effect.flatMap(decodeGrant),
       ),
     "Slack token exchange",
   );
 });
 
-const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) {
+type CallbackServerLayer = Layer.Layer<HttpServer.HttpServer, HttpServerError.ServeError>;
+
+const callbackServerLayer = (redirectUri: string): CallbackServerLayer => {
+  const callback = new URL(redirectUri);
+  return NodeHttpServer.layer(Http.createServer, { host: callback.hostname, port: Number(callback.port) });
+};
+
+const makeLogin = Effect.fn("slack.login")(function* (
+  config: SlackLoginConfig,
+  serverLayer: CallbackServerLayer,
+) {
   const pkce = yield* Linear.OAuth.makePkce().pipe(
     Effect.mapError(() => failure("Could not create secure Slack PKCE values")),
   );
@@ -166,35 +213,28 @@ const makeLogin = Effect.fn("slack.login")(function* (config: SlackLoginConfig) 
     loginName: "Slack",
   }).pipe(
     Effect.mapError((error) => failure(error.message)),
-    Effect.provide(
-      NodeHttpServer.layer(Http.createServer, {
-        host: callback.hostname,
-        port: Number(callback.port),
-      }),
-    ),
+    Effect.provide(serverLayer),
     Effect.scoped,
-    Effect.mapError((error) =>
-      error._tag === "ConnectionFailure"
-        ? error
-        : failure(`Could not start the Slack callback server on ${callback.host}`),
+    Effect.catchTag("ServeError", () =>
+      Effect.fail(failure(`Could not start the Slack callback server on ${callback.host}`)),
     ),
   );
   const client = yield* HttpClient.HttpClient;
-  const tokens = yield* exchange(client, config, code, pkce.verifier);
-  const appIdMismatched = tokens.app_id !== undefined && tokens.app_id !== config.appId;
+  const { identity, grant } = yield* exchange(client, config, code, pkce.verifier);
+  const appIdMismatched = identity.app_id !== undefined && identity.app_id !== config.appId;
   if (appIdMismatched) return yield* failure("Slack returned a grant for another app");
-  const grantedScope = [tokens.scope, tokens.authed_user.scope].find((scope) => scope !== undefined);
+  const grantedScope = [identity.scope, identity.authed_user.scope].find((scope) => scope !== undefined);
   const now = yield* Clock.currentTimeMillis;
   return {
     issueTracker: "slack",
-    organization: tokens.team.id,
-    actorUserId: tokens.authed_user.id,
+    organization: identity.team.id,
+    actorUserId: identity.authed_user.id,
     oauthClientId: config.clientId,
     oauthTokenEndpoint: config.tokenEndpoint,
     token: {
-      accessToken: Redacted.make(tokens.access_token),
-      refreshToken: Redacted.make(tokens.refresh_token),
-      expiresAtMillis: now + tokens.expires_in * 1000,
+      accessToken: Redacted.make(grant.access_token),
+      refreshToken: Redacted.make(grant.refresh_token),
+      expiresAtMillis: now + grant.expires_in * 1000,
       scopes: scopesOf(grantedScope ?? ""),
     },
   } satisfies CredentialStore.StoredCredential;
@@ -260,17 +300,20 @@ export const makeTokenRefresh = (client: HttpClient.HttpClient): CredentialStore
 export const slackLoginLayer = (
   config: SlackLoginConfig = defaultConfig,
   openerLayer: Layer.Layer<BrowserOpener, never, ChildProcessSpawner> = browserOpenerLayer,
+  serverLayer: CallbackServerLayer = callbackServerLayer(config.redirectUri),
 ) =>
   Layer.effect(
     Slack.SlackLogin,
     Effect.gen(function* () {
       const opener = yield* BrowserOpener;
-      const crypto = yield* Crypto.Crypto;
+      const random = yield* SecureRandom.SecureRandom;
+      const digest = yield* Digest.Digest;
       const client = yield* HttpClient.HttpClient;
       return {
-        login: makeLogin(config).pipe(
+        login: makeLogin(config, serverLayer).pipe(
           Effect.provideService(BrowserOpener, opener),
-          Effect.provideService(Crypto.Crypto, crypto),
+          Effect.provideService(SecureRandom.SecureRandom, random),
+          Effect.provideService(Digest.Digest, digest),
           Effect.provideService(HttpClient.HttpClient, client),
         ),
       };

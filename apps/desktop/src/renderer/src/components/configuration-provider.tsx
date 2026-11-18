@@ -8,7 +8,7 @@ import {
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import type * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
-import type * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import type * as AsyncResult from "effect/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
 import {
   installPluginAtom,

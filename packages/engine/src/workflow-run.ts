@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
@@ -27,6 +26,7 @@ import {
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -71,6 +71,7 @@ import {
   type WorkflowActionPlanExecution,
 } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
+import { actionEntryFor } from "./workflow-action-registry";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { WorkflowNotifications } from "./workflow-notification";
 import { ticketSlug, WorktreeManager } from "./worktree";
@@ -92,32 +93,18 @@ const encodeArtifactContext = Schema.encodeSync(
     ),
   ),
 );
-const issueSearchActionNames = new Set(["create-issue", "comment-issue", "comment-this-item"]);
-const namedPullRequestActionNames = new Set(["comment-on-named-pull-request", "post-review", "draft-review"]);
-
-const needsActionTool = (
+const engineToolsFor = (
   operation: Parameters<typeof workflowOperationResultSchema>[0],
   catalog: Parameters<typeof workflowOperationResultSchema>[1],
-  names: ReadonlySet<string>,
 ) => {
-  const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
-  return operation.transitions
-    .flatMap(({ actions }) => actions)
-    .some(({ entry }) => {
-      const catalogEntry = entries.get(entry);
-      return catalogEntry?.kind === "action" && names.has(entry.slice(entry.indexOf(".") + 1));
-    });
+  const actionKeys = new Set(catalog.entries.filter(({ kind }) => kind === "action").map(({ key }) => key));
+  return new Set(
+    operation.transitions
+      .flatMap(({ actions }) => actions)
+      .filter(({ entry }) => actionKeys.has(entry))
+      .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []),
+  );
 };
-
-const needsIssueSearch = (
-  operation: Parameters<typeof workflowOperationResultSchema>[0],
-  catalog: Parameters<typeof workflowOperationResultSchema>[1],
-) => needsActionTool(operation, catalog, issueSearchActionNames);
-
-const needsPullRequestTool = (
-  operation: Parameters<typeof workflowOperationResultSchema>[0],
-  catalog: Parameters<typeof workflowOperationResultSchema>[1],
-) => needsActionTool(operation, catalog, namedPullRequestActionNames);
 
 const agentInputIsMissing = (value: WorkflowAgentInputValue | undefined) =>
   value === undefined || (typeof value === "string" && value.trim().length === 0);
@@ -600,8 +587,9 @@ export const make = Effect.gen(function* () {
       outputWorkspaces,
       itemWorkspace,
     );
-    const issueSearchEnabled = needsIssueSearch(operation, catalogResult.catalog);
-    const pullRequestToolEnabled = needsPullRequestTool(operation, catalogResult.catalog);
+    const actionTools = engineToolsFor(operation, catalogResult.catalog);
+    const issueSearchEnabled = actionTools.has("issue-search");
+    const pullRequestToolEnabled = actionTools.has("pull-request");
     const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
       outputWorkspaces.includes(config.name),
     );
@@ -631,7 +619,7 @@ export const make = Effect.gen(function* () {
       pendingClaim ?? (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null })));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
-    const id = runId(randomUUID());
+    const id = runId(SecureRandom.uuidV4Unsafe());
     const checkout = yield* prepareCheckout(admission, workspace, operation.permissionProfile);
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
     const item = workItemId(keyOf(admission.event.key));
@@ -729,7 +717,7 @@ export const make = Effect.gen(function* () {
         catalogResult.catalog,
         outputWorkspaces,
         itemWorkspace,
-      )["~standard"].jsonSchema.input({ target: "draft-2020-12" }),
+      ),
       connections: [],
       workContext: {
         reference: { workItem: item, url: admission.event.subject?.url ?? null },

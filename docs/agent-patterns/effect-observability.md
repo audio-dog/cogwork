@@ -110,7 +110,7 @@ shape — a config read choosing `NodeSdk.layerEmpty` when no endpoint is config
 traces, metrics (`metricReader`), and logs (`logRecordProcessor`). Extend that file rather than
 wiring a second pipeline.
 
-The alternative route is Effect's own exporters (`effect/unstable/observability`: `OtlpTracer`, `OtlpMetrics`, `OtlpLogger` plus `OtlpSerialization` and an `HttpClient`), which drops the `@opentelemetry/*` dependencies entirely. Moving is a deliberate decision, not a side effect of adding a metric; until then, everything goes through the NodeSdk layer.
+The alternative route is Effect's own exporters (`effect/observability`: `OtlpTracer`, `OtlpMetrics`, `OtlpLogger` plus `OtlpSerialization` and an `HttpClient`), which drops the `@opentelemetry/*` dependencies entirely. Moving is a deliberate decision, not a side effect of adding a metric; until then, everything goes through the NodeSdk layer.
 
 Either way the rule from the ai-docs holds: provide the observability layer at the very end of composition, so every span the app creates is exported. And there is exactly one logging pipeline — a host process that cannot run Effect (see the process-edges pattern) forwards into it instead of growing a parallel logger whose lines never carry annotations.
 

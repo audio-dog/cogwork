@@ -1,25 +1,25 @@
-import { randomUUID } from "node:crypto";
 import { RunId } from "@cogwork/contracts";
 import { Replay } from "@cogwork/engine";
 import * as Console from "effect/Console";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
 import { defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
-const runIdFlag = Flag.string("id").pipe(Flag.withDescription("Run id to export"));
-const outputFlag = Flag.string("output").pipe(Flag.withDescription("Fixture file to write"));
-const baseFlag = Flag.string("base").pipe(Flag.withDescription("Base replay report"));
-const headFlag = Flag.string("head").pipe(Flag.withDescription("Head replay report"));
+const runIdFlag = Flag.String("id").pipe(Flag.withDescription("Run id to export"));
+const outputFlag = Flag.String("output").pipe(Flag.withDescription("Fixture file to write"));
+const baseFlag = Flag.String("base").pipe(Flag.withDescription("Base replay report"));
+const headFlag = Flag.String("head").pipe(Flag.withDescription("Head replay report"));
 const reportMaxBytes = 16 * 1024 * 1024;
 const fixtureFileMode = 0o600;
 const replayFileDeadline = "5 seconds";
@@ -91,7 +91,10 @@ const writeFixture = Effect.fn("replay.writeFixture")(function* (options: {
     Replay.ReplayFixture.make({ version: 1, sourceRunId: id, events }),
   );
   const directory = path.dirname(options.output);
-  const pending = path.join(directory, `.${path.basename(options.output)}.${randomUUID()}.pending`);
+  const pending = path.join(
+    directory,
+    `.${path.basename(options.output)}.${SecureRandom.uuidV4Unsafe()}.pending`,
+  );
   yield* withReplayFileDeadline(
     fs
       .makeDirectory(directory, { recursive: true })
