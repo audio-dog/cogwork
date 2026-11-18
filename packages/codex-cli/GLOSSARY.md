@@ -1,6 +1,6 @@
 # Codex CLI (harness adapter)
 
-The Codex-specific [harness runner](../engine/CONTEXT.md): it implements the engine's harness
+The Codex-specific [harness runner](../engine/GLOSSARY.md): it implements the engine's harness
 contract through the installed, already-authenticated Codex CLI using TanStack AI's Codex adapter.
 The engine knows nothing about Codex; this package knows nothing about scheduling.
 

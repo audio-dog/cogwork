@@ -5,7 +5,7 @@ allowlisted bot writes on a pull request wakes one. That takes Bugbot's `PR Summ
 minutes before Bugbot has reviewed anything — as a reason to spend a Run.
 
 This plan is the *how*. The **Bot allowlist** entry in
-[`packages/contracts/CONTEXT.md`](../../packages/contracts/CONTEXT.md) is the *what*, and where the
+[`packages/contracts/GLOSSARY.md`](../../packages/contracts/GLOSSARY.md) is the *what*, and where the
 two disagree the glossary wins.
 
 Before writing code: invoke `/effect-ts`, and read `docs/agent-patterns/effect-schema-unions.md`

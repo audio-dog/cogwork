@@ -33,7 +33,7 @@ A later maintainer steer overrides an earlier one and overrides the brief. "Main
 
 ## Repo conventions
 
-Before writing code, read the target repo's own guidance and follow it: `AGENTS.md` / `CLAUDE.md`, `CONTEXT.md`, and any `docs/adr/` relevant to the area, plus my personal rules if the repo points at them. Discover the repo's real gate commands (typecheck, build, test) from `package.json`, `README`, or those docs rather than assuming.
+Before writing code, read the target repo's own guidance and follow it: `AGENTS.md` / `CLAUDE.md`, the glossary (`GLOSSARY.md`, or `CONTEXT.md` in an older repo), and any `docs/adr/` relevant to the area, plus my personal rules if the repo points at them. Discover the repo's real gate commands (typecheck, build, test) from `package.json`, `README`, or those docs rather than assuming.
 
 ## 1. Read the brief
 
@@ -123,9 +123,9 @@ Prepare the pull request once the gate is green or every failure left is a prove
 
 Commit the engine-owned branch with the `git-master` skill. Do not push or open a pull request.
 
-Prepare the title and body for a pull request that is ready for review. The **PR body is a self-contained onboarding artifact** — a reviewer should need nothing but the PR to understand the change. Write it in ASD-STE100 Simplified Technical English: give a little context so a reviewer who was not in the run can follow, and use the ubiquitous language from the driven repo's `CONTEXT.md` when present.
+Prepare the title and body for a pull request that is ready for review. The **PR body is a self-contained onboarding artifact** — a reviewer should need nothing but the PR to understand the change. Write it in ASD-STE100 Simplified Technical English: give a little context so a reviewer who was not in the run can follow, and use the ubiquitous language from the driven repo's glossary (`GLOSSARY.md`, or `CONTEXT.md` in an older repo) when present.
 
-**Load `/pr` before you write the body**, and write its three sections with it: Summary, Evidence, and Merge Danger. Where `/pr` names `GLOSSARY.md`, read the driven repo's `CONTEXT.md`. A headless run has no app to screenshot, so the Evidence is the key test's red proof and its green run; the Test proof section stays the full record of every proof.
+**Load `/pr` before you write the body**, and write its three sections with it: Summary, Evidence, and Merge Danger. Where `/pr` names `GLOSSARY.md` and the driven repo has only `CONTEXT.md`, read `CONTEXT.md`. A headless run has no app to screenshot, so the Evidence is the key test's red proof and its green run; the Test proof section stays the full record of every proof.
 
 The body also carries the Work item, Steering honored, Verification, Test proof, and Open questions sections from the template below. The frame comes from the repo:
 

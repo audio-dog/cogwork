@@ -32,7 +32,7 @@ When the resolved intent names a triage state — "apply `wontfix`", "this needs
 
 ## Repo conventions
 
-Before judging the claim, read the repo's own guidance so you classify in the project's real vocabulary and honor prior decisions: `AGENTS.md` / `CLAUDE.md`, `CONTEXT.md`, and any `docs/adr/` in the area. When the repo has a **technical-disposition** doc (e.g. `docs/agents/technical-disposition.md`), read it: it carries the product direction and the maintainer's decision principles, and it is how you answer finely-tuned technical open questions instead of reflexively escalating them (see [Resolve technical open questions](#resolve-technical-open-questions)). Read `.out-of-scope/*.md` for past rejections — see [OUT-OF-SCOPE.md](OUT-OF-SCOPE.md); a headless run only **reads** that knowledge base; a person writes its entries.
+Before judging the claim, read the repo's own guidance so you classify in the project's real vocabulary and honor prior decisions: `AGENTS.md` / `CLAUDE.md`, the glossary (`GLOSSARY.md`, or `CONTEXT.md` in an older repo), and any `docs/adr/` in the area. When the repo has a **technical-disposition** doc (e.g. `docs/agents/technical-disposition.md`), read it: it carries the product direction and the maintainer's decision principles, and it is how you answer finely-tuned technical open questions instead of reflexively escalating them (see [Resolve technical open questions](#resolve-technical-open-questions)). Read `.out-of-scope/*.md` for past rejections — see [OUT-OF-SCOPE.md](OUT-OF-SCOPE.md); a headless run only **reads** that knowledge base; a person writes its entries.
 
 ## Resolve technical open questions
 
