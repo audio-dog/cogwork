@@ -1,7 +1,9 @@
 import {
   BranchName,
   type HarnessName,
+  issueTrackerErrorIsPermanent,
   type MachineReadiness,
+  type ParkReason,
   PluginContributionLoad,
   RunId,
   type WorkflowDocument,
@@ -10,8 +12,10 @@ import {
   WorkItemRef,
   type WorkspaceId,
 } from "@cogwork/contracts";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Match from "effect/Match";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { ContextAssembler } from "./context-assembler";
@@ -27,7 +31,7 @@ import { SessionStore } from "./session-store";
 import { SourceControlProvider } from "./source-control";
 import type { TriggerAdmission } from "./trigger-observation";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
-import { ticketSlug, WorktreeManager } from "./worktree";
+import { ticketSlug, type WorktreeError, WorktreeManager } from "./worktree";
 
 const workItemId = Schema.decodeSync(WorkItemId);
 
@@ -50,6 +54,23 @@ const runItemId = WorkItemRef.match({
   ScheduleInstant: () => workItemId("#workflow"),
   FanOutChild: () => workItemId("#workflow"),
 });
+
+const worktreeBlocked = ({ reason, branch, path, operation, unmergedPaths }: WorktreeError): ParkReason => ({
+  _tag: "WorktreeBlocked",
+  reason,
+  branch,
+  path,
+  operation,
+  unmergedPaths,
+});
+
+const exhaustedUnlessRetryable = (error: { readonly retryable: boolean; readonly message: string }) =>
+  error.retryable ? null : ({ _tag: "Exhausted", reason: error.message } satisfies ParkReason);
+
+export class CheckoutRefused extends Data.TaggedError("CheckoutRefused")<{
+  readonly message: string;
+  readonly park: ParkReason | null;
+}> {}
 
 export const selectedWorkspaceIds = (
   document: WorkflowDocument,
@@ -161,6 +182,19 @@ export const make = Effect.gen(function* () {
     return { path: checkout.path, branch } as const;
   });
 
+  const checkoutPark = (error: Effect.Error<ReturnType<typeof ensureCheckout>>) =>
+    Match.valueTags(error, {
+      WorktreeError: (failure) => (failure.retryable ? null : worktreeBlocked(failure)),
+      IssueTrackerError: (failure) =>
+        exhaustedUnlessRetryable({
+          retryable: !issueTrackerErrorIsPermanent(failure),
+          message: failure.message,
+        }),
+      GitError: exhaustedUnlessRetryable,
+      WorktreeFsError: exhaustedUnlessRetryable,
+      PlatformError: () => null,
+    });
+
   const prepare = Effect.fn("RunPreparation.prepare")(function* (input: RunPreparationInput) {
     const { admission, workspace, operation, run } = input;
     const view = yield* coordination.read(admission.event.key);
@@ -176,6 +210,8 @@ export const make = Effect.gen(function* () {
       workspace,
       operation.permissionProfile,
       resumedSession !== null,
+    ).pipe(
+      Effect.mapError((error) => new CheckoutRefused({ message: error.message, park: checkoutPark(error) })),
     );
     const session =
       resumedSession ??

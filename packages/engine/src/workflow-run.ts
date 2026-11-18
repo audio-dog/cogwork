@@ -35,7 +35,7 @@ import {
   readyHarness,
   resolveRunPlan,
 } from "./run-plan-resolution";
-import { make as makeRunPreparation, selectedWorkspaceIds } from "./run-preparation";
+import { CheckoutRefused, make as makeRunPreparation, selectedWorkspaceIds } from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
 import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } from "./trigger-observation";
 import { Recheck } from "./trigger-source";
@@ -93,6 +93,7 @@ export const make = Effect.gen(function* () {
     skipNoLongerMatching,
     rejectPlan,
     refuseResult,
+    refusePreparation,
     recoverClaimed,
     actOnResult,
   } = yield* makeWorkflowRunAttempts(pullRequestBuildInput);
@@ -195,21 +196,25 @@ export const make = Effect.gen(function* () {
       );
     }
 
-    const claim =
-      pendingClaim ??
-      (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null, lineageParent: null })));
+    const preparing = ClaimState.Claimed({ key, run: null, lineageParent: null });
+    const claim = pendingClaim ?? (yield* claimItem(admission, claimed, preparing));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(SecureRandom.uuidV4Unsafe());
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
-    const prepared = yield* preparation.prepare({
-      admission,
-      workspace,
-      operation,
-      harness: selectedHarness,
-      run: { id, workspace: runWorkspace, startedAtMillis },
-      pendingPlanAttempt: resumed?.plan.attempt ?? null,
-    });
+    const prepared = yield* preparation
+      .prepare({
+        admission,
+        workspace,
+        operation,
+        harness: selectedHarness,
+        run: { id, workspace: runWorkspace, startedAtMillis },
+        pendingPlanAttempt: resumed?.plan.attempt ?? null,
+      })
+      .pipe(Effect.catchTag("CheckoutRefused", Effect.succeed));
+    if (prepared instanceof CheckoutRefused) {
+      return yield* refusePreparation(admission, claimed, preparing, prepared.message, prepared.park);
+    }
     const resolution = resolveRunPlan({
       id,
       operation,
