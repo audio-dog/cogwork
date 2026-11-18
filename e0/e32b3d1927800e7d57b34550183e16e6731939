@@ -1,0 +1,26 @@
+.pre-commit-config.yaml
+  s_4e378b775f6c26::t_97dbb065cbd804 4,12-30
+scripts/check-file-tokens.mjs
+  s_4e378b775f6c26::t_45fa88151e4c24 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e0e32b3d1927800e7d57b34550183e16e6731939",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_4e378b775f6c26": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "96e80c15-c11c-430c-a085-829732a0ed8a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
