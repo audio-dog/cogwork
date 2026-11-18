@@ -1,0 +1,49 @@
+packages/contracts/src/daemon-event.ts
+  s_c99bb291de3f49::t_beb39c4523ccf2 9
+packages/contracts/src/index.ts
+  s_c99bb291de3f49::t_6165e491c0d6a4 22-27
+packages/contracts/src/rpc.ts
+  s_c99bb291de3f49::t_10144ab35d0b59 42-47,52-54
+packages/contracts/src/workflow-catalog.ts
+  s_c99bb291de3f49::t_da40587e060857 1-172
+packages/contracts/src/workflow-diagnostic.ts
+  s_c99bb291de3f49::t_6440199cf7ed48 1-102
+packages/contracts/src/workflow-edit.test.ts
+  s_c99bb291de3f49::t_ba371870293eb8 1-141
+packages/contracts/src/workflow-edit.ts
+  s_c99bb291de3f49::t_93ecdff7074e87 1-347
+packages/contracts/src/workflow-fixtures.ts
+  s_c99bb291de3f49::t_7c24367d2824e0 1-172
+packages/contracts/src/workflow-operation-result.test.ts
+  s_c99bb291de3f49::t_d31f847fb64c11 1-231
+packages/contracts/src/workflow-operation-result.ts
+  s_c99bb291de3f49::t_cb6088884070d0 1-159
+packages/contracts/src/workflow-readiness.ts
+  s_c99bb291de3f49::t_39a6030934bbdd 1-198
+packages/contracts/src/workflow-validation.test.ts
+  s_c99bb291de3f49::t_2c1b158396c516 3-5,7-29
+packages/contracts/src/workflow-validation.ts
+  s_c99bb291de3f49::t_4e1c7664039502 1-516
+packages/engine/src/daemon-composition-fixtures.ts
+  s_c99bb291de3f49::t_8b9fe519091813 1-290
+packages/engine/src/daemon-composition-slack-review.test.ts
+  s_c99bb291de3f49::t_554f816baa72fb 1-479
+packages/engine/src/daemon-composition.test.ts
+  s_c99bb291de3f49::t_700d8237ff6137 17-24,27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1a00fd088a00488eb4d24f399d8745eb90e6365",
+  "prompts": {},
+  "sessions": {
+    "s_c99bb291de3f49": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4eb3f24-7b6f-4f75-986d-f729b467a0f0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
