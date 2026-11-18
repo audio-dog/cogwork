@@ -1,0 +1,43 @@
+packages/cursor-acp/package.json
+  s_24ff93fadbb7ce::t_5db1ff969b10e1 13,29
+packages/cursor-acp/src/harness.test.ts
+  s_24ff93fadbb7ce::t_cd0ca6d8d32efa 10,15,465,468,805-852
+packages/engine/src/external-harness-runtime.ts
+  s_24ff93fadbb7ce::t_8cafaffd98ae35 215-216,479-480,483,503,715
+packages/engine/src/workflow-run.test.ts
+  s_24ff93fadbb7ce::t_24f368e672c128 50,1655,1658
+pnpm-lock.yaml
+  s_24ff93fadbb7ce::t_264ac0ff1a3f11 723-725
+packages/engine/src/external-harness-runtime.test.ts
+  s_0aa5fb0bf087cd::t_f0383bc089529d 449-450,490,507,509-521,525,555-566,568,571-573,575-577
+docs/research/cursor-acp-versus-cursor-sdk.md
+  s_0aa5fb0bf087cd::t_afc4d853d0f7ce 64-67
+packages/cursor-acp/CONTEXT.md
+  s_0aa5fb0bf087cd::t_567d3c9449746b 13
+packages/engine/CONTEXT.md
+  s_0aa5fb0bf087cd::t_749f390277084b 89,97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d8994490d8df2c3de3e9659999a0a9dcbf1c880",
+  "prompts": {},
+  "sessions": {
+    "s_0aa5fb0bf087cd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c7455679-3786-4808-9b25-392baf77b08b",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_24ff93fadbb7ce": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "545da300-91cc-4243-ada5-0eba814bce71",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
