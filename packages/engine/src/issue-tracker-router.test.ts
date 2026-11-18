@@ -148,7 +148,7 @@ describe("routed issue tracker reads", () => {
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
       const prose = yield* tracker.readProse(githubWorkspace, id("#1"));
-      const assignees = yield* tracker.assignees?.(githubWorkspace, id("#1")) ?? Effect.succeed([]);
+      const assignees = yield* tracker.assignees(githubWorkspace, id("#1"));
       assert.strictEqual(prose.body, "Body 1");
       assert.deepStrictEqual(
         prose.comments.map(({ author, body }) => ({ author, body })),
@@ -163,7 +163,7 @@ describe("routed issue tracker reads", () => {
       const tracker = yield* IssueTracker;
       const items = yield* tracker.observe(linearWorkspace);
       const prose = yield* tracker.readProse(linearWorkspace, id("AUD-7"));
-      const assignees = yield* tracker.assignees?.(linearWorkspace, id("AUD-7")) ?? Effect.succeed([]);
+      const assignees = yield* tracker.assignees(linearWorkspace, id("AUD-7"));
       assert.deepStrictEqual(
         items.map(({ id, priority, openBlockers, states }) => ({ id, priority, openBlockers, states })),
         [{ id: id("AUD-7"), priority: "high", openBlockers: 1, states: ["needs-triage", "Todo"] }],
