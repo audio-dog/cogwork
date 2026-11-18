@@ -1,0 +1,117 @@
+GLOSSARY-MAP.md
+  s_57e0981a28ac4f::t_887b0e914b6648 18,20,49
+apps/desktop/GLOSSARY.md
+  s_57e0981a28ac4f::t_f4cb76f1f7fb24 211-232
+apps/desktop/src/renderer/src/components/attention-board-card.tsx
+  s_57e0981a28ac4f::t_95251a70925695 1-104
+apps/desktop/src/renderer/src/components/attention-board-context.tsx
+  s_57e0981a28ac4f::t_6b622a5954e792 1-125
+apps/desktop/src/renderer/src/components/attention-board-notification.tsx
+  s_57e0981a28ac4f::t_e815a2ad636398 1-128
+apps/desktop/src/renderer/src/components/attention-board-parked.tsx
+  s_57e0981a28ac4f::t_19e508191cc36d 1-590
+apps/desktop/src/renderer/src/components/attention-board-skipped.tsx
+  s_57e0981a28ac4f::t_a90ab2a56610c0 1-55
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_57e0981a28ac4f::t_e275595176ad52 6-12
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_57e0981a28ac4f::t_31d762c87871f0 168,178,412-440
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_57e0981a28ac4f::t_68e22f231a4926 20-21,242-247
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_57e0981a28ac4f::t_6f52d3b9730233 22-27,124-130,184-188
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_57e0981a28ac4f::t_5496716e76b36b 4-5
+packages/contracts/GLOSSARY-harness-contract.md
+  s_57e0981a28ac4f::t_00afee83cbb466 53
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_57e0981a28ac4f::t_79f22b47e6eb2c 14
+packages/contracts/GLOSSARY.md
+  s_57e0981a28ac4f::t_1dc35ba21b6fb5 7-10,15-16,19-20,22-24,27-34
+packages/contracts/src/coordination.ts
+  s_57e0981a28ac4f::t_6d6c7769e98990 149-155
+packages/engine/GLOSSARY-adapters.md
+  s_57e0981a28ac4f::t_8a652ca3faf5ae 17-25,27-30
+packages/engine/GLOSSARY-coding-workflow.md
+  s_57e0981a28ac4f::t_489d7e433b5301 1-21
+packages/engine/GLOSSARY-coordination.md
+  s_57e0981a28ac4f::t_9e1f666c952161 9-12
+packages/engine/GLOSSARY-harness.md
+  s_57e0981a28ac4f::t_12225cd56feaee 6-7,17-20,22-27
+packages/engine/GLOSSARY-runs.md
+  s_57e0981a28ac4f::t_4b6e32d9568b14 17-20,29-39,41-47,53-56
+packages/engine/GLOSSARY-triggers.md
+  s_57e0981a28ac4f::t_f632f29c2a0526 1-23
+packages/engine/GLOSSARY.md
+  s_57e0981a28ac4f::t_1ba70e6e97a60c 4-6,16-19,21-22
+packages/engine/src/coordination-control-store.test.ts
+  s_57e0981a28ac4f::t_f4a2b71e7f9945 106-133
+packages/engine/src/operation-result.ts
+  s_57e0981a28ac4f::t_b5892907c6a86a 58
+packages/engine/src/park-notice.test.ts
+  s_57e0981a28ac4f::t_f35c5e86479940 120-137
+packages/engine/src/park-notice.ts
+  s_57e0981a28ac4f::t_a7b875569a8664 24
+packages/engine/src/workflow-attention.ts
+  s_57e0981a28ac4f::t_1e320b668dc7c8 34,39-51,61
+packages/engine/src/workflow-run-admission.test.ts
+  s_57e0981a28ac4f::t_40edc3412684a2 1-301
+packages/engine/src/workflow-run-admissions-fixtures.ts
+  s_57e0981a28ac4f::t_9903e934f60009 1-76
+packages/engine/src/workflow-run-approval.test.ts
+  s_57e0981a28ac4f::t_84d73cb50f029c 15-41,43-44,46-50,52,57,60,64,72-73,76-77,81,83-86,88,91,94,98,100,102-105,107-108,111,115,117-121,123,125-128,130-138,140,143,146,149-150,152,154-157,159-165,167-168,172,174-182,185-186,188,191-192,194-198,200-204,207-217,219-224,228-258,260-298,301-362,364-376,378-379,381-384,386-389,394,419-423,426-437
+packages/engine/src/workflow-run-attempts.ts
+  s_57e0981a28ac4f::t_32358cb98f2eae 4,18,34-36,178-187,199-213,253,360
+packages/engine/src/workflow-run-checkout.test.ts
+  s_57e0981a28ac4f::t_072814436c874a 1-416
+packages/engine/src/workflow-run-coding-template.test.ts
+  s_57e0981a28ac4f::t_5cf6fe02616eb1 1-253
+packages/engine/src/workflow-run-documents-fixtures.ts
+  s_57e0981a28ac4f::t_cf83b117a117af 1-309
+packages/engine/src/workflow-run-fan-out.test.ts
+  s_57e0981a28ac4f::t_fce73021806ac3 1-294
+packages/engine/src/workflow-run-fixtures.ts
+  s_57e0981a28ac4f::t_f23ca4643fa7fa 1-286
+packages/engine/src/workflow-run-hand-back.test.ts
+  s_57e0981a28ac4f::t_9199cbed13a07a 1-284
+packages/engine/src/workflow-run-hand-off.test.ts
+  s_57e0981a28ac4f::t_97c42b1e54e948 1-220
+packages/engine/src/workflow-run-retry.test.ts
+  s_57e0981a28ac4f::t_4650e994a3bb79 1-339
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_57e0981a28ac4f::t_ffcd5b28e5e674 1-420
+packages/engine/src/workflow-run-settled-run.test.ts
+  s_57e0981a28ac4f::t_2962c3692ee65b 1-306
+packages/engine/src/workflow-run-settlement.test.ts
+  s_57e0981a28ac4f::t_c87ba910595239 1-209
+packages/engine/src/workflow-run.ts
+  s_57e0981a28ac4f::t_70c36452a2701d 97,101,204-205,222-223,225-229
+packages/engine/src/worktree-ensure-reuse.test.ts
+  s_c99bb291de3f49::t_55698bfa77b849 1-221
+packages/engine/src/worktree-remove.test.ts
+  s_57e0981a28ac4f::t_a1c617444d15bf 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3756bcd7fdd0edb25809eba40e754dda41e0e564",
+  "prompts": {},
+  "sessions": {
+    "s_57e0981a28ac4f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e532b3eb-9250-467c-a6bb-7c37de3d95c4",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c99bb291de3f49": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4eb3f24-7b6f-4f75-986d-f729b467a0f0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
