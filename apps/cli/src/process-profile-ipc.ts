@@ -204,7 +204,7 @@ const installProcessProfileTransport = Effect.fn("ProcessProfileIpc.installProce
 });
 
 export const installProcessProfileIpc = Effect.fn("ProcessProfileIpc.install")(function* () {
-  const fdTransport = yield* Config.string("COGWORK_PROFILE_FD_TRANSPORT").pipe(Config.withDefault("0"));
+  const fdTransport = yield* Config.String("COGWORK_PROFILE_FD_TRANSPORT").pipe(Config.withDefault("0"));
   if (fdTransport === "1") return yield* installFdProfileTransport();
   if (!process.send) return;
   yield* installProcessProfileTransport();

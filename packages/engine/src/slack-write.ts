@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   SlackChannelId,
   SlackMessageTs,
@@ -9,13 +8,14 @@ import {
   WorkflowCatalogKey,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { readJsonEventStream } from "./json-event-stream";
 import {
@@ -303,7 +303,7 @@ const post = Effect.fn("SlackWrite.post")(function* (
 const draftRequest = (target: SlackMessageTarget, message: string) =>
   HttpClientRequest.bodyJson(HttpClientRequest.post(slackMcp), {
     jsonrpc: "2.0",
-    id: randomUUID(),
+    id: SecureRandom.uuidV4Unsafe(),
     method: "tools/call",
     params: {
       name: "slack_send_message_draft",
@@ -430,9 +430,11 @@ const action = (
 
 const slackItems = ["slack-message", "slack-conversation"];
 
-export const slackActionEntries = [
-  action("send-message", "Send a message", ["message"], [liveParameter("channel")], ["*"]),
-  action("reply-in-thread", "Reply in thread", ["reply"], [], slackItems),
-  action("add-reaction", "Add a reaction", [], [liveParameter("emoji")], slackItems),
-  action("draft-reply-in-slack", "Draft a reply in Slack", ["reply"], [], slackItems),
-] satisfies ReadonlyArray<WorkflowCatalogEntry>;
+export const slackActionRows = {
+  sendMessage: action("send-message", "Send a message", ["message"], [liveParameter("channel")], ["*"]),
+  replyInThread: action("reply-in-thread", "Reply in thread", ["reply"], [], slackItems),
+  addReaction: action("add-reaction", "Add a reaction", [], [liveParameter("emoji")], slackItems),
+  draftReply: action("draft-reply-in-slack", "Draft a reply in Slack", ["reply"], [], slackItems),
+} satisfies Record<string, WorkflowCatalogEntry>;
+
+export const slackActionEntries = Object.values(slackActionRows);

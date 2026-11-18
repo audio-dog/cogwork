@@ -1,6 +1,7 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as JsonSchema from "effect/JsonSchema";
 import * as Schema from "effect/Schema";
 import {
   HarnessName,
@@ -168,7 +169,7 @@ export const WorkflowReviewComment = Schema.Struct({
   path: TrimmedNonEmptyString,
   line: Schema.Int.check(Schema.isGreaterThan(0)),
   body: TrimmedNonEmptyString,
-}).annotate({ parseOptions: { onExcessProperty: "error" } });
+});
 export type WorkflowReviewComment = typeof WorkflowReviewComment.Type;
 
 export const WorkflowAgentInputValue = Schema.Union([Schema.String, Schema.Array(WorkflowReviewComment)]);
@@ -342,7 +343,7 @@ export const WorkflowDocument = Schema.Struct({
   workspaces: WorkflowWorkspaceSelection,
   triggers: Schema.Array(WorkflowTrigger),
   operations: Schema.Array(WorkflowOperation),
-}).annotate({ parseOptions: { onExcessProperty: "error" } });
+});
 export type WorkflowDocument = typeof WorkflowDocument.Type;
 
 export const WorkflowEdit = Schema.TaggedUnion({
@@ -420,9 +421,7 @@ export const WorkflowEdit = Schema.TaggedUnion({
 });
 export type WorkflowEdit = typeof WorkflowEdit.Type;
 
-export const WorkflowEditBatch = Schema.NonEmptyArray(WorkflowEdit).annotate({
-  parseOptions: { onExcessProperty: "error" },
-});
+export const WorkflowEditBatch = Schema.NonEmptyArray(WorkflowEdit);
 export type WorkflowEditBatch = typeof WorkflowEditBatch.Type;
 
 export const WorkflowDiagnosticCode = Schema.Literals([
@@ -576,7 +575,6 @@ export const workflowOperationResultSchema = (
     answers: structOrEmpty(answerFields(operation)),
     inputs: structOrEmpty(inputFields(operation, catalog)),
   };
-  const parseOptions = { onExcessProperty: "error" } as const;
   const entries = operationActionEntries(operation, catalog);
   const agentChoosesWorkspace = (workspace: WorkspaceId | undefined) =>
     entries.some(
@@ -584,10 +582,8 @@ export const workflowOperationResultSchema = (
         workspaceSource !== null && agentChoosesWorkspaceFrom[workspaceSource](workspace),
     );
   const element = agentChoosesWorkspace(undefined)
-    ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
-        parseOptions,
-      })
-    : Schema.Struct(elementFields).annotate({ parseOptions });
+    ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) })
+    : Schema.Struct(elementFields);
   const once = agentChoosesWorkspace(itemWorkspace)
     ? Schema.Struct({
         summary: TrimmedNonEmptyString,
@@ -595,20 +591,20 @@ export const workflowOperationResultSchema = (
         answers: elementFields.answers,
         inputs: elementFields.inputs,
         workspace: Schema.Literals(["none", ...workspaces]),
-      }).annotate({ parseOptions })
+      })
     : Schema.Struct({
         summary: TrimmedNonEmptyString,
         stuck: Schema.Boolean,
         answers: elementFields.answers,
         inputs: elementFields.inputs,
-      }).annotate({ parseOptions });
+      });
   return operation.forEach === null
     ? once
     : Schema.Struct({
         summary: TrimmedNonEmptyString,
         stuck: Schema.Boolean,
         elements: Schema.Array(element).check(Schema.isMaxLength(50)),
-      }).annotate({ parseOptions });
+      });
 };
 
 export const workflowOperationResultJsonSchema = (
@@ -616,10 +612,17 @@ export const workflowOperationResultJsonSchema = (
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
   itemWorkspace?: WorkspaceId,
-) =>
-  Schema.toStandardJSONSchemaV1(
-    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces, itemWorkspace)),
+) => {
+  const document = Schema.toJsonSchemaDocument(
+    workflowOperationResultSchema(operation, catalog, workspaces, itemWorkspace),
+    { onExcessProperty: "error" },
   );
+  const schema: JsonSchema.JsonSchema = {
+    $schema: JsonSchema.META_SCHEMA_URI_DRAFT_2020_12,
+    ...document.schema,
+  };
+  return Object.keys(document.definitions).length === 0 ? schema : { ...schema, $defs: document.definitions };
+};
 
 export const matchWorkflowTransitions = (
   operation: WorkflowOperation,
@@ -928,7 +931,7 @@ const applyWorkflowEdit = (document: WorkflowDocument, edit: WorkflowEdit): Deco
     RemoveTrigger: ({ trigger }) => {
       const triggers = document.triggers.filter(({ id }) => id !== trigger);
       return triggers.length === document.triggers.length
-        ? refused([unknownTarget(trigger, "trigger")])
+        ? refused<WorkflowDocument>([unknownTarget(trigger, "trigger")])
         : ok({ ...document, triggers });
     },
     SetTriggerEntry: ({ trigger, entry }) =>
@@ -959,7 +962,7 @@ const applyWorkflowEdit = (document: WorkflowDocument, edit: WorkflowEdit): Deco
           })),
         }));
       return operations.length === document.operations.length
-        ? refused([unknownTarget(operation, "operation")])
+        ? refused<WorkflowDocument>([unknownTarget(operation, "operation")])
         : ok({ ...document, operations });
     },
     RenameOperation: ({ operation, name }) =>

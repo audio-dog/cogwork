@@ -100,7 +100,7 @@ const importFailureMessage = (error: unknown) => {
 };
 
 const decodeWorkflowJson = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
-const decodeWorkflowDocument = Schema.decodeUnknownEffect(WorkflowDocument);
+const decodeWorkflowDocument = Schema.decodeUnknownEffect(WorkflowDocument, { onExcessProperty: "error" });
 const encodeWorkflowJson = Schema.encodeSync(Schema.fromJsonString(WorkflowDocument, { space: 2 }));
 
 // Windows and POSIX reject these characters in a file name. Control characters are dropped separately.

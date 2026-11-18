@@ -16,6 +16,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
@@ -23,7 +24,6 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { cursorModelOptions, cursorRunner, estimatedUsage, interceptCursorTelemetry } from "./harness";
 import { cursorCatalog } from "./models.generated";
 

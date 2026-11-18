@@ -38,12 +38,12 @@ const signalEndpoint = (
 
 function otlpTelemetryLayer() {
   return Effect.gen(function* () {
-    const endpoint = yield* Config.option(Config.string("OTEL_EXPORTER_OTLP_ENDPOINT"));
+    const endpoint = yield* Config.option(Config.String("OTEL_EXPORTER_OTLP_ENDPOINT"));
     if (Option.isNone(endpoint)) return NodeSdk.layerEmpty;
     const configuredEndpoints = yield* Config.all({
-      traces: Config.option(Config.string("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")),
-      metrics: Config.option(Config.string("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")),
-      logs: Config.option(Config.string("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")),
+      traces: Config.option(Config.String("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")),
+      metrics: Config.option(Config.String("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT")),
+      logs: Config.option(Config.String("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT")),
     });
     return NodeSdk.layer(() => ({
       resource: { serviceName: "cogwork-daemon" },

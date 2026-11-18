@@ -5,13 +5,13 @@ import { assert, describe, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import type * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { layer, makeFileStore } from "./credentials";
 
 const stored = (accessToken: string, expiresAtMillis = Number.MAX_SAFE_INTEGER) =>

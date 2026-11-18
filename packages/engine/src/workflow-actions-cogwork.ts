@@ -6,7 +6,6 @@ import {
   WorkflowCatalogKey,
   WorkflowNotificationId,
 } from "@cogwork/contracts";
-import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { defaultClaimant } from "./coordination";
@@ -95,7 +94,6 @@ const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPending
       plan.steps.some(({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending"),
   );
   const admissions = yield* context.observationStore.admissions;
-  const endedAtMillis = yield* Clock.currentTimeMillis;
   yield* Effect.forEach(
     waiting,
     (plan) =>
@@ -116,14 +114,6 @@ const withdrawPendingApprovalRaw = Effect.fn("WorkflowActionPlan.withdrawPending
           { discard: true },
         );
         yield* context.actionPlans.remove(plan.item, plan.workflow, plan.attempt);
-        const run = yield* context.ledger.getRun(plan.attempt);
-        if (run !== null) {
-          yield* context.ledger.updateRun(plan.attempt, {
-            status: "interrupted",
-            usage: null,
-            endedAtMillis,
-          });
-        }
       }),
     { discard: true },
   );
