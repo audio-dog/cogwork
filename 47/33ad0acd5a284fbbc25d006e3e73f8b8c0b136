@@ -1,0 +1,31 @@
+packages/claude-code/src/harness.ts
+  s_6888214cdf3917::t_b0e631a899e672 321,323-325,344
+packages/claude-code/src/harness-host.test.ts
+  s_6888214cdf3917::t_bb92adae8464b5 171
+  s_6888214cdf3917::t_d45583d951b85f 23
+  s_6888214cdf3917::t_0e16b280a24987 183
+packages/claude-code/src/harness-fixtures.ts
+  s_6888214cdf3917::t_96f34a0b8e554a 498
+  s_6888214cdf3917::t_64908e2576d5b3 380,382-386
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4733ad0acd5a284fbbc25d006e3e73f8b8c0b136",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_6888214cdf3917": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7ac13e79-6c69-4aa2-938b-d76673a69810",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
