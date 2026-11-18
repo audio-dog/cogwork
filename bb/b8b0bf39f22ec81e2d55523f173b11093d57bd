@@ -1,0 +1,19 @@
+packages/ui/src/components/combobox.tsx
+  s_cb1bf3e9ef0fcd::t_27423b018bd1a3 1-4,8,16-73,143-160,174-183,200-207,218-226,250,253-254,256,258-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bbb8b0bf39f22ec81e2d55523f173b11093d57bd",
+  "prompts": {},
+  "sessions": {
+    "s_cb1bf3e9ef0fcd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d3e18995-a904-4414-afc5-6738d9f7e7b1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
