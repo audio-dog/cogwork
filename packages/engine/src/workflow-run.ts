@@ -2,15 +2,12 @@ import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
   BranchName,
-  defaultPriority,
   keyOf,
   LineageId,
   matchWorkflowTransitions,
   PluginContributionLoad,
   Principal,
   RunId,
-  RunPlan,
-  type RunPlanMember,
   type RunRecord,
   WorkflowActionPlan,
   WorkflowActionPlanStep,
@@ -20,7 +17,6 @@ import {
   WorkItemId,
   WorkItemRef,
   WorkspaceId,
-  workflowOperationResultJsonSchema,
   workflowOperationResultSchema,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
@@ -57,6 +53,7 @@ import { makePullRequestTool } from "./pull-request-tool";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
 import { subagentMembers } from "./run-plan";
+import { harnessOptions, resolveRunPlan } from "./run-plan-resolution";
 import { RunRecorder } from "./run-recorder";
 import { SessionStore } from "./session-store";
 import { SlackWrite } from "./slack-write";
@@ -82,17 +79,6 @@ const workItemId = Schema.decodeSync(WorkItemId);
 const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 const encodeDecision = Schema.encodeSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)));
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
-const encodeArtifactContext = Schema.encodeSync(
-  Schema.fromJsonString(
-    Schema.Array(
-      Schema.Struct({
-        workspace: WorkspaceId,
-        issue: WorkItemId,
-        url: Schema.String,
-      }),
-    ),
-  ),
-);
 const engineToolsFor = (
   operation: Parameters<typeof workflowOperationResultSchema>[0],
   catalog: Parameters<typeof workflowOperationResultSchema>[1],
@@ -130,28 +116,6 @@ const runItemId = WorkItemRef.match({
 });
 
 export type WorkflowRunOutcome = "completed" | "retry" | "skipped" | "waiting";
-
-const workContextBody = (admission: TriggerAdmission, workflow: string) => {
-  const payload = admission.event.payload;
-  if (payload?._tag !== "GranolaNote") {
-    return `Scheduled instant ${admission.event.revision} for Workflow ${workflow}.`;
-  }
-  return [
-    `# ${payload.title}`,
-    "",
-    "## Attendees",
-    payload.attendees.join("\n"),
-    "",
-    "## Calendar event",
-    payload.calendarEvent,
-    "",
-    "## Summary",
-    payload.summary,
-    "",
-    "## Transcript",
-    payload.transcript,
-  ].join("\n");
-};
 
 const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
   workflow: admission.subscription.workflow,
@@ -248,27 +212,6 @@ const planRefusal = {
   invalid: { status: "failed", result: (message: string) => RefusedResult.ActionPlanRefused({ message }) },
   declined: { status: "declined", result: (reason: string) => RefusedResult.PullRequestDeclined({ reason }) },
 } as const;
-
-const projection = [
-  "Harness Adapter",
-  "Instructions",
-  "Messages",
-  "Work Context",
-  "Middleware",
-  "Sandbox",
-  "Structured Output",
-  "Persistence",
-  "Provenance",
-].map((member) => ({ member, disposition: "projected" as const }));
-
-const memberDisposition = (projectedMembers: ReadonlyArray<RunPlanMember>, member: "Tools" | "Skills") =>
-  projectedMembers.includes(member)
-    ? { member, disposition: "projected" as const }
-    : {
-        member,
-        disposition: "not-projected" as const,
-        reason: `selected harness does not project ${member}`,
-      };
 
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
@@ -589,12 +532,11 @@ export const make = Effect.gen(function* () {
     const workspace =
       registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
-    const itemWorkspace = itemWorkspaceOf(admission);
     const resultSchema = workflowOperationResultSchema(
       operation,
       catalogResult.catalog,
       outputWorkspaces,
-      itemWorkspace,
+      itemWorkspaceOf(admission),
     );
     const actionTools = engineToolsFor(operation, catalogResult.catalog);
     const issueSearchEnabled = actionTools.has("issue-search");
@@ -607,13 +549,16 @@ export const make = Effect.gen(function* () {
       (need) => !catalogResult.machine.readyNeeds.includes(need),
     );
     if (selectedHarness === null || hasMissingNeed) return "waiting" as const;
-    const options = Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value]));
     const preflight = yield* Effect.result(
-      harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
+      harness.preflight(
+        selectedHarness,
+        operation.permissionProfile,
+        operation.model.model,
+        harnessOptions(operation),
+      ),
     );
     if (Result.isFailure(preflight)) return "waiting" as const;
     const projectedMembers = harness.projectedMembers(selectedHarness);
-    const projectsTools = projectedMembers.includes("Tools");
     const skills = yield* admittedSkills(workspace, operation.requires);
     const requiredSkill = skills.find(({ identity }) => operation.requires.some((need) => need === identity));
     const requiredSkillUnsupplied = requiredSkill !== undefined && !projectedMembers.includes("Skills");
@@ -632,7 +577,6 @@ export const make = Effect.gen(function* () {
     const id = runId(SecureRandom.uuidV4Unsafe());
     const checkout = yield* prepareCheckout(admission, workspace, operation.permissionProfile);
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
-    const item = workItemId(keyOf(admission.event.key));
     const coordinationView = yield* coordination.read(admission.event.key);
     const handback =
       coordinationView.handback !== null && coordinationView.handback.atMillis > admission.event.atMillis
@@ -650,7 +594,6 @@ export const make = Effect.gen(function* () {
         { workspace: runWorkspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
         harness.sessionKind,
       ));
-    const handbackNote = handback?.note?.trim();
     const priorIssues = (yield* Ref.get(previousResultIssues)).get(keyOf(admission.event.key)) ?? null;
     const assembled = yield* contextAssembler.assemble({
       runId: id,
@@ -661,103 +604,35 @@ export const make = Effect.gen(function* () {
       contributions: [],
     });
     yield* Effect.addFinalizer(() => contextAssembler.cleanup(id).pipe(Effect.ignore));
-    const observation = {
-      generation: record.publishedRevision ?? 0,
-      observedAtMillis: admission.event.atMillis,
-    };
     const lineageArtifacts = yield* artifacts.byLineage(admission.lineage.root);
-    const baseProse = admission.event.workContext ?? {
-      body: workContextBody(admission, record.id),
-      comments: [],
-    };
-    const artifactProse =
-      lineageArtifacts.length === 0
-        ? baseProse
-        : {
-            ...baseProse,
-            body: [
-              baseProse.body,
-              "",
-              "## Artifacts this lineage created",
-              encodeArtifactContext(
-                lineageArtifacts.map(({ workspace, issue, url }) => ({ workspace, issue, url })),
-              ),
-            ].join("\n"),
-          };
     const subagents = yield* subagentMembers(workspace?.contributions ?? [], operation.requires);
-    const plan = RunPlan.make({
+    const plan = resolveRunPlan({
       id,
-      operation: operation.id,
+      admission,
+      workflow: record,
+      operation,
+      catalog: catalogResult.catalog,
+      outputWorkspaces,
       harness: {
         name: selectedHarness,
-        model: operation.model.model,
-        options,
-        profile: operation.permissionProfile,
+        projectedMembers,
+        middleware: harness.planMiddleware(selectedHarness),
+        sessionKind: harness.sessionKind(selectedHarness),
       },
-      instructions: assembled.layers,
-      operatingInstructions: {
-        name: assembled.operatingInstructionsName,
-        path: assembled.operatingInstructionsPath,
-        resources: [
-          ...assembled.operatingInstructionResources,
-          ...(priorIssues === null ? [] : [{ source: "previous-result-issues", content: priorIssues }]),
-        ],
-      },
-      messages: [
-        {
-          role: "user",
-          content: handbackNote
-            ? `Run Workflow Operation: ${operation.name}\n\nPerson's note: ${handbackNote}`
-            : `Run Workflow Operation: ${operation.name}`,
-        },
-      ],
-      tools: projectsTools
-        ? [
-            ...(issueSearchEnabled ? ["issue-search" as const] : []),
-            ...(pullRequestToolEnabled ? ["pull-request" as const] : []),
-          ]
-        : [],
+      workspaceCheckout: workspace === null ? null : checkout.path,
+      instructions: assembled,
+      previousResultIssues: priorIssues,
+      lineageArtifacts,
+      claim,
+      handback,
+      toolNeeds: actionTools,
       skills,
-      mcp: [],
       subagents,
-      hooks: [],
-      middleware: [...harness.planMiddleware(selectedHarness)],
-      structuredOutput: workflowOperationResultJsonSchema(
-        operation,
-        catalogResult.catalog,
-        outputWorkspaces,
-        itemWorkspace,
-      ),
-      connections: [],
-      workContext: {
-        reference: { workItem: item, url: admission.event.subject?.url ?? null },
-        facts: {
-          assignees: [],
-          openBlockers: 0,
-          claim,
-          priority: admission.event.priority ?? defaultPriority,
-        },
-        prose: artifactProse,
-        observation,
-      },
-      sandbox: { workspace: workspace ? checkout.path : null, policy: operation.permissionProfile },
-      persistence: { sessionKind: harness.sessionKind(selectedHarness) },
-      provenance: {
-        resolution: [],
-        stamps: [],
-        projectedNames: [],
-        projection: [
-          ...projection,
-          memberDisposition(projectedMembers, "Tools"),
-          memberDisposition(projectedMembers, "Skills"),
-        ],
-        observation,
-      },
     });
     const run: RunRecord = {
       id,
       workspace: runWorkspace,
-      workItem: item,
+      workItem: workItemId(keyOf(admission.event.key)),
       ...(admission.event.subject ? { subject: admission.event.subject } : {}),
       workflow: record.id,
       operation: operation.id,
