@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  lint-rule-fixtures:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

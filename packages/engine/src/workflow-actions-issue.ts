@@ -16,6 +16,7 @@ import {
   type ActionEntry,
   type ActionExecutor,
   decodeFailure,
+  type EngineToolName,
   invalidTarget,
   parameterValues,
   stringInput,
@@ -220,20 +221,26 @@ const issueEntry = (
   target: TargetProducer,
   execute: ActionExecutor,
   workspaceSource: WorkflowWorkspaceSource,
+  tools: ReadonlyArray<EngineToolName> = [],
 ): ActionEntry => ({
   row: { ...row, workspaceSource },
   target,
   execute,
   phase: "write",
-  tools: [],
+  tools,
 });
 
-const currentIssueEntry = (row: IssueActionRow, execute: ActionExecutor) =>
+const currentIssueEntry = (
+  row: IssueActionRow,
+  execute: ActionExecutor,
+  tools: ReadonlyArray<EngineToolName> = [],
+) =>
   issueEntry(
     { ...row, actsOn: [`${row.system}.issue`] },
     currentIssueTargetProducer,
     execute,
     "item-else-agent",
+    tools,
   );
 
 const issueEntries = (system: IssueTrackerApp) => [
@@ -248,16 +255,19 @@ const issueEntries = (system: IssueTrackerApp) => [
     newIssueTargetProducer,
     createIssue,
     "agent",
+    ["issue-search"],
   ),
   issueEntry(
     issueActionRow(system, "comment-issue", "Comment on an existing issue", ["issue", "comment"]),
     existingIssueTargetProducer,
     commentIssue,
     "agent",
+    ["issue-search"],
   ),
   currentIssueEntry(
     issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"]),
     commentIssue,
+    ["issue-search"],
   ),
   currentIssueEntry(
     issueActionRow(system, "add-label", "Add a label", [], [issueParameter("label", true)]),
