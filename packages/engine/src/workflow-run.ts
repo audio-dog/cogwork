@@ -288,6 +288,7 @@ export const make = Effect.gen(function* () {
     admission: TriggerAdmission,
     workspace: RegisteredWorkspace | null,
     permissionProfile: "read-only" | "full",
+    resume: boolean,
   ) {
     if (workspace === null) {
       const path = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workflow-" });
@@ -310,6 +311,7 @@ export const make = Effect.gen(function* () {
     const checkout = yield* worktrees.ensure(workspace, item, {
       branch,
       pushOwner: "engine",
+      resume,
     });
     return { path: checkout.path, branch } as const;
   });
@@ -575,7 +577,6 @@ export const make = Effect.gen(function* () {
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(SecureRandom.uuidV4Unsafe());
-    const checkout = yield* prepareCheckout(admission, workspace, operation.permissionProfile);
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
     const coordinationView = yield* coordination.read(admission.event.key);
     const handback =
@@ -588,8 +589,15 @@ export const make = Effect.gen(function* () {
       handback !== null && parkedAttempt !== null ? () => ledger.getRun(parkedAttempt) : null,
     ];
     const resumedRun = yield* resumeReaders.find((read) => read !== null)?.() ?? Effect.succeed(null);
+    const resumedSession = resumedRun?.session ?? null;
+    const checkout = yield* prepareCheckout(
+      admission,
+      workspace,
+      operation.permissionProfile,
+      resumedSession !== null,
+    );
     const session =
-      resumedRun?.session ??
+      resumedSession ??
       (yield* sessions.mint(
         { workspace: runWorkspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
         harness.sessionKind,
