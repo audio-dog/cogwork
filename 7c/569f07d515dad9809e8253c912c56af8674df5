@@ -1,0 +1,25 @@
+packages/engine/src/trigger-source.ts
+  s_84b24dec055c57::t_1199ab8d71d67c 88
+packages/engine/src/clock-source.ts
+  s_84b24dec055c57::t_f71702b3aa33a6 307
+packages/engine/src/trigger-observation.test.ts
+  s_84b24dec055c57::t_e90a2082c99a1c 180-184,199-204,224,1074-1161
+packages/engine/src/trigger-observation.ts
+  s_84b24dec055c57::t_47ed74fa723ac5 25,709,804,806-808,810-812,823,826
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7c569f07d515dad9809e8253c912c56af8674df5",
+  "prompts": {},
+  "sessions": {
+    "s_84b24dec055c57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8907ac07-2e6e-4a32-8711-02307648cc9f",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
