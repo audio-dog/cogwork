@@ -1,0 +1,71 @@
+apps/cli/src/platform.test.ts
+  s_e13c453c293725::t_14e33ec26d131f 934-946,951,953-964,969,1091-1092,1096-1099,1109-1110,1116-1146,1152-1156,1165-1166
+apps/cli/src/platform.ts
+  s_59dfc69c946e56::t_3ef2a2af908951 87-88,92-114,151-180,185-186,189-193,197,200-228,330-331
+apps/cli/src/worktree-commands.ts
+  s_59dfc69c946e56::t_e94060a44b3449 79-81,83-84
+packages/contracts/src/run-plan.ts
+  s_181a4522502deb::t_b31a3b112bc72b 103-109,116
+packages/engine/src/daemon-composition.test.ts
+  s_e13c453c293725::t_72ec6ab8710d7a 124-125
+packages/engine/src/git.test.ts
+  s_e13c453c293725::t_88f6035c3808db 15-16
+packages/engine/src/git.ts
+  s_e13c453c293725::t_63728cbd5eb920 37,39-43,79-83
+packages/engine/src/run-plan-resolution.test.ts
+  s_340575eee6bd02::t_8bd8279f195f76 120
+packages/engine/src/run-plan-resolution.ts
+  s_181a4522502deb::t_bfca60964f991a 22,45,122-133,192
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_e13c453c293725::t_c6633dec3c78c3 16-17,45-46,62-63,82-83
+packages/engine/src/testing/git-invocation-counting.ts
+  s_340575eee6bd02::t_bfe731a5505ab0 28-29,78-81
+packages/engine/src/workflow-run.ts
+  s_181a4522502deb::t_495b27961f19f2 295,298,316,636
+packages/engine/src/workspace-registry.test.ts
+  s_e13c453c293725::t_5c60e1a6abaf5b 41-42
+packages/engine/src/worktree.test.ts
+  s_e13c453c293725::t_35e3c2b2782664 151-152,512-517
+packages/engine/src/worktree.ts
+  s_59dfc69c946e56::t_1f5e4b5af185fc 11-18,95,164-179,316,321-326,330-331,337-343,370-371,373,375,392-397,404-409,412-418
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d7ffcb69fcabcbeb6a98c68998fa13a64bc1cec",
+  "prompts": {},
+  "sessions": {
+    "s_181a4522502deb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a328bfe8-aef0-4149-87c5-88da6da1c6c0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_340575eee6bd02": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2275f96e-6575-47b5-b0c7-810544a06950",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_59dfc69c946e56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5fdd8ce9-a219-4870-b997-c41a9600be55",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e13c453c293725": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4ae705ca-9889-4b1b-9d41-f2e4665c886a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
