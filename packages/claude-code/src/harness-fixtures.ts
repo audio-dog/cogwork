@@ -377,8 +377,13 @@ const Capture = Schema.Struct({
   }),
 });
 
-const NativeSandboxSettings = Schema.fromJsonString(
+const NativeSettings = Schema.fromJsonString(
   Schema.Struct({
+    attribution: Schema.Struct({
+      commit: Schema.String,
+      pr: Schema.String,
+      sessionUrl: Schema.Boolean,
+    }),
     sandbox: Schema.Struct({
       enabled: Schema.Boolean,
       failIfUnavailable: Schema.Boolean,
@@ -490,7 +495,7 @@ export {
   makeRequest,
   mcpSelection,
   missingByokHarnessLayer,
-  NativeSandboxSettings,
+  NativeSettings,
   name,
   networkEnvironmentProbe,
   occurrences,
