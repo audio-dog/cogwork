@@ -1,0 +1,52 @@
+packages/engine/GLOSSARY-harness.md
+  s_db70251e22628d::t_194beb6468910a 22
+  s_db70251e22628d::t_8365fa2dc09f14 17-20
+  s_db70251e22628d::t_b888300a3ec3fa 6-7
+  s_db70251e22628d::t_874497b2e6fce4 23-27
+packages/engine/GLOSSARY-adapters.md
+  s_db70251e22628d::t_c114f68f536a10 17-25,27-30
+packages/engine/GLOSSARY-coordination.md
+  s_db70251e22628d::t_720055df2b3f72 9-12
+packages/contracts/GLOSSARY-harness-contract.md
+  s_db70251e22628d::t_8eb2789c074cce 53
+packages/engine/GLOSSARY-coding-workflow.md
+  s_c8483e7a891c38::t_aa2d1b73da4c43 3-4
+  s_db70251e22628d::t_e04e15f91829ab 1-2,5-21
+packages/engine/GLOSSARY-triggers.md
+  s_db70251e22628d::t_65f2fe06befbdd 1-23
+packages/engine/GLOSSARY.md
+  s_db70251e22628d::t_d9cad7890e3d06 4-6,16-19,21-22
+packages/engine/GLOSSARY-runs.md
+  s_db70251e22628d::t_371dd9ee61b7de 17-20
+  s_db70251e22628d::t_8164c68a26318f 53-55
+  s_db70251e22628d::t_24b7f5ce6c4959 29-39,41-47
+  s_db70251e22628d::t_fe66536f16d804 56
+GLOSSARY-MAP.md
+  s_db70251e22628d::t_a457059ef11fa9 18,49
+packages/contracts/GLOSSARY.md
+  s_db70251e22628d::t_e003fcb0fd5cbe 7-10,15,19-20,22-24,27-34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cca2b5ca0ef63ddf8658f807671572f5adb54a82",
+  "prompts": {},
+  "sessions": {
+    "s_c8483e7a891c38": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8e561070-0156-4ff8-8aae-349e1a48368c",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_db70251e22628d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5926b48c-0fa9-4100-a8a8-e4bb9b9562c0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
