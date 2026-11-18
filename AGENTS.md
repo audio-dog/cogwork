@@ -105,7 +105,8 @@ The five canonical triage roles map 1:1 to labels of the same name (`needs-triag
 
 ### Domain docs
 
-Multi-context: a root `CONTEXT-MAP.md` points to per-package `CONTEXT.md` files. See `docs/agents/domain.md`.
+Multi-context: a root `GLOSSARY-MAP.md` points to per-package `GLOSSARY.md` files. A large glossary is
+an index with `GLOSSARY-<group>.md` parts. See `docs/agents/domain.md`.
 
 ### Product
 
