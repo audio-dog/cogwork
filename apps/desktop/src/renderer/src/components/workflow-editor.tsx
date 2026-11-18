@@ -72,6 +72,7 @@ import {
   selectableHarnessCatalogs,
 } from "../features/operation-settings";
 import { documentNodeIds, freshNodeId, newWorkflowOperation } from "../features/workflow-defaults";
+import { importReviewMark } from "../features/workflow-import-review";
 import {
   type NeedChoice,
   type NeedKind,
@@ -80,6 +81,12 @@ import {
   type WorkflowHarnesses,
 } from "../features/workflow-session";
 import { BufferedInput, BufferedTextarea } from "./buffered-field";
+import {
+  ImportReview,
+  ImportReviewBanner,
+  ImportReviewProvider,
+  useDismissImportReview,
+} from "./import-review";
 import { OperationOutcomes } from "./operation-outcomes";
 import { ProviderPicker } from "./provider-picker";
 import { TraitsMenu } from "./traits-menu";
@@ -130,6 +137,7 @@ function WorkspaceSelect() {
     actions,
     meta: { machine, workspaceLabels },
   } = useWorkflowEditor();
+  const dismissImportReview = useDismissImportReview();
   const labelOf = (workspace: WorkspaceId) => workspaceLabels.get(workspace) ?? workspace;
   const current = workflow.workingCopy.workspaces;
   const currentWorkspace = current._tag === "Listed" ? current.workspaces[0] : undefined;
@@ -149,6 +157,7 @@ function WorkspaceSelect() {
       value={value}
       onValueChange={(next) => {
         if (!next) return;
+        dismissImportReview(importReviewMark.workspaces);
         const selected =
           next === currentWorkspace
             ? currentWorkspace
@@ -159,9 +168,11 @@ function WorkspaceSelect() {
         actions.send([{ _tag: "SelectWorkspaces", workspaces }]);
       }}
     >
-      <SelectTrigger size="sm" className="w-44" aria-label="Workspaces">
-        <SelectValue />
-      </SelectTrigger>
+      <ImportReview mark={importReviewMark.workspaces}>
+        <SelectTrigger size="sm" className="w-44" aria-label="Workspaces">
+          <SelectValue />
+        </SelectTrigger>
+      </ImportReview>
       <SelectContent>
         <SelectGroup>
           {items.map((item) => (
@@ -410,6 +421,7 @@ function TriggerRow({ trigger }: { readonly trigger: WorkflowTrigger }) {
     actions,
     meta: { catalog, listValues },
   } = useWorkflowEditor();
+  const dismissImportReview = useDismissImportReview();
   const entry = catalogEntryOf(catalog, trigger.entry);
   const Icon = appIconOf(entry ? appOf(entry) : (trigger.entry.split(".")[0] ?? "cogwork"));
   const name = entry?.name ?? trigger.entry;
@@ -421,18 +433,25 @@ function TriggerRow({ trigger }: { readonly trigger: WorkflowTrigger }) {
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="text-sm">{name}</span>
       {entry?.parameters.map((parameter) => (
-        <ParameterMenu
-          key={parameter.id}
-          entry={entry}
-          parameter={parameter}
-          value={trigger.parameters.find(({ id }) => id === parameter.id)?.value ?? ""}
-          listValues={listValues}
-          onChange={(value) =>
-            actions.send([
-              { _tag: "SetTriggerParameter", trigger: trigger.id, parameter: parameter.id, values: [value] },
-            ])
-          }
-        />
+        <ImportReview key={parameter.id} mark={importReviewMark.triggerParameter(trigger.id, parameter.id)}>
+          <ParameterMenu
+            entry={entry}
+            parameter={parameter}
+            value={trigger.parameters.find(({ id }) => id === parameter.id)?.value ?? ""}
+            listValues={listValues}
+            onChange={(value) => {
+              dismissImportReview(importReviewMark.triggerParameter(trigger.id, parameter.id));
+              actions.send([
+                {
+                  _tag: "SetTriggerParameter",
+                  trigger: trigger.id,
+                  parameter: parameter.id,
+                  values: [value],
+                },
+              ]);
+            }}
+          />
+        </ImportReview>
       ))}
       {entry ? <TriggerFilters trigger={trigger} entry={entry} /> : null}
       {workflow.workingCopy.operations.length > 1 ? <TriggerStart trigger={trigger} label={name} /> : null}
@@ -539,14 +558,17 @@ function OperationModelPicker({ operation }: { readonly operation: WorkflowOpera
     actions,
     meta: { harnesses },
   } = useWorkflowEditor();
+  const dismissImportReview = useDismissImportReview();
   const catalogs = availableHarnessCatalogs(harnesses.catalogs);
   const providers = providerPickerCatalogs(catalogs, harnesses.readiness);
   const catalog = catalogFor(catalogs, operation.model.harness);
   const model = catalog ? selectedHarnessCatalogModel(catalog.models, operation.model.model) : undefined;
   const own = modelSelections(operation.model);
   const options = model ? modelOptionStates(model, { own, inherited: null, effective: own ?? {} }) : [];
-  const setModel = (selection: WorkflowModelSelection) =>
+  const setModel = (selection: WorkflowModelSelection) => {
+    dismissImportReview(importReviewMark.model(operation.id));
     actions.send([{ _tag: "SetModel", operation: operation.id, model: selection }]);
+  };
   return (
     <>
       <ProviderPicker.Provider
@@ -566,7 +588,9 @@ function OperationModelPicker({ operation }: { readonly operation: WorkflowOpera
         }}
       >
         <ProviderPicker.Root>
-          <ProviderPicker.Trigger />
+          <ImportReview mark={importReviewMark.model(operation.id)}>
+            <ProviderPicker.Trigger />
+          </ImportReview>
           <ProviderPicker.Content>
             <ProviderPicker.Rail />
             <Separator orientation="vertical" />
@@ -700,11 +724,14 @@ function OperationTools({ operation }: { readonly operation: WorkflowOperation }
     actions,
     meta: { needs },
   } = useWorkflowEditor();
+  const dismissImportReview = useDismissImportReview();
   const [query, setQuery] = useState("");
   const nameOf = (identity: NeedIdentity) =>
     needs.find((need) => need.identity === identity)?.name ?? identity;
-  const setRequires = (requires: ReadonlyArray<NeedIdentity>) =>
+  const setRequires = (requires: ReadonlyArray<NeedIdentity>) => {
+    dismissImportReview(importReviewMark.requires(operation.id));
     actions.send([{ _tag: "SetRequires", operation: operation.id, requires }]);
+  };
   const toggle = (need: NeedChoice, checked: boolean) =>
     setRequires(
       checked
@@ -713,36 +740,38 @@ function OperationTools({ operation }: { readonly operation: WorkflowOperation }
     );
   return (
     <OperationToolsContext value={{ state: { operation, query }, actions: { toggle } }}>
-      <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button size="sm" variant="ghost" className="font-normal text-muted-foreground" />}
+      <ImportReview mark={importReviewMark.requires(operation.id)}>
+        <DropdownMenuFilter filter={null} value={query} onValueChange={setQuery} autoHighlight>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button size="sm" variant="ghost" className="font-normal text-muted-foreground" />}
+            >
+              <RiToolsLine data-icon="inline-start" />
+              Tools
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64">
+              <DropdownMenuInput placeholder="Search" aria-label="Search tools" />
+              <DropdownMenuEmpty>No tools</DropdownMenuEmpty>
+              <DropdownMenuList>
+                {query.trim().length > 0 ? <ToolsSearch /> : <ToolsCascade />}
+              </DropdownMenuList>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </DropdownMenuFilter>
+        {operation.requires.map((identity) => (
+          <Button
+            key={identity}
+            size="xs"
+            variant="secondary"
+            className="font-normal"
+            aria-label={`Stop requiring ${nameOf(identity)}`}
+            onClick={() => setRequires(operation.requires.filter((required) => required !== identity))}
           >
-            <RiToolsLine data-icon="inline-start" />
-            Tools
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-64">
-            <DropdownMenuInput placeholder="Search" aria-label="Search tools" />
-            <DropdownMenuEmpty>No tools</DropdownMenuEmpty>
-            <DropdownMenuList>
-              {query.trim().length > 0 ? <ToolsSearch /> : <ToolsCascade />}
-            </DropdownMenuList>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </DropdownMenuFilter>
-      {operation.requires.map((identity) => (
-        <Button
-          key={identity}
-          size="xs"
-          variant="secondary"
-          className="font-normal"
-          aria-label={`Stop requiring ${nameOf(identity)}`}
-          onClick={() => setRequires(operation.requires.filter((required) => required !== identity))}
-        >
-          {nameOf(identity)}
-          <RiCloseLine data-icon="inline-end" />
-        </Button>
-      ))}
+            {nameOf(identity)}
+            <RiCloseLine data-icon="inline-end" />
+          </Button>
+        ))}
+      </ImportReview>
     </OperationToolsContext>
   );
 }
@@ -859,11 +888,20 @@ function Operations() {
   );
 }
 
-export function WorkflowEditor({ workflow: initial }: { readonly workflow: WorkflowRecord }) {
+export function WorkflowEditor({
+  workflow: initial,
+  importReview = [],
+  onPublished,
+}: {
+  readonly workflow: WorkflowRecord;
+  readonly importReview?: readonly string[];
+  readonly onPublished?: () => void;
+}) {
   const { state, actions } = useWorkflowSession();
   const remote = state.workflows.find(({ id }) => id === initial.id) ?? initial;
   const [preview, setPreview] = useState<WorkflowRecord | null>(null);
   const [saveFailed, setSaveFailed] = useState(false);
+  const [reviewMarks, setReviewMarks] = useState(importReview);
   const accepted = useRef(remote);
   const pending = useRef<
     ReadonlyArray<{
@@ -952,7 +990,9 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
         queued.workingRevision,
         accepted.current.workingRevision,
       );
-      return actions.publish(id, latestRevision);
+      const published = await actions.publish(id, latestRevision);
+      onPublished?.();
+      return published;
     },
   };
   const listValues: ListValues = async (entry, parameter) =>
@@ -962,6 +1002,8 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
         label: option.name,
       }),
     );
+  const dismissImportReview = (mark: string) =>
+    setReviewMarks((current) => current.filter((item) => item !== mark));
   return (
     <WorkflowEditorContext
       value={{
@@ -978,11 +1020,14 @@ export function WorkflowEditor({ workflow: initial }: { readonly workflow: Workf
         },
       }}
     >
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-8 py-8">
-        <EditorHeader />
-        <Triggers />
-        <Operations />
-      </div>
+      <ImportReviewProvider marks={reviewMarks} dismiss={dismissImportReview}>
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-8 py-8">
+          <ImportReviewBanner />
+          <EditorHeader />
+          <Triggers />
+          <Operations />
+        </div>
+      </ImportReviewProvider>
     </WorkflowEditorContext>
   );
 }

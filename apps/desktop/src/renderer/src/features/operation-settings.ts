@@ -88,7 +88,7 @@ const pendingProviderAvailability: ProviderAvailability = {
 };
 
 const providerAvailability = (readiness: HarnessReadiness, state: HarnessState) =>
-  HarnessState.match<ProviderAvailability>({
+  HarnessState.match({
     Ready: () => ({ pickable: true, stateLabel: "Ready", reason: null }),
     NotInstalled: ({ diagnostic }) => ({
       pickable: false,

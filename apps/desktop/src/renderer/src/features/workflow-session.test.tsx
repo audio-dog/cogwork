@@ -11,25 +11,57 @@ import {
   type WorkflowRecord,
   WorkspaceId,
 } from "@cogwork/contracts";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { act } from "react";
+import { act, type KeyboardEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowEditor } from "../components/workflow-editor";
 import { WorkflowsList } from "../components/workflows-list";
+import { importReviewMark } from "./workflow-import-review";
 import {
   type WorkflowClient,
   WorkflowProvider,
   type WorkflowSessionState,
   workflowProviderValue,
 } from "./workflow-session";
+import { exportWorkflow, importWorkflow } from "./workflow-transfer";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
+const navigate = vi.hoisted(() => vi.fn(async (_destination: unknown) => undefined));
+
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
-  Link: () => <a href="/workflows">Workflows</a>,
-  useNavigate: () => async () => undefined,
+  Link: ({
+    children,
+    to,
+    params,
+    onClick,
+    onKeyDown,
+    "aria-label": ariaLabel,
+  }: {
+    readonly children?: ReactNode;
+    readonly to?: string;
+    readonly params?: { readonly workflowId?: string };
+    readonly onClick?: (event: { readonly defaultPrevented: boolean }) => void;
+    readonly onKeyDown?: (event: KeyboardEvent<HTMLAnchorElement>) => void;
+    readonly "aria-label"?: string;
+  }) => (
+    <a
+      href={to ?? "/workflows"}
+      aria-label={ariaLabel}
+      onClick={async (event) => {
+        onClick?.(event);
+        if (event.defaultPrevented || to !== "/workflows/$workflowId" || !params?.workflowId) return;
+        await navigate({ to, params: { workflowId: params.workflowId } });
+      }}
+      onKeyDown={onKeyDown}
+    >
+      {children}
+    </a>
+  ),
+  useNavigate: () => navigate,
 }));
 
 const decodeWorkflowId = Schema.decodeUnknownSync(WorkflowId);
@@ -588,7 +620,7 @@ describe("WorkflowProvider", () => {
     await act(async () => root.unmount());
   });
 
-  it("keeps the list switch disabled until the Workflow is published", async () => {
+  it("keeps the list on/off control disabled until the Workflow is published", async () => {
     const switchEnabled = vi.fn<WorkflowClient["switchEnabled"]>(async () => record);
     const client: WorkflowClient = {
       create: unused,
@@ -609,14 +641,199 @@ describe("WorkflowProvider", () => {
         </WorkflowProvider>,
       );
     });
+    navigate.mockClear();
 
-    const switches = [...container.querySelectorAll<HTMLElement>('[aria-label="Turn Local name on"]')];
-    expect(switches).toHaveLength(1);
-    expect(switches.every((control) => control.getAttribute("aria-disabled") === "true")).toBe(true);
-    switches.forEach((control) => {
-      control.click();
+    const card = [...container.querySelectorAll<HTMLElement>("[data-slot=card]")].find((element) =>
+      element.textContent?.includes("Local name"),
+    );
+    if (!card) throw new Error("Workflow card did not render");
+    const toggle = [...card.querySelectorAll("button")].find((button) => button.textContent === "Off");
+    const exportWorkflow = card.querySelector<HTMLButtonElement>('button[aria-label="Export Local name"]');
+    const opener = card.querySelector<HTMLAnchorElement>("a");
+    if (!toggle) throw new Error("On/Off control did not render");
+    if (!exportWorkflow) throw new Error("Export control did not render");
+    if (!opener) throw new Error("Workflow card did not open");
+
+    expect(card.querySelector('[role="switch"]')).toBeNull();
+    expect(opener.querySelector("button")).toBeNull();
+    expect(toggle.closest("a")).toBeNull();
+    expect(exportWorkflow.closest("a")).toBeNull();
+    expect(toggle.disabled).toBe(true);
+    await act(async () => {
+      toggle.click();
+      exportWorkflow.click();
     });
     expect(switchEnabled).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      opener.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/workflows/$workflowId",
+      params: { workflowId: record.id },
+    });
+    await act(async () => root.unmount());
+  });
+
+  it("shows an import failure on the list and does not create a workflow", async () => {
+    const create = vi.fn<WorkflowClient["create"]>(unused);
+    const client: WorkflowClient = {
+      create,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider value={workflowProviderValue(sessionState([record]), client)}>
+          <WorkflowsList />
+        </WorkflowProvider>,
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error("Import input did not render");
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["{"], "broken.json", { type: "application/json" }));
+    input.files = transfer.files;
+
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(create).not.toHaveBeenCalled();
+    expect(container.querySelector("[role=alert]")?.textContent).toContain(
+      Effect.runSync(
+        importWorkflow("{").pipe(
+          Effect.match({
+            onFailure: (error) => error.message,
+            onSuccess: () => {
+              throw new Error("invalid JSON imported");
+            },
+          }),
+        ),
+      ),
+    );
+    await act(async () => root.unmount());
+  });
+
+  it("imports a workflow file dropped on the list", async () => {
+    const imported = { ...record, id: decodeWorkflowId("workflow-imported") };
+    const create = vi.fn<WorkflowClient["create"]>(async () => imported);
+    const client: WorkflowClient = {
+      create,
+      edit: unused,
+      publish: unused,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider value={workflowProviderValue(sessionState([record]), client)}>
+          <WorkflowsList />
+        </WorkflowProvider>,
+      );
+    });
+    navigate.mockClear();
+    const view = container.firstElementChild;
+    if (!(view instanceof HTMLElement)) throw new Error("Workflow list did not render");
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File([exportWorkflow(workflowDocument)], "local-name.json", { type: "application/json" }),
+    );
+    const drop = new DragEvent("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: transfer });
+
+    await act(async () => {
+      view.dispatchEvent(drop);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(create).toHaveBeenCalledWith(workflowDocument);
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/workflows/$workflowId/review",
+      params: { workflowId: imported.id },
+    });
+    await act(async () => root.unmount());
+  });
+
+  it("highlights imported fields until they are saved and then leaves the review", async () => {
+    const operation = everyDocument.operations[0];
+    if (!operation) throw new Error("expected an operation");
+    const draft = { ...everyRecord, publishedCopy: null, publishedRevision: null };
+    const publish = vi.fn<WorkflowClient["publish"]>(async () => ({
+      ...draft,
+      publishedRevision: draft.workingRevision,
+      publishedCopy: draft.workingCopy,
+    }));
+    const client: WorkflowClient = {
+      create: unused,
+      edit: async () => draft,
+      publish,
+      switchEnabled: unused,
+      delete: unused,
+      listOptions: unused,
+    };
+    const onPublished = vi.fn<() => void>();
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <WorkflowProvider value={workflowProviderValue(sessionState([draft], { catalog }), client)}>
+          <WorkflowEditor
+            workflow={draft}
+            importReview={[importReviewMark.workspaces, importReviewMark.model(operation.id)]}
+            onPublished={onPublished}
+          />
+        </WorkflowProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain("Review these before you turn this on");
+    expect(container.querySelector(`[data-import-review="${importReviewMark.workspaces}"]`)).not.toBeNull();
+    expect(
+      container.querySelector(`[data-import-review="${importReviewMark.model(operation.id)}"]`),
+    ).not.toBeNull();
+
+    const workspaces = container.querySelector<HTMLButtonElement>('[aria-label="Workspaces"]');
+    if (!workspaces) throw new Error("Workspace menu did not render");
+    await act(async () => workspaces.click());
+    const noWorkspace = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
+      option.textContent?.includes("No workspace"),
+    );
+    if (!noWorkspace) throw new Error("No workspace was not offered");
+    await act(async () => {
+      noWorkspace.click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector(`[data-import-review="${importReviewMark.workspaces}"]`)).toBeNull();
+    expect(
+      container.querySelector(`[data-import-review="${importReviewMark.model(operation.id)}"]`),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("Review these before you turn this on");
+
+    const save = [...container.querySelectorAll("button")].find((button) => button.textContent === "Save");
+    if (!save) throw new Error("Save did not render");
+    await act(async () => {
+      save.click();
+      await publish.mock.results[0]?.value;
+    });
+
+    expect(onPublished).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
   });
 

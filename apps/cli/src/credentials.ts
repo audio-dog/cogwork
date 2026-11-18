@@ -2,12 +2,12 @@ import { type ConnectionId, connectionAccountOf, connectionSystemOf } from "@cog
 import { CredentialStore, GitHub, Linear } from "@cogwork/engine";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as HttpClient from "effect/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { makeTokenRefresh as makeGranolaTokenRefresh } from "./granola-login";
 import { makeTokenRefresh as makeSlackTokenRefresh } from "./slack-login";
 

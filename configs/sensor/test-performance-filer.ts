@@ -12,9 +12,9 @@ import * as Console from "effect/Console";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 
 const positiveFinite = Schema.Finite.check(Schema.isGreaterThan(0));
 const positiveInt = Schema.Int.check(Schema.isGreaterThan(0));
@@ -334,7 +334,7 @@ const runComparisonEntry = Effect.fn("SuiteComparisonEntry.run")(function* (args
   const [reportPath, workflowRunUrl] = yield* decodeEntryArguments(args);
   const fileSystem = yield* FileSystem.FileSystem;
   const report = yield* fileSystem.readFileString(reportPath).pipe(Effect.flatMap(decodeReportJson));
-  const repository = yield* Config.string("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
+  const repository = yield* Config.String("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
   const filer = yield* makeFiler(repository);
   const atMillis = yield* Clock.currentTimeMillis;
   const result = yield* submitSuiteComparison({ report, repository, workflowRunUrl, atMillis }).pipe(
@@ -347,7 +347,7 @@ const runBudgetEntry = Effect.fn("TestSuiteBudgetEntry.run")(function* (args: Re
   const [, historyPath] = yield* decodeBudgetEntryArguments(args);
   const fileSystem = yield* FileSystem.FileSystem;
   const history = yield* fileSystem.readFileString(historyPath).pipe(Effect.flatMap(decodeHistoryJson));
-  const repository = yield* Config.string("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
+  const repository = yield* Config.String("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
   const filer = yield* makeFiler(repository);
   const atMillis = yield* Clock.currentTimeMillis;
   const result = yield* submitTestSuiteBudget({ history, repository, atMillis }).pipe(
@@ -360,7 +360,7 @@ const runTestFileBudgetEntry = Effect.fn("TestFileBudgetEntry.run")(function* (a
   const [, reportPath, workflowRunUrl] = yield* decodeTestFileBudgetEntryArguments(args);
   const fileSystem = yield* FileSystem.FileSystem;
   const reportJson = yield* fileSystem.readFileString(reportPath);
-  const repository = yield* Config.string("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
+  const repository = yield* Config.String("GITHUB_REPOSITORY").pipe(Effect.flatMap(decodeRepository));
   const filer = yield* makeFiler(repository);
   const atMillis = yield* Clock.currentTimeMillis;
   const result = yield* fileTestFileBudget({ reportJson, repository, workflowRunUrl, atMillis }).pipe(

@@ -24,13 +24,13 @@ const replayHarnessExecution = {
 } satisfies HarnessExecution;
 const positiveMillis = Schema.Finite.check(Schema.isGreaterThan(0));
 const timedMillis = Schema.Array(positiveMillis).check(
-  Schema.isLengthBetween(replaySampleMinimum, replaySampleMaximum),
+  Schema.isBetweenLength(replaySampleMinimum, replaySampleMaximum),
 );
 
 export class ReplayFixture extends Schema.Class<ReplayFixture>("ReplayFixture")({
   version: Schema.Literal(1),
   sourceRunId: RunId,
-  events: Schema.Array(RunEventSchema).check(Schema.isLengthBetween(1, 1_000_000)),
+  events: Schema.Array(RunEventSchema).check(Schema.isBetweenLength(1, 1_000_000)),
 }) {}
 
 export class ReplayCounts extends Schema.Class<ReplayCounts>("ReplayCounts")({
@@ -56,7 +56,7 @@ export class ReplayReport extends Schema.Class<ReplayReport>("ReplayReport")({
   concurrency: Schema.Int.check(Schema.isGreaterThan(0)),
   speed: ReplaySpeed,
   warmupMillis: timedMillis,
-  samples: Schema.Array(ReplaySample).check(Schema.isLengthBetween(replaySampleMinimum, replaySampleMaximum)),
+  samples: Schema.Array(ReplaySample).check(Schema.isBetweenLength(replaySampleMinimum, replaySampleMaximum)),
 }) {}
 
 export class ReplayComparisonError extends Schema.TaggedError<ReplayComparisonError>()(

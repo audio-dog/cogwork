@@ -2,10 +2,10 @@ import { localOwnerId, Principal, PrincipalMiddleware } from "@cogwork/contracts
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Rpc from "effect/rpc/Rpc";
+import * as RpcGroup from "effect/rpc/RpcGroup";
+import * as RpcTest from "effect/rpc/RpcTest";
 import * as Schema from "effect/Schema";
-import * as Rpc from "effect/unstable/rpc/Rpc";
-import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
-import * as RpcTest from "effect/unstable/rpc/RpcTest";
 import * as Daemon from "./daemon";
 
 const WhoAmI = Rpc.make("WhoAmI", { success: Schema.String });
