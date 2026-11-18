@@ -1,0 +1,24 @@
+.github/workflows/lint-rule-fixtures.yml
+  s_6221c29f741787::t_9cc145c168ca98 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "abc761c0df25c4e624fd88826015037778ef70dc",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_6221c29f741787": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "162814ba-0553-41fb-85a6-fea5f9824d96",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
