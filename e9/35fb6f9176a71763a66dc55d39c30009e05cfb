@@ -1,0 +1,49 @@
+.github/workflows/lint-rule-fixtures.yml
+  s_2ec1aeb74aa0c8::t_dc4dd76104d242 16
+.mergify.yml
+  s_2ec1aeb74aa0c8::t_3fad6910814103 1-22
+apps/cli/src/slack-login.test.ts
+  s_2ec1aeb74aa0c8::t_12e3c6ff4773cf 6,8-12,14,17,43-49,51-55,57-98,100-110,112-115,118,121,123,136-178
+apps/cli/src/slack-login.ts
+  s_2ec1aeb74aa0c8::t_96f9fd304c9ffb 13-14,67-75,83,86,89-99,108,136-154,186,192-202,216,218-219,223-224,226,230-231,235-237,303,313
+packages/claude-code/src/harness-fixtures.ts
+  s_2ec1aeb74aa0c8::t_e77fcda1b1470d 380,382-386,498
+packages/claude-code/src/harness-host.test.ts
+  s_2ec1aeb74aa0c8::t_24d9021c0168e9 23,171,183
+packages/claude-code/src/harness.ts
+  s_2ec1aeb74aa0c8::t_4935ea5ba81323 321,323-325,344
+packages/engine/src/slack-write.ts
+  s_2ec1aeb74aa0c8::t_f838ac792bfa66 433-440
+packages/engine/src/workflow-action-plan.ts
+  s_2ec1aeb74aa0c8::t_98b91b9a48a3ed 29,115,195,337
+packages/engine/src/workflow-action-registry.ts
+  s_2ec1aeb74aa0c8::t_f7565981c5c2a1 4,9-11
+packages/engine/src/workflow-actions-issue.ts
+  s_2ec1aeb74aa0c8::t_410170b9434a81 19,224,230,233-237,243,258,265,270
+packages/engine/src/workflow-actions-slack.test.ts
+  s_2ec1aeb74aa0c8::t_120e0da1fc0590 1-94
+packages/engine/src/workflow-actions-slack.ts
+  s_2ec1aeb74aa0c8::t_785af4b85f00f6 1-142
+packages/engine/src/workflow-catalog.ts
+  s_2ec1aeb74aa0c8::t_1fe1316f0a7253 46
+packages/engine/src/workflow-run.ts
+  s_2ec1aeb74aa0c8::t_b462078fb60a0e 74,96,100-106,590-592
+packages/engine/src/workflow.test.ts
+  s_2ec1aeb74aa0c8::t_3c77e444de523e 44,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e935fb6f9176a71763a66dc55d39c30009e05cfb",
+  "prompts": {},
+  "sessions": {
+    "s_2ec1aeb74aa0c8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b6e0c882-cd3a-46d9-affe-649e3ef4013b",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
