@@ -1,0 +1,135 @@
+docs/agents/domain.md
+  s_0e65a8194b6f97::t_bc2652f31a5906 21,24,26-33,36-46
+  s_0e65a8194b6f97::t_0d8a3b0e41f3f3 47
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_0e65a8194b6f97::t_5a8e55eb40d181 126
+  s_0e65a8194b6f97::t_0599fd7b345fc5 36
+  s_0e65a8194b6f97::t_b59708fed0515d 128
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_0e65a8194b6f97::t_a1a8fdfe77d3f7 35
+docs/agents/technical-disposition.md
+  s_0e65a8194b6f97::t_0af9f92abee8df 85
+  s_0e65a8194b6f97::t_277c2614a63d11 82
+  s_0e65a8194b6f97::t_d8be2db0653961 83-84
+  s_0e65a8194b6f97::t_eeb651c3f27f4f 86-88
+AGENTS.md
+  s_0e65a8194b6f97::t_7b16ed661eb711 108-109
+.agents/skills/create-patterns/SKILL.md
+  s_0e65a8194b6f97::t_c5d9f1a1fa7424 18
+.agents/skills/test-audit/SKILL.md
+  s_0e65a8194b6f97::t_7534548c0adfdd 21
+CODING_STANDARDS.md
+  s_0e65a8194b6f97::t_f3f27c364835e8 11
+GLOSSARY-MAP.md
+  s_0e65a8194b6f97::t_6c7753ae6395f9 6-7,17-23,27
+README.md
+  s_0e65a8194b6f97::t_e46058e1db7447 24-32
+apps/cli/GLOSSARY.md
+  s_0e65a8194b6f97::t_b40e6aab70644a 6-7
+apps/desktop/GLOSSARY.md
+  s_0e65a8194b6f97::t_146bbfeb0da2ad 6-7,11
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_0e65a8194b6f97::t_3f93052d6ce0ef 11,35
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_0e65a8194b6f97::t_6658e45f528c3c 114-115
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  s_0e65a8194b6f97::t_a8f48219c2a144 25
+docs/agent-patterns/effect-error-design.md
+  s_0e65a8194b6f97::t_5a2f2539578857 121,167
+docs/agent-patterns/effect-process-edges.md
+  s_0e65a8194b6f97::t_1cccd4c425b9dc 111,166
+docs/agent-patterns/effect-schema-unions.md
+  s_0e65a8194b6f97::t_fe88a7522a4f44 86,146,158
+docs/agents/product.md
+  s_0e65a8194b6f97::t_8b04a76a3889b4 14
+docs/agents/technical-disposition-engine-and-trust.md
+  s_0e65a8194b6f97::t_d02b1747c03991 1-100
+docs/agents/technical-disposition-evidence-and-scope.md
+  s_0e65a8194b6f97::t_c77627bc172976 1-102
+docs/agents/technical-disposition-failures-and-limits.md
+  s_0e65a8194b6f97::t_a44de74477b6d7 1-95
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_0e65a8194b6f97::t_72274b55790e12 5,23
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_0e65a8194b6f97::t_adcaec745e74c5 60,99
+docs/spec/performance-observability.md
+  s_0e65a8194b6f97::t_befc078f47e362 150
+docs/spec/trusted-bot-wake-signal.md
+  s_0e65a8194b6f97::t_668a6b5e61576b 8
+packages/claude-code/GLOSSARY.md
+  s_0e65a8194b6f97::t_c7f57db99dc8a0 3
+packages/codex-cli/GLOSSARY.md
+  s_0e65a8194b6f97::t_2146729c557b3e 3
+packages/contracts/GLOSSARY-client-rpc.md
+  s_0e65a8194b6f97::t_ff10ee6ba8d07b 1-19
+packages/contracts/GLOSSARY-configuration.md
+  s_0e65a8194b6f97::t_c2d31b619d0ac8 1,3
+packages/contracts/GLOSSARY-contributions.md
+  s_0e65a8194b6f97::t_373f57d0d3990e 1-56
+packages/contracts/GLOSSARY-coordination.md
+  s_0e65a8194b6f97::t_f581cbdf184950 1-33
+packages/contracts/GLOSSARY-credentials.md
+  s_0e65a8194b6f97::t_9bed342922f513 1-7
+packages/contracts/GLOSSARY-daemon-status.md
+  s_0e65a8194b6f97::t_14dc03abec04c4 1-19
+packages/contracts/GLOSSARY-harness-contract.md
+  s_0e65a8194b6f97::t_6a13c3ae7f9c46 1-82
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_0e65a8194b6f97::t_5da8fd87d5a0f5 1-27
+packages/contracts/GLOSSARY-operations.md
+  s_0e65a8194b6f97::t_6f1dd40c304a51 1-121
+packages/contracts/GLOSSARY-runs.md
+  s_0e65a8194b6f97::t_2cbcdef3be19c3 1-62
+packages/contracts/GLOSSARY-triggers.md
+  s_0e65a8194b6f97::t_a747f140105b1e 1-47
+packages/contracts/GLOSSARY-work.md
+  s_0e65a8194b6f97::t_70c96927302f28 1-46
+packages/contracts/GLOSSARY-workflows.md
+  s_0e65a8194b6f97::t_c51a2428eeb6be 1-40
+packages/contracts/GLOSSARY.md
+  s_0e65a8194b6f97::t_cac508c82ebade 1-23
+packages/cursor-acp/GLOSSARY.md
+  s_0e65a8194b6f97::t_499977b9f0fab8 3
+packages/engine/GLOSSARY-adapters.md
+  s_0e65a8194b6f97::t_4a31b7ba14186a 1-47
+packages/engine/GLOSSARY-coordination.md
+  s_0e65a8194b6f97::t_7de914383ba33e 1-27
+packages/engine/GLOSSARY-daemon.md
+  s_0e65a8194b6f97::t_bae2139f4117b2 1-44
+packages/engine/GLOSSARY-harness.md
+  s_0e65a8194b6f97::t_47565b699a946c 1,3
+packages/engine/GLOSSARY-performance.md
+  s_0e65a8194b6f97::t_78bbf45b6363ba 1-40
+packages/engine/GLOSSARY-runs.md
+  s_0e65a8194b6f97::t_fdc09d0a646e9d 1-36
+packages/engine/GLOSSARY-sandbox.md
+  s_0e65a8194b6f97::t_894a406367ca2b 1-35
+packages/engine/GLOSSARY.md
+  s_0e65a8194b6f97::t_57555ee5f27017 1-20
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_0e65a8194b6f97::t_c73cf69661522e 5,26
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_0e65a8194b6f97::t_de40f0f3393b0c 3
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_0e65a8194b6f97::t_84de7cb18930fd 3
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_0e65a8194b6f97::t_11b61aafd59169 38
+packages/engine/src/connection-verify.ts
+  s_0e65a8194b6f97::t_4d4e62b2defa9f 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1870c116e181304c3892921200a38c882bdfd3f4",
+  "prompts": {},
+  "sessions": {
+    "s_0e65a8194b6f97": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c607c8d8-d41b-4332-af24-c8de0c241e5e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
