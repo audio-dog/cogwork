@@ -1,0 +1,151 @@
+.agents/skills/create-patterns/SKILL.md
+  s_78f7101c68cba3::t_155cd4dbce675d 18
+.agents/skills/test-audit/SKILL.md
+  s_78f7101c68cba3::t_df22ca9da6d601 21
+AGENTS.md
+  s_78f7101c68cba3::t_32d746876e8434 108-109
+CODING_STANDARDS.md
+  s_78f7101c68cba3::t_cae4498ce87c86 11
+GLOSSARY-MAP.md
+  s_78f7101c68cba3::t_3f68ea43b8ce91 6-7,17-23,27
+README.md
+  s_78f7101c68cba3::t_4b4c6025709423 24-32
+apps/cli/GLOSSARY.md
+  s_78f7101c68cba3::t_e2921f5737c363 6-7
+apps/desktop/GLOSSARY.md
+  s_78f7101c68cba3::t_e5c2e9de25fd99 6-7,11
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_78f7101c68cba3::t_7ef6bd686b85e5 11,35
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_78f7101c68cba3::t_418ee7e8283876 114-115
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  s_78f7101c68cba3::t_34082d4f3d3b76 25
+docs/agent-patterns/effect-error-design.md
+  s_78f7101c68cba3::t_ca00b984f5e66c 121,167
+docs/agent-patterns/effect-process-edges.md
+  s_78f7101c68cba3::t_a5f14ebec52033 111,166
+docs/agent-patterns/effect-schema-unions.md
+  s_78f7101c68cba3::t_e985007e6eff2c 86,146,158
+docs/agents/domain.md
+  s_78f7101c68cba3::t_48b87527fbe46e 7-9,16,21,24,26-33,36-47,66
+docs/agents/product.md
+  s_78f7101c68cba3::t_f9ff064ce8abb8 14
+docs/agents/technical-disposition-engine-and-trust.md
+  s_78f7101c68cba3::t_9abc8b09c1d70d 1-100
+docs/agents/technical-disposition-evidence-and-scope.md
+  s_78f7101c68cba3::t_31dcaad6e3280c 1-102
+docs/agents/technical-disposition-failures-and-limits.md
+  s_78f7101c68cba3::t_9b172dae710c8f 1-95
+docs/agents/technical-disposition.md
+  s_78f7101c68cba3::t_658b0f786c2aa5 13,26,30-31,63,82-91
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_78f7101c68cba3::t_38a94a7f7a1c7c 5,23
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_78f7101c68cba3::t_3c4eeae36982e5 60,99
+docs/spec/performance-observability.md
+  s_78f7101c68cba3::t_1f89ac6932341d 150
+docs/spec/trusted-bot-wake-signal.md
+  s_78f7101c68cba3::t_ba41fdc03ead2c 8
+packages/claude-code/GLOSSARY.md
+  s_78f7101c68cba3::t_a8d65b4c220eca 3
+packages/codex-cli/GLOSSARY.md
+  s_78f7101c68cba3::t_2e1daf8451849b 3
+packages/contracts/GLOSSARY-client-rpc.md
+  s_78f7101c68cba3::t_94ed462200f299 1-19
+packages/contracts/GLOSSARY-configuration.md
+  s_78f7101c68cba3::t_2dc465ed1ad086 1,3
+packages/contracts/GLOSSARY-contributions.md
+  s_78f7101c68cba3::t_784fe068d60d8b 1-56
+packages/contracts/GLOSSARY-coordination.md
+  s_78f7101c68cba3::t_ec53c9335dbb22 1-33
+packages/contracts/GLOSSARY-credentials.md
+  s_78f7101c68cba3::t_2844c8db2a4871 1-7
+packages/contracts/GLOSSARY-daemon-status.md
+  s_78f7101c68cba3::t_6600efc280e63b 1-19
+packages/contracts/GLOSSARY-harness-contract.md
+  s_78f7101c68cba3::t_e81e79ce2eefbf 1-82
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_78f7101c68cba3::t_d07eaaebe5eb4a 1-27
+packages/contracts/GLOSSARY-operations.md
+  s_78f7101c68cba3::t_682f908b6db763 1-121
+packages/contracts/GLOSSARY-runs.md
+  s_78f7101c68cba3::t_f0ed13f03ac16a 1-62
+packages/contracts/GLOSSARY-triggers.md
+  s_78f7101c68cba3::t_3dde8a5ff54690 1-47
+packages/contracts/GLOSSARY-work.md
+  s_78f7101c68cba3::t_8c3e69bac24efe 1-46
+packages/contracts/GLOSSARY-workflows.md
+  s_78f7101c68cba3::t_cb5b8a755fb7d7 1-40
+packages/contracts/GLOSSARY.md
+  s_78f7101c68cba3::t_ad2cbac5808cac 1-23
+packages/cursor-acp/GLOSSARY.md
+  s_78f7101c68cba3::t_dc886bb7c2e035 3
+packages/engine/GLOSSARY-adapters.md
+  s_78f7101c68cba3::t_784a7ce924dfb6 1-47
+packages/engine/GLOSSARY-coordination.md
+  s_78f7101c68cba3::t_be794a4a61d3e6 1-27
+packages/engine/GLOSSARY-harness.md
+  s_78f7101c68cba3::t_ded4ac3c0f735d 1,3
+packages/engine/GLOSSARY-performance.md
+  s_78f7101c68cba3::t_956d39bbc9d0ee 1-40
+packages/engine/GLOSSARY-runs.md
+  s_78f7101c68cba3::t_3cb50db4db59bc 1-36
+packages/engine/GLOSSARY-sandbox.md
+  s_78f7101c68cba3::t_f00238acb41ec1 1-35
+packages/engine/GLOSSARY.md
+  s_78f7101c68cba3::t_4b5906122d7434 1-20
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_78f7101c68cba3::t_60f8d2a648116c 5,26
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_78f7101c68cba3::t_cf8273ec2b47e0 3
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_78f7101c68cba3::t_1259b7dec1f78a 3
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_78f7101c68cba3::t_041f618c6d33a8 38
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_78f7101c68cba3::t_4d8e01cd7f06b7 36,126,128
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_78f7101c68cba3::t_c7ef3fac2d9316 35
+packages/engine/src/connection-verify.ts
+  s_78f7101c68cba3::t_273e382bc70524 13
+packages/engine/src/workflow-run-admission.ts
+  s_78f7101c68cba3::t_503b217b296920 1-56
+packages/engine/src/workflow-run-attempts.ts
+  s_78f7101c68cba3::t_49315ffb3087d7 1-340
+packages/engine/src/workflow-run-execution-context.ts
+  s_78f7101c68cba3::t_cbf23e8c2a7506 1-55
+packages/engine/src/workflow-run-pending-plan.ts
+  s_78f7101c68cba3::t_1a6b318798cf04 1-194
+packages/engine/src/workflow-run-preparation.ts
+  s_78f7101c68cba3::t_e8f943876036f9 1-155
+packages/engine/src/workflow-run-touchpoints.ts
+  s_78f7101c68cba3::t_ea08a7e53f2c37 1-207
+packages/engine/src/workflow-run.ts
+  s_78f7101c68cba3::t_4e30f8ccd7a00d 7,28-29,40-41,44-49,86-100,290-293,329-336,342-344,400-403,420-427
+packages/engine/GLOSSARY-daemon.md
+  s_29681a8d215569::t_fe755f379e2e50 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fcdb6b9a40cf2251f12520e196821d75ce7718bd",
+  "prompts": {},
+  "sessions": {
+    "s_29681a8d215569": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67e3ec62-d199-4055-8473-67279da8a613",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_78f7101c68cba3": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "81f6ee5b-bed0-48d1-8326-bb2bbff6108d",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
