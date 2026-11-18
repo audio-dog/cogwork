@@ -135,7 +135,7 @@ const emptyTriggerProse: TrackerProse = { body: "", comments: [] };
 
 export const makeEmpty = Effect.succeed({
   observe: emptyRead<ReadonlyArray<TrackerItem>>([]),
-  itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, _sinceMillis: number) =>
+  openItemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, _sinceMillis: number) =>
     emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
   openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, _label: string) =>
     emptyRead<ReadonlyArray<ListedTrackerItem>>([])(workspace),
@@ -148,15 +148,12 @@ export const makeEmpty = Effect.succeed({
   labelAppliedAt: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId, _label: string) =>
     emptyRead<number | null>(null)(workspace),
   listLabels: emptyRead<ReadonlyArray<string>>([]),
+  assignees: (workspace: WorkspaceIssueTrackerBinding, _itemId: WorkItemId) =>
+    emptyRead<ReadonlyArray<string>>([])(workspace),
   ...unsupportedWorkflowActions,
 });
 
-export type IssueTrackerService = Effect.Success<typeof makeEmpty> & {
-  readonly assignees?: (
-    workspace: WorkspaceIssueTrackerBinding,
-    itemId: WorkItemId,
-  ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
-};
+export type IssueTrackerService = Effect.Success<typeof makeEmpty>;
 
 export class IssueTracker extends Context.Service<IssueTracker, IssueTrackerService>()(
   "@cogwork/engine/issue-tracker/IssueTracker",

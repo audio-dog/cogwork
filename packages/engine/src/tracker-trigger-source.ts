@@ -30,7 +30,7 @@ import type { WorkflowArtifactStoreService } from "./workflow-artifact-store";
 type TrackerSystem = "github" | "linear";
 type TrackerReads = Pick<
   IssueTrackerService,
-  | "itemsChangedSince"
+  | "openItemsChangedSince"
   | "openItemsWithLabel"
   | "readItem"
   | "readTriggerProse"
@@ -167,7 +167,7 @@ export const makeTrackerTriggerSource = (
     if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: name };
     const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
     const [changed, labelled] = yield* Effect.all([
-      issueTracker.itemsChangedSince(workspace, since),
+      issueTracker.openItemsChangedSince(workspace, since),
       Effect.forEach(filteredLabels(selected), (label) => issueTracker.openItemsWithLabel(workspace, label)),
     ]);
     const events = yield* Effect.forEach(uniqueItems([...changed, ...labelled.flat()]), (item) =>

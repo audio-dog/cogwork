@@ -77,25 +77,25 @@ const githubClient = Layer.mock(GitHubClient, {
   listIssueFieldValues: () => Effect.succeed(new Map([[1, new Map([[42, "Urgent"]])]])),
 });
 
+const linearIssue = (createdAtMillis: number) => ({
+  id: "linear-id",
+  identifier: "AUD-7",
+  title: "Audit export",
+  url: "https://linear.app/acme/issue/AUD-7",
+  labels: ["needs-triage"],
+  assignees: ["owner"],
+  stateName: "Todo",
+  stateType: "unstarted",
+  openBlockers: 1,
+  priority: "high" as const,
+  updatedAtMillis: 3_000,
+  createdAtMillis,
+  coordinationComments: [],
+});
+
 const linearClient = Layer.mock(LinearClient, {
-  observeIssues: (_ref, _coordination, _assignees, updatedSince) =>
-    Effect.succeed([
-      {
-        id: "linear-id",
-        identifier: "AUD-7",
-        title: "Audit export",
-        url: "https://linear.app/acme/issue/AUD-7",
-        labels: ["needs-triage"],
-        assignees: ["owner"],
-        stateName: "Todo",
-        stateType: "unstarted",
-        openBlockers: 1,
-        priority: "high",
-        updatedAtMillis: 3_000,
-        createdAtMillis: updatedSince ?? 2_500,
-        coordinationComments: [],
-      },
-    ]),
+  observeIssues: () => Effect.succeed([linearIssue(2_500)]),
+  observeOpenIssuesSince: (_ref, updatedSince) => Effect.succeed([linearIssue(updatedSince)]),
   readProse: () =>
     Effect.succeed({
       body: "Linear body",
@@ -177,7 +177,7 @@ describe("routed issue tracker reads", () => {
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
       const observed = yield* tracker.observe(githubWorkspace);
-      const changed = yield* tracker.itemsChangedSince(githubWorkspace, 5_000);
+      const changed = yield* tracker.openItemsChangedSince(githubWorkspace, 5_000);
       assert.deepStrictEqual(
         observed.map(({ id, lastTouchedAtMillis }) => ({ id, lastTouchedAtMillis })),
         [{ id: id("#1"), lastTouchedAtMillis: 2_000 }],
@@ -229,7 +229,7 @@ describe("routed issue tracker reads", () => {
   it.effect("lists Linear issues changed since a cursor and reads label history, prose, and labels", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
-      const changed = yield* tracker.itemsChangedSince(linearWorkspace, 3_000);
+      const changed = yield* tracker.openItemsChangedSince(linearWorkspace, 3_000);
       const appliedAt = yield* tracker.labelAppliedAt(linearWorkspace, id("AUD-7"), "needs-triage");
       const prose = yield* tracker.readTriggerProse(linearWorkspace, id("AUD-7"));
       const labels = yield* tracker.listLabels(linearWorkspace);

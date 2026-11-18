@@ -136,10 +136,14 @@ export const makeIssueReads = (client: LinearClientService) => {
   return {
     observe: (workspace: WorkspaceIssueTrackerBinding) =>
       listItems(workspace, (target) => client.observeIssues(target, null)),
-    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
-      listItems(workspace, (target) => client.observeIssues(target, null, null, sinceMillis, true)),
+    openItemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      listItems(workspace, (target) =>
+        client.observeOpenIssuesSince(target, sinceMillis, workspace.config.issueTracker.assigneeAllowlist),
+      ),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
-      listItems(workspace, (target) => client.observeLabelledIssues(target, label)),
+      listItems(workspace, (target) =>
+        client.observeLabelledIssues(target, label, workspace.config.issueTracker.assigneeAllowlist),
+      ),
     readItem: Effect.fn("linear.readItem")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,

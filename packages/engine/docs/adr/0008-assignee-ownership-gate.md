@@ -20,3 +20,13 @@ The allowlist (whose tickets the daemon may pick up) is deliberately separate fr
 The gate trusts tracker-side assignment: it raises the bar to "can assign an issue to an allowlisted identity," not "is a trusted actor." Anyone with write access to the shared tracker can assign a ticket to an allowlisted identity and draw the daemon onto it. That is the intended scope — staying out of teammates' way in a cooperative tracker — not a defense against a hostile insider, who is already inside the trust boundary of a repo the daemon runs agents against.
 
 `colony` runs with `assigneeAllowlist` set to a single identity for its first supervised run; other workspaces leave it unset and are unaffected. The `WorkItem`/status contracts are untouched — assignees live only on the engine's internal observed item, since nothing above `classify` needs them. The manual reclassify command path keeps the gate off (it acts on an item a human explicitly named), so only the reconcile poll enforces ownership.
+
+## Amendment ([#989](https://github.com/taylorfsteele/cogwork/issues/989)): Linear Trigger reads narrow by the allowlist to save cost
+
+The gate now lives in Trigger observation. It reads the assignees of the one issue in the event, not
+every open issue in the Workspace. When the allowlist is set, the Linear Trigger reads (changed
+issues and issues with a label) also put it in the query, so they do not read other people's
+issues. This narrowing only saves Linear complexity points. The gate in Trigger observation stays
+the one authority for whose issues the daemon may take. GitHub reads are not narrowed, because its
+REST issue list takes one assignee only. The Option above stays rejected: no adapter query decides
+eligibility.

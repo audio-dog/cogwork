@@ -27,7 +27,6 @@ const allowlistedWorkspace: WorkspaceIssueTrackerBinding = {
   }),
 };
 const issueId = Schema.decodeSync(WorkItemId)("#7");
-const closedIssueId = Schema.decodeSync(WorkItemId)("#8");
 
 const issue = (labels: ReadonlyArray<string>): RawIssue => ({
   nodeId: "issue-7",
@@ -143,7 +142,7 @@ describe("GitHub trigger prose", () => {
 });
 
 describe("GitHub issue listing", () => {
-  it.effect("lists closed issues since a cursor, and open ones when observing or by label", () =>
+  it.effect("lists only open issues since a cursor, when observing, and by label", () =>
     Effect.gen(function* () {
       const closed: RawIssue = { ...issue([]), number: 8, state: "closed", updatedAtMillis: 9 };
       const client = yield* GitHubClient.pipe(
@@ -159,7 +158,7 @@ describe("GitHub issue listing", () => {
       const reads = makeIssueReads(client);
 
       const observed = yield* reads.observe(workspace);
-      const changed = yield* reads.itemsChangedSince(workspace, 1);
+      const changed = yield* reads.openItemsChangedSince(workspace, 1);
       const labelled = yield* reads.openItemsWithLabel(workspace, "needs-triage");
 
       assert.deepStrictEqual(
@@ -168,10 +167,7 @@ describe("GitHub issue listing", () => {
       );
       assert.deepStrictEqual(
         changed.map(({ id, open }) => [id, open]),
-        [
-          [issueId, true],
-          [closedIssueId, false],
-        ],
+        [[issueId, true]],
       );
       assert.deepStrictEqual(
         labelled.map(({ id, labels }) => [id, labels]),

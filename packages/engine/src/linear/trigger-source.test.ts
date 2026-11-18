@@ -53,7 +53,7 @@ const subscription = (entry: string, trigger: string, label = "needs-triage"): T
   catchUp: { since: 1_000 },
 });
 
-const observeIssues = vi.fn<LinearClientService["observeIssues"]>(() =>
+const observeOpenIssuesSince = vi.fn<LinearClientService["observeOpenIssuesSince"]>(() =>
   Effect.succeed([
     {
       id: "issue-id",
@@ -145,13 +145,12 @@ it.effect("reads Linear updates and keeps comment revisions distinct by label", 
         ["label:needs-triage:3000", "Unknown", undefined],
       ],
     );
-    assert.isTrue(observeIssues.mock.calls[0]?.[4]);
     assert.strictEqual(readTriggerProse.mock.calls.length, 1);
     assert.strictEqual(readProse.mock.calls.length, 0);
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues,
+        observeOpenIssuesSince,
         readProse,
         readTriggerProse,
         labelAppliedAt: () => Effect.succeed(3_000),
@@ -199,7 +198,7 @@ it.effect("matches open issues only, and a not-blocked filter only unblocked iss
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues: () =>
+        observeOpenIssuesSince: () =>
           Effect.succeed([
             { ...issue(3), stateType: "canceled" },
             { ...issue(4), stateType: "completed" },
@@ -236,7 +235,7 @@ it.effect("reads every open issue with a filtered Trigger's label, so an unblock
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues: () => Effect.succeed([]),
+        observeOpenIssuesSince: () => Effect.succeed([]),
         observeLabelledIssues,
         readTriggerProse: () => Effect.succeed({ body: "Body", comments: [] }),
         labelAppliedAt: () => Effect.succeed(3_000),
@@ -288,7 +287,7 @@ it.effect.each([
 
 it.effect("skips a failed Linear issue read and advances the workspace cursor", () => {
   const listIssues = vi
-    .fn<LinearClientService["observeIssues"]>()
+    .fn<LinearClientService["observeOpenIssuesSince"]>()
     .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]))
     .mockReturnValue(Effect.succeed([issue(3)]));
 
@@ -314,11 +313,11 @@ it.effect("skips a failed Linear issue read and advances the workspace cursor", 
         { _tag: "Issue", workspace: workspaceId, id: thirdIssueId },
       ],
     );
-    assert.strictEqual(listIssues.mock.calls[1]?.[3], 70_000);
+    assert.strictEqual(listIssues.mock.calls[1]?.[1], 70_000);
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues: listIssues,
+        observeOpenIssuesSince: listIssues,
         readTriggerProse: (_target, id) =>
           id === "ENG-1"
             ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue read failed" }))

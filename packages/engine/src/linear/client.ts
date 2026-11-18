@@ -449,18 +449,15 @@ const issuesSelection = (coordination: string) => `
 
 const issuesArgs = ", $filter: IssueFilter, $after: String";
 
-// Mirrors the classify-side assignee ownership gate: when the workspace names an allowlist, an
-// issue owned by anyone else can never classify, so fetching it only costs pages.
-const issuesFilter = (
-  assigneeIds: ReadonlyArray<string> | null,
-  updatedSince?: number,
-  includeCompleted = false,
-) => ({
-  ...(includeCompleted ? {} : { state: { type: { nin: ["completed"] } } }),
-  ...(assigneeIds !== null && assigneeIds.length > 0 ? { assignee: { id: { in: assigneeIds } } } : {}),
-  ...(updatedSince === undefined
-    ? {}
-    : { updatedAt: { gte: DateTime.formatIso(DateTime.makeUnsafe(updatedSince)) } }),
+const resolvedStateTypes: ReadonlyArray<string> = ["completed", "canceled"];
+
+const uncompletedIssuesFilter = { state: { type: { nin: ["completed"] } } };
+
+// The allowlist narrows the read only to save Linear complexity. The assignee gate in Trigger
+// observation stays the authority (ADR 0008).
+const openIssuesFilter = (assigneeIds: ReadonlyArray<string> | undefined) => ({
+  state: { type: { nin: resolvedStateTypes } },
+  ...(assigneeIds === undefined ? {} : { assignee: { id: { in: assigneeIds } } }),
 });
 
 const metaSelection = `
@@ -639,7 +636,7 @@ const actionIssueMarkerShape = teamShape(
   ", $marker: String!",
 );
 
-export const isResolvedState = (stateType: string) => stateType === "completed" || stateType === "canceled";
+export const isResolvedState = (stateType: string) => resolvedStateTypes.includes(stateType);
 
 const isOpenBlocker = (relation: typeof RelationNode.Type) =>
   relation.type === "blocks" && !isResolvedState(relation.issue.state.type);
@@ -945,22 +942,24 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return team;
     });
 
-  const observeIssues = Effect.fn("linear.observeIssues")(function* (
-    ref: LinearTeamRef,
-    coordination: CoordinationScope | null,
-    assigneeIds: ReadonlyArray<string> | null = null,
-    updatedSince?: number,
-    includeCompleted: boolean = false,
-  ) {
-    return yield* observeMatching(
-      ref,
-      coordination,
-      issuesFilter(assigneeIds, updatedSince, includeCompleted),
-    );
-  });
+  const observeIssues = (ref: LinearTeamRef, coordination: CoordinationScope | null) =>
+    observeMatching(ref, coordination, uncompletedIssuesFilter);
 
-  const observeLabelledIssues = (ref: LinearTeamRef, label: string) =>
-    observeMatching(ref, null, { ...issuesFilter(null), labels: { name: { eq: label } } });
+  const observeOpenIssuesSince = (
+    ref: LinearTeamRef,
+    updatedSince: number,
+    assigneeIds: ReadonlyArray<string> | undefined,
+  ) =>
+    observeMatching(ref, null, {
+      ...openIssuesFilter(assigneeIds),
+      updatedAt: { gte: DateTime.formatIso(DateTime.makeUnsafe(updatedSince)) },
+    });
+
+  const observeLabelledIssues = (
+    ref: LinearTeamRef,
+    label: string,
+    assigneeIds: ReadonlyArray<string> | undefined,
+  ) => observeMatching(ref, null, { ...openIssuesFilter(assigneeIds), labels: { name: { eq: label } } });
 
   const observeMatching = Effect.fn("linear.observeMatching")(function* (
     ref: LinearTeamRef,
@@ -1190,6 +1189,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
       return yield* callWithCredential(ref, credential, (sdk) => sdk.viewer.then((viewer) => viewer.id));
     }),
     observeIssues,
+    observeOpenIssuesSince,
     observeLabelledIssues,
     issueAssignees,
     labelAppliedAt,

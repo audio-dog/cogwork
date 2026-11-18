@@ -134,12 +134,21 @@ const selectedWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github", assigneeAllowlist: ["owner"] },
   }),
 };
+const ungatedWorkspace: RegisteredWorkspace = {
+  ...selectedWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: selectedWorkspaceId,
+    checkoutPath: "/repos/selected",
+    issueTracker: { type: "github" },
+  }),
+};
 const selectedDocument = Schema.decodeSync(WorkflowDocument)({
   ...document,
   workspaces: { _tag: "Listed", workspaces: [selectedWorkspaceId] },
 });
 const selectedIssueId = Schema.decodeSync(WorkItemId)("#1");
 const nextSelectedIssueId = Schema.decodeSync(WorkItemId)("#2");
+const unassignedIssueId = Schema.decodeSync(WorkItemId)("#3");
 const selectedEvent = {
   ...event,
   key: { _tag: "Issue", workspace: selectedWorkspaceId, id: selectedIssueId },
@@ -157,8 +166,8 @@ const selectedTrackerItem: TrackerItem = {
 
 const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(function* (
   options: {
-    readonly observedItems?: ReadonlyArray<TrackerItem>;
-    readonly exactAssignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+    readonly assignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+    readonly workspace?: RegisteredWorkspace;
     readonly store?: TriggerObservationStoreService;
     readonly document?: WorkflowDocument;
     readonly source?: { readonly id: TriggerSourceId; readonly entries: TriggerSource["entries"] };
@@ -168,28 +177,19 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
   const processed = yield* Ref.make<string | null>(null);
   const observed = yield* Ref.make(0);
   const sourceRevision = yield* Ref.make<string | null>(null);
-  const trackerCalls = yield* Ref.make(0);
-  const exactAssigneeCalls = yield* Ref.make(0);
+  const assigneeReads = yield* Ref.make<ReadonlyArray<WorkItemId>>([]);
   const scripted = yield* makeScriptedSource(
     options.source?.id ?? "clock",
     options.source?.entries ?? clockEntries,
   );
   const store = options.store ?? (yield* makeMemoryTriggerObservationStore);
   const bus = yield* makeDaemonEventBus;
-  const emptyTracker = yield* makeEmptyIssueTracker;
-  const exactAssignees = options.exactAssignees;
+  const readAssignees = options.assignees ?? (() => Effect.succeed(["owner"]));
   const tracker = {
-    ...emptyTracker,
-    observe: () =>
-      Ref.update(trackerCalls, (count) => count + 1).pipe(
-        Effect.map(() => options.observedItems ?? [selectedTrackerItem]),
-      ),
-    ...(exactAssignees === undefined
-      ? {}
-      : {
-          assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
-            Ref.update(exactAssigneeCalls, (count) => count + 1).pipe(Effect.andThen(exactAssignees(itemId))),
-        }),
+    ...(yield* makeEmptyIssueTracker),
+    observe: () => Effect.die("the assignee gate read the whole Workspace"),
+    assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
+      Ref.update(assigneeReads, (reads) => [...reads, itemId]).pipe(Effect.andThen(readAssignees(itemId))),
   };
   const coordination = coordinationService(processed, observed, sourceRevision);
   const observation = yield* make.pipe(
@@ -201,12 +201,12 @@ const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspace
     Effect.provideService(IssueTracker, tracker),
     Effect.provideService(
       WorkspaceRegistry,
-      readOnlyRegistry({ workspaces: [selectedWorkspace], failures: [] }),
+      readOnlyRegistry({ workspaces: [options.workspace ?? selectedWorkspace], failures: [] }),
     ),
   );
   yield* Effect.yieldNow;
   yield* observation.refresh;
-  return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination, store };
+  return { observation, scripted, assigneeReads, observed, coordination, store };
 });
 
 const observeLineage = Effect.fn("TriggerObservationTest.observeLineage")(function* (
@@ -747,6 +747,7 @@ describe("TriggerObservation", () => {
               workspace.config.issueTracker.type === "linear" ? [parked(99, start - 200 * day)] : candidates,
             ),
           readProse: (_workspace, id) => Effect.succeed({ body: `Parked body ${id}`, comments: [] }),
+          assignees: () => Effect.succeed(["owner"]),
         }),
         Effect.provideService(
           WorkspaceRegistry,
@@ -966,7 +967,7 @@ describe("TriggerObservation", () => {
 
   it.effect("admits a standalone pull request through an assignee-gated Workspace", () =>
     Effect.gen(function* () {
-      const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
+      const { observation, scripted, assigneeReads } = yield* makeWorkspaceObservation();
       const changed = yield* observation.changes.pipe(
         Stream.take(1),
         Stream.runCollect,
@@ -982,7 +983,7 @@ describe("TriggerObservation", () => {
       const result = yield* Fiber.join(changed);
 
       assert.isTrue(Option.isSome(result));
-      assert.strictEqual(yield* Ref.get(trackerCalls), 0);
+      assert.deepStrictEqual(yield* Ref.get(assigneeReads), []);
     }).pipe(Effect.scoped),
   );
 
@@ -1028,49 +1029,67 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("reuses one assignee snapshot for a Trigger batch", () =>
+  it.effect("admits an Issue only when its own assignee is on the allowlist", () =>
     Effect.gen(function* () {
-      const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
+      const assigneesById = new Map([
+        [nextSelectedIssueId, ["someone-else"]],
+        [unassignedIssueId, []],
+      ]);
+      const { observation, scripted, assigneeReads } = yield* makeWorkspaceObservation({
+        assignees: (itemId) => Effect.succeed(assigneesById.get(itemId) ?? ["owner"]),
+      });
       const changed = yield* observation.changes.pipe(
-        Stream.take(2),
+        Stream.take(1),
         Stream.runCollect,
+        Effect.timeoutOption("1 second"),
         Effect.forkChild({ startImmediately: true }),
       );
-      yield* scripted.emit(selectedEvent);
-      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
-      yield* Fiber.join(changed);
+      const issueEvent = (id: WorkItemId, revision: string) => ({
+        ...selectedEvent,
+        key: { ...selectedEvent.key, id },
+        revision,
+      });
+      yield* scripted.emit(issueEvent(nextSelectedIssueId, "someone-else"));
+      yield* scripted.emit(issueEvent(unassignedIssueId, "unassigned"));
+      yield* scripted.emit(issueEvent(selectedIssueId, "owner"));
+      yield* TestClock.adjust("1 second");
+      const result = yield* Fiber.join(changed);
 
-      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
+      assert.deepStrictEqual(
+        Option.map(result, (admissions) => admissions.map(({ event }) => event.revision)),
+        Option.some(["owner"]),
+      );
+      assert.deepStrictEqual(yield* Ref.get(assigneeReads), [
+        nextSelectedIssueId,
+        unassignedIssueId,
+        selectedIssueId,
+      ]);
     }).pipe(Effect.scoped),
   );
 
-  it.effect("loads and reuses assignees for an item outside the tracker snapshot", () =>
+  it.effect("admits an Issue without reading assignees when the Workspace has no allowlist", () =>
     Effect.gen(function* () {
-      const { observation, scripted, trackerCalls, exactAssigneeCalls } = yield* makeWorkspaceObservation({
-        observedItems: [],
-        exactAssignees: () => Effect.succeed(["owner"]),
+      const { observation, scripted, assigneeReads } = yield* makeWorkspaceObservation({
+        workspace: ungatedWorkspace,
       });
       const changed = yield* observation.changes.pipe(
-        Stream.take(2),
+        Stream.take(1),
         Stream.runCollect,
         Effect.timeoutOption("1 second"),
         Effect.forkChild({ startImmediately: true }),
       );
       yield* scripted.emit(selectedEvent);
-      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
       yield* TestClock.adjust("1 second");
 
       assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
-      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
-      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 1);
+      assert.deepStrictEqual(yield* Ref.get(assigneeReads), []);
     }).pipe(Effect.scoped),
   );
 
   it.effect("keeps observing after one assignee lookup fails", () =>
     Effect.gen(function* () {
-      const { observation, scripted, exactAssigneeCalls } = yield* makeWorkspaceObservation({
-        observedItems: [],
-        exactAssignees: (itemId) =>
+      const { observation, scripted, assigneeReads } = yield* makeWorkspaceObservation({
+        assignees: (itemId) =>
           itemId === selectedIssueId
             ? Effect.fail(
                 new IssueTrackerError({
@@ -1098,7 +1117,7 @@ describe("TriggerObservation", () => {
       yield* TestClock.adjust("1 second");
 
       const result = yield* Fiber.join(changed);
-      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 2);
+      assert.strictEqual((yield* Ref.get(assigneeReads)).length, 2);
       assert.isTrue(Option.isSome(result));
       assert.strictEqual(Option.getOrThrow(result)[0]?.event.key._tag, "Issue");
       assert.strictEqual(Option.getOrThrow(result)[0]?.event.revision, "issue-2");
