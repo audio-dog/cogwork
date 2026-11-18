@@ -1,0 +1,23 @@
+packages/engine/src/workflow-run.ts
+  s_fffc4d2f2ea190::t_a92acc7b57c4aa 56,544,597,599-603,606-608,610-616
+packages/engine/src/run-plan-resolution.test.ts
+  s_fffc4d2f2ea190::t_38be04346dfdbe 1-370
+packages/engine/src/run-plan-resolution.ts
+  s_fffc4d2f2ea190::t_c6ed9826290938 1-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7aad74cf677fee297727c3e2af799431cf116ff8",
+  "prompts": {},
+  "sessions": {
+    "s_fffc4d2f2ea190": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "006f86cf-ffc0-4b39-982e-8341202d36fd",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
