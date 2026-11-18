@@ -12,11 +12,12 @@ import {
   ContributionSettingUpdate,
   type ControlStoreFailure,
   type ControlStore as ControlStorePicture,
+  connectionSystemOf,
   type DaemonLimitUpdate,
   type HarnessName,
   HarnessNotRegistered,
   IssueTrackerError,
-  type IssueTrackerPerson,
+  IssueTrackerPerson,
   type OperationSettingBatch,
   type PluginFailure,
   type PluginId,
@@ -109,7 +110,7 @@ const githubPeople = Effect.fn("Daemon.githubPeople")(function* (
 ) {
   const target = yield* githubRepoTarget(workspace, connection);
   const logins = yield* (yield* GitHubClient).listAssignees(target);
-  return logins.map((login): IssueTrackerPerson => ({ identity: login, label: login }));
+  return logins.map((login) => ({ identity: login, label: login }));
 });
 
 const linearPeople = Effect.fn("Daemon.linearPeople")(function* (
@@ -121,9 +122,7 @@ const linearPeople = Effect.fn("Daemon.linearPeople")(function* (
     `Workspace ${workspace.config.name} has no Linear team`,
   );
   const users = yield* (yield* LinearClient).listActiveUsers(target);
-  return users.map(
-    (user): IssueTrackerPerson => ({ identity: user.id, label: user.displayName || user.name }),
-  );
+  return users.map((user) => ({ identity: user.id, label: user.displayName.trim() || user.name }));
 });
 
 const issueTrackerPeople = new Map<string, typeof githubPeople | typeof linearPeople>([
@@ -131,16 +130,25 @@ const issueTrackerPeople = new Map<string, typeof githubPeople | typeof linearPe
   ["linear", linearPeople],
 ]);
 
+const decodePerson = Schema.decodeUnknownOption(IssueTrackerPerson);
+
 export const getIssueTrackerPeople = Effect.fn("Daemon.GetIssueTrackerPeople")(function* (
   payload: IssueTrackerReadRequest,
 ) {
   const workspace = yield* registeredWorkspace(payload.workspace);
   const tracker = workspace.config.issueTracker.type;
+  if (connectionSystemOf(payload.connection) !== tracker) {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: `Connection ${payload.connection} is not a ${tracker} Connection`,
+    });
+  }
   const people = yield* orUnavailable(
     issueTrackerPeople.get(tracker) ?? null,
     `Issue tracker ${tracker} has no people list`,
   );
-  return yield* people(workspace, payload.connection);
+  const listed = yield* people(workspace, payload.connection);
+  return listed.flatMap((person) => Option.toArray(decodePerson(person)));
 });
 
 const pluginMembership = (overview: PluginOverview) =>

@@ -541,7 +541,7 @@ const ActiveUsersPayload = Schema.Struct({
 });
 const decodeActiveUsers = Schema.decodeUnknownEffect(ActiveUsersPayload);
 
-export type LinearUser = (typeof ActiveUsersPayload.Type)["users"]["nodes"][number];
+type LinearUser = (typeof ActiveUsersPayload.Type)["users"]["nodes"][number];
 
 const HistoryPayload = Schema.Struct({
   issue: Schema.NullOr(

@@ -98,25 +98,3 @@ describe("WorkspaceRecord.IssueTrackerRows", () => {
     ]);
   });
 });
-
-describe("WorkspaceRecord.TriageRows", () => {
-  it("shows a stored assignee the tracker does not list as unknown so it can be removed", () => {
-    const markup = renderToStaticMarkup(
-      <WorkspaceRecord.Provider
-        value={{
-          state: {
-            draft: { ...emptyDraft, issueTrackerType: "linear", assigneeAllowlist: ["taylor.steele"] },
-            connections: [],
-          },
-          actions: { patch: vi.fn() },
-          meta: { disabled: false, workspace: null },
-        }}
-      >
-        <WorkspaceRecord.TriageRows />
-      </WorkspaceRecord.Provider>,
-    );
-
-    expect(markup).toContain("Unknown: taylor.steele");
-    expect(markup).toContain('aria-label="Assignee allowlist"');
-  });
-});

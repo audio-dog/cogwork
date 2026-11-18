@@ -103,7 +103,7 @@ describe("assignee allowlist identities", () => {
   ] as const)("decodes a %s update with %j to refusal %s", (type, entries, expected) => {
     const outcome = refusal(update(type, entries));
     if (expected === null) return assert.isNull(outcome);
-    assert.include(outcome, expected);
+    assert.include(outcome ?? "accepted", expected);
   });
 
   it("still publishes a stored workspace whose allowlist holds a username", () => {

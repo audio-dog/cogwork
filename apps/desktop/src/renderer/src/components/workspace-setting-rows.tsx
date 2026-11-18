@@ -34,6 +34,7 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { Textarea } from "@cogwork/ui/components/textarea";
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
+import type * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use } from "react";
 import { githubPriorityFieldsAtom, issueTrackerPeopleAtom } from "../daemon/atoms";
 import { daemonFailureMessage } from "../features/daemon-failure";
@@ -153,7 +154,7 @@ function TrackerLoadFailure({
   onRetry,
   children,
 }: {
-  readonly cause: Parameters<typeof daemonFailureMessage>[0];
+  readonly cause: Cause.Cause<unknown>;
   readonly onRetry: () => void;
   readonly children: ReactNode;
 }) {
@@ -432,14 +433,16 @@ export const assigneeItems = (people: readonly IssueTrackerPerson[], selected: r
   return [...unknown, ...people];
 };
 
-function AssigneeAllowlistSelect({ people }: { readonly people: readonly IssueTrackerPerson[] }) {
+export const unloadedAssigneeItems = (selected: readonly string[]) =>
+  selected.map((identity) => ({ identity, label: identity }));
+
+function AssigneeAllowlistSelect({ items }: { readonly items: readonly IssueTrackerPerson[] }) {
   const {
     state: { draft },
     actions: { patch },
     meta: { disabled },
   } = useWorkspaceRecord();
   const anchor = useComboboxAnchor();
-  const items = assigneeItems(people, draft.assigneeAllowlist);
   const labels = new Map(items.map(({ identity, label }) => [identity, label]));
   const labelOf = (identity: string) => labels.get(identity) ?? identity;
   return (
@@ -484,14 +487,19 @@ function LiveAssigneeAllowlistSelect({
   readonly workspace: WorkspaceId;
   readonly connection: ConnectionBindingId;
 }) {
+  const {
+    state: { draft },
+  } = useWorkspaceRecord();
   const atom = issueTrackerPeopleAtom(workspace, connection);
   const result = useAtomValue(atom);
   const refresh = useAtomRefresh(atom);
-  if (result._tag === "Success") return <AssigneeAllowlistSelect people={result.value} />;
+  if (result._tag === "Success") {
+    return <AssigneeAllowlistSelect items={assigneeItems(result.value, draft.assigneeAllowlist)} />;
+  }
   if (result._tag !== "Failure") return <Skeleton className="h-9 w-80" />;
   return (
     <FieldGroup className="w-auto gap-2">
-      <AssigneeAllowlistSelect people={[]} />
+      <AssigneeAllowlistSelect items={unloadedAssigneeItems(draft.assigneeAllowlist)} />
       <TrackerLoadFailure cause={result.cause} onRetry={refresh}>
         Could not load people
       </TrackerLoadFailure>
@@ -517,7 +525,7 @@ function AssigneeAllowlistRow() {
         />
       ) : (
         <FieldGroup className="w-auto gap-2">
-          <AssigneeAllowlistSelect people={[]} />
+          <AssigneeAllowlistSelect items={unloadedAssigneeItems(draft.assigneeAllowlist)} />
           <FieldDescription>Register this workspace to load people.</FieldDescription>
         </FieldGroup>
       )}

@@ -102,20 +102,17 @@ const assigneeIdentityFormats = new Map([
   ["linear", { expected: "a Linear user id", matches: Schema.is(Schema.String.check(Schema.isUUID())) }],
 ]);
 
-const assigneeAllowlistIssue = (issueTracker: IssueTrackerConfig) => {
-  const format = assigneeIdentityFormats.get(issueTracker.type);
-  if (!format) return undefined;
-  const invalid = (issueTracker.assigneeAllowlist ?? []).filter((entry) => !format.matches(entry));
-  if (invalid.length === 0) return undefined;
-  return {
-    path: ["issueTracker", "assigneeAllowlist"],
-    issue: `Expected each assignee allowlist entry to be ${format.expected}, got ${invalid.join(", ")}`,
-  };
-};
-
 const assigneeAllowlistFitsTracker = Schema.makeFilter(
-  (workspace: { readonly issueTracker: IssueTrackerConfig }) =>
-    assigneeAllowlistIssue(workspace.issueTracker),
+  ({ issueTracker }: { readonly issueTracker: IssueTrackerConfig }) => {
+    const format = assigneeIdentityFormats.get(issueTracker.type);
+    if (!format) return undefined;
+    const invalid = (issueTracker.assigneeAllowlist ?? []).filter((entry) => !format.matches(entry));
+    if (invalid.length === 0) return undefined;
+    return {
+      path: ["issueTracker", "assigneeAllowlist"],
+      issue: `Expected each assignee allowlist entry to be ${format.expected}, got ${invalid.join(", ")}`,
+    };
+  },
 );
 
 export const WorkspaceUpdate = Schema.Struct(workspaceUpdateFields).check(assigneeAllowlistFitsTracker);
@@ -126,6 +123,7 @@ export const WorkspaceRecord = Schema.Struct({
   ...workspaceUpdateFields,
   checkoutPath: TrimmedNonEmptyString,
 });
+export type WorkspaceRecord = typeof WorkspaceRecord.Type;
 
 export const WorkspaceRegistration = WorkspaceRecord.check(assigneeAllowlistFitsTracker);
 export type WorkspaceRegistration = typeof WorkspaceRegistration.Type;
