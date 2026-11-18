@@ -931,17 +931,42 @@ const conflictedFixture = Effect.fn("test.conflictedFixture")(function* (branch:
   return state;
 });
 
+const revision = Effect.fn("test.revision")(function* (cwd: string, name: string) {
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const output = yield* spawner.string(
+    ChildProcess.make("git", ["rev-parse", "--verify", name], { cwd, env: gitFixtureEnvironment }),
+  );
+  return output.trim();
+});
+
+interface OperationRevisions {
+  readonly theirs: string;
+  readonly ours: string;
+}
+
 const operationFixtures: ReadonlyArray<{
   readonly operation: Git.GitOperation;
   readonly head: string;
   readonly command: (branch: string) => string;
+  readonly identity: (revisions: OperationRevisions) => string;
 }> = [
-  { operation: "merge", head: "MERGE_HEAD", command: (branch) => `git merge origin/${branch}` },
-  { operation: "rebase", head: "REBASE_HEAD", command: (branch) => `git rebase origin/${branch}` },
+  {
+    operation: "merge",
+    head: "MERGE_HEAD",
+    command: (branch) => `git merge origin/${branch}`,
+    identity: ({ theirs }) => theirs,
+  },
+  {
+    operation: "rebase",
+    head: "REBASE_HEAD",
+    command: (branch) => `git rebase origin/${branch}`,
+    identity: ({ theirs, ours }) => `${theirs},${ours}`,
+  },
   {
     operation: "cherry-pick",
     head: "CHERRY_PICK_HEAD",
     command: (branch) => `git cherry-pick origin/${branch}`,
+    identity: ({ theirs }) => theirs,
   },
 ];
 
@@ -1063,11 +1088,15 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
     );
 
     it.effect.each(operationFixtures)(
-      "reports a $operation in progress and its unmerged paths",
-      ({ operation, head, command }) =>
+      "reports a $operation in progress, its identity, and its unmerged paths",
+      ({ operation, head, command, identity }) =>
         Effect.gen(function* () {
           const git = yield* Git.Git;
           const { root, worktree, branch } = yield* conflictedFixture(`84-${operation}-probe`);
+          const revisions = {
+            theirs: yield* revision(worktree, `origin/${branch}`),
+            ours: yield* revision(worktree, "HEAD"),
+          };
 
           yield* shell(
             root,
@@ -1077,15 +1106,53 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
 
           assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
             operation,
+            identity: identity(revisions),
+            head: yield* revision(worktree, "HEAD"),
             unmergedPaths: ["shared.txt"],
           });
         }).pipe(Effect.scoped),
+    );
+
+    it.effect("keeps the record of a Git operation in the worktree's own config until it is removed", () =>
+      Effect.gen(function* () {
+        const git = yield* Git.Git;
+        const { root, checkout, worktree, branch } = yield* conflictedFixture("1014-operation-record");
+        yield* shell(
+          root,
+          worktree,
+          `git merge origin/${branch} >/dev/null 2>&1 || test -f "$(git rev-parse --git-path MERGE_HEAD)"`,
+        );
+        const operation = yield* git.operationInProgress(worktree);
+        assert.isNotNull(operation);
+        if (operation === null) return;
+
+        yield* git.recordOperation(worktree, operation);
+        const recorded = {
+          worktree: yield* git.recordedOperation(worktree),
+          checkout: yield* git.recordedOperation(checkout),
+        };
+        yield* git.recordOperation(worktree, null);
+
+        assert.deepStrictEqual(
+          { ...recorded, removed: yield* git.recordedOperation(worktree) },
+          {
+            worktree: { operation: "merge", identity: operation.identity, head: operation.head },
+            checkout: null,
+            removed: null,
+          },
+        );
+      }).pipe(Effect.scoped),
     );
 
     it.effect("reports a paused rebase without REBASE_HEAD", () =>
       Effect.gen(function* () {
         const git = yield* Git.Git;
         const { root, worktree } = yield* fixture("84-paused-rebase-probe");
+
+        const revisions = {
+          onto: yield* revision(worktree, "HEAD~1"),
+          original: yield* revision(worktree, "HEAD"),
+        };
 
         yield* shell(
           root,
@@ -1095,6 +1162,8 @@ describe.concurrent("gitLayer against a real repository", { timeout: 30_000 }, (
 
         assert.deepStrictEqual(yield* git.operationInProgress(worktree), {
           operation: "rebase",
+          identity: `${revisions.onto},${revisions.original}`,
+          head: yield* revision(worktree, "HEAD"),
           unmergedPaths: [],
         });
       }).pipe(Effect.scoped),

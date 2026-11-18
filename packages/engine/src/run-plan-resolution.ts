@@ -19,6 +19,7 @@ import {
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import type { AssembledContext } from "./context-assembler";
+import type { GitOperationInProgress } from "./git";
 import type { TriggerAdmission } from "./trigger-observation";
 import { type EngineToolName, itemWorkspaceOf } from "./workflow-action-entry";
 
@@ -41,6 +42,7 @@ export interface RunPlanFacts {
   readonly lineageArtifacts: ReadonlyArray<Pick<WorkflowActionArtifact, "workspace" | "issue" | "url">>;
   readonly claim: Claim;
   readonly handback: HandbackRecord | null;
+  readonly gitOperationInProgress: GitOperationInProgress | null;
   readonly toolNeeds: ReadonlySet<EngineToolName>;
   readonly skills: RunPlan["skills"];
   readonly subagents: RunPlan["subagents"];
@@ -117,6 +119,18 @@ const workContextProse = ({ admission, workflow, lineageArtifacts }: RunPlanFact
   return { ...prose, body: [prose.body, "", "## Artifacts this lineage created", artifacts].join("\n") };
 };
 
+const gitOperationFact = (inProgress: GitOperationInProgress | null) => {
+  if (inProgress === null) return {};
+  const { operation, unmergedPaths } = inProgress;
+  return {
+    gitOperationInProgress: {
+      operation,
+      unmergedPaths,
+      instruction: `A Run of this work item left this ${operation} in progress in the worktree. Finish or abort it before any other work.`,
+    },
+  };
+};
+
 const operationMessage = (operation: WorkflowOperation, handback: HandbackRecord | null) => {
   const request = `Run Workflow Operation: ${operation.name}`;
   const note = handback?.note?.trim();
@@ -175,6 +189,7 @@ export const resolveRunPlan = (facts: RunPlanFacts) => {
         openBlockers: 0,
         claim: facts.claim,
         priority: admission.event.priority ?? defaultPriority,
+        ...gitOperationFact(facts.gitOperationInProgress),
       },
       prose: workContextProse(facts),
       observation,

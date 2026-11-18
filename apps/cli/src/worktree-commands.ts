@@ -76,13 +76,12 @@ const runEnsure = (options: {
   readonly title: string;
 }) =>
   runWorktree(options, (workspace, manager) =>
-    manager
-      .ensure(workspace, { id: options.item, title: options.title })
-      .pipe(
-        Effect.flatMap((result) =>
-          Console.log(`${result.created ? "created" : "reused"} ${result.branch} at ${result.path}`),
-        ),
+    manager.ensure(workspace, { id: options.item, title: options.title }).pipe(
+      Effect.flatMap((result) =>
+        Console.log(`${result.created ? "created" : "reused"} ${result.branch} at ${result.path}`),
       ),
+      Effect.scoped,
+    ),
   );
 
 const runRemove = (options: {
