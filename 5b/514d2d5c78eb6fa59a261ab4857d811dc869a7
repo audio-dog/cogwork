@@ -1,0 +1,155 @@
+.agents/skills/create-patterns/SKILL.md
+  s_7168447e18b987::t_648845d62b45da 18
+.agents/skills/test-audit/SKILL.md
+  s_7168447e18b987::t_3edeb8d9bc9c34 21
+AGENTS.md
+  s_7168447e18b987::t_27f0ca6e98604d 108-109
+CODING_STANDARDS.md
+  s_7168447e18b987::t_87d4d73e1c1619 11
+GLOSSARY-MAP.md
+  s_7168447e18b987::t_9c49a8ce6cdce7 6-7,17-23,27
+README.md
+  s_7168447e18b987::t_e1f13841d06976 24-32
+apps/cli/GLOSSARY.md
+  s_7168447e18b987::t_d574a8465f0713 6-7
+apps/desktop/GLOSSARY.md
+  s_7168447e18b987::t_9ee4f9f4123c49 6-7,11
+docs/adr/0002-external-repo-config-for-forked-skills.md
+  s_7168447e18b987::t_cc918391ea2996 11,35
+docs/adr/0019-per-workspace-operating-instructions-overrides.md
+  s_7168447e18b987::t_a3062eba62eb08 114-115
+docs/adr/0025-cursor-declares-only-the-full-profile.md
+  s_7168447e18b987::t_c8457ca1fe16c4 25
+docs/agent-patterns/effect-error-design.md
+  s_7168447e18b987::t_3c829cbbaf52da 121,167
+docs/agent-patterns/effect-process-edges.md
+  s_7168447e18b987::t_cc2b03dadf8a4f 111,166
+docs/agent-patterns/effect-schema-unions.md
+  s_7168447e18b987::t_b878de8d0e2d6f 86,146,158
+docs/agents/domain.md
+  s_7168447e18b987::t_35e597af2ed283 7-9,16,21,24,26-33,36-47,66
+docs/agents/product.md
+  s_7168447e18b987::t_d93a0f104699f3 14
+docs/agents/technical-disposition-engine-and-trust.md
+  s_7168447e18b987::t_010eb956c5a4a2 1-100
+docs/agents/technical-disposition-evidence-and-scope.md
+  s_7168447e18b987::t_ab53a29a46959e 1-102
+docs/agents/technical-disposition-failures-and-limits.md
+  s_7168447e18b987::t_b3a0d631ec7c3f 1-95
+docs/agents/technical-disposition.md
+  s_7168447e18b987::t_91938c06ce6c90 13,26,30-31,63,82-91
+docs/research/cogwork-performance-bottleneck-survey.md
+  s_7168447e18b987::t_97f586300ea562 5,23
+docs/research/harness-switch-vs-tanstack-harness-upgrade.md
+  s_7168447e18b987::t_6f128a04fb2211 60,99
+docs/spec/performance-observability.md
+  s_7168447e18b987::t_4852712bdd8fa9 150
+docs/spec/trusted-bot-wake-signal.md
+  s_7168447e18b987::t_ea821469230bea 8
+packages/claude-code/GLOSSARY.md
+  s_7168447e18b987::t_769b617ad27916 3
+packages/codex-cli/GLOSSARY.md
+  s_7168447e18b987::t_2eabc0acf44d4a 3
+packages/contracts/GLOSSARY-client-rpc.md
+  s_7168447e18b987::t_aa80048da539d0 1-19
+packages/contracts/GLOSSARY-configuration.md
+  s_7168447e18b987::t_184ce42ccb5a55 1,3
+packages/contracts/GLOSSARY-contributions.md
+  s_7168447e18b987::t_afde076272bc97 1-56
+packages/contracts/GLOSSARY-coordination.md
+  s_7168447e18b987::t_2df01a28befaab 1-33
+packages/contracts/GLOSSARY-credentials.md
+  s_7168447e18b987::t_912812b14eccdf 1-7
+packages/contracts/GLOSSARY-daemon-status.md
+  s_7168447e18b987::t_39fdf595e83d7f 1-19
+packages/contracts/GLOSSARY-harness-contract.md
+  s_7168447e18b987::t_42e0d12c28e0d1 1-82
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_7168447e18b987::t_4b774644edc477 1-27
+packages/contracts/GLOSSARY-operations.md
+  s_7168447e18b987::t_1d2f470d90b241 1-121
+packages/contracts/GLOSSARY-runs.md
+  s_7168447e18b987::t_d67f492b935e92 1-62
+packages/contracts/GLOSSARY-triggers.md
+  s_7168447e18b987::t_ce3c135e9cb1f7 1-47
+packages/contracts/GLOSSARY-work.md
+  s_7168447e18b987::t_2addd86ccf4c26 1-46
+packages/contracts/GLOSSARY-workflows.md
+  s_7168447e18b987::t_9bdc398577ce5f 1-40
+packages/contracts/GLOSSARY.md
+  s_7168447e18b987::t_51dc4f92edfd5a 1-23
+packages/cursor-acp/GLOSSARY.md
+  s_7168447e18b987::t_cbdd76fbf26e1c 3
+packages/engine/GLOSSARY-adapters.md
+  s_7168447e18b987::t_2179727565284d 1-47
+packages/engine/GLOSSARY-coordination.md
+  s_7168447e18b987::t_4ddcb8c5aaa60b 1-27
+packages/engine/GLOSSARY-daemon.md
+  s_7168447e18b987::t_b6c760d85ceca2 1-44
+packages/engine/GLOSSARY-harness.md
+  s_7168447e18b987::t_00c0fece532716 1,3
+packages/engine/GLOSSARY-performance.md
+  s_7168447e18b987::t_4728e4a4f93a5a 1-40
+packages/engine/GLOSSARY-runs.md
+  s_7168447e18b987::t_2991e83217eafd 1-36
+packages/engine/GLOSSARY-sandbox.md
+  s_7168447e18b987::t_89f9693fe83614 1-35
+packages/engine/GLOSSARY.md
+  s_7168447e18b987::t_960ab04748ec00 1-20
+packages/engine/docs/adr/0005-mcp-skills-engine-assembles-harness-runner-renders.md
+  s_7168447e18b987::t_9831fa9db8b067 5,26
+packages/engine/docs/adr/0007-context-assembler-layers-and-playbook-skill-provision.md
+  s_7168447e18b987::t_25a34279d2fd78 3
+packages/engine/docs/adr/0010-codex-cli-is-an-external-harness.md
+  s_7168447e18b987::t_c6026f3d549bd2 3
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_7168447e18b987::t_3e75bb79506a73 38
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_7168447e18b987::t_cf62a3fee88531 36,126,128
+packages/engine/operating-instructions/triage-agent/INSTRUCTIONS.md
+  s_7168447e18b987::t_83959115a10048 35
+packages/engine/src/connection-verify.ts
+  s_7168447e18b987::t_f52894f0252120 13
+packages/engine/src/linear/client.test.ts
+  s_7168447e18b987::t_70a90ac434d739 1-61
+packages/engine/src/linear/client.ts
+  s_7168447e18b987::t_023497587dbd51 533
+packages/engine/src/workflow-run-admission.ts
+  s_7168447e18b987::t_e4208e0dab0708 1-56
+packages/engine/src/workflow-run-attempts.ts
+  s_7168447e18b987::t_1026130d6af3eb 1-340
+packages/engine/src/workflow-run-execution-context.ts
+  s_7168447e18b987::t_c2dbbfd575273f 1-55
+packages/engine/src/workflow-run-pending-plan.ts
+  s_7168447e18b987::t_a65041773f04de 1-194
+packages/engine/src/workflow-run-preparation.ts
+  s_80f4ae44f10625::t_4d5bb0bc86026d 1-155
+packages/engine/src/workflow-run-touchpoints.ts
+  s_7168447e18b987::t_30d5af50efb9ed 1-207
+packages/engine/src/workflow-run.ts
+  s_80f4ae44f10625::t_f75a79073dba48 7,28-29,40-41,44-49,86-100,291-294,330-337,343-345,401-404,421-428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5b514d2d5c78eb6fa59a261ab4857d811dc869a7",
+  "prompts": {},
+  "sessions": {
+    "s_7168447e18b987": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "803e2802-cb24-4b0b-8a22-4414f1d33647",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_80f4ae44f10625": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9f59364b-028b-4084-b695-a3c1e9c9e0f6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
