@@ -100,12 +100,20 @@ export const RunPlanFollowUpTrigger = Schema.Struct({
 });
 export type RunPlanFollowUpTrigger = typeof RunPlanFollowUpTrigger.Type;
 
+export const RunPlanGitOperationInProgress = Schema.Struct({
+  operation: Schema.Literals(["merge", "rebase", "cherry-pick"]),
+  unmergedPaths: Schema.Array(Schema.String),
+  instruction: TrimmedNonEmptyString,
+});
+export type RunPlanGitOperationInProgress = typeof RunPlanGitOperationInProgress.Type;
+
 export class RunPlanWorkContextFacts extends Schema.Class<RunPlanWorkContextFacts>("RunPlanWorkContextFacts")(
   {
     assignees: Schema.Array(TrimmedNonEmptyString),
     openBlockers: Schema.Natural,
     claim: Schema.NullOr(Claim),
     priority: Priority,
+    gitOperationInProgress: Schema.optionalKey(RunPlanGitOperationInProgress),
   },
 ) {}
 

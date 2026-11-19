@@ -89,6 +89,7 @@ const codingWorktreeLayer = Layer.unwrap(
           branch: BranchName.make(`${item.id.slice(1)}-coding-template`),
           path: `/worktrees/${item.id.slice(1)}`,
           created: true,
+          operationInProgress: null,
         }),
       pullRequestReadiness: (_workspace, _item, branch) => {
         if (!branch) return Effect.die("Test run has no branch");

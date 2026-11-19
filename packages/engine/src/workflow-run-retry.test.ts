@@ -120,7 +120,13 @@ describe("WorkflowRun", () => {
       openWorkflowPullRequest: () => Effect.die("must not open"),
     };
     const worktreeService = {
-      ensure: () => Effect.succeed({ branch: BranchName.make("820"), path: "/worktrees/820", created: true }),
+      ensure: () =>
+        Effect.succeed({
+          branch: BranchName.make("820"),
+          path: "/worktrees/820",
+          created: true,
+          operationInProgress: null,
+        }),
       pullRequestReadiness: () => Effect.succeed(PullRequestReadiness.Declined({ reason })),
     };
     const service = {

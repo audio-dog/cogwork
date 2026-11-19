@@ -29,6 +29,8 @@ const gitService = (remoteUrl: GitService["remoteUrl"]) =>
     fastForward: () => Effect.die("unused"),
     divergence: () => Effect.die("unused"),
     operationInProgress: () => Effect.die("unused"),
+    recordedOperation: () => Effect.die("unused"),
+    recordOperation: () => Effect.die("unused"),
     rebase: () => Effect.die("unused"),
     remoteUrl,
     blockPush: () => Effect.die("unused"),

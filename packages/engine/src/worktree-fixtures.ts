@@ -141,6 +141,8 @@ export const fakeGit = (
       Ref.update(recorder.operationProbes, (log) => [...log, worktreePath]).pipe(
         Effect.map(() => options.operation ?? null),
       ),
+    recordedOperation: () => Effect.succeed(null),
+    recordOperation: () => Effect.void,
     rebase: (worktreePath: string, _remote: string, _branch: string) =>
       options.rebaseFailure === undefined
         ? Ref.update(recorder.rebased, (log) => [...log, worktreePath])
