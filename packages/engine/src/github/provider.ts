@@ -31,6 +31,7 @@ import {
   type GitHubRepoRef,
   type RawPull,
   type ReviewDecision,
+  writeAccess,
   writeAccessReviewDecision,
 } from "./client";
 import { wireCodec } from "./markers";
@@ -84,8 +85,6 @@ export const isReadyToMerge = (signals: PrSignals) =>
   signals.review === "ready";
 
 const numericIssue = /^#(\d+)$/;
-
-const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 const make = (
   client: GitHubClientService,

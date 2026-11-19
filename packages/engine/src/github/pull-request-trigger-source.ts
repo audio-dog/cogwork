@@ -151,15 +151,21 @@ const indented = (text: string) =>
     .map((line) => `    ${line}`)
     .join("\n");
 
+const singleLine = (text: string) => text.replaceAll(/\s*[\r\n]+\s*/g, " ");
+
 const checkLines = (check: CheckRun) => [
-  `- ${check.name}: ${check.status}, ${check.conclusion ?? "no conclusion"}, ${check.detailsUrl ?? "no details URL"}`,
+  `- ${singleLine(check.name)}: ${check.status}, ${check.conclusion ?? "no conclusion"}, ${singleLine(check.detailsUrl ?? "no details URL")}`,
   ...(isFailing(check)
-    ? [`  - Title: ${check.outputTitle ?? "none"}`, "  - Summary:", indented(check.outputSummary ?? "none")]
+    ? [
+        `  - Title: ${singleLine(check.outputTitle ?? "none")}`,
+        "  - Summary:",
+        indented(check.outputSummary ?? "none"),
+      ]
     : []),
 ];
 
 const fileLine = (file: RawPullFile) =>
-  `- ${file.path} (${file.status}, +${file.additions} -${file.deletions})`;
+  `- ${singleLine(file.path)} (${file.status}, +${file.additions} -${file.deletions})`;
 
 const listOrNone = (lines: ReadonlyArray<string>) => (lines.length === 0 ? "none" : lines.join("\n"));
 
@@ -172,16 +178,15 @@ const changedFilesSection = (files: ReadonlyArray<RawPullFile> | null) =>
   files === null ? "unavailable" : listOrNone(files.map(fileLine));
 
 interface PullRequestFacts {
-  readonly pull: RawPull;
   readonly detail: RawPullDetail;
   readonly checks: ReadonlyArray<CheckRun>;
   readonly reviews: ReadonlyArray<RawReview>;
   readonly files: ReadonlyArray<RawPullFile> | null;
 }
 
-const pullRequestBody = ({ pull, detail, checks, reviews, files }: PullRequestFacts) =>
+const pullRequestBody = ({ detail, checks, reviews, files }: PullRequestFacts) =>
   [
-    `# ${detail.title}`,
+    `# ${singleLine(detail.title)}`,
     "",
     detail.url,
     "",
@@ -189,8 +194,8 @@ const pullRequestBody = ({ pull, detail, checks, reviews, files }: PullRequestFa
     detail.body ? indented(detail.body) : "none",
     "",
     "## Head and base",
-    `- Head: ${pull.headRef}@${pull.headSha}`,
-    `- Base: ${pull.baseRef ?? "unknown"}@${pull.baseSha ?? "unknown"}`,
+    `- Head: ${detail.headRef}@${detail.headSha}`,
+    `- Base: ${detail.baseRef ?? "unknown"}@${detail.baseSha ?? "unknown"}`,
     "",
     "## Mergeability",
     mergeabilityOf(detail.mergeableState),
@@ -320,7 +325,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   const events = [...conditionEvents, ...occurrenceEvents];
   if (events.length === 0) return events;
   const files = yield* changedFilesOf(client, target, pull);
-  const workContext = proseOf({ pull, detail, checks, reviews, files }, feedback);
+  const workContext = proseOf({ detail, checks, reviews, files }, feedback);
   return events.map((event) => ({ ...event, workContext }));
 });
 

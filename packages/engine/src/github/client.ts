@@ -143,7 +143,7 @@ const reviewDecisionOf = (
   return "none";
 };
 
-const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+export const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 export const writeAccessReviewDecision = (reviews: ReadonlyArray<RawReview>) =>
   reviewDecisionOf(

@@ -54,7 +54,7 @@ describe("GitHub pull request reads", () => {
     }).pipe(Effect.provide(fetchLayer(fetch)));
   });
 
-  it.effect("reads the mergeable state of a pull request", () => {
+  it.effect("reads the mergeable state and description of a pull request", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(
         jsonResponse({
@@ -73,7 +73,10 @@ describe("GitHub pull request reads", () => {
       const client = yield* GitHubClient;
       const pull = yield* client.getPull(repo, 480);
 
-      assert.strictEqual(pull.mergeableState, "dirty");
+      assert.deepStrictEqual(
+        [pull.mergeableState, pull.body],
+        ["dirty", "Please review the implementation."],
+      );
     }).pipe(Effect.provide(fetchLayer(fetch)));
   });
 });
