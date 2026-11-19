@@ -1,0 +1,35 @@
+configs/lint/oxlint-plugin/index.ts
+  s_24a7036fab5f2b::t_eacb0c10c41696 1-7
+configs/lint/oxlint-plugin/rules/no-export-in-test.ts
+  s_24a7036fab5f2b::t_f2d051835b4e8b 1-21
+configs/lint/oxlint/cogwork.ts
+  s_31c41b07675917::t_2b6eca63b99d57 1-12
+configs/lint/tests/fixtures/no-export-in-test/invalid-example.ts
+  s_24a7036fab5f2b::t_4b167a4642cdc2 1-7
+configs/lint/tests/fixtures/no-export-in-test/valid-example.ts
+  s_24a7036fab5f2b::t_026d67b0abf13e 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c1b0f5143e473a0b255a824d43d13843b3319b16",
+  "prompts": {},
+  "sessions": {
+    "s_24a7036fab5f2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b8aa8c2-de7a-45a3-bbbd-cc9b5df09b19",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_31c41b07675917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3e3bf988-5745-483c-a8e0-dd677e82dc96",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
