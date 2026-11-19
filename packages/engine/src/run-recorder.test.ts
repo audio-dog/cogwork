@@ -323,6 +323,39 @@ describe("RunRecorder", () => {
         assert.deepStrictEqual(decoded, [text("first"), text("second")]);
       }),
     );
+    it.effect("withholds from the event bus an event whose stored form does not decode, and logs it", () =>
+      Effect.gen(function* () {
+        const record = run("run-withheld");
+        const recorder = yield* RunRecorder;
+        const subscription = yield* (yield* DaemonEventBus.DaemonEventBus).subscribe();
+        const logged: Array<unknown> = [];
+        const nonFiniteUsage = {
+          type: "RUN_FINISHED",
+          usage: { promptTokens: Number.NaN },
+        } satisfies AgUiEvent;
+
+        yield* Effect.forEach([nonFiniteUsage, finished], (event) => recorder.record(record, event)).pipe(
+          Effect.withLogger(
+            Logger.make(({ message }) => {
+              logged.push(message);
+            }),
+          ),
+        );
+
+        const published = yield* Stream.fromSubscription(subscription).pipe(
+          Stream.take(1),
+          Stream.runCollect,
+        );
+        assert.deepStrictEqual(
+          published.map((event) => ("activity" in event ? event.activity.seq : null)),
+          [1],
+        );
+        const withheld = logged
+          .filter(Array.isArray)
+          .find(([message]) => message === "run event withheld from the event bus");
+        assert.deepInclude(withheld?.[1], { type: "RUN_FINISHED", name: null });
+      }),
+    );
     it.effect("logs an event encoding failure without persisting a placeholder", () =>
       Effect.gen(function* () {
         const record = run("run-encode-failure");

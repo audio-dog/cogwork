@@ -36,7 +36,7 @@ import {
   publicFileEvent,
   withUsage,
 } from "./external-harness-runtime-events";
-import { projectedSkills, resolveExternalLaunch } from "./external-harness-runtime-launch";
+import { resolveExternalLaunch } from "./external-harness-runtime-launch";
 import {
   satisfiedProjection,
   scrubEvent,
@@ -61,6 +61,7 @@ import {
   validateCheckoutDirectory,
 } from "./harness";
 import { bridgeChat } from "./provider-bridge";
+import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import {
   type AvailableSubagent,
   type ModelLevels,
@@ -151,7 +152,7 @@ export interface ExternalHarnessDescriptor<Adapter extends AnyTextAdapter> {
   readonly catalog: HarnessCatalogOptions;
   readonly readiness: () => Effect.Effect<HarnessReadiness, never, HarnessRunnerEnv>;
   readonly sharedGit: "none" | "required";
-  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Tools" | "Skills" | "Subagents">>;
+  readonly declaredMembers?: ReadonlyArray<Extract<RunPlanMember, "Subagents">>;
   readonly modelLevels?: ModelLevels;
   readonly inheritedEnvironment: ReadonlyArray<string>;
   readonly makeAdapter: (input: {
@@ -219,6 +220,8 @@ export const externalHarnessDeclaration = Object.freeze({
     "Structured Output",
     "Persistence",
     "Connections",
+    "Tools",
+    "Skills",
   ]),
   planMiddleware: Object.freeze(["sandbox"]),
 } satisfies Pick<HarnessRunner, "sessionKind" | "projectedMembers" | "planMiddleware">);
@@ -354,7 +357,7 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
         resolveExternalLaunch(descriptor, inputs, request).pipe(
           Effect.flatMap((launch) =>
             Effect.map(
-              Effect.all({ skills: projectedSkills(descriptor, request), feed: makeSubagentFeed }),
+              Effect.all({ skills: runPlanSkillsMiddleware(request.plan.skills), feed: makeSubagentFeed }),
               (projected) => ({ ...launch, ...projected }),
             ),
           ),

@@ -25,6 +25,8 @@ const makeEmptyCounts = () =>
     fastForward: 0,
     divergence: 0,
     operationInProgress: 0,
+    recordedOperation: 0,
+    recordOperation: 0,
     rebase: 0,
     remoteUrl: 0,
     blockPush: 0,
@@ -73,6 +75,10 @@ export const countingLayer = Layer.effect(
         counter.track("divergence", git.divergence(worktreePath, remote, branch)),
       operationInProgress: (worktreePath) =>
         counter.track("operationInProgress", git.operationInProgress(worktreePath)),
+      recordedOperation: (worktreePath) =>
+        counter.track("recordedOperation", git.recordedOperation(worktreePath)),
+      recordOperation: (worktreePath, operation) =>
+        counter.track("recordOperation", git.recordOperation(worktreePath, operation)),
       rebase: (worktreePath, remote, branch) =>
         counter.track("rebase", git.rebase(worktreePath, remote, branch)),
       remoteUrl: (repoPath, remote) => counter.track("remoteUrl", git.remoteUrl(repoPath, remote)),
