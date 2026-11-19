@@ -1,0 +1,25 @@
+packages/engine/src/workflow-action-plan-fixtures.ts
+  s_623e13f22bdba2::t_10bcf5deacbeab 1-464
+packages/engine/src/workflow-action-plan-parking.test.ts
+  s_623e13f22bdba2::t_bcbacd9bf9ff1f 1-265
+packages/engine/src/workflow-action-plan-pull-requests.test.ts
+  s_623e13f22bdba2::t_664b9db9d48291 16-17,19,23-44
+packages/engine/src/workflow-action-plan-slack.test.ts
+  s_623e13f22bdba2::t_87a24494733395 1-252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c859959997cbd60b53f7f119858d55b343fb2953",
+  "prompts": {},
+  "sessions": {
+    "s_623e13f22bdba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a04357dc-1852-4aa2-b10b-7d0a40cb9aab",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
