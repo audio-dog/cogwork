@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/components/workflow-editor-operations.tsx
+  s_faec89ee55d8cc::t_bcdb2ea42605ad 1-407
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_faec89ee55d8cc::t_46dea109f90c2b 42-43,45,47,55
+packages/ui/src/components/scroll-area.tsx
+  s_abb171f1ebda64::t_711d0515662b17 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2a52d5597a98ce6942c4fe61c2c5b61ee272bf7e",
+  "prompts": {},
+  "sessions": {
+    "s_abb171f1ebda64": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a77e1da-82a2-4b58-91ed-707577c54e81",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
