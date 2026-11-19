@@ -1,0 +1,27 @@
+packages/engine/src/workspace-registry-authoring-trees.test.ts
+  s_623e13f22bdba2::t_36642014d704eb 1-88
+packages/engine/src/workspace-registry-fixtures.ts
+  s_623e13f22bdba2::t_9f50bcd67c0030 1-94
+packages/engine/src/workspace-registry-identity.test.ts
+  s_623e13f22bdba2::t_ee540629179236 1-337
+packages/engine/src/workspace-registry-registration.test.ts
+  s_623e13f22bdba2::t_d02426dea26a40 1-249
+packages/engine/src/workspace-registry-repository.test.ts
+  s_623e13f22bdba2::t_846c75b0170a87 12-27,48-50,80,121-122,139-141,149,164-165,170-171,175,182-183,186,208-209,224-225,228,243-244,256-257,260,270-271,274,288-289,318-319,354-355
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "10083147a373f49ccc0a4690ad8e6b55ebd1d506",
+  "prompts": {},
+  "sessions": {
+    "s_623e13f22bdba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a04357dc-1852-4aa2-b10b-7d0a40cb9aab",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
