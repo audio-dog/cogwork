@@ -1,0 +1,27 @@
+packages/engine/src/daemon-engine.ts
+  s_faec89ee55d8cc::t_0c06ff6227d800 1-309
+packages/engine/src/daemon-handlers.ts
+  s_faec89ee55d8cc::t_d829eb9e960217 1-173
+packages/engine/src/daemon-watch.ts
+  s_faec89ee55d8cc::t_5299c7d23d589f 1-169
+packages/engine/src/daemon.ts
+  s_faec89ee55d8cc::t_5c752db4466e82 1,11,13-15,17-19
+packages/engine/src/watch-activity.test.ts
+  s_faec89ee55d8cc::t_374b246a2b4252 11,72,99,282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2736e3e85d3e71a37698cc65e78e5ce8fcdfb42f",
+  "prompts": {},
+  "sessions": {
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
