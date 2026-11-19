@@ -1,0 +1,41 @@
+packages/engine/src/github/host.test.ts
+  s_623e13f22bdba2::t_67c3c776f740de 173-192
+packages/engine/src/github/host.ts
+  s_623e13f22bdba2::t_f420325a6cec33 196,198
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_62e0b0ef91aa3c::t_d0331ea9eb465d 9,75
+packages/engine/src/github/trigger-source-polling.test.ts
+  s_62e0b0ef91aa3c::t_777cb3cc43d65a 11,75-77,95-104,110-124,130-131,134,139-140,142-146,152
+packages/engine/src/linear/trigger-source.test.ts
+  s_623e13f22bdba2::t_cf83c72fb1ac37 21,154,202,288-296,301-302,305,310-311,313-317,321-324
+packages/engine/src/provider-trigger-source.ts
+  s_62e0b0ef91aa3c::t_7b9a3e048b57e7 92-100,102,104-105
+packages/engine/src/tracker-trigger-source.test.ts
+  s_623e13f22bdba2::t_bb2c26adaba321 15,18,22,90,92-93,184,202,206,208-211,213-216,220-265
+packages/engine/src/tracker-trigger-source.ts
+  s_623e13f22bdba2::t_9f8e8ae1b4351d 10,13,74-85,95-96,183-187,189-192,239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44285fd86dd58ce356c40b3c020225a1282b03b0",
+  "prompts": {},
+  "sessions": {
+    "s_623e13f22bdba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a04357dc-1852-4aa2-b10b-7d0a40cb9aab",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_62e0b0ef91aa3c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1cca0a5d-9c82-4848-838b-589168fb6b15",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
