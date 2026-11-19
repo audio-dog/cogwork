@@ -17,8 +17,8 @@ import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { makeTrackerTriggerSource } from "../tracker-trigger-source";
-import { matchTriggerEvent } from "../trigger-observation";
-import { Recheck, type TriggerSubscription } from "../trigger-source";
+import { matchTriggerEvent } from "../trigger-observation-subscriptions";
+import { Recheck, type TriggerEvent, type TriggerSubscription } from "../trigger-source";
 import { makeWorkflowOptions } from "../workflow-options";
 import { LinearClient, type LinearClientService } from "./client";
 import { makeIssueReads } from "./host";
@@ -31,7 +31,8 @@ const workspace: RegisteredWorkspace = {
   source: "test",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId,
+    id: workspaceId,
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear", teams: ["ENG"], assigneeAllowlist: ["owner"] },
   }),
@@ -41,7 +42,6 @@ const issueHasLabelKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-has
 const issueNotBlockedKey = Schema.decodeSync(WorkflowCatalogKey)("linear.issue-not-blocked");
 const firstIssueId = Schema.decodeSync(WorkItemId)("ENG-1");
 const secondIssueId = Schema.decodeSync(WorkItemId)("ENG-2");
-const thirdIssueId = Schema.decodeSync(WorkItemId)("ENG-3");
 const subscription = (entry: string, trigger: string, label = "needs-triage"): TriggerSubscription => ({
   workflow: Schema.decodeSync(WorkflowId)("coding"),
   trigger: Schema.decodeSync(WorkflowNodeId)(trigger),
@@ -152,6 +152,7 @@ it.effect("reads Linear updates and keeps comment revisions distinct by label", 
     Effect.provide(
       Layer.mock(LinearClient, {
         observeIssues,
+        observeLabelledIssues: () => Effect.succeed([]),
         readProse,
         readTriggerProse,
         labelAppliedAt: () => Effect.succeed(3_000),
@@ -199,14 +200,13 @@ it.effect("matches open issues only, and a not-blocked filter only unblocked iss
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues: () =>
+        observeLabelledIssues: () =>
           Effect.succeed([
             { ...issue(3), stateType: "canceled" },
             { ...issue(4), stateType: "completed" },
             issue(1),
             { ...issue(2), openBlockers: 1 },
           ]),
-        observeLabelledIssues: () => Effect.succeed([]),
         readTriggerProse: () => Effect.succeed({ body: "Body", comments: [] }),
         labelAppliedAt: (_target, id) => Effect.succeed(id === "ENG-3" || id === "ENG-4" ? 1_000 : 3_000),
       }),
@@ -286,44 +286,43 @@ it.effect.each([
   ),
 );
 
-it.effect("skips a failed Linear issue read and advances the workspace cursor", () => {
-  const listIssues = vi
-    .fn<LinearClientService["observeIssues"]>()
-    .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]))
-    .mockReturnValue(Effect.succeed([issue(3)]));
+it.effect("skips a failed Linear issue read and admits the unchanged issue on the next poll", () => {
+  const changedOnce = vi
+    .fn<LinearClientService["observeIssues"]>(() => Effect.succeed([]))
+    .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]));
+  const readFailsOnce = vi
+    .fn<LinearClientService["readTriggerProse"]>(() => Effect.succeed({ body: "Body", comments: [] }))
+    .mockReturnValueOnce(
+      Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue read failed" })),
+    );
 
   return Effect.gen(function* () {
     yield* TestClock.setTime(100_000);
     const client = yield* LinearClient;
-    const observed = yield* linearTrackerInstance(client, Effect.succeed(registryState))
+    const admitted: Array<TriggerEvent["key"]> = [];
+    const observing = yield* linearTrackerInstance(client, Effect.succeed(registryState))
       .observe([subscription("linear.issue-has-label", "label")])
       .pipe(
-        Stream.take(2),
-        Stream.runCollect,
-        Effect.catchTag("SourceFailure", () => Effect.succeed([] as const)),
+        Stream.runForEach(({ key }) => Effect.sync(() => admitted.push(key))),
         Effect.forkChild({ startImmediately: true }),
       );
     yield* Effect.yieldNow;
     yield* TestClock.adjust("60 seconds");
-    const events = yield* Fiber.join(observed);
+    yield* Effect.yieldNow;
+    yield* Fiber.interrupt(observing);
 
-    assert.deepStrictEqual(
-      [...events].map(({ key }) => key),
-      [
-        { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
-        { _tag: "Issue", workspace: workspaceId, id: thirdIssueId },
-      ],
-    );
-    assert.strictEqual(listIssues.mock.calls[1]?.[3], 70_000);
+    assert.deepStrictEqual(admitted, [
+      { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+      { _tag: "Issue", workspace: workspaceId, id: firstIssueId },
+      { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+    ]);
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues: listIssues,
-        readTriggerProse: (_target, id) =>
-          id === "ENG-1"
-            ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue read failed" }))
-            : Effect.succeed({ body: "Body", comments: [] }),
-        labelAppliedAt: () => Effect.succeed(3_000),
+        observeIssues: changedOnce,
+        observeLabelledIssues: () => Effect.succeed([issue(1), issue(2)]),
+        readTriggerProse: readFailsOnce,
+        labelAppliedAt: (_target, id) => Effect.succeed(id === "ENG-1" ? 1_000 : 2_000),
       }),
     ),
   );

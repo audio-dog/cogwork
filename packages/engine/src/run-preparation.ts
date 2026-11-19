@@ -30,7 +30,7 @@ import { subagentMembers } from "./run-plan";
 import { HarnessPreflight, harnessOptions } from "./run-plan-resolution";
 import { SessionStore } from "./session-store";
 import { SourceControlProvider } from "./source-control";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { ticketSlug, type WorktreeError, WorktreeManager } from "./worktree";
 
@@ -77,7 +77,7 @@ export const selectedWorkspaceIds = (
   document: WorkflowDocument,
   workspaces: ReadonlyArray<RegisteredWorkspace>,
 ) => {
-  const registered = workspaces.map(({ config }) => config.name);
+  const registered = workspaces.map(({ config }) => config.id);
   return document.workspaces._tag === "Every"
     ? registered
     : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
@@ -110,7 +110,7 @@ export const make = Effect.gen(function* () {
     required: ReadonlyArray<string>,
   ) {
     if (workspace === null) return [];
-    const fromPlugins = yield* plugins.contributions(workspace.config.name).pipe(
+    const fromPlugins = yield* plugins.contributions(workspace.config.id).pipe(
       Effect.map((contributions) =>
         contributions.filter(({ load }) => PluginContributionLoad.guards.Loaded(load)),
       ),

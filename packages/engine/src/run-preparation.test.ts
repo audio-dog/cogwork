@@ -35,7 +35,7 @@ import { RunLedger } from "./run-ledger";
 import { HarnessPreflight } from "./run-plan-resolution";
 import { make as makeRunPreparation, type RunPreparationInput } from "./run-preparation";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import { TriggerAdmission } from "./trigger-observation";
+import { TriggerAdmission } from "./trigger-observation-admission";
 import { memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 import { WorktreeManager } from "./worktree";
 
@@ -86,7 +86,8 @@ const workspace: RegisteredWorkspace = {
   repository: "owner/cogwork",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "cogwork",
+    id: "cogwork",
+    displayName: "cogwork",
     checkoutPath: "/cogwork",
     issueTracker: { type: "github" },
   }),

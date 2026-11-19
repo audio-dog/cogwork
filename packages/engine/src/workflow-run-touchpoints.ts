@@ -10,9 +10,9 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { Coordination } from "./coordination";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { SourceControlProvider } from "./source-control";
-import { TriggerObservationStore } from "./trigger-observation";
+import { TriggerObservationStore } from "./trigger-observation-store";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { operationKeyOf } from "./workflow-run-admission";
 import {
@@ -51,7 +51,7 @@ export const makeWorkflowRunTouchpoints = Effect.fn("WorkflowRun.makeTouchpoints
       (plan) => {
         const target = waitingReviewTarget(plan);
         if (target?._tag !== "NamedPullRequest") return Effect.void;
-        const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+        const workspace = workspaces.find(({ config }) => config.id === target.workspace);
         if (!workspace) return Effect.void;
         return sourceControl.readPullRequest(workspace, `#${target.number}`).pipe(
           Effect.flatMap((pullRequest) => {

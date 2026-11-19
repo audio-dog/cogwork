@@ -17,11 +17,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { Coordination, type CoordinationService, fold } from "./coordination";
-import {
-  makeMemoryTriggerObservationStore,
-  type TriggerAdmission,
-  TriggerObservationStore,
-} from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
+import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";
 import { Workflows, type WorkflowsService } from "./workflow";
 import {
   WorkflowActionPlanStore,

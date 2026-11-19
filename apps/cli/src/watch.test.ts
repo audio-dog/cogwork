@@ -239,7 +239,7 @@ const schedulerStats = Schema.decodeSync(SchedulerStats)({
   perWorkspaceLimit: 4,
   dailyBudgetUsed: 2,
   dailyBudgetLimit: 10,
-  perWorkspace: [{ name: "acme", inFlight: 1, limit: 3 }],
+  perWorkspace: [{ id: "acme", inFlight: 1, limit: 3 }],
 });
 
 describe("renderBoard", () => {

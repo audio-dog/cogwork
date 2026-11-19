@@ -76,7 +76,7 @@ const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
 const notGitHub = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
-    message: `workspace ${workspace.config.name} does not use GitHub Issues`,
+    message: `workspace ${workspace.config.id} does not use GitHub Issues`,
   });
 
 const writeMarker = (writeKey: string) =>
@@ -193,8 +193,9 @@ export const makeIssueReads = (client: GitHubClientService) => {
   });
   return {
     observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, { state: "open" }),
+    // GitHub answers `since=1970-01-01T00:00:00.000Z` with an empty issue list.
     itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
-      listItems(workspace, { state: "all", since: sinceMillis }),
+      listItems(workspace, sinceMillis > 0 ? { state: "all", since: sinceMillis } : { state: "all" }),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
       listItems(workspace, { state: "open", label }),
     readItem: Effect.fn("github.readItem")(function* (
@@ -289,7 +290,7 @@ export const makeIssueActions = (client: GitHubClientService) => {
   ) {
     return WorkflowActionArtifact.make({
       kind: "IssueCreated",
-      workspace: workspace.config.name,
+      workspace: workspace.config.id,
       issue: yield* itemId(issue.number),
       url: issue.url,
       origin,

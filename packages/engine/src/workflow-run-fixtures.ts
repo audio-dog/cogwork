@@ -24,7 +24,8 @@ import {
   type IssueTrackerService,
 } from "./issue-tracker";
 import { PluginManager } from "./plugin";
-import { emptyRegistry, type RegistryState, readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { emptyRegistry, type RegistryState } from "./projector";
+import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { SlackWrite } from "./slack-write";
 import {
@@ -34,12 +35,12 @@ import {
 } from "./source-control";
 import { engineTestLayer } from "./testing/engine-test-layer";
 import { LogProbe } from "./testing/log-probe";
+import { TriggerObservation } from "./trigger-observation";
 import {
   makeMemoryTriggerObservationStore,
-  TriggerObservation,
   TriggerObservationStore,
   type TriggerObservationStoreService,
-} from "./trigger-observation";
+} from "./trigger-observation-store";
 import { Recheck } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
 import {

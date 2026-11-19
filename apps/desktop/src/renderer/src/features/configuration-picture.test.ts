@@ -5,15 +5,15 @@ import { Authority, Diagnostic, LoadState } from "./configuration-model";
 import { configurationPicture } from "./configuration-picture";
 
 const workspace = Schema.decodeSync(WorkspaceId)("example");
-const workspaceRecord = (name: string, checkoutPath: string) => ({
-  name,
+const workspaceRecord = (displayName: string, checkoutPath: string) => ({
+  displayName,
   checkoutPath,
   issueTracker: { type: "github" as const },
   linearHistory: false,
 });
 const registeredWorkspace = Schema.decodeSync(WorkspaceState)({
   _tag: "Registered",
-  name: workspace,
+  id: workspace,
   displayName: "Example",
   checkoutPath: "/repos/example",
   issueTracker: "github",
@@ -131,14 +131,14 @@ describe("configurationPicture", () => {
       kind: "mcp-server",
       localName: "tools",
     } satisfies Omit<LocalContribution, "file">;
-    const projectedWorkspace = (name: WorkspaceId, checkoutPath: string) =>
+    const projectedWorkspace = (id: WorkspaceId, checkoutPath: string) =>
       Schema.decodeSync(WorkspaceState)({
         _tag: "Registered",
-        name,
-        displayName: name,
+        id,
+        displayName: id,
         checkoutPath,
         issueTracker: "github",
-        record: workspaceRecord(name, checkoutPath),
+        record: workspaceRecord(id, checkoutPath),
         contributions: [userServer, userSkill, { ...sharedRepoServer, file: `${checkoutPath}/tools.json` }],
       });
     const picture = configurationPicture({
@@ -198,14 +198,14 @@ describe("configurationPicture", () => {
       localName: "review",
       file: "/home/.agents/mcp/review.json",
     });
-    const projectedWorkspace = (name: WorkspaceId) =>
+    const projectedWorkspace = (id: WorkspaceId) =>
       Schema.decodeSync(WorkspaceState)({
         _tag: "Registered",
-        name,
-        displayName: name,
-        checkoutPath: `/repos/${name}`,
+        id,
+        displayName: id,
+        checkoutPath: `/repos/${id}`,
         issueTracker: "github",
-        record: workspaceRecord(name, `/repos/${name}`),
+        record: workspaceRecord(id, `/repos/${id}`),
         contributions: [userServer],
       });
     const picture = configurationPicture({
@@ -256,7 +256,7 @@ describe("configurationPicture", () => {
     });
     const state = Schema.decodeSync(WorkspaceState)({
       _tag: "Registered",
-      name: workspace,
+      id: workspace,
       displayName: "Example",
       checkoutPath: "/repos/example",
       issueTracker: "github",

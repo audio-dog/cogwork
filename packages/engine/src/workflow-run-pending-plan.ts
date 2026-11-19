@@ -10,10 +10,11 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
-import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
+import { TriggerObservationStore } from "./trigger-observation-store";
 import { Workflows } from "./workflow";
 import {
   buildWorkflowActionPlan,

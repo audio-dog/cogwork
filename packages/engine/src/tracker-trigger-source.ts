@@ -7,9 +7,10 @@ import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
   catchUpParameter,
   catchUpSince,
-  filteredLabels,
+  conditionEntryKeys,
   isolateProviderItemRead,
   issueNotBlockedFilter,
+  labelsReadEveryPoll,
   liveParameter,
   type ProviderPollCheckpoint,
   parameterValue,
@@ -70,6 +71,18 @@ const uniqueItems = (items: ReadonlyArray<ListedTrackerItem>) => [
   ...new Map(items.map((item) => [item.id, item])).values(),
 ];
 
+const modifiedSinceLowerBound = (
+  cursor: number | undefined,
+  occurrences: ReadonlyArray<TriggerSubscription>,
+  now: number,
+) => {
+  if (occurrences.length === 0) return undefined;
+  const earliestCatchUp = Math.min(
+    ...occurrences.map(({ parameters, catchUp }) => catchUpSince(parameters, catchUp?.since ?? now, now)),
+  );
+  return (cursor ?? earliestCatchUp) - providerModifiedSinceGraceMillis;
+};
+
 export const makeTrackerTriggerSource = (
   system: TrackerSystem,
   issueTracker: TrackerReads,
@@ -79,6 +92,8 @@ export const makeTrackerTriggerSource = (
   const issueHasLabelKey = issueHasLabelKeyOf(system);
   const newCommentKey = newCommentKeyOf(system);
   const issueFilters = [issueNotBlockedFilter(system)];
+  const entries = trackerTriggerEntries(system);
+  const conditionEntries = conditionEntryKeys(entries);
 
   const originCause = (workspace: WorkspaceId, id: WorkItemId) =>
     artifacts === null
@@ -108,12 +123,12 @@ export const makeTrackerTriggerSource = (
       return label !== undefined && item.labels.includes(label) ? [{ subscription, label }] : [];
     });
     if (!item.open || matching.length === 0) return [];
-    const name = workspace.config.name;
+    const workspaceId = workspace.config.id;
     const prose = yield* issueTracker.readTriggerProse(workspace, item.id);
-    const cause = yield* originCause(name, item.id);
+    const cause = yield* originCause(workspaceId, item.id);
     const shared = {
-      key: { _tag: "Issue", workspace: name, id: item.id },
-      workspace: name,
+      key: { _tag: "Issue", workspace: workspaceId, id: item.id },
+      workspace: workspaceId,
       priority: item.priority,
       passes: passedFilters(issueFilters, item),
       subject: providerSubject(item.title, item.url),
@@ -162,21 +177,27 @@ export const makeTrackerTriggerSource = (
     workspace: RegisteredWorkspace,
     now: number,
   ) {
-    const name = workspace.config.name;
-    const selected = workspaceSubscriptions(name, subscriptions);
-    if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: name };
-    const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
+    const workspaceId = workspace.config.id;
+    const selected = workspaceSubscriptions(workspaceId, subscriptions);
+    if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspaceId };
+    const since = modifiedSinceLowerBound(
+      cursor,
+      selected.filter(({ entry }) => !conditionEntries.has(entry)),
+      now,
+    );
     const [changed, labelled] = yield* Effect.all([
-      issueTracker.itemsChangedSince(workspace, since),
-      Effect.forEach(filteredLabels(selected), (label) => issueTracker.openItemsWithLabel(workspace, label)),
+      since === undefined ? Effect.succeed([]) : issueTracker.itemsChangedSince(workspace, since),
+      Effect.forEach(labelsReadEveryPoll(conditionEntries, selected), (label) =>
+        issueTracker.openItemsWithLabel(workspace, label),
+      ),
     ]);
     const events = yield* Effect.forEach(uniqueItems([...changed, ...labelled.flat()]), (item) =>
       isolateProviderItemRead(
-        { source: system, workspace: name, item: item.id },
+        { source: system, workspace: workspaceId, item: item.id },
         eventsForItem(workspace, selected, item, now),
       ),
     );
-    return { events: events.flat(), cursor: providerCursorAfterRead(cursor, now), workspace: name };
+    return { events: events.flat(), cursor: providerCursorAfterRead(cursor, now), workspace: workspaceId };
   });
 
   const read = Effect.fn("TrackerTriggerSource.read")(function* (
@@ -187,7 +208,7 @@ export const makeTrackerTriggerSource = (
     const state = yield* registry;
     const workspaces = state.workspaces.filter(({ config }) => config.issueTracker.type === system);
     const reads = yield* Effect.forEach(workspaces, (workspace) =>
-      readWorkspace(checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
+      readWorkspace(checkpoint.cursors.get(workspace.config.id), subscriptions, workspace, now),
     );
     return {
       events: reads.flatMap(({ events }) => events),
@@ -204,7 +225,7 @@ export const makeTrackerTriggerSource = (
   ) {
     if (event.key._tag !== "Issue") return Recheck.Matches();
     const { id, workspace } = event.key;
-    const registered = (yield* registry).workspaces.find(({ config }) => config.name === workspace);
+    const registered = (yield* registry).workspaces.find(({ config }) => config.id === workspace);
     if (!registered) return Recheck.Matches();
     const item = yield* issueTracker
       .readItem(registered, id)
@@ -215,7 +236,7 @@ export const makeTrackerTriggerSource = (
 
   return {
     id: system,
-    entries: trackerTriggerEntries(system),
+    entries,
     filters: trackerTriggerFilters(system),
     availability: () => Effect.succeed({ _tag: "Available" }),
     options: [

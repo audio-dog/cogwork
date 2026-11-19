@@ -3,7 +3,14 @@ import {
   type HarnessManagedCatalogModel,
   HarnessModelOptionDescriptor,
 } from "@cogwork/contracts";
+import type { SubagentRunner } from "@cogwork/engine";
 import * as Data from "effect/Data";
+import type { ClaudeCatalogModel } from "./models.generated";
+
+export const claudeModelLevels = {
+  light: "haiku",
+  deep: "opus",
+} satisfies SubagentRunner.ModelLevels<ClaudeCatalogModel>;
 
 type ClaudeModelOptions = Readonly<Record<string, string | boolean>>;
 

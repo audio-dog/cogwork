@@ -12,7 +12,8 @@ import { wireCodec } from "./markers";
 const workspace: WorkspaceIssueTrackerBinding = {
   repository: "acme/example",
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    id: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github" },
   }),
@@ -20,7 +21,8 @@ const workspace: WorkspaceIssueTrackerBinding = {
 const allowlistedWorkspace: WorkspaceIssueTrackerBinding = {
   repository: "acme/example",
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    id: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github" },
     sourceControl: { type: "github", botAllowlist: ["release-bot"] },
@@ -177,6 +179,26 @@ describe("GitHub issue listing", () => {
         labelled.map(({ id, labels }) => [id, labels]),
         [[issueId, ["needs-triage"]]],
       );
+    }),
+  );
+
+  it.effect("omits the lower bound when it lists issues changed since the epoch", () =>
+    Effect.gen(function* () {
+      const sentSince: Array<number | undefined> = [];
+      const client = yield* GitHubClient.pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            listIssues: (_repo, query) => {
+              sentSince.push(query?.since);
+              return Effect.succeed([]);
+            },
+          }),
+        ),
+      );
+
+      yield* makeIssueReads(client).itemsChangedSince(workspace, 0);
+
+      assert.deepStrictEqual(sentSince, [undefined]);
     }),
   );
 });

@@ -24,7 +24,8 @@ import {
 } from "./operation-result";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
-import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
+import { TriggerObservationStore } from "./trigger-observation-store";
 import type { WorkflowActionPlanDecodeError } from "./workflow-action-entry";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";

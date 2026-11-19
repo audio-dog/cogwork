@@ -1,6 +1,6 @@
 import { ndJsonStream, RequestError } from "@agentclientprotocol/sdk";
 import { AgUiEvent, type HarnessName, type ModelOptionSelections } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
+import { ExternalHarnessRuntime, ExternalHarnessSandbox, Harness, HarnessBridge } from "@cogwork/engine";
 import {
   type AcpCompatibleTextAdapter,
   type AcpHarnessContext,
@@ -75,7 +75,7 @@ const cursorProbeError = (cause: unknown) => {
 };
 
 const cursorCommand = Effect.fn("CursorRunner.command")((agentBin: string, argument: string) =>
-  ExternalHarnessRuntime.withLocalProcessSandbox(
+  ExternalHarnessSandbox.withLocalProcessSandbox(
     process.cwd(),
     inheritedEnvironment,
     cursorProbeError,

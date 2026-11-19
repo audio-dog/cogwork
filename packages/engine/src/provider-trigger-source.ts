@@ -89,13 +89,20 @@ export const issueNotBlockedFilter = (system: "github" | "linear") =>
     holds: ({ openBlockers }) => openBlockers === 0,
   }) satisfies ItemFilter<{ readonly openBlockers: number }>;
 
-// A filter can start holding without the item changing (its blocker closes), so a modified-since
-// read never sees it; a source reads every open item with a filtered Trigger's label on each poll.
-export const filteredLabels = (subscriptions: ReadonlyArray<TriggerSubscription>) => [
+export const conditionEntryKeys = (entries: ReadonlyArray<TriggerEntry>) =>
+  new Set(entries.flatMap(({ key, triggerKind }) => (triggerKind === "condition" ? [key] : [])));
+
+// A condition or a filter can hold while the item does not change again (a poll missed it, its
+// blocker closed), so a modified-since read never sees it; these labels are read in full each poll.
+export const labelsReadEveryPoll = (
+  conditionEntries: ReadonlySet<WorkflowCatalogKey>,
+  subscriptions: ReadonlyArray<TriggerSubscription>,
+) => [
   ...new Set(
-    subscriptions.flatMap(({ parameters, filters }) => {
+    subscriptions.flatMap(({ entry, parameters, filters }) => {
       const label = parameterValue(parameters, "label");
-      return filters.length > 0 && label !== undefined ? [label] : [];
+      const readInFull = conditionEntries.has(entry) || filters.length > 0;
+      return readInFull && label !== undefined ? [label] : [];
     }),
   ),
 ];
@@ -164,7 +171,7 @@ export const workspaceOptionReader =
     Effect.gen(function* () {
       if (workspace === undefined) return [];
       const state = yield* registry;
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
+      const registered = state.workspaces.find(({ config }) => config.id === workspace);
       if (!registered) return [];
       const listed = yield* names(registered);
       return [...new Set(listed)].map(

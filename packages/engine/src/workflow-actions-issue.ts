@@ -10,7 +10,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import {
   type ActionContext,
   type ActionEntry,
@@ -42,19 +42,19 @@ const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(func
   if (workspaceId === "none") return null;
   if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
   const app = issueTrackerApps.find((candidate) => candidate === entry.system);
-  const workspace = selected.find(({ config }) => config.name === workspaceId);
+  const workspace = selected.find(({ config }) => config.id === workspaceId);
   if (!app || workspace?.config.issueTracker.type !== app) {
     return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
   }
   return {
     app: workspace.config.issueTracker.type,
-    config: { name: workspace.config.name, issueTracker: workspace.config.issueTracker },
+    config: { id: workspace.config.id, issueTracker: workspace.config.issueTracker },
     repository: workspace.repository,
   } satisfies FrozenIssueTarget;
 });
 
 const targetFields = (target: FrozenIssueTarget) => ({
-  workspace: target.config.name,
+  workspace: target.config.id,
   app: target.app,
   issueTracker: target.config.issueTracker,
   repository: target.repository ?? null,
@@ -63,7 +63,7 @@ const targetFields = (target: FrozenIssueTarget) => ({
 const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarget | null) => {
   if (target === null) return Effect.succeed<WorkflowActionTarget>({ _tag: "NoWorkspace" });
   const ref = admission.event.key;
-  if (ref._tag !== "Issue" || ref.workspace !== target.config.name) {
+  if (ref._tag !== "Issue" || ref.workspace !== target.config.id) {
     return decodeFailure("The action cannot target this item in the selected Workspaces");
   }
   return Effect.succeed<WorkflowActionTarget>({
@@ -92,7 +92,7 @@ const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(
   target: FrozenIssueTarget | null,
 ) {
   if (target === null) return { _tag: "NoWorkspace" } as const;
-  const prefix = `${target.config.name}:`;
+  const prefix = `${target.config.id}:`;
   const hasWorkspacePrefix = issueInput.includes(":");
   if (hasWorkspacePrefix && !issueInput.startsWith(prefix)) {
     return yield* decodeFailure("The issue input does not identify the selected Workspace");
