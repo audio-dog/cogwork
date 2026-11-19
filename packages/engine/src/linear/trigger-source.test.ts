@@ -53,7 +53,7 @@ const subscription = (entry: string, trigger: string, label = "needs-triage"): T
   catchUp: { since: 1_000 },
 });
 
-const observeIssues = vi.fn<LinearClientService["observeIssues"]>(() =>
+const observeOpenIssuesSince = vi.fn<LinearClientService["observeOpenIssuesSince"]>(() =>
   Effect.succeed([
     {
       id: "issue-id",
@@ -145,13 +145,12 @@ it.effect("reads Linear updates and keeps comment revisions distinct by label", 
         ["label:needs-triage:3000", "Unknown", undefined],
       ],
     );
-    assert.isTrue(observeIssues.mock.calls[0]?.[4]);
     assert.strictEqual(readTriggerProse.mock.calls.length, 1);
     assert.strictEqual(readProse.mock.calls.length, 0);
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues,
+        observeOpenIssuesSince,
         observeLabelledIssues: () => Effect.succeed([]),
         readProse,
         readTriggerProse,
@@ -236,7 +235,7 @@ it.effect("reads every open issue with a filtered Trigger's label, so an unblock
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues: () => Effect.succeed([]),
+        observeOpenIssuesSince: () => Effect.succeed([]),
         observeLabelledIssues,
         readTriggerProse: () => Effect.succeed({ body: "Body", comments: [] }),
         labelAppliedAt: () => Effect.succeed(3_000),
@@ -288,7 +287,7 @@ it.effect.each([
 
 it.effect("skips a failed Linear issue read and admits the unchanged issue on the next poll", () => {
   const changedOnce = vi
-    .fn<LinearClientService["observeIssues"]>(() => Effect.succeed([]))
+    .fn<LinearClientService["observeOpenIssuesSince"]>(() => Effect.succeed([]))
     .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]));
   const readFailsOnce = vi
     .fn<LinearClientService["readTriggerProse"]>(() => Effect.succeed({ body: "Body", comments: [] }))
@@ -319,7 +318,7 @@ it.effect("skips a failed Linear issue read and admits the unchanged issue on th
   }).pipe(
     Effect.provide(
       Layer.mock(LinearClient, {
-        observeIssues: changedOnce,
+        observeOpenIssuesSince: changedOnce,
         observeLabelledIssues: () => Effect.succeed([issue(1), issue(2)]),
         readTriggerProse: readFailsOnce,
         labelAppliedAt: (_target, id) => Effect.succeed(id === "ENG-1" ? 1_000 : 2_000),
