@@ -1,0 +1,63 @@
+apps/cli/src/platform-setup-command.test.ts
+  s_76676c30711ade::t_49599ea7dda155 17-19,22-23
+packages/claude-code/src/fixtures/fake-claude.mjs
+  s_faec89ee55d8cc::t_6cffa5ed90c985 91-92
+packages/claude-code/src/harness-fixtures.ts
+  s_faec89ee55d8cc::t_a1cfbf9feb4bf0 12,210,263,297,364-365
+packages/claude-code/src/harness-host.test.ts
+  s_faec89ee55d8cc::t_4e809215159bc1 3,108-136
+packages/claude-code/src/harness.ts
+  s_faec89ee55d8cc::t_0f93cfbbd6be80 2,12,358-369,386
+packages/engine/GLOSSARY-coordination.md
+  s_76676c30711ade::t_9c3b672b44555c 18-23
+packages/engine/GLOSSARY.md
+  s_76676c30711ade::t_3e7f93f9d34edd 22
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_faec89ee55d8cc::t_3d9ad4161a930b 57,100
+packages/engine/src/run-plan-resolution.ts
+  s_faec89ee55d8cc::t_796fc6b8697292 26,84-87,202
+packages/engine/src/workflow-run-engine-tools.ts
+  s_76676c30711ade::t_cc5656ccc72bbe 2,5,25-34,56
+packages/engine/src/worktree-fs.ts
+  s_76676c30711ade::t_fc35d096d4c81e 9
+packages/codex-cli/src/harness.ts
+  s_3cb83d2e01a45c::t_c7efe1ad77478a 302-312
+packages/engine/operating-instructions/implement-agent/INSTRUCTIONS.md
+  s_3cb83d2e01a45c::t_684aa3b55a38e1 116
+packages/engine/src/workflow-action-entry.ts
+  s_3cb83d2e01a45c::t_ea860e6c7fb7b4 83-84
+packages/engine/src/workflow-run.ts
+  s_3cb83d2e01a45c::t_870d5a3afe0828 259-260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b75351526433649675855aa370ee08219af8c74a",
+  "prompts": {},
+  "sessions": {
+    "s_3cb83d2e01a45c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b3aea60-cc7e-47ab-9a69-83ac2afefc6f",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_76676c30711ade": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9e340f49-e042-4fb6-80ba-bf8f51052a8f",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
