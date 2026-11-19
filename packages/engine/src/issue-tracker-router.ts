@@ -12,15 +12,15 @@ export const route = (github: IssueTrackerService, linear: IssueTrackerService):
     workspace.config.issueTracker.type === "linear" ? linear : github;
   return {
     observe: (workspace) => forWorkspace(workspace).observe(workspace),
-    itemsChangedSince: (workspace, sinceMillis) =>
-      forWorkspace(workspace).itemsChangedSince(workspace, sinceMillis),
+    openItemsChangedSince: (workspace, sinceMillis) =>
+      forWorkspace(workspace).openItemsChangedSince(workspace, sinceMillis),
     openItemsWithLabel: (workspace, label) => forWorkspace(workspace).openItemsWithLabel(workspace, label),
     readItem: (workspace, id) => forWorkspace(workspace).readItem(workspace, id),
     readProse: (workspace, id) => forWorkspace(workspace).readProse(workspace, id),
     readTriggerProse: (workspace, id) => forWorkspace(workspace).readTriggerProse(workspace, id),
     labelAppliedAt: (workspace, id, label) => forWorkspace(workspace).labelAppliedAt(workspace, id, label),
     listLabels: (workspace) => forWorkspace(workspace).listLabels(workspace),
-    assignees: (workspace, id) => forWorkspace(workspace).assignees?.(workspace, id) ?? Effect.succeed([]),
+    assignees: (workspace, id) => forWorkspace(workspace).assignees(workspace, id),
     createIssue: (workspace, input) => forWorkspace(workspace).createIssue(workspace, input),
     commentIssue: (workspace, id, body, writeKey) =>
       forWorkspace(workspace).commentIssue(workspace, id, body, writeKey),

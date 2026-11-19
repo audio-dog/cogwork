@@ -424,7 +424,7 @@ const descriptor = (
     catalog: managedCatalogOptions,
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
-    declaredMembers: ["Tools", "Skills", "Subagents"],
+    declaredMembers: ["Subagents"],
     modelLevels: claudeModelLevels,
     inheritedEnvironment,
     makeAdapter: ({ model, request }) =>

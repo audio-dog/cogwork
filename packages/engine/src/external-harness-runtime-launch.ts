@@ -20,7 +20,6 @@ import {
   validateCheckoutDirectory,
 } from "./harness";
 import { workContextMessage } from "./run-plan";
-import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import { SessionStore } from "./session-store";
 import { availableSubagents } from "./subagent-runner";
 
@@ -154,21 +153,8 @@ const gitWritablePaths = (
   return resolveGitWritablePaths(checkoutPath).pipe(Effect.mapError(() => sharedGitError(checkoutPath)));
 };
 
-const projectedTools = (
-  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "declaredMembers">,
-  request: HarnessRequest,
-) =>
-  descriptor.declaredMembers?.includes("Tools")
-    ? (request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [])
-    : [];
-
-export const projectedSkills = (
-  descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "declaredMembers">,
-  request: HarnessRequest,
-) =>
-  descriptor.declaredMembers?.includes("Skills")
-    ? runPlanSkillsMiddleware(request.plan.skills)
-    : Effect.succeed([]);
+const projectedTools = (request: HarnessRequest) =>
+  request.engineTools?.filter(({ name }) => request.plan.tools.includes(name)) ?? [];
 
 const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(function* (
   descriptor: Pick<ExternalHarnessDescriptor<AnyTextAdapter>, "sharedGit" | "declaredMembers">,
@@ -191,7 +177,7 @@ const resolvedRequest = Effect.fn("ExternalHarnessRuntime.resolveRequest")(funct
     checkout: { path: checkoutPath, gitWritablePaths: writablePaths },
     prompt: [workContextMessage(request.plan.workContext), ...request.plan.messages],
     outputSchema: request.plan.structuredOutput,
-    tools: projectedTools(descriptor, request),
+    tools: projectedTools(request),
     subagents: descriptor.declaredMembers?.includes("Subagents")
       ? availableSubagents(request.plan.subagents)
       : [],

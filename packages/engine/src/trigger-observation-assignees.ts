@@ -47,7 +47,7 @@ export const makeAssigneeGate = Effect.gen(function* () {
   ) {
     const refreshed = yield* refreshWorkspaceAssignees(workspace, now);
     if (refreshed.has(itemId)) return refreshed.get(itemId) ?? [];
-    const assignees = yield* tracker.assignees?.(workspace, itemId) ?? Effect.succeed([]);
+    const assignees = yield* tracker.assignees(workspace, itemId);
     yield* Ref.update(assigneeSnapshots, (snapshots) =>
       new Map(snapshots).set(workspace.config.id, {
         atMillis: now,
@@ -67,14 +67,21 @@ export const makeAssigneeGate = Effect.gen(function* () {
     return yield* assigneeGate.withPermit(refreshItemAssignees(workspace, itemId, now));
   });
 
-  const hasAllowlistedAssignee = Effect.fn("TriggerObservation.hasAllowlistedAssignee")(function* (
+  const issueHasAllowlistedAssignee = Effect.fn("TriggerObservation.issueHasAllowlistedAssignee")(function* (
     workspace: RegisteredWorkspace,
     allowlist: ReadonlyArray<string>,
     itemId: WorkItemId,
   ) {
-    const assignees = yield* itemAssignees(workspace, itemId);
+    const assignees = yield* tracker.assignees(workspace, itemId);
     return assignees.some((assignee) => allowlist.includes(assignee));
   });
+
+  const linkedItemHasAllowlistedAssignee = Effect.fn("TriggerObservation.linkedItemHasAllowlistedAssignee")(
+    function* (workspace: RegisteredWorkspace, allowlist: ReadonlyArray<string>, itemId: WorkItemId) {
+      const assignees = yield* itemAssignees(workspace, itemId);
+      return assignees.some((assignee) => allowlist.includes(assignee));
+    },
+  );
 
   const pullRequestLinkedItems = Effect.fn("TriggerObservation.pullRequestLinkedItems")(function* (
     workspace: RegisteredWorkspace,
@@ -102,7 +109,7 @@ export const makeAssigneeGate = Effect.gen(function* () {
     const linked = yield* pullRequestLinkedItems(workspace, pullRequest);
     if (linked.length === 0) return allowlist.includes(pullRequest.author);
     const owned = yield* Effect.findFirst(linked, (itemId) =>
-      hasAllowlistedAssignee(workspace, allowlist, itemId),
+      linkedItemHasAllowlistedAssignee(workspace, allowlist, itemId),
     );
     return Option.isSome(owned);
   });
@@ -117,7 +124,7 @@ export const makeAssigneeGate = Effect.gen(function* () {
     const allowlist = workspace.config.issueTracker.assigneeAllowlist;
     if (allowlist === undefined) return true;
     return yield* WorkItemRef.match(event.key, {
-      Issue: ({ id }) => hasAllowlistedAssignee(workspace, allowlist, id),
+      Issue: ({ id }) => issueHasAllowlistedAssignee(workspace, allowlist, id),
       PullRequest: () => ownsPullRequest(workspace, allowlist, event.pullRequest),
       GranolaNote: ungated,
       SlackMessage: ungated,

@@ -17,6 +17,8 @@ import {
   selectedTrackerItem,
   selectedWorkspace,
   selectedWorkspaceId,
+  unassignedIssueId,
+  ungatedWorkspace,
 } from "./trigger-observation-fixtures";
 
 const workspaceTrackedBy = (
@@ -51,7 +53,10 @@ const trackerUnavailable = () =>
 const pullRequestGateCases = [
   {
     case: "admits a pull request whose closing reference names an allowlisted item outside the snapshot",
-    options: { exactAssignees: (itemId: WorkItemId) => Effect.succeed(itemId === "#5" ? ["owner"] : []) },
+    options: {
+      observedItems: [selectedTrackerItem],
+      assignees: (itemId: WorkItemId) => Effect.succeed(itemId === "#5" ? ["owner"] : []),
+    },
     pullRequest: { author: "teammate", headRef: "feature", closingIssueNumbers: [5] },
     admitted: true,
   },
@@ -63,19 +68,22 @@ const pullRequestGateCases = [
   },
   {
     case: "declines a pull request whose branch names a teammate's item outside the snapshot",
-    options: { exactAssignees: (itemId: WorkItemId) => Effect.succeed(itemId === "#42" ? ["teammate"] : []) },
+    options: {
+      observedItems: [selectedTrackerItem],
+      assignees: (itemId: WorkItemId) => Effect.succeed(itemId === "#42" ? ["teammate"] : []),
+    },
     pullRequest: { author: "owner", headRef: "42-fix", closingIssueNumbers: [] },
     admitted: false,
   },
   {
     case: "admits an unlinked pull request from an allowlisted author",
-    options: {},
+    options: { observedItems: [selectedTrackerItem] },
     pullRequest: { author: "owner", headRef: "feature", closingIssueNumbers: [] },
     admitted: true,
   },
   {
     case: "declines an unlinked pull request from a teammate",
-    options: {},
+    options: { observedItems: [selectedTrackerItem] },
     pullRequest: { author: "teammate", headRef: "feature", closingIssueNumbers: [] },
     admitted: false,
   },
@@ -90,7 +98,7 @@ const pullRequestGateCases = [
     options: {
       workspace: workspaceTrackedBy({ type: "linear", teams: ["FEL"], assigneeAllowlist: ["linear-owner"] }),
       observedItems: [linearTrackerItem],
-      exactAssignees: trackerUnavailable,
+      assignees: trackerUnavailable,
     },
     pullRequest: { author: "teammate", headRef: "fel-157-fix", closingIssueNumbers: [3] },
     admitted: true,
@@ -127,49 +135,67 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("reuses one assignee snapshot for a Trigger batch", () =>
+  it.effect("admits an Issue only when its own assignee is on the allowlist", () =>
     Effect.gen(function* () {
-      const { observation, scripted, trackerCalls } = yield* makeWorkspaceObservation();
+      const assigneesById = new Map([
+        [nextSelectedIssueId, ["someone-else"]],
+        [unassignedIssueId, []],
+      ]);
+      const { observation, scripted, assigneeReads } = yield* makeWorkspaceObservation({
+        assignees: (itemId) => Effect.succeed(assigneesById.get(itemId) ?? ["owner"]),
+      });
       const changed = yield* observation.changes.pipe(
-        Stream.take(2),
+        Stream.take(1),
         Stream.runCollect,
+        Effect.timeoutOption("1 second"),
         Effect.forkChild({ startImmediately: true }),
       );
-      yield* scripted.emit(selectedEvent);
-      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
-      yield* Fiber.join(changed);
+      const issueEvent = (id: WorkItemId, revision: string) => ({
+        ...selectedEvent,
+        key: { ...selectedEvent.key, id },
+        revision,
+      });
+      yield* scripted.emit(issueEvent(nextSelectedIssueId, "someone-else"));
+      yield* scripted.emit(issueEvent(unassignedIssueId, "unassigned"));
+      yield* scripted.emit(issueEvent(selectedIssueId, "owner"));
+      yield* TestClock.adjust("1 second");
+      const result = yield* Fiber.join(changed);
 
-      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
+      assert.deepStrictEqual(
+        Option.map(result, (admissions) => admissions.map(({ event }) => event.revision)),
+        Option.some(["owner"]),
+      );
+      assert.deepStrictEqual(yield* Ref.get(assigneeReads), [
+        nextSelectedIssueId,
+        unassignedIssueId,
+        selectedIssueId,
+      ]);
     }).pipe(Effect.scoped),
   );
 
-  it.effect("loads and reuses assignees for an item outside the tracker snapshot", () =>
+  it.effect("admits an Issue without reading assignees when the Workspace has no allowlist", () =>
     Effect.gen(function* () {
-      const { observation, scripted, trackerCalls, exactAssigneeCalls } = yield* makeWorkspaceObservation({
-        observedItems: [],
-        exactAssignees: () => Effect.succeed(["owner"]),
+      const { observation, scripted, assigneeReads } = yield* makeWorkspaceObservation({
+        workspace: ungatedWorkspace,
       });
       const changed = yield* observation.changes.pipe(
-        Stream.take(2),
+        Stream.take(1),
         Stream.runCollect,
         Effect.timeoutOption("1 second"),
         Effect.forkChild({ startImmediately: true }),
       );
       yield* scripted.emit(selectedEvent);
-      yield* scripted.emit({ ...selectedEvent, revision: "issue-2" });
       yield* TestClock.adjust("1 second");
 
       assert.isTrue(Option.isSome(yield* Fiber.join(changed)));
-      assert.strictEqual(yield* Ref.get(trackerCalls), 1);
-      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 1);
+      assert.deepStrictEqual(yield* Ref.get(assigneeReads), []);
     }).pipe(Effect.scoped),
   );
 
   it.effect("keeps observing after one assignee lookup fails", () =>
     Effect.gen(function* () {
-      const { observation, scripted, exactAssigneeCalls } = yield* makeWorkspaceObservation({
-        observedItems: [],
-        exactAssignees: (itemId) =>
+      const { observation, scripted, assigneeReads } = yield* makeWorkspaceObservation({
+        assignees: (itemId) =>
           itemId === selectedIssueId
             ? Effect.fail(
                 new IssueTrackerError({
@@ -197,7 +223,7 @@ describe("TriggerObservation", () => {
       yield* TestClock.adjust("1 second");
 
       const result = yield* Fiber.join(changed);
-      assert.strictEqual(yield* Ref.get(exactAssigneeCalls), 2);
+      assert.strictEqual((yield* Ref.get(assigneeReads)).length, 2);
       assert.isTrue(Option.isSome(result));
       assert.strictEqual(Option.getOrThrow(result)[0]?.event.key._tag, "Issue");
       assert.strictEqual(Option.getOrThrow(result)[0]?.event.revision, "issue-2");
