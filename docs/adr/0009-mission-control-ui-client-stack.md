@@ -1,3 +1,5 @@
 # Mission control UI client stack
 
+- **Amended by:** [0039](./0039-local-ui-state-is-effect-atom-state.md) — local UI state is Effect Atom state; zustand is removed.
+
 The desktop **client** is React + TanStack Router (no TanStack Start — the **daemon** is already the backend over Effect RPC). Server/read-model state uses Effect 4 **AtomRpc** (`effect/unstable/reactivity/AtomRpc`) and `@effect/atom-react`, not TanStack Query: same `RpcGroup`/Schema as contracts, and stream RPCs (`WatchEvents` / `WatchActivity`) are first-class pull atoms; we can revisit Query if AtomRpc hurts in practice. Local shell chrome (selection, rail) uses zustand. UI primitives live in `packages/ui` (shadcn + Tailwind v4 via the Vite plugin); routes and features stay in the desktop app. Triage/run text uses TanStack Markdown + TanStack Highlight (alpha). Desktop helpers: `electron-window-state` and `electron-log`. A typed main↔renderer IPC seam carries the Effect RPC / AtomRpc client (renderer never opens the Unix socket).

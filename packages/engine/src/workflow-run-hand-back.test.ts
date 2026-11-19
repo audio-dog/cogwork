@@ -1,4 +1,10 @@
-import { keyOf, WorkflowActionPlan, WorkflowActionPlanStep, WorkflowDocument } from "@cogwork/contracts";
+import {
+  keyOf,
+  LineageId,
+  WorkflowActionPlan,
+  WorkflowActionPlanStep,
+  WorkflowDocument,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
@@ -17,6 +23,7 @@ import {
   document,
   harnessName,
   notifyEntry,
+  operation,
   waitForApprovalEntry,
   workflow,
   workflowRecord,
@@ -161,6 +168,56 @@ describe("WorkflowRun", () => {
       assert.strictEqual(resumed?.session, parked.session);
       const resumedPlan = resumed === undefined ? null : yield* ledger.getRunPlan(resumed.id);
       assert.include(resumedPlan?.messages[0]?.content ?? "", "Person's note: Use the human decision");
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("resumes the hand-back's Session over a schema refusal", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram([
+        { summary: "Done", stuck: false, answers: { done: "maybe" } },
+        { summary: "Done", stuck: false, answers: { done: "yes" }, inputs: { notification: "Done" } },
+      ]);
+      const ledger = yield* RunLedger;
+      yield* runner.execute(admission);
+      const [refused] = yield* ledger.listRuns(10);
+      const parkedAttempt = decodeRun("parked-attempt");
+      const parkedSession = decodeSession("parked-session");
+      yield* ledger.insertSession({
+        kind: "owned-transcript",
+        id: parkedSession,
+        workspace: decodeWorkspace(workflow),
+        harness: harnessName,
+        createdAtMillis: 1,
+      });
+      yield* ledger.insertRun({
+        id: parkedAttempt,
+        workspace: decodeWorkspace(workflow),
+        workItem: decodeWorkItem(keyOf(admission.event.key)),
+        operation,
+        harness: harnessName,
+        branch: null,
+        session: parkedSession,
+        usage: null,
+        status: "failed",
+        startedAtMillis: 1,
+        endedAtMillis: 1,
+      });
+      yield* coordination.service.handBack(admission.event.key, { by: "Taylor", note: "Use the decision" });
+
+      yield* runner.execute({
+        ...admission,
+        lineage: { ...admission.lineage, parent: LineageId.make(parkedAttempt) },
+      });
+
+      const resumed = (yield* ledger.listRuns(10)).find(
+        ({ id }) => id !== refused?.id && id !== parkedAttempt,
+      );
+      assert.strictEqual(resumed?.session, parkedSession);
+      const resumedPlan = resumed === undefined ? null : yield* ledger.getRunPlan(resumed.id);
+      assert.strictEqual(
+        resumedPlan?.messages[0]?.content,
+        "Run Workflow Operation: Summarize\n\nPerson's note: Use the decision",
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
