@@ -15,7 +15,6 @@ export const noExportInTest = defineRule({
       ExportAllDeclaration: report,
       ExportDefaultDeclaration: report,
       ExportNamedDeclaration: report,
-      TSExportAssignment: report,
     };
   },
 });

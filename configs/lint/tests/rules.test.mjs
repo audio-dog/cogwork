@@ -289,17 +289,12 @@ const oxlintRuleCases = [
     message:
       "Rule: do not export from a test file. Why: a module that imports from a test file also loads that file and registers its tests. Fix: move the shared value to a module that is not a test file, and import it from there.",
     name: "no-export-in-test",
+    reports: 4,
   },
 ];
 
 const oxlintPluginName = oxlintPlugin.meta.name;
-const registeredOxlintRules = [
-  ...new Set(
-    [oxlintConfig, ...oxlintConfig.overrides]
-      .flatMap((source) => Object.keys(source.rules ?? {}))
-      .filter((rule) => rule.startsWith(`${oxlintPluginName}/`)),
-  ),
-];
+const registeredOxlintRules = oxlintConfig.overrides.flatMap((override) => Object.keys(override.rules));
 
 test("every Oxlint plugin rule is registered in the Oxlint config", () => {
   const defined = Object.keys(oxlintPlugin.rules).map((name) => `${oxlintPluginName}/${name}`);
@@ -337,7 +332,7 @@ for (const ruleCase of oxlintRuleCases) {
   test(`${ruleCase.name} catches its prohibited pattern`, () => {
     assert.deepEqual(
       ownDiagnostics("invalid").map((diagnostic) => diagnostic.message),
-      [ruleCase.message],
+      Array.from({ length: ruleCase.reports }, () => ruleCase.message),
       oxlintRun.output,
     );
   });

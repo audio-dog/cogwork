@@ -13,8 +13,7 @@ export const repoRoot = path.resolve(lintRoot, "../..");
 
 const resolveBin = (packageName, binName) => {
   const packagePath = require.resolve(`${packageName}/package.json`);
-  const { bin } = require(packagePath);
-  return path.resolve(path.dirname(packagePath), typeof bin === "string" ? bin : bin[binName]);
+  return path.resolve(path.dirname(packagePath), require(packagePath).bin[binName]);
 };
 
 export const lintWithRule = (rulePath, fixturePath) => {
@@ -57,12 +56,14 @@ export const lintWithOxlint = (config, fixturePaths) => {
       [resolveBin("oxlint", "oxlint"), "-A", "all", "-f", "json", "-c", configPath, ...fixturePaths],
       { cwd: lintRoot, encoding: "utf8" },
     );
+    const output = `${result.stdout}${result.stderr}`;
+    if (!result.stdout.startsWith("{")) throw new Error(`oxlint did not report JSON:\n${output}`);
     const diagnostics = JSON.parse(result.stdout).diagnostics;
 
     return {
       diagnosticsFor: (fixturePath) =>
         diagnostics.filter((diagnostic) => path.resolve(lintRoot, diagnostic.filename) === fixturePath),
-      output: `${result.stdout}${result.stderr}`,
+      output,
     };
   } finally {
     rmSync(tempDirectory, { force: true, recursive: true });
