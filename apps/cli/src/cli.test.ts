@@ -10,7 +10,8 @@ import { RpcClientError } from "effect/rpc/RpcClientError";
 import { SocketCloseError } from "effect/socket/Socket";
 import { TestConsole } from "effect/testing";
 import { cli } from "./cli";
-import { operationSettingError, reportDaemonTransportError } from "./commands";
+import { reportDaemonTransportError } from "./commands";
+import { operationSettingError } from "./operation-settings-commands";
 
 layer(
   Layer.mergeAll(

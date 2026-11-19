@@ -18,7 +18,8 @@ const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workspace = {
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId("example"),
+    id: workspaceId("example"),
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "linear" },
   }),
@@ -122,7 +123,7 @@ describe("RunControl", () => {
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
       const replacementWorkspace = {
-        config: { ...workspace.config, name: workspaceId("replacement") },
+        config: { ...workspace.config, id: workspaceId("replacement") },
       } satisfies WorkspaceIssueTrackerBinding;
       const firstStarted = yield* Deferred.make<void>();
       const finishFirstTeardown = yield* Deferred.make<void>();

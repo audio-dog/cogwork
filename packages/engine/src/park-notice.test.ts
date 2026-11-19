@@ -16,7 +16,7 @@ import { TestClock } from "effect/testing";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import { IssueTracker, makeEmpty } from "./issue-tracker";
 import { withParkNotices } from "./park-notice";
-import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { temporaryControlStoreLayer } from "./testing/temporary-control-store";
 
 interface PostedComment {
@@ -41,7 +41,8 @@ const registry = Layer.succeed(
         source: "test",
         contributions: [],
         config: Schema.decodeSync(WorkspaceConfig)({
-          name: workspace,
+          id: workspace,
+          displayName: "Test workspace",
           checkoutPath: "/cogwork",
           issueTracker: { type: "github" },
         }),
@@ -60,9 +61,7 @@ const tracker = (write: Effect.Effect<void>) =>
       return {
         ...empty,
         commentIssue: (binding, item, body) =>
-          Deferred.succeed(posted, { workspace: binding.config.name, item, body }).pipe(
-            Effect.andThen(write),
-          ),
+          Deferred.succeed(posted, { workspace: binding.config.id, item, body }).pipe(Effect.andThen(write)),
       };
     }),
   ).pipe(Layer.provideMerge(Layer.effect(TrackerWrite, Deferred.make<PostedComment>())));

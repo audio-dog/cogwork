@@ -1,5 +1,12 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
+import {
+  CredentialStore,
+  ExternalHarnessRuntime,
+  ExternalHarnessSandbox,
+  ExternalHarnessWorkspace,
+  Harness,
+  HarnessBridge,
+} from "@cogwork/engine";
 import {
   type ClaudeCodeModel,
   type ClaudeCodeTextAdapter,
@@ -12,7 +19,7 @@ import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { ClaudeNativeSelectionResult, claudeNativeSelection } from "./model";
+import { ClaudeNativeSelectionResult, claudeModelLevels, claudeNativeSelection } from "./model";
 import { claudeModelCatalog } from "./models.generated";
 
 export interface ClaudeCodeRunnerOptions {
@@ -115,7 +122,7 @@ const commandTimeoutError = (subject: string) =>
 
 const withProbeSandbox = <Value, Requirements>(
   use: (sandbox: SandboxHandle) => Effect.Effect<Value, Harness.HarnessError, Requirements>,
-) => ExternalHarnessRuntime.withLocalProcessSandbox(".", inheritedEnvironment, commandCauseError, use);
+) => ExternalHarnessSandbox.withLocalProcessSandbox(".", inheritedEnvironment, commandCauseError, use);
 
 const claudeCommand = Effect.fn("ClaudeCode.command")(
   (sandbox: SandboxHandle, executable: string, argument: string) =>
@@ -299,7 +306,7 @@ const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
 };
 
 const mcpServerEntry = (server: Harness.ResolvedMcpSkill) => {
-  const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
+  const environmentName = ExternalHarnessWorkspace.mcpBearerEnvironmentName(server.name);
   return [
     server.name,
     {
@@ -417,6 +424,8 @@ const descriptor = (
     catalog: managedCatalogOptions,
     readiness: () => claudeReadiness(executable, options.authentication.mode),
     sharedGit: "required",
+    declaredMembers: ["Subagents"],
+    modelLevels: claudeModelLevels,
     inheritedEnvironment,
     makeAdapter: ({ model, request }) =>
       claudeCodeText(model, adapterConfig(executable, request, nativeSelection(request).effort)),

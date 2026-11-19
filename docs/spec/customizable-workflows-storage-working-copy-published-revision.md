@@ -1,0 +1,11 @@
+### 3. Storage, working copy, published revision
+
+- **One Control store row per Workflow:** the engine-minted id, the owning Principal, the working copy and its revision (+1 per applied edit batch), the published copy and its revision (null before the first publish), and on/off. Both document columns are strongly typed JSON with a validity check, decoded on every read and encoded on every write through the contracts Schema, so the daemon, the RPC, and the app all use one type. A row that does not decode makes that Workflow unreadable — reported, nothing runs from it — and the others go on. (#784 items 14, 16)
+- **No revision history.** Each Run records the published revision it ran. (#784 item 17)
+- **One shared working copy, changed by edits.** Nobody keeps a private copy. Every writer sends edits that name their target by stable id; the daemon applies them one batch at a time, in arrival order, to the current working copy, then publishes the new record to every client. A whole document enters only through `create`. The editor stops keeping its own draft and becomes a live view. (#783 items 2–3)
+- **The agent saves without limit and reacts to the person's edits.** Each agent turn starts with the current working copy and the edits made since its last turn; the engine supplies them. (#783 items 4–5)
+- **Publish names the revision the person sees** and refuses if an edit arrived first. On/off is a separate act keyed by Workflow id, stored by the daemon, not in the document. (#783 items 6–7)
+- **Switch-off and delete decline; they never unwind.** Runs in flight finish, the next admission declines, items wait in view, coordination records stay. Occurrences while off are skipped and never replayed. (#784 item 20; [Grill: Trigger observation](https://github.com/taylorfsteele/cogwork/issues/787))
+- **Each admission reads the current published revision.** A hand-off to an Operation the current revision lacks parks the item with `missing-operation`. (#784 item 19)
+- **Sharing stays out of scope, but gets no harder:** export is get-the-published-copy; import is `create`; machine-bound references (Workspace ids, Connection identities, Harness) stay in named fields so a later import can ask the person to bind them again. (#784 item 18)
+

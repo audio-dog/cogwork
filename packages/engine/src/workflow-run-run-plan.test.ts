@@ -14,7 +14,7 @@ import * as Stream from "effect/Stream";
 import { externalHarnessDeclaration } from "./external-harness-runtime";
 import type { HarnessRunner } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { emptyService as emptySourceControl } from "./source-control";
@@ -234,6 +234,14 @@ describe("WorkflowRun", () => {
           reason: "selected harness does not project Tools",
         },
       );
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Subagents") },
+        {
+          member: "Subagents",
+          disposition: "not-projected",
+          reason: "selected harness does not project Subagents",
+        },
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -268,7 +276,8 @@ describe("WorkflowRun", () => {
         },
       ],
       config: yield* Schema.decodeEffect(WorkspaceConfig)({
-        name: "repo",
+        id: "repo",
+        displayName: "repo",
         checkoutPath: "/repo",
         issueTracker: { type: "github" },
       }),
