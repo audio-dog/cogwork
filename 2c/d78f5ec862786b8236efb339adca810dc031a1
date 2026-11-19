@@ -1,0 +1,21 @@
+packages/engine/src/run-plan-resolution.test.ts
+  s_e4cfb012e06511::t_de513da21bb24d 279-283
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_e4cfb012e06511::t_e1b91be1fa3f1a 236-243
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2cd78f5ec862786b8236efb339adca810dc031a1",
+  "prompts": {},
+  "sessions": {
+    "s_e4cfb012e06511": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "852875b8-1870-4b17-bcd3-51dc8d61105c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
