@@ -16,9 +16,9 @@ import { githubSourceControlActionEntries } from "./github/provider";
 import { type IssueTrackerService, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import type { RegisteredWorkspace } from "./projector";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import type { WorkflowsService } from "./workflow";
 import { cogworkWorkflowCatalogContribution } from "./workflow-catalog";
 import {
@@ -110,7 +110,8 @@ describe("WorkflowRun", () => {
       repository: "owner/repo",
       contributions: [],
       config: Schema.decodeSync(WorkspaceConfig)({
-        name: "github",
+        id: "github",
+        displayName: "github",
         checkoutPath: "/repos/github",
         issueTracker: { type: "github" },
       }),
@@ -133,7 +134,7 @@ describe("WorkflowRun", () => {
           harnesses: [],
         },
         machine: {
-          workspaces: [{ id: workspace.config.name, binds: ["github"] }],
+          workspaces: [{ id: workspace.config.id, binds: ["github"] }],
           connections: [],
           harnesses: [{ name: harnessName, available: true }],
           defaultHarness: harnessName,
@@ -151,7 +152,7 @@ describe("WorkflowRun", () => {
           cause: triggerId === "needs-info-comment" ? { _tag: "Person" } : { _tag: "Unknown" },
           atMillis: 1_000,
           entry: selected.entry,
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           parameters: selected.parameters,
         },
         subscription: {
@@ -161,7 +162,7 @@ describe("WorkflowRun", () => {
           entry: selected.entry,
           parameters: selected.parameters,
           filters: [],
-          workspaces: [workspace.config.name],
+          workspaces: [workspace.config.id],
           catchUp: { since: 0 },
         },
         lineage: {
@@ -197,7 +198,7 @@ describe("WorkflowRun", () => {
       const issue = (id: string) =>
         ({
           _tag: "Issue",
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           id: decodeWorkItem(id),
         }) satisfies WorkItemRef;
       const needsInfoProgram = yield* runCodingAdmission(admissionFor("needs-triage", issue("#800")), {
@@ -221,7 +222,7 @@ describe("WorkflowRun", () => {
       yield* runCodingAdmission(
         admissionFor("checks-failed", {
           _tag: "PullRequest",
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           number: 803,
         }),
         {

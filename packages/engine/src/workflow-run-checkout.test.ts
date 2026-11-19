@@ -7,9 +7,9 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import { Git, GitError, type GitOperationInProgress, type GitOperationRecord, type GitService } from "./git";
 import { HarnessError } from "./harness";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { admission } from "./workflow-run-admissions-fixtures";
 import { document, reviewWorkspace, workflowServiceWith } from "./workflow-run-documents-fixtures";
 import { type HarnessBehavior, requirements, resultEvent, testProgram } from "./workflow-run-fixtures";
@@ -18,7 +18,7 @@ import { WorktreeFs, type WorktreeFsService } from "./worktree-fs";
 
 const checkoutAdmission: TriggerAdmission = {
   ...admission,
-  event: { ...admission.event, workspace: reviewWorkspace.config.name },
+  event: { ...admission.event, workspace: reviewWorkspace.config.id },
 };
 
 const checkoutDocument = WorkflowDocument.make({

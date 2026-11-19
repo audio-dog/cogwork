@@ -23,7 +23,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { AssembledContext } from "./context-assembler";
 import type { GitOperationInProgress } from "./git";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { type EngineToolName, itemWorkspaceOf } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
 
@@ -111,7 +111,10 @@ const projection = [
   "Provenance",
 ].map((member) => ({ member, disposition: "projected" as const }));
 
-const memberDisposition = (projectedMembers: ReadonlyArray<RunPlanMember>, member: "Tools" | "Skills") =>
+const memberDisposition = (
+  projectedMembers: ReadonlyArray<RunPlanMember>,
+  member: "Tools" | "Skills" | "Subagents",
+) =>
   projectedMembers.includes(member)
     ? { member, disposition: "projected" as const }
     : {
@@ -247,6 +250,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
         ...projection,
         memberDisposition(harness.projectedMembers, "Tools"),
         memberDisposition(harness.projectedMembers, "Skills"),
+        memberDisposition(harness.projectedMembers, "Subagents"),
       ],
       observation,
     },

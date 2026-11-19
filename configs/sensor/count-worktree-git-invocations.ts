@@ -83,7 +83,8 @@ const makeFixture = Effect.fn("GitInvocationMeasurement.makeFixture")(function* 
   yield* executeGit(checkout, ["push", "--quiet", "--set-upstream", "origin", "main"]);
 
   const config = yield* Schema.decodeEffect(WorkspaceConfig)({
-    name: "git-invocation-measurement",
+    id: "git-invocation-measurement",
+    displayName: "git-invocation-measurement",
     checkoutPath: checkout,
     issueTracker: { type: "github" },
     worktrees: {

@@ -7,10 +7,10 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { HarnessError } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
 import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import type { WorkflowsService } from "./workflow";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { admission } from "./workflow-run-admissions-fixtures";
@@ -59,7 +59,8 @@ describe("WorkflowRun", () => {
       repository: "owner/repo",
       contributions: [],
       config: Schema.decodeSync(WorkspaceConfig)({
-        name: "github",
+        id: "github",
+        displayName: "github",
         checkoutPath: "/repos/github",
         issueTracker: { type: "github" },
       }),
@@ -72,19 +73,19 @@ describe("WorkflowRun", () => {
       ...admission,
       event: {
         ...admission.event,
-        key: { _tag: "Issue", workspace: workspace.config.name, id: issue },
+        key: { _tag: "Issue", workspace: workspace.config.id, id: issue },
         entry: issueEntry,
-        workspace: workspace.config.name,
+        workspace: workspace.config.id,
       },
       subscription: {
         ...admission.subscription,
         entry: issueEntry,
-        workspaces: [workspace.config.name],
+        workspaces: [workspace.config.id],
       },
     } satisfies TriggerAdmission;
     const pullRequestDocument = Schema.decodeSync(WorkflowDocument)({
       ...document,
-      workspaces: { _tag: "Listed", workspaces: [workspace.config.name] },
+      workspaces: { _tag: "Listed", workspaces: [workspace.config.id] },
       triggers: [{ ...document.triggers[0], entry: issueEntry, parameters: [] }],
       operations: [
         {
@@ -165,7 +166,7 @@ describe("WorkflowRun", () => {
         machine: {
           workspaces: [
             {
-              id: workspace.config.name,
+              id: workspace.config.id,
               binds: ["github"],
             },
           ],

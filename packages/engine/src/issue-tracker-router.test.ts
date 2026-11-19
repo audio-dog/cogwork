@@ -12,14 +12,19 @@ import type { RegisteredWorkspace } from "./projector";
 const id = Schema.decodeSync(WorkItemId);
 
 const workspaceOf = (
-  name: string,
+  workspaceId: string,
   issueTracker: (typeof WorkspaceConfig.Encoded)["issueTracker"],
   repository?: string,
 ): RegisteredWorkspace => ({
-  source: `${name}.workspace.ts`,
+  source: `${workspaceId}.workspace.ts`,
   contributions: [],
   ...(repository ? { repository } : {}),
-  config: Schema.decodeSync(WorkspaceConfig)({ name, checkoutPath: `/repos/${name}`, issueTracker }),
+  config: Schema.decodeSync(WorkspaceConfig)({
+    id: workspaceId,
+    displayName: workspaceId,
+    checkoutPath: `/repos/${workspaceId}`,
+    issueTracker,
+  }),
 });
 
 const githubWorkspace = workspaceOf("gh", { type: "github", priority: { field: 42 } }, "acme/example");

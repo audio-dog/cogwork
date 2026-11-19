@@ -174,7 +174,8 @@ export const reviewWorkspace: RegisteredWorkspace = {
   repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "repo",
+    id: "repo",
+    displayName: "repo",
     checkoutPath: "/repo",
     issueTracker: { type: "github" },
   }),
@@ -218,7 +219,7 @@ export const reviewOutput = {
   summary: "Review ready",
   stuck: false,
   answers: { done: "yes" },
-  workspace: reviewWorkspace.config.name,
+  workspace: reviewWorkspace.config.id,
   inputs: {
     pull_request: "#826",
     review_body: "Looks good.",

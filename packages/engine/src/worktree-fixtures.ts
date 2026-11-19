@@ -28,7 +28,8 @@ export const workspaceWith = (worktrees?: Worktree.WorktreeSettings) => ({
   source: "test.workspace.ts",
   contributions: [],
   config: decodeConfig({
-    name: "demo",
+    id: "demo",
+    displayName: "demo",
     checkoutPath: "/repo",
     issueTracker: { type: "github" },
     worktrees,
