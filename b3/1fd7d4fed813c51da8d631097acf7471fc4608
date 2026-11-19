@@ -1,0 +1,21 @@
+docs/adr/0009-mission-control-ui-client-stack.md
+  s_287408123df056::t_8d7f28c563632a 3-4
+docs/adr/0039-local-ui-state-is-effect-atom-state.md
+  s_287408123df056::t_1e96126bf0ed7b 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b31fd7d4fed813c51da8d631097acf7471fc4608",
+  "prompts": {},
+  "sessions": {
+    "s_287408123df056": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0f62d829-6f7b-4736-af38-77319dfa7e2a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
