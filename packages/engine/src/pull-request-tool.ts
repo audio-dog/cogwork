@@ -22,7 +22,7 @@ export const makePullRequestTool = (
     Effect.void,
 ) => {
   const read = Effect.fn("PullRequestTool.read")(function* (input: typeof PullRequestToolInput.Type) {
-    const workspace = workspaces.find(({ config }) => config.name === input.workspace);
+    const workspace = workspaces.find(({ config }) => config.id === input.workspace);
     if (!workspace) return yield* unavailable(`Workspace ${input.workspace} is not selected`);
     const pullRequest = yield* sourceControl.readPullRequest(workspace, input.pull_request);
     if (pullRequest === null) return yield* unavailable(`Pull request ${input.pull_request} was not found`);

@@ -1,4 +1,11 @@
-import { type Git, Registry, Worktree } from "@cogwork/engine";
+import {
+  type Git,
+  type Projector,
+  Registry,
+  RegistryLookup,
+  RegistryService,
+  Worktree,
+} from "@cogwork/engine";
 import * as Console from "effect/Console";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
@@ -29,11 +36,11 @@ const itemFlag = Flag.String("item").pipe(Flag.withDescription("Work item id, e.
 const titleFlag = Flag.String("title").pipe(Flag.withDescription("Work item title"));
 const branchFlag = Flag.String("branch").pipe(Flag.withDescription("Worktree branch name"));
 
-const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (name: string) {
-  const registry = yield* (yield* Registry.WorkspaceRegistry).state;
-  const workspace = Registry.findWorkspace(registry, name);
+const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (id: string) {
+  const registry = yield* (yield* RegistryService.WorkspaceRegistry).state;
+  const workspace = RegistryLookup.findWorkspace(registry, id);
   if (!workspace) {
-    return yield* new WorktreeWorkspaceNotFound({ detail: `workspace "${name}" not found` });
+    return yield* new WorktreeWorkspaceNotFound({ detail: `workspace "${id}" not found` });
   }
   return workspace;
 });
@@ -41,7 +48,7 @@ const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (name: strin
 const runWorktree = <E>(
   options: { readonly controlStore: string; readonly workspace: string },
   use: (
-    workspace: Registry.RegisteredWorkspace,
+    workspace: Projector.RegisteredWorkspace,
     manager: Worktree.WorktreeManagerService,
   ) => Effect.Effect<unknown, E>,
 ) =>

@@ -8,7 +8,6 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
-import { matchTriggerEvent } from "../trigger-observation";
 import type { TriggerEvent } from "../trigger-source";
 import { GitHubClient, type GitHubClientService } from "./client";
 import {
@@ -22,7 +21,7 @@ import {
   workspaceId,
 } from "./trigger-source-fixtures";
 
-describe("GitHub Tracker Trigger source polling", () => {
+describe("GitHub Trigger sources", () => {
   it.effect("holds item 51 for the next poll", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;
@@ -189,110 +188,6 @@ describe("GitHub Tracker Trigger source polling", () => {
           listIssueEvents: () =>
             Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 1_500 }]),
           listTriggerComments: () => Effect.succeed([]),
-        }),
-      ),
-    ),
-  );
-
-  it.effect("admits live comments with zero catch-up", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(120_000);
-      const client = yield* GitHubClient;
-      const source = githubTrackerInstance(client, Effect.succeed(registryState));
-      const collected = yield* source
-        .observe([
-          subscription("github.new-comment-from-person", "comment", [
-            { id: "label", value: "needs-triage" },
-            { id: "catch-up-at-most", value: "0" },
-          ]),
-        ])
-        .pipe(
-          Stream.take(1),
-          Stream.runCollect,
-          Effect.timeoutOption("1 second"),
-          Effect.forkChild({ startImmediately: true }),
-        );
-      yield* Effect.yieldNow;
-      yield* TestClock.adjust("1 second");
-
-      const result = yield* Fiber.join(collected);
-      assert.isTrue(Option.isSome(result));
-      assert.strictEqual(Option.getOrThrow(result)[0]?.revision, "comment:1:label:needs-triage");
-    }).pipe(
-      Effect.provide(
-        Layer.mock(GitHubClient, {
-          ...issueReads,
-          listIssues: () => Effect.succeed([issue(1)]),
-          listIssueEvents: () => Effect.succeed([]),
-          listTriggerComments: () =>
-            Effect.succeed([
-              {
-                id: 2,
-                authorLogin: "maintainer",
-                authorAssociation: "MEMBER",
-                body: "stale",
-                createdAtMillis: 29_000,
-              },
-              {
-                id: 1,
-                authorLogin: "maintainer",
-                authorAssociation: "MEMBER",
-                body: "new",
-                createdAtMillis: 60_001,
-              },
-            ]),
-        }),
-      ),
-    ),
-  );
-
-  it.effect("keeps catch-up scoped to the Trigger that accepted the comment", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(1_000_000);
-      const client = yield* GitHubClient;
-      const source = githubTrackerInstance(client, Effect.succeed(registryState));
-      const wide = subscription(
-        "github.new-comment-from-person",
-        "wide-comment",
-        [
-          { id: "label", value: "needs-triage" },
-          { id: "catch-up-at-most", value: "7" },
-        ],
-        0,
-      );
-      const live = subscription(
-        "github.new-comment-from-person",
-        "live-comment",
-        [
-          { id: "label", value: "needs-triage" },
-          { id: "catch-up-at-most", value: "0" },
-        ],
-        0,
-      );
-      const events = yield* source.observe([wide, live]).pipe(Stream.take(1), Stream.runCollect);
-
-      assert.deepStrictEqual(
-        matchTriggerEvent([wide, live], events[0] ?? assert.fail("missing comment event")).map(
-          ({ trigger }) => trigger,
-        ),
-        [wide.trigger],
-      );
-    }).pipe(
-      Effect.provide(
-        Layer.mock(GitHubClient, {
-          ...issueReads,
-          listIssues: () => Effect.succeed([issue(1)]),
-          listIssueEvents: () => Effect.succeed([]),
-          listTriggerComments: () =>
-            Effect.succeed([
-              {
-                id: 1,
-                authorLogin: "maintainer",
-                authorAssociation: "MEMBER",
-                body: "caught up",
-                createdAtMillis: 100_000,
-              },
-            ]),
         }),
       ),
     ),

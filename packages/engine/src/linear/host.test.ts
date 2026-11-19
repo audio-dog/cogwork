@@ -10,7 +10,8 @@ import { wireCodec } from "./markers";
 
 const workspace: WorkspaceIssueTrackerBinding = {
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "linear-workspace",
+    id: "linear-workspace",
+    displayName: "linear-workspace",
     checkoutPath: "/repos/linear",
     issueTracker: { type: "linear", teams: ["AUD"] },
   }),

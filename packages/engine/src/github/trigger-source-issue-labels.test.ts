@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import { vi } from "vitest";
-import { matchTriggerEvent } from "../trigger-observation";
+import { matchTriggerEvent } from "../trigger-observation-subscriptions";
 import { Recheck, type TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";
 import { makeWorkflowOptions } from "../workflow-options";
@@ -27,7 +27,7 @@ import {
   workspaceId,
 } from "./trigger-source-fixtures";
 
-describe("GitHub Tracker Trigger source", () => {
+describe("GitHub Trigger sources", () => {
   it.effect("lists the repository's labels without reading its issues", () => {
     const listLabels = vi.fn<GitHubClientService["listLabels"]>(() =>
       Effect.succeed(["needs-triage", "unused-yet"]),

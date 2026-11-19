@@ -15,7 +15,7 @@ import {
   type IssueTrackerService,
   makeEmpty as makeEmptyIssueTracker,
 } from "./issue-tracker";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger, type RunLedgerService } from "./run-ledger";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { admission } from "./workflow-run-admissions-fixtures";
@@ -117,7 +117,7 @@ describe("WorkflowRun", () => {
       inputs: { issue: "#12", comment: `Step ${position}` },
       target: {
         _tag: "ExistingIssue",
-        workspace: reviewWorkspace.config.name,
+        workspace: reviewWorkspace.config.id,
         app: IssueTrackerType.make("github"),
         issueTracker: reviewWorkspace.config.issueTracker,
         repository: null,
@@ -237,7 +237,7 @@ describe("WorkflowRun", () => {
             summary: "Comment ready",
             stuck: false,
             answers: { done: "yes" },
-            workspace: reviewWorkspace.config.name,
+            workspace: reviewWorkspace.config.id,
             inputs: { issue: "#12", comment: "Captured" },
           },
         ],
