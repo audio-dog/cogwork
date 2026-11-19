@@ -103,6 +103,34 @@ layer(NodeServices.layer)((it) => {
     }),
   );
 
+  it.effect("decodes a stored WorktreeBlocked park after a Control store restart", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-coordination-" });
+      const storePath = path.join(directory, "control.db");
+      const reason = {
+        _tag: "WorktreeBlocked",
+        reason: "operation-in-progress",
+        branch: "947",
+        path: "/worktrees/947",
+        operation: "merge",
+        unmergedPaths: ["src/a.ts", "src/b.ts"],
+      } as const;
+
+      yield* withCoordination(storePath, (coordination) =>
+        coordination
+          .observe(item, "message:1", { _tag: "Unknown" })
+          .pipe(Effect.andThen(coordination.park(item, reason, operation))),
+      );
+
+      const gate = yield* withCoordination(storePath, (coordination) =>
+        coordination.read(item).pipe(Effect.map((view) => view.gate(operation))),
+      );
+      assert.deepStrictEqual(gate, { _tag: "Parked", reason });
+    }),
+  );
+
   it.effect("rejects duplicate claims and stale releases", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

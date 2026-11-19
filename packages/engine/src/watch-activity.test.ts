@@ -6,9 +6,9 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as Daemon from "./daemon";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { activityOf } from "./daemon-event-bus";
+import { watchActivity } from "./daemon-watch";
 import * as RunLedger from "./run-ledger";
 import { RunRecorder, type RunRecorderService } from "./run-recorder";
 import { engineTestLayer } from "./testing/engine-test-layer";
@@ -69,7 +69,7 @@ const seed = (rec: RunRecord, events: ReadonlyArray<AgUiEvent>) =>
   Effect.flatMap(RunRecorder, (recorder) => Effect.forEach(events, (item) => recorder.record(rec, item)));
 
 const watchActivities = (id: RunId | undefined) =>
-  Stream.unwrap(Daemon.watchActivity(id)).pipe(
+  Stream.unwrap(watchActivity(id)).pipe(
     Stream.filter(RunWatchItem.guards.RunActivity),
     Stream.map((item) => item.activity),
   );
@@ -96,7 +96,7 @@ describe("watchActivity", () => {
       ]);
 
       const historyEnded = yield* Deferred.make<void>();
-      const fiber = yield* Stream.unwrap(Daemon.watchActivity(id)).pipe(
+      const fiber = yield* Stream.unwrap(watchActivity(id)).pipe(
         Stream.tap((item) =>
           RunWatchItem.guards.HistoryEnd(item) ? Deferred.succeed(historyEnded, undefined) : Effect.void,
         ),
@@ -279,7 +279,7 @@ describe("watchActivity", () => {
 
   it.effect("completes immediately for an unknown run id", () =>
     Effect.gen(function* () {
-      const seen = yield* Stream.unwrap(Daemon.watchActivity(runId("missing"))).pipe(Stream.runCollect);
+      const seen = yield* Stream.unwrap(watchActivity(runId("missing"))).pipe(Stream.runCollect);
       assert.deepStrictEqual([...seen], []);
     }).pipe(Effect.provide(layer), Effect.scoped),
   );

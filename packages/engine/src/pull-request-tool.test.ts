@@ -12,7 +12,8 @@ const workspace: RegisteredWorkspace = {
   repository: "owner/repo",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "cogwork",
+    id: "cogwork",
+    displayName: "cogwork",
     checkoutPath: "/cogwork",
     issueTracker: { type: "github" },
   }),

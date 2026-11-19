@@ -9,14 +9,15 @@ import { getIssueTrackerPeople } from "./commands";
 import { GitHubClient } from "./github/client";
 import { LinearClient } from "./linear/client";
 import type { RegisteredWorkspace } from "./projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 
 const workspaceOf = (name: string, issueTracker: typeof IssueTrackerConfig.Encoded): RegisteredWorkspace => ({
   source: "test",
   contributions: [],
   repository: "acme/web",
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: Schema.decodeSync(WorkspaceId)(name),
+    id: Schema.decodeSync(WorkspaceId)(name),
+    displayName: name,
     checkoutPath: `/repos/${name}`,
     issueTracker,
   }),
@@ -53,7 +54,7 @@ describe("getIssueTrackerPeople", () => {
   it.effect("offers a GitHub workspace's assignable logins through the chosen Connection", () =>
     Effect.gen(function* () {
       const people = yield* getIssueTrackerPeople({
-        workspace: github.config.name,
+        workspace: github.config.id,
         connection: connectionIdOf("github", "acme"),
       });
 
@@ -64,7 +65,7 @@ describe("getIssueTrackerPeople", () => {
   it.effect("offers a Linear workspace's active users by name and stores their user id", () =>
     Effect.gen(function* () {
       const people = yield* getIssueTrackerPeople({
-        workspace: linear.config.name,
+        workspace: linear.config.id,
         connection: connectionIdOf("linear", "acme"),
       });
 
@@ -79,7 +80,7 @@ describe("getIssueTrackerPeople", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
         getIssueTrackerPeople({
-          workspace: linear.config.name,
+          workspace: linear.config.id,
           connection: connectionIdOf("github", "acme"),
         }),
       );

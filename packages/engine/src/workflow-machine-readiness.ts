@@ -27,7 +27,7 @@ import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import { HarnessReadinessCache } from "./harness-readiness";
 import { PluginManager } from "./plugin";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 
 export interface MachineReadinessSourceService {
   readonly current: Effect.Effect<MachineReadiness>;
@@ -133,9 +133,9 @@ export const make = Effect.gen(function* () {
     const settings = picture?.contributionSettings ?? [];
     const key = pluginReadKey(picture?.pluginInstalls ?? [], connectionOverview);
     const satisfyingIds = yield* Effect.forEach(registryState.workspaces, ({ config, contributions }) =>
-      Effect.map(pluginContributions(config.name, key), (fromPlugins) =>
+      Effect.map(pluginContributions(config.id, key), (fromPlugins) =>
         [...contributions, ...fromPlugins]
-          .filter((contribution) => satisfiesNeed({ contribution, settings, workspace: config.name }))
+          .filter((contribution) => satisfiesNeed({ contribution, settings, workspace: config.id }))
           .map(({ id }) => id),
       ),
     );
@@ -145,7 +145,7 @@ export const make = Effect.gen(function* () {
     const readyNeedIds = new Set([...readyConnections, ...satisfyingIds.flat()]);
     return {
       workspaces: registryState.workspaces.map(({ config }) => ({
-        id: config.name,
+        id: config.id,
         binds: [config.issueTracker.type, ...(config.sourceControl ? [config.sourceControl.type] : [])],
       })),
       connections: connectionOverview.connections.flatMap(({ system, connection, readiness }) =>

@@ -270,6 +270,7 @@ export const make = Effect.gen(function* () {
             reason: "diverged",
             remote,
             branch,
+            path: worktreePath,
             message: unresolvableMessage(remote, branch, divergence, error.message),
             retryable: false,
           }),
@@ -298,6 +299,7 @@ export const make = Effect.gen(function* () {
     return yield* new WorktreeError({
       reason: "operation-in-progress",
       branch,
+      path: worktreePath,
       ...operation,
       message: operationMessage(branch, operation),
       retryable: false,

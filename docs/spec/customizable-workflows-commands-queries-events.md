@@ -1,0 +1,9 @@
+### 4. Commands, queries, events
+
+- **Commands:** `create(document)` → id, revision, diagnostics · `edit(id, edits)` → new revision and diagnostics, or a refusal carrying them · `publish(id, revision)` · `switch(id, on | off)` · `delete(id)`. Each edit is a tagged struct naming its target by id; a function cannot cross the RPC. (#784 items 26–27)
+- **Human-touchpoint commands:** `Approve`, `Reject`, `HandBack` (gains Workflow-item addressing, loses `role`, takes an optional note), `ChooseAnswer` (new). Each names what it acts on — a plan digest, a parked attempt — and refuses when that is no longer current. Any client may send them as the Principal. A Workflow Run never gets them as Tools. `Reclassify` and its CLI command are deleted at cut-over. ([Grill: output actions and human touchpoints](https://github.com/taylorfsteele/cogwork/issues/788), item 11; #789 items 14–16)
+- **Queries:** `list` · `get(id)` (working copy, published copy, both revisions, on/off, diagnostics) · `catalog` · `validate(document)` · `templates` · `listOptions({ entry, parameter, workspaces })` → `{ value, name, listedIn: WorkspaceId[] }[]` with source failures as data. (#784 item 26; #788 item 3; #790 item 4)
+- **Events:** `WorkflowChanged` carries one Workflow's whole new record; `WorkflowDeleted { id }` beside it; `list` seeds a new client. Not `ControlStoreChanged`: an agent edits at typing speed. (#784 item 28)
+- **Responsiveness.** An edit is a local socket call, one SQLite write, and the pure validator. A click waits for the daemon's answer. A focused text field keeps its own text while the person types and sends one edit on pause or blur, then takes the daemon's value — field text, not a Workflow draft. The build sets a latency budget for the edit round trip (ADR 0023). (#784 item 29)
+- **Acceptance test for the seam:** a client that has only the RPC can author every Workflow the editor can. (#783 item 10)
+

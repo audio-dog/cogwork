@@ -29,7 +29,7 @@ The saved option selections (`id` → value pairs) of one Operation, stored and 
 _Avoid_: Effort setting (retired), model suffix, traits (the desktop menu, not the data)
 
 **Model level**:
-The named capability a role or operation asks of its model — `light`, `standard`, or `deep` — instead of a vendor model name. `light` is the cheapest capable model on whatever Harness runs it; `standard` is the Run's own model or the tool's default, rendered as omission where the tool inherits by omitting; `deep` is the reasoning escalation, named and unused. The level is the only model vocabulary a role definition or instruction may use; the mapping to a Harness-native value lives with whoever projects the role (the sync toolkit today, whose tier of the same three words this names, the Harness adapter once Subagents project). See ADR 0028.
+The named capability a role or operation asks of its model — `light`, `standard`, or `deep` — instead of a vendor model name. `light` is the cheapest capable model on whatever Harness runs it; `standard` is the Run's own model or the tool's default, rendered as omission where the tool inherits by omitting; `deep` is the reasoning escalation, named and unused. The level is the only model vocabulary a role definition or instruction may use; the mapping to a Harness-native value lives with whoever projects the role: the sync toolkit, whose tier of the same three words this names, and the Harness adapter for a projected Subagent (Claude Code, Codex, and the provider runner each keep a `light` and `deep` table; `standard` runs on the parent Run's model). See ADR 0028.
 _Avoid_: Tier (sync's word for its rendering mechanism), pinned model, vendor alias (`sonnet`, `haiku` — those are one Harness's native values), `fast` / `default` / `powerful` (sync's retired tier names), level (bare — that word belongs to where an Operation setting is written)
 
 **Harness readiness**:
@@ -45,32 +45,12 @@ _Avoid_: Status, health, readiness (that is the observation this folds)
 The one command that establishes a Harness's own login — `codex login`, `claude auth login` — declared by the adapter that owns that Harness. Cogwork never runs it and never stores what it produces: the credential is **harness-owned**, so this is something a person is shown, not something the product does. Absent for a Harness that verifies its login during the native launch instead.
 _Avoid_: Login flow, credential prompt, authenticate action
 
-**Harness preflight**:
-The authoritative per-Run check that one registered Harness can execute the accepted Run Plan with its selected catalog values, authentication binding, policy, Workspace projection, required MCP servers, and Sandbox provider. It validates the Plan as frozen and never re-resolves settings.
-_Avoid_: Readiness, Run Plan resolution, fallback
-
-**Harness capability profile**:
-The runner-declared facts that let clients and preflight describe intentional native inequalities without guessing from a Harness name. They cover authentication bindings, Session affinity, option and structured-output support, policy fidelity, usage quality, readiness diagnostics, journal and takeover support, and file-event fidelity. File events are `terminal-only`, `best-effort`, or `absent`; the label reports delivery quality, not whether a Run changed files.
-_Avoid_: Feature flag, fallback policy, durability activation
-
-**Harness execution boundary**:
-The sandbox, approval mode, and native tools an external CLI harness enforces inside its agent loop. Cogwork chooses that boundary when it launches the harness, but its owned-tool policy cannot intercept native shell or file operations inside Cursor or Codex. An unattended harness must use a non-interactive approval mode and remain bounded to its worktree; full host access is not an unattended default.
-_Avoid_: Owned tool policy, provider sandbox, fallback
-
-**Harness request**:
-The projection of an accepted Run Plan handed to one Harness: checkout path, work request, model and effort, Session reference, Instructions, Tools, Skills, MCP, and other supported fields. Secret material rides a channel that is never persisted or logged, not a plain field.
-_Avoid_: Run plan (the complete engine-owned input), prompt, job
-
 **Operation result**:
 The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action takes its Workspace from the agent (see **Question**), a Workspace. One engine module accepts the result from the final `structured-output.complete` Harness event, or gives a **Refused result**.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
-**Refused result**:
-The typed reason the engine does not accept an **Operation result**. Its kinds are: the result does not match the schema (each issue's path and message), the action plan refuses it (the plan's message), pull request readiness declines it (the readiness reason), and the Harness stream fails before it gives a result. Each kind has two renderings. The agent text tells the next attempt what to change, through the `previous-result-issues` Run Plan resource. The person text is plain language for the attempt record and the `Exhausted` park reason that Attention shows; it never holds an Effect `Cause` dump. A refused result is a failed attempt, so three in a row make the item *exhausted*.
-_Avoid_: Refused claim (a claim coordination will not accept), decode issues (only one kind), error string
-
 **Operating-instructions package**:
-The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path; `SKILL.md` is reserved for real Skills. The engine ships the default packages, an Operation in a Workflow document names one by name, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
+The Operation-owned instruction document and supporting resources carrying its mandatory Operating Instructions. It is supplied explicitly to every Harness through an instruction-specific content and resource path outside the driven worktree; `SKILL.md` and Skill paths are reserved for real Skills. The engine ships the default packages, an Operation in a Workflow document names one by name, and a Workspace may replace it whole with an operator-authored package in its private overlay tree (`~/.cogwork/workspaces/<WorkspaceId>/operating-instructions/<name>/`); a replacement that is present but has no readable, non-empty `INSTRUCTIONS.md` fails the Run rather than falling back. Either source stays mandatory, last and highest in the instruction ladder, and is never a contribution (ADR 0019).
 _Avoid_: Skill, `SKILL.md`, playbook skill, MCP server
 
 **Harness event**:

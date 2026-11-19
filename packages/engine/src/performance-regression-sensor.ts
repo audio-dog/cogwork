@@ -20,7 +20,7 @@ import {
   performanceVerdictFingerprint,
 } from "./performance-issue-filer";
 import type { RegistryState } from "./projector";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { Scheduler, type SchedulerState } from "./scheduler";
 
 type HealthSignalPerformanceVerdict = Extract<PerformanceVerdict, { readonly kind: "health-signal" }>;

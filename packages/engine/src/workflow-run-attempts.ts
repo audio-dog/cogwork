@@ -1,6 +1,7 @@
 import {
   type AgUiEvent,
   keyOf,
+  type ParkReason,
   type RunId,
   type RunRecord,
   WorkflowActionPlan,
@@ -14,10 +15,11 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
-import { RefusedResult, refusalForAgent, refusalForPerson } from "./operation-result";
+import { failureDetail, RefusedResult, refusalForAgent, refusalForPerson } from "./operation-result";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
-import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
+import { TriggerObservationStore } from "./trigger-observation-store";
 import type { WorkflowActionPlanDecodeError } from "./workflow-action-entry";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
@@ -29,6 +31,9 @@ import {
 } from "./workflow-run-admission";
 
 const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
+
+const unexpectedFailureText = (cause: Cause.Cause<unknown>) =>
+  failureDetail(cause).trim() || "The Run failed without an error message";
 
 export type ClaimState = Data.TaggedEnum<{
   Idle: Record<never, never>;
@@ -171,6 +176,16 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
         Effect.map(() => "skipped" as const),
       );
 
+  const parkClaimed = Effect.fn("WorkflowRun.parkClaimed")(function* (
+    admission: TriggerAdmission,
+    work: ClaimedWork,
+    reason: ParkReason,
+  ) {
+    yield* coordination.park(admission.event.key, reason, work.key);
+    if (work.lineageParent === null) return;
+    yield* observationStore.putAll([parkedAdmission(admission, work.lineageParent)]);
+  });
+
   const failAttempt = Effect.fn("WorkflowRun.failAttempt")(function* (
     admission: TriggerAdmission,
     claimed: Ref.Ref<ClaimState>,
@@ -182,10 +197,21 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     const exhausted = view.counters(work.key).exhausted;
     yield* settleClaimed(claimed, exhausted ? "exhausted" : status);
     if (!exhausted) return "retry" as const;
-    yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, work.key);
-    if (work.lineageParent !== null) {
-      yield* observationStore.putAll([parkedAdmission(admission, work.lineageParent)]);
-    }
+    yield* parkClaimed(admission, work, { _tag: "Exhausted", reason });
+    return "completed" as const;
+  });
+
+  const refusePreparation = Effect.fn("WorkflowRun.refusePreparation")(function* (
+    admission: TriggerAdmission,
+    claimed: Ref.Ref<ClaimState>,
+    work: ClaimedWork,
+    reason: string,
+    park: ParkReason | null,
+  ) {
+    if (park === null) return yield* failAttempt(admission, claimed, work, reason);
+    yield* recordClaimedAttempt(admission, claimed, work, { outcome: "failed", reason });
+    yield* settleClaimed(claimed, "failed");
+    yield* parkClaimed(admission, work, park);
     return "completed" as const;
   });
 
@@ -225,7 +251,7 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
   ) {
     return yield* ClaimState.$match(yield* Ref.get(claimed), {
       Idle: () => Effect.failCause(cause),
-      Claimed: (work) => failAttempt(admission, claimed, work, String(cause)),
+      Claimed: (work) => failAttempt(admission, claimed, work, unexpectedFailureText(cause)),
       Attempted: ({ status }) => settleClaimed(claimed, status).pipe(Effect.andThen(Effect.failCause(cause))),
     });
   });
@@ -332,6 +358,7 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     skipNoLongerMatching,
     rejectPlan,
     refuseResult,
+    refusePreparation,
     recoverClaimed,
     actOnResult,
   };

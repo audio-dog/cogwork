@@ -80,7 +80,7 @@ export const WorkspaceBindingWorktreeConfig = WorktreeConfig;
 export type WorkspaceBindingWorktreeConfig = typeof WorkspaceBindingWorktreeConfig.Type;
 
 const workspaceUpdateFields = {
-  name: TrimmedNonEmptyString,
+  displayName: TrimmedNonEmptyString,
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
   mcpSkills: Schema.optional(Schema.Array(McpSkill)),
@@ -145,8 +145,8 @@ export class WorkspaceRegistryError extends Schema.TaggedError<WorkspaceRegistry
 ) {}
 
 export const WorkspaceConfig = Schema.Struct({
-  name: WorkspaceId,
-  displayName: Schema.optional(TrimmedNonEmptyString),
+  id: WorkspaceId,
+  displayName: TrimmedNonEmptyString,
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerConfig,
   sourceControl: Schema.optional(SourceControlConfig),
