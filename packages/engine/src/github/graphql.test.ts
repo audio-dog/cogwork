@@ -5,7 +5,7 @@ import {
   graphQlData,
   issuePullReferencesPage,
   issuePullReferencesQuery,
-} from "./client";
+} from "./client-graphql";
 
 describe("graphQlData", () => {
   it("keeps partial data when errors accompany accessible cards", () => {
