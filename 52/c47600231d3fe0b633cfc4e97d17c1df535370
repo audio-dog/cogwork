@@ -1,0 +1,27 @@
+packages/engine/src/github/trigger-source-comments.test.ts
+  s_623e13f22bdba2::t_81bd061dea2b48 1-184
+packages/engine/src/github/trigger-source-fixtures.ts
+  s_623e13f22bdba2::t_86c7e9e73edd6c 1-156
+packages/engine/src/github/trigger-source-issue-labels.test.ts
+  s_623e13f22bdba2::t_41d4c38bd9a86c 1,11-25,27-28
+packages/engine/src/github/trigger-source-polling.test.ts
+  s_623e13f22bdba2::t_059d04d1da50b9 1-184
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_623e13f22bdba2::t_de9f4a0df92a34 1-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "52c47600231d3fe0b633cfc4e97d17c1df535370",
+  "prompts": {},
+  "sessions": {
+    "s_623e13f22bdba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a04357dc-1852-4aa2-b10b-7d0a40cb9aab",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
