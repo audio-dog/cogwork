@@ -13,7 +13,7 @@ export interface CheckRun {
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 
-const isFailing = (run: CheckRun) => run.conclusion !== null && failingConclusions.has(run.conclusion);
+export const isFailing = (run: CheckRun) => run.conclusion !== null && failingConclusions.has(run.conclusion);
 
 const latestPerName = (runs: ReadonlyArray<CheckRun>) => [
   ...runs

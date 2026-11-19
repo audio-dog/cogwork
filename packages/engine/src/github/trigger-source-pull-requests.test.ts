@@ -52,21 +52,19 @@ describe("GitHub Trigger sources", () => {
         const client = yield* GitHubClient;
         const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
         const events = yield* source
-          .observe([
-            subscription("github.pull-request-checks-failed", "checks"),
-            subscription("github.pull-request-conflicts-with-base", "conflicts"),
-          ])
-          .pipe(Stream.take(2), Stream.runCollect);
-        const [checksBody, conflictBody] = [...events].map(({ workContext }) => workContext?.body ?? "");
+          .observe([subscription("github.pull-request-checks-failed", "checks")])
+          .pipe(Stream.take(1), Stream.runCollect);
+        const body = events[0]?.workContext?.body ?? "";
 
         assert.include(
-          checksBody,
+          body,
           "- test: completed, failure, https://github.com/acme/example/actions/runs/1\n  - Title: 1 test failed\n  - Summary:\n    expected 1 to equal 2",
         );
-        assert.include(conflictBody, "## Mergeability\ndirty, conflicts with base");
-        assert.include(conflictBody, "- Head: 7-work@head-sha\n- Base: unknown@base-sha");
-        assert.include(conflictBody, "## Changed files\n- src/index.ts (modified, +3 -1)");
-        assert.notInclude(conflictBody, "secret patch");
+        assert.include(body, "## Description\n    Pull request description");
+        assert.include(body, "## Mergeability\ndirty, conflicts with base");
+        assert.include(body, "- Head: 7-work@head-sha\n- Base: main@base-sha");
+        assert.include(body, "## Changed files\n- src/index.ts (modified, +3 -1)");
+        assert.notInclude(body, "secret patch");
       }).pipe(Effect.provide(pullClientLayer())),
   );
 
@@ -90,10 +88,7 @@ describe("GitHub Trigger sources", () => {
           ])
           .pipe(Stream.take(1), Stream.runCollect);
 
-        assert.deepStrictEqual(
-          getPull.mock.calls.map(([, number]) => number),
-          [12, 10],
-        );
+        assert.deepStrictEqual(getPull.mock.calls.map(([, number]) => number).toSorted(), [10, 12]);
         assert.deepStrictEqual(
           listPullFiles.mock.calls.map(([, baseSha, headSha]) => [baseSha, headSha]),
           [["base-sha", "head-sha"]],
@@ -121,6 +116,43 @@ describe("GitHub Trigger sources", () => {
         ),
       );
     },
+  );
+
+  it.effect("keeps a checks-failed event when the changed files read fails", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const observed = yield* makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState))
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("1 second"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+      const events = Option.getOrElse(yield* Fiber.join(observed), () => []);
+
+      assert.strictEqual(events[0]?.revision, "checks:head-sha:test:failure");
+      assert.include(events[0]?.workContext?.body ?? "", "## Changed files\nunavailable");
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+          listPulls: () => Effect.succeed([trustedPull]),
+          listCheckRuns: () =>
+            Effect.succeed([
+              { name: "test", status: "completed", conclusion: "failure", startedAtMillis: 2_500 },
+            ]),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () =>
+            Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "compare timed out" })),
+          listTriggerComments: () => Effect.succeed([]),
+          listReviewComments: () => Effect.succeed([]),
+          listReviews: () => Effect.succeed([]),
+        }),
+      ),
+    ),
   );
 
   it.effect("skips a failed GitHub pull request read", () => {

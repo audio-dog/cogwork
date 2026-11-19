@@ -31,7 +31,7 @@ import {
   type GitHubRepoRef,
   type RawPull,
   type ReviewDecision,
-  reviewDecisionOf,
+  writeAccessReviewDecision,
 } from "./client";
 import { wireCodec } from "./markers";
 import { slackReviewTemplate } from "./provider-slack-review-template";
@@ -104,11 +104,7 @@ const make = (
       client.listReviews(target, pull.number),
       client.pullMergeableState(target, pull.number),
     ]);
-    const decision = reviewDecisionOf(
-      reviews
-        .filter((review) => writeAccess.has(review.authorAssociation))
-        .map((review) => ({ login: review.authorLogin, state: review.state })),
-    );
+    const decision = writeAccessReviewDecision(reviews);
     return {
       number: pull.number,
       url: pull.url,

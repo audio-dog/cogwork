@@ -130,7 +130,7 @@ export interface RawReview {
 
 const standingStates = new Set(["APPROVED", "CHANGES_REQUESTED", "DISMISSED"]);
 
-export const reviewDecisionOf = (
+const reviewDecisionOf = (
   states: ReadonlyArray<{ readonly login: string; readonly state: string }>,
 ): ReviewDecision => {
   const latest = states.reduce(
@@ -142,6 +142,15 @@ export const reviewDecisionOf = (
   if (decisions.includes("APPROVED")) return "approved";
   return "none";
 };
+
+const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+export const writeAccessReviewDecision = (reviews: ReadonlyArray<RawReview>) =>
+  reviewDecisionOf(
+    reviews
+      .filter((review) => writeAccess.has(review.authorAssociation))
+      .map((review) => ({ login: review.authorLogin, state: review.state })),
+  );
 
 const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpClient) {
   const transport = yield* makeTransport(client);

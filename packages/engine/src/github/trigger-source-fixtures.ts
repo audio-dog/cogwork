@@ -110,6 +110,7 @@ export const trustedPull: RawPull = {
   draft: false,
   headSha: "head-sha",
   baseSha: "base-sha",
+  baseRef: "main",
   headRef: "7-work",
   headRepository: "acme/example",
   closingIssueNumbers: [7],

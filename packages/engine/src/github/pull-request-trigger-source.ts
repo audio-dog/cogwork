@@ -2,7 +2,7 @@ import { WorkflowCatalogKey, type WorkItemRef } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import type { CheckRun } from "../ci";
+import { type CheckRun, isFailing } from "../ci";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import {
   catchUpParameter,
@@ -28,7 +28,7 @@ import {
   type RawPullFile,
   type RawReview,
   type RawReviewComment,
-  reviewDecisionOf,
+  writeAccessReviewDecision,
 } from "./client";
 import { trustedBotFeedback } from "./feedback";
 import { hasCogworkMarker } from "./markers";
@@ -79,7 +79,6 @@ export const githubPullRequestEntries = [
   ),
 ];
 
-const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const conditionEntries = new Set([checksFailedKey, conflictsKey]);
 
@@ -145,9 +144,6 @@ const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull):
   number: pull.number,
 });
 
-const isFailingCheck = ({ conclusion }: CheckRun) =>
-  conclusion !== null && failingConclusions.has(conclusion);
-
 const indented = (text: string) =>
   text
     .split("\n")
@@ -156,7 +152,7 @@ const indented = (text: string) =>
 
 const checkLines = (check: CheckRun) => [
   `- ${check.name}: ${check.status}, ${check.conclusion ?? "no conclusion"}, ${check.detailsUrl ?? "no details URL"}`,
-  ...(isFailingCheck(check)
+  ...(isFailing(check)
     ? [`  - Title: ${check.outputTitle ?? "none"}`, "  - Summary:", indented(check.outputSummary ?? "none")]
     : []),
 ];
@@ -171,19 +167,15 @@ const mergeabilityOf = (mergeableState: string | null) =>
     ? `${mergeableState}, conflicts with base`
     : (mergeableState ?? "unknown");
 
-const reviewStateOf = (reviews: ReadonlyArray<RawReview>) =>
-  reviewDecisionOf(
-    reviews
-      .filter((review) => personAssociations.has(review.authorAssociation))
-      .map((review) => ({ login: review.authorLogin, state: review.state })),
-  );
+const changedFilesSection = (files: ReadonlyArray<RawPullFile> | null) =>
+  files === null ? "unavailable" : listOrNone(files.map(fileLine));
 
 interface PullRequestFacts {
   readonly pull: RawPull;
   readonly detail: RawPullDetail;
   readonly checks: ReadonlyArray<CheckRun>;
   readonly reviews: ReadonlyArray<RawReview>;
-  readonly files: ReadonlyArray<RawPullFile>;
+  readonly files: ReadonlyArray<RawPullFile> | null;
 }
 
 const pullRequestBody = ({ pull, detail, checks, reviews, files }: PullRequestFacts) =>
@@ -193,7 +185,7 @@ const pullRequestBody = ({ pull, detail, checks, reviews, files }: PullRequestFa
     detail.url,
     "",
     "## Description",
-    detail.body || "none",
+    detail.body ? indented(detail.body) : "none",
     "",
     "## Head and base",
     `- Head: ${pull.headRef}@${pull.headSha}`,
@@ -203,13 +195,13 @@ const pullRequestBody = ({ pull, detail, checks, reviews, files }: PullRequestFa
     mergeabilityOf(detail.mergeableState),
     "",
     "## Review state",
-    reviewStateOf(reviews),
+    writeAccessReviewDecision(reviews),
     "",
     "## Checks",
     listOrNone(checks.flatMap(checkLines)),
     "",
     "## Changed files",
-    listOrNone(files.map(fileLine)),
+    changedFilesSection(files),
   ].join("\n");
 
 const proseOf = (facts: PullRequestFacts, feedback: ReadonlyArray<Feedback>) => ({
@@ -224,8 +216,8 @@ const proseOf = (facts: PullRequestFacts, feedback: ReadonlyArray<Feedback>) => 
 
 const changedFilesOf = (client: GitHubClientService, target: GitHubTargetConfig, pull: RawPull) =>
   pull.baseSha === undefined
-    ? Effect.succeed<ReadonlyArray<RawPullFile>>([])
-    : client.listPullFiles(target, pull.baseSha, pull.headSha);
+    ? Effect.succeed(null)
+    : client.listPullFiles(target, pull.baseSha, pull.headSha).pipe(Effect.orElseSucceed(() => null));
 
 const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(function* (
   client: GitHubClientService,
@@ -246,7 +238,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   const ref = itemRef(workspace, pull);
   const subject = providerSubject(pull.title, pull.url);
   const failed = checks
-    .filter(isFailingCheck)
+    .filter(isFailing)
     .map(({ name, conclusion }) => `${name}:${conclusion}`)
     .toSorted();
   const conditionEvents: ReadonlyArray<TriggerEvent> = [
