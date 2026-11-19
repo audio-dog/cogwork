@@ -193,8 +193,9 @@ export const makeIssueReads = (client: GitHubClientService) => {
   });
   return {
     observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, {}),
+    // GitHub answers `since=1970-01-01T00:00:00.000Z` with an empty issue list.
     openItemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
-      listItems(workspace, { since: sinceMillis }),
+      listItems(workspace, sinceMillis > 0 ? { since: sinceMillis } : {}),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
       listItems(workspace, { label }),
     readItem: Effect.fn("github.readItem")(function* (
