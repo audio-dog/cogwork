@@ -1,0 +1,19 @@
+docs/agent-patterns/effect-observability.md
+  s_faec89ee55d8cc::t_018519dafb6365 32,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a8cbfa2a53114a50ff3d796538d74efb46193049",
+  "prompts": {},
+  "sessions": {
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
