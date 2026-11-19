@@ -276,6 +276,11 @@ describe("resolveRunPlan", () => {
           { member: "Provenance", disposition: "projected" },
           { member: "Tools", disposition: "projected" },
           { member: "Skills", disposition: "projected" },
+          {
+            member: "Subagents",
+            disposition: "not-projected",
+            reason: "selected harness does not project Subagents",
+          },
         ],
         observation: { generation: 7, observedAtMillis: 5_000 },
       },

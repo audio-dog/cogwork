@@ -233,6 +233,14 @@ describe("WorkflowRun", () => {
           reason: "selected harness does not project Tools",
         },
       );
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Subagents") },
+        {
+          member: "Subagents",
+          disposition: "not-projected",
+          reason: "selected harness does not project Subagents",
+        },
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
