@@ -37,7 +37,7 @@ import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 export const harnessName = HarnessName.make("scripted");
 export const githubType = Schema.decodeSync(IssueTrackerType)("github");
 export const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
-export const structuredOutput = {
+const structuredOutput = {
   summary: "Ready for implementation",
   stuck: false,
   answers: { role: "ready-for-agent" },

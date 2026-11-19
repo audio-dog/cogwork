@@ -60,20 +60,8 @@ export const make = Effect.gen(function* () {
     return handle;
   });
 
-  const publishStored = (run: RunRecord, seq: number, atMillis: number, event: AgUiEvent, data: string) =>
-    decodeStoredRunEvent(data).pipe(
-      Effect.matchEffect({
-        onFailure: (error) =>
-          Effect.logError("run event withheld from the event bus", {
-            type: event.type,
-            name: displayName(event),
-            error,
-          }),
-        onSuccess: (stored) => bus.publishActivity(activityOf(run, seq, atMillis, stored)),
-      }),
-    );
-
   const record = Effect.fn("RunRecorder.record")(function* (run: RunRecord, event: AgUiEvent) {
+    const name = displayName(event);
     const data = yield* encodeStoredRunEvent(event).pipe(
       Effect.mapError((error) =>
         RunLedgerError.make({
@@ -83,7 +71,7 @@ export const make = Effect.gen(function* () {
         }),
       ),
       Effect.tapError((error) =>
-        Effect.logError("run event encoding failed", { type: event.type, name: displayName(event), error }),
+        Effect.logError("run event encoding failed", { type: event.type, name, error }),
       ),
     );
     const atMillis = yield* Clock.currentTimeMillis;
@@ -94,11 +82,17 @@ export const make = Effect.gen(function* () {
     yield* ledger.appendEvent(run.id, {
       seq,
       type: event.type,
-      name: displayName(event),
+      name,
       data,
       atMillis,
     });
-    yield* publishStored(run, seq, atMillis, event, data);
+    yield* decodeStoredRunEvent(data).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.logError("run event withheld from the event bus", { type: event.type, name, error }),
+        onSuccess: (stored) => bus.publishActivity(activityOf(run, seq, atMillis, stored)),
+      }),
+    );
     return handle;
   });
 

@@ -11,30 +11,29 @@ import { crashedIssue, issueRun, testLayer } from "./daemon-composition-fixtures
 import * as RunLedger from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 
-const actionPlanCodec = Schema.fromJsonString(WorkflowActionPlan);
-const actionPlan = Schema.decodeSync(actionPlanCodec)(
-  JSON.stringify({
-    item: keyOf(crashedIssue),
-    workflow: "coding",
-    attempt: "action-plan",
-    operation: "implement",
-    revision: "1",
-    createdAtMillis: 1,
-    digest: "plan-digest",
-    summary: "Ready for review",
-    answers: {},
-    lineage: { root: keyOf(crashedIssue), parent: null, hop: 0 },
-    handOff: null,
-    steps: [],
-  }),
-);
-const actionPlanRaw = Schema.encodeSync(actionPlanCodec)(actionPlan);
-const actionPlanJson = Schema.encodeSync(Schema.toCodecJson(WorkflowActionPlan))(actionPlan);
+const planJson = {
+  item: keyOf(crashedIssue),
+  workflow: "coding",
+  attempt: "action-plan",
+  operation: "implement",
+  revision: "1",
+  createdAtMillis: 1,
+  consumedHandbackAtMillis: 0,
+  digest: "plan-digest",
+  workflowRevision: 0,
+  summary: "Ready for review",
+  answers: {},
+  inputs: {},
+  workspace: null,
+  lineage: { root: keyOf(crashedIssue), parent: null, hop: 0 },
+  handOff: null,
+  steps: [],
+};
 
 const actionPlanEvent = {
   type: "CUSTOM",
   name: "workflow.action-plan",
-  value: { object: actionPlan, raw: actionPlanRaw },
+  value: { object: Schema.decodeSync(Schema.toCodecJson(WorkflowActionPlan))(planJson), raw: "plan" },
 } as const;
 
 describe("daemon composition WatchEvents", () => {
@@ -46,7 +45,7 @@ describe("daemon composition WatchEvents", () => {
       const seeded = yield* Deferred.make<void>();
       const watcher = yield* rpc.WatchEvents().pipe(
         Stream.tap((event) =>
-          Effect.when(Deferred.succeed(seeded, undefined), Effect.succeed(DaemonEvent.guards.SeedEnd(event))),
+          DaemonEvent.guards.SeedEnd(event) ? Deferred.succeed(seeded, undefined) : Effect.void,
         ),
         Stream.filter(DaemonEvent.guards.RunActivity),
         Stream.runHead,
@@ -59,7 +58,7 @@ describe("daemon composition WatchEvents", () => {
       const delivered = yield* Fiber.join(watcher);
       assert.deepStrictEqual(
         delivered.pipe(Option.map(({ activity }) => activity.event)),
-        Option.some({ ...actionPlanEvent, value: { object: actionPlanJson, raw: actionPlanRaw } }),
+        Option.some({ ...actionPlanEvent, value: { object: planJson, raw: "plan" } }),
       );
     }).pipe(Effect.provide(testLayer()), Effect.scoped),
   );
