@@ -1,0 +1,20 @@
+packages/engine/src/workflow-catalog.test.ts
+  h_46518a29d4dd91 1-104
+packages/engine/src/workflow-fixtures.ts
+  h_46518a29d4dd91 1-192
+packages/engine/src/workflow-lifecycle.test.ts
+  h_46518a29d4dd91 1-295
+packages/engine/src/workflow-templates.test.ts
+  h_46518a29d4dd91 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "361d761f7a36c969565f9b3190bda4a89c9b8d5a",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
