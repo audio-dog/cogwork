@@ -31,13 +31,13 @@ import { baseBranchOf, PullRequestReadiness } from "./worktree";
 
 type FrozenSourceControlTarget = Pick<RegisteredWorkspace, "repository"> & {
   readonly app: SourceControlType;
-  readonly config: Pick<RegisteredWorkspace["config"], "name" | "issueTracker" | "sourceControl">;
+  readonly config: Pick<RegisteredWorkspace["config"], "id" | "issueTracker" | "sourceControl">;
 };
 
 const githubSourceControlType = Schema.decodeSync(SourceControlType)("github");
 
 const sourceControlTargetFields = (target: FrozenSourceControlTarget) => ({
-  workspace: target.config.name,
+  workspace: target.config.id,
   app: target.app,
   issueTracker: target.config.issueTracker,
   ...(target.config.sourceControl ? { sourceControl: target.config.sourceControl } : {}),
@@ -51,7 +51,7 @@ const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceCont
 ) {
   if (workspaceId === "none") return null;
   if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
-  const workspace = selected.find(({ config }) => config.name === workspaceId);
+  const workspace = selected.find(({ config }) => config.id === workspaceId);
   const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
   if (entry.system !== "github" || app !== "github" || !workspace) {
     return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
@@ -59,7 +59,7 @@ const frozenSourceControlTarget = Effect.fn("WorkflowActionPlan.frozenSourceCont
   return {
     app: githubSourceControlType,
     config: {
-      name: workspace.config.name,
+      id: workspace.config.id,
       issueTracker: workspace.config.issueTracker,
       ...(workspace.config.sourceControl ? { sourceControl: workspace.config.sourceControl } : {}),
     },
@@ -76,10 +76,10 @@ const newPullRequestTarget = Effect.fn("WorkflowActionPlan.newPullRequestTarget"
   const target = yield* sourceControlTarget(context);
   if (target === null) return { _tag: "NoWorkspace" } satisfies WorkflowActionTarget;
   const item = context.admission.event.key;
-  if (item._tag !== "Issue" || item.workspace !== target.config.name) {
+  if (item._tag !== "Issue" || item.workspace !== target.config.id) {
     return yield* decodeFailure("Open a pull request needs an Issue in the selected Workspace");
   }
-  const workspace = context.workspaces.find(({ config }) => config.name === target.config.name);
+  const workspace = context.workspaces.find(({ config }) => config.id === target.config.id);
   if (!workspace || !context.worktrees || !context.runBranch) {
     return yield* decodeFailure("Open a pull request needs the Run's branch");
   }
@@ -109,7 +109,7 @@ const currentPullRequestTarget = Effect.fn("WorkflowActionPlan.currentPullReques
   const target = yield* sourceControlTarget(context);
   if (target === null) return { _tag: "NoWorkspace" } satisfies WorkflowActionTarget;
   const item = context.admission.event.key;
-  if ((item._tag !== "Issue" && item._tag !== "PullRequest") || item.workspace !== target.config.name) {
+  if ((item._tag !== "Issue" && item._tag !== "PullRequest") || item.workspace !== target.config.id) {
     return yield* decodeFailure("The action cannot target this pull request in the selected Workspace");
   }
   return {
@@ -161,7 +161,7 @@ const namedPullRequestTarget = Effect.fn("WorkflowActionPlan.namedPullRequestTar
   const target = yield* sourceControlTarget(context);
   if (target === null) return { _tag: "NoWorkspace" } satisfies WorkflowActionTarget;
   const reference = typeof inputs.pull_request === "string" ? inputs.pull_request : "";
-  const workspace = context.workspaces.find(({ config }) => config.name === target.config.name);
+  const workspace = context.workspaces.find(({ config }) => config.id === target.config.id);
   if (!workspace) return yield* decodeFailure("The named pull request Workspace is unavailable");
   if (!sourceControl) return yield* decodeFailure("Source control provider is not configured");
   const currentPullRequest = yield* sourceControl
@@ -174,7 +174,7 @@ const namedPullRequestTarget = Effect.fn("WorkflowActionPlan.namedPullRequestTar
   if (currentPullRequest === null) return yield* decodeFailure(`Pull request ${reference} was not found`);
   const snapshot = snapshots?.findLast(
     ({ workspace: snapshotWorkspace, pullRequest }) =>
-      snapshotWorkspace === workspace.config.name && pullRequest.number === currentPullRequest.number,
+      snapshotWorkspace === workspace.config.id && pullRequest.number === currentPullRequest.number,
   );
   if (snapshots && !snapshot) {
     return yield* decodeFailure(`Read pull request ${reference} with the pull-request Tool`);

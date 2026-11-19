@@ -34,7 +34,7 @@ const registrationInputFrom = (draft: WorkspaceRegistrationDraft) => {
   const issueTrackerConnectionId = trimmed(draft.issueTrackerConnectionId);
   if (!issueTrackerConnectionId) return null;
   const registration = {
-    name: workspaceNameFrom(checkoutPath),
+    displayName: workspaceNameFrom(checkoutPath),
     checkoutPath,
     linearHistory: false,
   };

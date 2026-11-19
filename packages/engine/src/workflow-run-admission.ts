@@ -1,5 +1,5 @@
 import { keyOf, LineageId, type RunId, type WorkflowOperationElement } from "@cogwork/contracts";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 
 export const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
   workflow: admission.subscription.workflow,

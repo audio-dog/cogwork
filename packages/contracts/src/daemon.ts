@@ -90,8 +90,8 @@ export const PollPauseReason = Schema.Literals(["auth", "unavailable", "rate-lim
 export type PollPauseReason = typeof PollPauseReason.Type;
 
 export const WorkspaceInfo = Schema.Struct({
-  name: WorkspaceId,
-  displayName: Schema.optional(TrimmedNonEmptyString),
+  id: WorkspaceId,
+  displayName: TrimmedNonEmptyString,
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerType,
   record: WorkspaceRegistration,
@@ -101,7 +101,7 @@ export const WorkspaceInfo = Schema.Struct({
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
 export const WorkspaceFailureInfo = Schema.Struct({
-  name: Schema.optional(WorkspaceId),
+  id: Schema.optional(WorkspaceId),
   displayName: Schema.optional(TrimmedNonEmptyString),
   source: TrimmedNonEmptyString,
   message: Schema.String,
@@ -116,7 +116,7 @@ export const SchedulerLimit = Schema.Int.check(
 export type SchedulerLimit = typeof SchedulerLimit.Type;
 
 export const WorkspaceLoad = Schema.Struct({
-  name: WorkspaceId,
+  id: WorkspaceId,
   inFlight: Schema.Natural,
   limit: WorkspaceConcurrency,
 });

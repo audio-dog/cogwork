@@ -1,6 +1,6 @@
 # The first-party agent runtime lives behind the harness seam
 
-> **Amendment (2026-10-27).** [Customizable Workflows §17](../../../../docs/spec/customizable-workflows.md#17-documents-and-adrs-the-build-changes)
+> **Amendment (2026-10-27).** [Customizable Workflows §17](../../../../docs/spec/customizable-workflows-documents-and-adrs-the-build-changes.md#17-documents-and-adrs-the-build-changes)
 > narrows "utility model calls" to direct model calls the app makes for itself, such as ranking,
 > drafting, and summaries. The rule does not cover Operations; each Operation uses the Harness its
 > author chose.

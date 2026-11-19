@@ -1,22 +1,18 @@
 import * as Command from "effect/cli/Command";
-import {
-  contributionSettingsCommand,
-  daemonCommand,
-  limitsCommand,
-  metricsCommand,
-  operationSettingsCommand,
-  runEventsCommand,
-  runsCommand,
-  schedulingCommand,
-  statusCommand,
-  watchCommand,
-} from "./commands";
 import { connectionCommand } from "./connection-commands";
+import { contributionSettingsCommand } from "./contribution-settings-commands";
+import { daemonCommand } from "./daemon-commands";
 import { handBackCommand } from "./hand-back-command";
 import { harnessCommand } from "./harness-commands";
+import { limitsCommand } from "./limits-commands";
 import { loginCommand } from "./login-commands";
+import { operationSettingsCommand } from "./operation-settings-commands";
 import { pluginCommand } from "./plugin-commands";
 import { replayCommand } from "./replay-commands";
+import { metricsCommand, runEventsCommand, runsCommand } from "./run-commands";
+import { schedulingCommand } from "./scheduling-commands";
+import { statusCommand } from "./status-commands";
+import { watchCommand } from "./watch-commands";
 import { workflowCommand } from "./workflow-commands";
 import { workspaceCommand } from "./workspace-commands";
 import { worktreeCommand } from "./worktree-commands";

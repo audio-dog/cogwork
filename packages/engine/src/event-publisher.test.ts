@@ -15,17 +15,18 @@ import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { Scheduler } from "./scheduler";
 import { emptyService, SourceControlProvider } from "./source-control";
 import { memoryLayer as workflowArtifactsLayer } from "./workflow-artifact-store";
 
-const workspaceName = Schema.decodeSync(WorkspaceId)("web");
+const workspaceId = Schema.decodeSync(WorkspaceId)("web");
 const workspace: RegisteredWorkspace = {
   source: "test",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceName,
+    id: workspaceId,
+    displayName: "Test workspace",
     checkoutPath: "/repos/web",
     issueTracker: { type: "github" },
   }),
