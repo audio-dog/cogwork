@@ -8,13 +8,7 @@ import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as TxReentrantLock from "effect/TxReentrantLock";
-import {
-  type BranchDivergence,
-  Git,
-  GitError,
-  type GitOperationInProgress,
-  type WorktreeEntry,
-} from "./git";
+import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
 import {
   isSameOperation,
