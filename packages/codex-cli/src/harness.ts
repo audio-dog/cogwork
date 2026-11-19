@@ -1,12 +1,13 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
+import { ExternalHarnessRuntime, Harness, HarnessBridge, Provider } from "@cogwork/engine";
 import {
   type CodexTextAdapter,
   type CodexTextConfig,
   type CodexTextProviderOptions,
   codexText,
 } from "@tanstack/ai-codex";
-import type { SandboxHandle } from "@tanstack/ai-sandbox";
+import { BRIDGED_MCP_SERVER_NAME, type SandboxHandle } from "@tanstack/ai-sandbox";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import { codexNativeEffort } from "./model";
@@ -295,6 +296,20 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
   };
 };
 
+// Codex stops waiting for an MCP tool call after 60 seconds unless the server sets
+// `tool_timeout_sec`. An engine tool such as `worktree-setup` can run a cold dependency
+// install, so the bridge gets the Run's own budget.
+const engineToolTimeout = (
+  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+): Record<string, string> =>
+  request.tools.length === 0
+    ? {}
+    : {
+        [`mcp_servers.${BRIDGED_MCP_SERVER_NAME}.tool_timeout_sec`]: String(
+          Duration.toSeconds(Provider.defaultRunBudget(request.policy)),
+        ),
+      };
+
 const codexDescriptor = (
   options: CodexRunnerOptions,
 ): ExternalHarnessRuntime.ExternalHarnessDescriptor<CodexTextAdapter<CodexModel>> => {
@@ -325,6 +340,7 @@ const codexDescriptor = (
     inheritedEnvironment: ExternalHarnessRuntime.defaultInheritedEnvironment,
     makeAdapter: ({ model, nativeAuthentication, request }) => {
       const mcp = codexMcpProjection(request.mcp);
+      const config = { ...mcp.config, ...engineToolTimeout(request) };
       return makeAdapter(model, {
         authMode: nativeAuthentication,
         approvalPolicy: "never",
@@ -336,7 +352,7 @@ const codexDescriptor = (
         ...(request.checkout.gitWritablePaths.length > 0
           ? { additionalDirectories: [...request.checkout.gitWritablePaths] }
           : {}),
-        ...(Object.keys(mcp.config).length > 0 ? { config: mcp.config } : {}),
+        ...(Object.keys(config).length > 0 ? { config } : {}),
         ...(Object.keys(mcp.env).length > 0 ? { env: mcp.env } : {}),
       });
     },

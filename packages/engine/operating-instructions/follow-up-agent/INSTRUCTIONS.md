@@ -52,7 +52,9 @@ If [step 1](#1-read-the-state) found the base diverged, bring `main` back into t
 
 **Linear-history repos — rebase instead.** When the workspace's `linearHistory` flag is set, a merge commit is not allowed. Rebase the branch onto `main`, resolve the conflicts, and plan to push with `git push --force-with-lease` at [step 5](#5-push-and-summarize). Because that force-push rewrites the branch a human may be mid-review on, put a heads-up in your round summary (which the engine posts, per [step 5](#5-push-and-summarize)) so the reviewer isn't blindsided — say plainly that you rebased and force-pushed, and why.
 
-**A `pnpm-lock.yaml` conflict is not a hand-merge.** Leave the conflict markers in place and run `pnpm install` — pnpm reads both sides, reconciles them against the merged `package.json` files, and writes a valid lockfile — then `git add pnpm-lock.yaml`. Never hand-edit the lockfile, and never delete-and-regenerate it; both risk a tree that no longer matches what either branch actually resolved. Use plain `pnpm install` here, not `--frozen-lockfile`: frozen refuses to update the lockfile, which is the opposite of what a merge needs.
+**Install with the `worktree-setup` tool, never by hand.** The sandbox denies writes to the package manager's store, so `pnpm install` fails inside the Run. The `worktree-setup` tool runs the Workspace's configured worktree setup — the dependency install — in this worktree, outside the sandbox. It takes no input. Call it after the integration changes a dependency manifest or a lockfile, before you run the gate. A result with `status: "failed"` names the command, its exit code, and the end of its output: the gate cannot run, so that is a real block — escalate per the [authority boundary](#authority-boundary) with those three facts.
+
+**A `pnpm-lock.yaml` conflict is not a hand-merge.** Leave the conflict markers in place and call the `worktree-setup` tool — pnpm reads both sides, reconciles them against the merged `package.json` files, and writes a valid lockfile — then `git add pnpm-lock.yaml`. Never hand-edit the lockfile, and never delete-and-regenerate it; both risk a tree that no longer matches what either branch actually resolved.
 
 If the conflicts are ones you genuinely cannot resolve, escalate per the [authority boundary](#authority-boundary) rather than guessing.
 
@@ -95,7 +97,7 @@ Take each failure the gate reports and:
 
 1. Commit your work first, so the base run cannot lose it.
 2. Find the base commit: `git merge-base HEAD origin/<base branch>`.
-3. Check that commit out detached in this same worktree, run the same command, and capture the output. Re-run the install first when the diff touched a manifest or a lockfile. Then return to the engine's branch — a detached base checkout is a measurement, and the branch rule above still holds.
+3. Check that commit out detached in this same worktree, run the same command, and capture the output. Call the `worktree-setup` tool first when the diff touched a manifest or a lockfile, and again after you return to the engine's branch. Then return to the engine's branch — a detached base checkout is a measurement, and the branch rule above still holds.
 4. Compare by **identity**, not by color: the same test and assertion, the same file and lint rule, the same type error at the same symbol. A suite red before and red now is not a match, and a failure whose message moved is a new failure.
 
 A failure that reproduces by identity at the base is a **baseline failure** — leave it, and name it in your round summary with the base sha it reproduces on, so a reviewer can re-run your proof in one command. Every other failure belongs to this PR: fix it and re-run the gate.

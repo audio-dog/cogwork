@@ -394,6 +394,7 @@ export const worktreeFsLayer = Layer.effect(
                   operation: command,
                   message:
                     result.stderr.trim() || result.stdout.trim() || `exited with code ${result.exitCode}`,
+                  exitCode: result.exitCode,
                   retryable: true,
                 }),
           ),

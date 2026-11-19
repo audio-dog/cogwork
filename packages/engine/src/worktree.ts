@@ -203,6 +203,10 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const setup = Effect.fn("Worktree.setup")(function* (workspace: RegisteredWorkspace, worktreePath: string) {
+    yield* runSetup(workspace.config.checkoutPath, worktreePath, workspace.config.worktrees);
+  });
+
   const pushOwnership = {
     agent: git.allowPush,
     engine: git.blockPush,
@@ -506,6 +510,7 @@ export const make = Effect.gen(function* () {
 
   return {
     ensure,
+    setup,
     pullRequestReadiness,
     pushBranch,
     pushBranchIfAhead,

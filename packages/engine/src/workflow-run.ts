@@ -224,6 +224,7 @@ export const make = Effect.gen(function* () {
       catalog: catalogResult.catalog,
       outputWorkspaces,
       workspaceCheckout: workspace === null ? null : prepared.checkout.path,
+      worktreeSetup: workspace?.config.worktrees?.setup ?? [],
       instructions: prepared.instructions,
       previousResultIssues: (yield* Ref.get(previousResultIssues)).get(keyOf(admission.event.key)) ?? null,
       lineageArtifacts: prepared.lineageArtifacts,
@@ -255,7 +256,11 @@ export const make = Effect.gen(function* () {
       Effect.uninterruptible,
     );
 
-    const engineTools = yield* runEngineTools(toolNeeds, toolWorkspaces);
+    const runWorktree =
+      workspace === null || prepared.checkout.branch === null
+        ? null
+        : { workspace, path: prepared.checkout.path };
+    const engineTools = yield* runEngineTools(toolNeeds, toolWorkspaces, runWorktree);
     const eventsExit = yield* harness
       .run({ plan, session: prepared.session, mcpCredentials: new Map(), engineTools: engineTools.tools })
       .pipe(

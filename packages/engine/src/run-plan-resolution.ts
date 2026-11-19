@@ -63,6 +63,7 @@ export interface RunPlanFacts {
   readonly catalog: WorkflowCatalog;
   readonly outputWorkspaces: ReadonlyArray<WorkspaceId>;
   readonly workspaceCheckout: string | null;
+  readonly worktreeSetup: ReadonlyArray<string>;
   readonly instructions: AssembledContext;
   readonly previousResultIssues: string | null;
   readonly lineageArtifacts: ReadonlyArray<Pick<WorkflowActionArtifact, "workspace" | "issue" | "url">>;
@@ -72,15 +73,19 @@ export interface RunPlanFacts {
   readonly subagents: RunPlan["subagents"];
 }
 
-const engineToolsFor = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
+const actionToolsFor = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
   const actionKeys = new Set(catalog.entries.filter(({ kind }) => kind === "action").map(({ key }) => key));
-  return new Set(
-    operation.transitions
-      .flatMap(({ actions }) => actions)
-      .filter(({ entry }) => actionKeys.has(entry))
-      .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []),
-  );
+  return operation.transitions
+    .flatMap(({ actions }) => actions)
+    .filter(({ entry }) => actionKeys.has(entry))
+    .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []);
 };
+
+const worktreeToolsFor = ({ operation, worktreeSetup }: RunPlanFacts): ReadonlyArray<EngineToolName> =>
+  operation.permissionProfile !== "read-only" && worktreeSetup.length > 0 ? ["worktree-setup"] : [];
+
+const engineToolsFor = (facts: RunPlanFacts) =>
+  new Set([...actionToolsFor(facts.operation, facts.catalog), ...worktreeToolsFor(facts)]);
 
 const workItemId = Schema.decodeSync(WorkItemId);
 const encodeArtifactContext = Schema.encodeSync(
@@ -95,7 +100,7 @@ const encodeArtifactContext = Schema.encodeSync(
   ),
 );
 
-const engineToolOrder: ReadonlyArray<EngineToolName> = ["issue-search", "pull-request"];
+const engineToolOrder: ReadonlyArray<EngineToolName> = ["issue-search", "pull-request", "worktree-setup"];
 
 const projection = [
   "Harness Adapter",
@@ -239,7 +244,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
 };
 
 export const resolveRunPlan = (facts: RunPlanFacts) => {
-  const toolNeeds = engineToolsFor(facts.operation, facts.catalog);
+  const toolNeeds = engineToolsFor(facts);
   return Result.match(readyHarness(facts.harness), {
     onFailure: (reason) => RunPlanResolution.Rejected({ reason }),
     onSuccess: (harness) =>

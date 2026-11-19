@@ -7,14 +7,28 @@ import type { RegisteredWorkspace } from "./projector";
 import { makePullRequestTool } from "./pull-request-tool";
 import { type PullRequestContext, SourceControlProvider } from "./source-control";
 import type { EngineToolName } from "./workflow-action-entry";
+import { WorktreeManager } from "./worktree";
+import { makeWorktreeSetupTool } from "./worktree-setup-tool";
+
+export interface RunWorktree {
+  readonly workspace: RegisteredWorkspace;
+  readonly path: string;
+}
 
 export const make = Effect.gen(function* () {
   const issueTracker = yield* IssueTracker;
   const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
+  const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
+
+  const worktreeSetupTools = (runWorktree: RunWorktree | null) =>
+    worktrees && runWorktree
+      ? [makeWorktreeSetupTool(worktrees.setup(runWorktree.workspace, runWorktree.path))]
+      : [];
 
   return Effect.fn("WorkflowRun.engineTools")(function* (
     toolNeeds: ReadonlySet<EngineToolName>,
     toolWorkspaces: ReadonlyArray<RegisteredWorkspace>,
+    runWorktree: RunWorktree | null,
   ) {
     const pullRequestSnapshots = yield* Ref.make<
       ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
@@ -31,6 +45,7 @@ export const make = Effect.gen(function* () {
             ),
           ]
         : []),
+      ...(toolNeeds.has("worktree-setup") ? worktreeSetupTools(runWorktree) : []),
     ];
     return { tools, reviewedPullRequests: Ref.get(pullRequestSnapshots) };
   });
