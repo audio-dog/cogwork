@@ -1,32 +1,32 @@
 import { WorkflowDocument, WorkflowEditBatch, WorkflowId } from "@cogwork/contracts";
 import * as Console from "effect/Console";
+import * as Argument from "effect/cli/Argument";
+import * as CliError from "effect/cli/CliError";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as Argument from "effect/unstable/cli/Argument";
-import * as CliError from "effect/unstable/cli/CliError";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
 import { defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 import { terminalLine } from "./terminal-text";
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
 
-const documentArgument = Argument.string("document-json");
-const templateIdArgument = Argument.string("template-id");
-const editsArgument = Argument.string("edits-json");
-const idArgument = Argument.string("id");
-const revisionArgument = Argument.integer("revision");
-const switchArgument = Argument.choice("state", ["on", "off"]);
+const documentArgument = Argument.String("document-json");
+const templateIdArgument = Argument.String("template-id");
+const editsArgument = Argument.String("edits-json");
+const idArgument = Argument.String("id");
+const revisionArgument = Argument.Int("revision");
+const switchArgument = Argument.Literals("state", ["on", "off"]);
 
 const inputError = (label: string, cause: unknown) =>
   new CliError.UserError({ cause, userMessage: terminalLine(`Invalid ${label} JSON`) });
 
 const decodeDocument = (input: string) =>
-  Schema.decodeEffect(Schema.fromJsonString(WorkflowDocument))(input).pipe(
+  Schema.decodeEffect(Schema.fromJsonString(WorkflowDocument), { onExcessProperty: "error" })(input).pipe(
     Effect.mapError((error) => inputError("Workflow document", error)),
   );
 
@@ -36,7 +36,7 @@ const decodeUnknown = (input: string) =>
   );
 
 const decodeEdits = (input: string) =>
-  Schema.decodeEffect(Schema.fromJsonString(WorkflowEditBatch))(input).pipe(
+  Schema.decodeEffect(Schema.fromJsonString(WorkflowEditBatch), { onExcessProperty: "error" })(input).pipe(
     Effect.mapError((error) => inputError("Workflow edits", error)),
   );
 

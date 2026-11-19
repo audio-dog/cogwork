@@ -18,7 +18,7 @@ proven candidates beat a long list of suspects.
 ## Resolve the ground
 
 Read `test-value.md`, `effect-test-layers.md`, the Testing heuristics in
-`docs/agents/technical-disposition.md`, the scope's `CONTEXT.md`, and the ADRs for the area. An ADR
+`docs/agents/technical-disposition.md`, the scope's `GLOSSARY.md`, and the ADRs for the area. An ADR
 that names an invariant puts the tests guarding it on the retention bar.
 
 ## Phase 1 — Discover

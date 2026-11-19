@@ -5,12 +5,12 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
+import * as RpcClient from "effect/rpc/RpcClient";
+import { RpcClientDefect, RpcClientError } from "effect/rpc/RpcClientError";
+import type { FromServerEncoded } from "effect/rpc/RpcMessage";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as Schedule from "effect/Schedule";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
-import { RpcClientDefect, RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import type { FromServerEncoded } from "effect/unstable/rpc/RpcMessage";
-import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
-import { SocketCloseError, SocketOpenError } from "effect/unstable/socket/Socket";
+import { SocketCloseError, SocketOpenError } from "effect/socket/Socket";
 import type { DaemonRpcBridge } from "../../../shared/ipc";
 import { recordProtocolInboxChange, resetProtocolInboxDepth } from "./process-health";
 

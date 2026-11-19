@@ -14,7 +14,7 @@ import * as Ref from "effect/Ref";
 import { DaemonEventBus } from "./daemon-event-bus";
 import type { RegistryState } from "./projector";
 import { readyToMergeByWorkspace, schedulerStatsOf, workspaceStatesOf } from "./read-model";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { Scheduler } from "./scheduler";
 
 const withoutContributionDiagnostic = ({

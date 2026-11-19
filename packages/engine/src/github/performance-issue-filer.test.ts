@@ -12,7 +12,7 @@ import {
   type PerformanceVerdict,
 } from "../performance-issue-filer";
 import type { RegisteredWorkspace } from "../projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "../registry";
+import { readOnlyRegistry, WorkspaceRegistry } from "../registry-service";
 import { GitHubClient, type GitHubClientService } from "./client";
 import { makePerformanceIssueFilerTarget } from "./index";
 import { wireCodec } from "./markers";

@@ -5,7 +5,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { SourceControlProvider } from "./source-control";
 import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";

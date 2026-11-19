@@ -1,29 +1,29 @@
 import { type ConnectionEstablishment, ConnectionFailure } from "@cogwork/contracts";
 import { Linear } from "@cogwork/engine";
 import * as Console from "effect/Console";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { layer as credentialsLayer } from "./credentials";
 import { browserOpenerLayer, loginKey, loginLinear, ProviderKeyError } from "./login";
 import { defaultCredentialsPath, defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 
-const clientIdFlag = Flag.string("client-id").pipe(Flag.withDescription("Linear OAuth client id"));
+const clientIdFlag = Flag.String("client-id").pipe(Flag.withDescription("Linear OAuth client id"));
 
-const redirectPortFlag = Flag.integer("redirect-port").pipe(
+const redirectPortFlag = Flag.Int("redirect-port").pipe(
   Flag.withDescription("Loopback OAuth callback port"),
   Flag.withDefault(Linear.OAuth.defaultRedirectPort),
 );
 
-const socketFlag = Flag.string("socket").pipe(
+const socketFlag = Flag.String("socket").pipe(
   Flag.withDescription("Path to the daemon control socket"),
   Flag.withDefault(defaultSocketPath),
 );
 
-const credentialsFlag = Flag.string("credentials").pipe(
+const credentialsFlag = Flag.String("credentials").pipe(
   Flag.withDescription("Path to the stored OAuth credential file (0600)"),
   Flag.withDefault(defaultCredentialsPath),
 );
@@ -100,7 +100,7 @@ const runSlackLogin = Effect.fn("login.slack")((options: { readonly socket: stri
 
 const slackCommand = Command.make("slack", { socket: socketFlag }).pipe(Command.withHandler(runSlackLogin));
 
-const providerFlag = Flag.string("provider").pipe(
+const providerFlag = Flag.String("provider").pipe(
   Flag.withDescription("Provider id to store a key for (anthropic, openai, google, openrouter)"),
 );
 

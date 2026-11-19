@@ -16,7 +16,7 @@ import * as Schema from "effect/Schema";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import type { RegisteredWorkspace } from "./projector";
 import { emptyService as emptySourceControl, type PullRequestContext } from "./source-control";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import type { TargetContext } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
 import { PullRequestReadiness, WorktreeManager } from "./worktree";

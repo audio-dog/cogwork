@@ -31,7 +31,6 @@
     "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0",
-    "drizzle-kit": "1.0.0-rc.4",
     "drizzle-orm": "catalog:",
     "effect": "catalog:effect"
   },

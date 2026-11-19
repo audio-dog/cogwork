@@ -1,10 +1,17 @@
-import { type Git, Registry, Worktree } from "@cogwork/engine";
+import {
+  type Git,
+  type Projector,
+  Registry,
+  RegistryLookup,
+  RegistryService,
+  Worktree,
+} from "@cogwork/engine";
 import * as Console from "effect/Console";
+import * as Command from "effect/cli/Command";
+import * as Flag from "effect/cli/Flag";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Command from "effect/unstable/cli/Command";
-import * as Flag from "effect/unstable/cli/Flag";
 import { defaultControlStorePath } from "./paths";
 import { gitLayer, worktreeManagerLayer } from "./platform";
 
@@ -16,22 +23,22 @@ class WorktreeWorkspaceNotFound extends Data.TaggedError("WorktreeWorkspaceNotFo
   }
 }
 
-const controlStoreFlag = Flag.string("control-store").pipe(
+const controlStoreFlag = Flag.String("control-store").pipe(
   Flag.withDescription("Path to the machine-local Control store"),
   Flag.withDefault(defaultControlStorePath),
 );
 
-const workspaceFlag = Flag.string("workspace").pipe(
+const workspaceFlag = Flag.String("workspace").pipe(
   Flag.withDescription("WorkspaceId of the registered workspace"),
 );
 
-const itemFlag = Flag.string("item").pipe(Flag.withDescription("Work item id, e.g. #13"));
-const titleFlag = Flag.string("title").pipe(Flag.withDescription("Work item title"));
-const branchFlag = Flag.string("branch").pipe(Flag.withDescription("Worktree branch name"));
+const itemFlag = Flag.String("item").pipe(Flag.withDescription("Work item id, e.g. #13"));
+const titleFlag = Flag.String("title").pipe(Flag.withDescription("Work item title"));
+const branchFlag = Flag.String("branch").pipe(Flag.withDescription("Worktree branch name"));
 
 const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (id: string) {
-  const registry = yield* (yield* Registry.WorkspaceRegistry).state;
-  const workspace = Registry.findWorkspace(registry, id);
+  const registry = yield* (yield* RegistryService.WorkspaceRegistry).state;
+  const workspace = RegistryLookup.findWorkspace(registry, id);
   if (!workspace) {
     return yield* new WorktreeWorkspaceNotFound({ detail: `workspace "${id}" not found` });
   }
@@ -41,7 +48,7 @@ const findWorkspace = Effect.fn("worktree.findWorkspace")(function* (id: string)
 const runWorktree = <E>(
   options: { readonly controlStore: string; readonly workspace: string },
   use: (
-    workspace: Registry.RegisteredWorkspace,
+    workspace: Projector.RegisteredWorkspace,
     manager: Worktree.WorktreeManagerService,
   ) => Effect.Effect<unknown, E>,
 ) =>

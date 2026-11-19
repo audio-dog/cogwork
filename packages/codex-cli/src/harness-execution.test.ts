@@ -210,7 +210,7 @@ describe("codexRunner execution", { timeout: 30_000 }, () => {
       () =>
         Effect.scoped(
           Effect.gen(function* () {
-            const enabled = yield* Config.string("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
+            const enabled = yield* Config.String("COGWORK_LIVE_CODEX_PROBE").pipe(Config.withDefault("0"));
             if (enabled !== "1") return;
             const handle = yield* createSandbox();
             const { checkoutPath } = yield* linkedWorktree(handle);

@@ -27,7 +27,7 @@ import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 import { HarnessReadinessCache } from "./harness-readiness";
 import { PluginManager } from "./plugin";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 
 export interface MachineReadinessSourceService {
   readonly current: Effect.Effect<MachineReadiness>;

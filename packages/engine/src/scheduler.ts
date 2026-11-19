@@ -10,10 +10,11 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { day } from "./time";
-import { type TriggerAdmission, TriggerObservation } from "./trigger-observation";
+import { TriggerObservation } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { WorkflowRun, type WorkflowRunOutcome } from "./workflow-run";
 
 const runsInFlight = Metric.gauge("cogwork_scheduler_runs_in_flight", {

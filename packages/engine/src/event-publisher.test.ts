@@ -15,7 +15,7 @@ import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { Scheduler } from "./scheduler";
 import { emptyService, SourceControlProvider } from "./source-control";
 import { memoryLayer as workflowArtifactsLayer } from "./workflow-artifact-store";

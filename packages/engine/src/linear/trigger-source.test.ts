@@ -17,7 +17,7 @@ import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { makeTrackerTriggerSource } from "../tracker-trigger-source";
-import { matchTriggerEvent } from "../trigger-observation";
+import { matchTriggerEvent } from "../trigger-observation-subscriptions";
 import { Recheck, type TriggerSubscription } from "../trigger-source";
 import { makeWorkflowOptions } from "../workflow-options";
 import { LinearClient, type LinearClientService } from "./client";

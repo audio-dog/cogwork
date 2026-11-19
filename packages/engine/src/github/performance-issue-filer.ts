@@ -15,7 +15,7 @@ import {
   PerformanceIssueFingerprint,
   performanceIssueLabels,
 } from "../performance-issue-filer";
-import { WorkspaceRegistry, type WorkspaceRegistryService } from "../registry";
+import { WorkspaceRegistry, type WorkspaceRegistryService } from "../registry-service";
 import { GitHubClient, type GitHubClientService, type GitHubRepoRef, repoRefFromRepository } from "./client";
 import { wireCodec } from "./markers";
 

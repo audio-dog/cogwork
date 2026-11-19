@@ -12,28 +12,25 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import { RpcClientDefect, RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { SocketOpenError } from "effect/socket/Socket";
 import { TestClock } from "effect/testing";
-import { RpcClientDefect, RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import { SocketOpenError } from "effect/unstable/socket/Socket";
+import { daemonOrStore } from "./commands";
+import { contributionSettingsCommand, makeContributionSettingUpdate } from "./contribution-settings-commands";
+import { limitsCommand } from "./limits-commands";
 import {
-  contributionSettingsCommand,
-  daemonOrStore,
-  daemonStatusPicture,
-  formatDaemonLimits,
   formatOperationSettingRefusal,
   formatOperationSettings,
-  formatRunEvents,
-  limitsCommand,
-  makeContributionSettingUpdate,
   makeOperationSettingUpdate,
   operationSettingsCommand,
-  resolveTarget,
-  schedulingActions,
-  schedulingCommand,
-  withWatchReconnect,
-} from "./commands";
+} from "./operation-settings-commands";
+import { formatRunEvents } from "./run-commands";
+import { schedulingActions, schedulingCommand } from "./scheduling-commands";
+import { formatDaemonLimits } from "./status";
+import { daemonStatusPicture } from "./status-commands";
+import { resolveTarget, withWatchReconnect } from "./watch-commands";
 
 const runId = Schema.decodeSync(RunIdSchema);
 const workItemId = Schema.decodeSync(WorkItemIdSchema);

@@ -1,16 +1,16 @@
 import { type ConnectionSystem, IssueTrackerError } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import type { Credential } from "./credential-store";
 import { GitHubClient } from "./github/client";
 import { type GranolaHttpFailure, makeGranolaHttp } from "./granola-http";
 import { verifyCredential as verifyLinear } from "./linear/client";
 
-// Connection readiness is "established, unrevoked, and usable" (contracts CONTEXT.md). Resolving a
+// Connection readiness is "established, unrevoked, and usable" (contracts GLOSSARY.md). Resolving a
 // token locally answers the first two; only the system itself answers the third, so establishment
 // asks it once rather than waiting for the first reconcile poll to discover the credential is junk.
 // Each adapter probes with the cheapest call that needs no repository, team, or extra scope, and

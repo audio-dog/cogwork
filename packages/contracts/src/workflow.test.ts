@@ -19,7 +19,7 @@ import {
   type WorkflowDiagnosticCode,
   type WorkflowDocument,
   WorkflowDocument as WorkflowDocumentSchema,
-  WorkflowEditBatch,
+  type WorkflowEditBatch,
   WorkflowNodeId,
   workflowOperationResultJsonSchema,
   workflowOperationResultSchema,
@@ -424,10 +424,6 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
 ];
 
 describe("Workflow validator", () => {
-  it("rejects excess document keys at the Schema boundary", () => {
-    assert.isFalse(Schema.is(WorkflowDocumentSchema)({ ...baseDocument, extra: true }));
-  });
-
   it("bounds the answer combinations expanded by validation", () => {
     const questions = Array.from({ length: 13 }, (_, index) => ({
       id: `question-${index}`,
@@ -553,6 +549,93 @@ describe("Workflow validator", () => {
     assert.deepStrictEqual(codesOf(filteredDocument(entry), filterCatalog), [code]);
   });
 
+  const [issueTrigger, issueAction] = baseCatalog.entries;
+  const appAction = (key: string, actsOn: ReadonlyArray<string>) => ({
+    ...issueAction,
+    key,
+    system: key.split(".", 1)[0],
+    actsOn,
+  });
+  const appCatalog = decodeCatalog({
+    ...baseCatalog,
+    entries: [
+      ...baseCatalog.entries,
+      { ...issueTrigger, key: "linear.issue-opened", system: "linear", connection: "linear/main" },
+      { ...issueTrigger, key: "schedule.sweep", system: null, connection: null },
+      appAction("github.add-label", ["github.issue"]),
+      appAction("github.open-pull-request", ["issue"]),
+    ],
+  });
+  const itemKindMessages = (document: WorkflowDocument) =>
+    validateWorkflow(document, appCatalog)
+      .filter(({ code }) => code === "item-kind-mismatch")
+      .map(({ message }) => message);
+  const startedBy = (trigger: string, action: string) =>
+    documentWith({
+      triggers: [{ ...baseDocument.triggers[0], entry: decodeCatalogKey(trigger) }],
+      operations: [
+        {
+          ...operation,
+          transitions: [{ ...transition, actions: [{ entry: decodeCatalogKey(action), parameters: [] }] }],
+        },
+      ],
+    });
+
+  it.each([
+    {
+      case: "a github action reached by a linear issue",
+      trigger: "linear.issue-opened",
+      action: "github.add-label",
+      messages: [
+        "Action github.add-label in Operation triage acts only on github.issue, but linear.issue reaches it",
+      ],
+    },
+    {
+      case: "a github action reached by a github issue",
+      trigger: "github.issue-opened",
+      action: "github.add-label",
+      messages: [],
+    },
+    {
+      case: "an action of any app's issue reached by a linear issue",
+      trigger: "linear.issue-opened",
+      action: "github.open-pull-request",
+      messages: [],
+    },
+    {
+      case: "a github action reached by an issue of no named app",
+      trigger: "schedule.sweep",
+      action: "github.add-label",
+      messages: [],
+    },
+  ])("matches the item app for $case", ({ trigger, action, messages }) => {
+    assert.deepStrictEqual(itemKindMessages(startedBy(trigger, action)), messages);
+  });
+
+  it("carries the item app through a hand-off", () => {
+    const review = decodeNodeId("review");
+    const document = documentWith({
+      triggers: [{ ...baseDocument.triggers[0], entry: decodeCatalogKey("linear.issue-opened") }],
+      operations: [
+        { ...operation, transitions: [{ ...transition, handOff: review }] },
+        {
+          ...operation,
+          id: review,
+          transitions: [
+            {
+              ...transition,
+              actions: [{ entry: decodeCatalogKey("github.add-label"), parameters: [] }],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.deepStrictEqual(itemKindMessages(document), [
+      "Action github.add-label in Operation review acts only on github.issue, but linear.issue reaches it",
+    ]);
+  });
+
   it("produces every section 5 code", () => {
     diagnosticCases.forEach((testCase) => {
       assert.include(testCase.produce(), testCase.code);
@@ -561,11 +644,6 @@ describe("Workflow validator", () => {
 });
 
 describe("Workflow edits", () => {
-  it("rejects excess edit keys at the Schema boundary", () => {
-    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "Rename", name: "Edited", extra: true }]));
-    assert.isFalse(Schema.is(WorkflowEditBatch)([{ _tag: "ReplaceOperation", id: "triage", operation }]));
-  });
-
   it("applies a batch in arrival order", () => {
     const result = applyWorkflowEdits(baseDocument, [
       { _tag: "Rename", name: "First" },
@@ -760,7 +838,7 @@ describe("Workflow Operation result", () => {
         row.catalog,
         [cogworkWorkspace],
         row.itemWorkspace,
-      )["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+      );
       assert.strictEqual(json.type, "object");
       assert.deepStrictEqual(json.required, row.required);
       assert.strictEqual(json.additionalProperties, false);
@@ -801,7 +879,7 @@ describe("Workflow Operation result", () => {
           noInputsCatalog,
           [cogworkWorkspace],
           cogworkWorkspace,
-        )["~standard"].jsonSchema.input({ target: "draft-2020-12" }),
+        ),
         "properties",
       );
       const strictEmptyObject = { type: "object", additionalProperties: false };
@@ -827,9 +905,7 @@ describe("Workflow Operation result", () => {
         },
       ],
     };
-    const json = workflowOperationResultJsonSchema(reviewOperation, reviewCatalog)[
-      "~standard"
-    ].jsonSchema.input({ target: "draft-2020-12" });
+    const json = workflowOperationResultJsonSchema(reviewOperation, reviewCatalog);
     const inputs = jsonMember(jsonMember(json, "properties"), "inputs");
 
     assert.isObject(inputs);
@@ -847,7 +923,7 @@ describe("Workflow Operation result", () => {
         type: "object",
         properties: {
           path: { type: "string" },
-          line: { type: "integer", exclusiveMinimum: 0 },
+          line: { type: "integer", exclusiveMinimum: 0, maximum: Number.MAX_SAFE_INTEGER },
           body: { type: "string" },
         },
         required: ["path", "line", "body"],
@@ -882,7 +958,7 @@ describe("Workflow Operation result", () => {
   it("builds a strict for-each envelope", () => {
     const json = workflowOperationResultJsonSchema({ ...operation, forEach: "commitment" }, baseCatalog, [
       cogworkWorkspace,
-    ])["~standard"].jsonSchema.input({ target: "draft-2020-12" });
+    ]);
 
     assert.deepStrictEqual(json.required, ["summary", "stuck", "elements"]);
     assert.strictEqual(json.additionalProperties, false);

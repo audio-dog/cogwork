@@ -6,14 +6,10 @@ import {
   type MachineReadiness,
   NeedIdentity,
   type WorkflowCatalog,
-  type WorkflowCatalogKey,
   type WorkflowDocument,
-  type WorkflowEditBatch,
   type WorkflowId,
-  type WorkflowOption,
   type WorkflowRecord,
   type WorkflowTemplate,
-  type WorkspaceId,
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { useUpdateEffect } from "@react-hookz/web";
@@ -21,12 +17,9 @@ import * as Schema from "effect/Schema";
 import { createContext, type ReactNode, use, useState } from "react";
 import { useConfiguration } from "../components/configuration-provider";
 import {
-  applyWorkflowEditAtom,
   createWorkflowAtom,
   deleteWorkflowAtom,
   harnessCatalogsAtom,
-  listWorkflowOptionsAtom,
-  publishWorkflowAtom,
   switchWorkflowAtom,
   workflowCatalogAtom,
   workflowsAtom,
@@ -40,16 +33,15 @@ import { workspaceLabel } from "./workspace-record";
 
 export interface WorkflowClient {
   readonly create: (document: WorkflowDocument) => Promise<WorkflowRecord>;
-  readonly edit: (id: WorkflowId, edits: WorkflowEditBatch) => Promise<WorkflowRecord>;
-  readonly publish: (id: WorkflowId, revision: number) => Promise<WorkflowRecord>;
   readonly switchEnabled: (id: WorkflowId, enabled: boolean) => Promise<WorkflowRecord>;
   readonly delete: (id: WorkflowId) => Promise<WorkflowId>;
-  readonly listOptions: (
-    entry: WorkflowCatalogKey,
-    parameter: string,
-    workspaces: ReadonlyArray<WorkspaceId>,
-  ) => Promise<ReadonlyArray<WorkflowOption>>;
 }
+
+export const enableNotificationsWhenOn = (workflow: WorkflowRecord) => {
+  if (!workflow.enabled) return workflow;
+  window.cogwork.notifications.enable().catch((error) => reportRendererError(error, "desktop notifications"));
+  return workflow;
+};
 
 export interface WorkflowHarnesses {
   readonly catalogs: ReadonlyArray<HarnessCatalog> | null;
@@ -162,11 +154,8 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
   useUpdateEffect(refreshCatalog, [refreshCatalog, session.workflowInputsRevision]);
   const templatesResult = useAtomValue(workflowTemplatesAtom);
   const create = useAtomSet(createWorkflowAtom, { mode: "promise" });
-  const edit = useAtomSet(applyWorkflowEditAtom, { mode: "promise" });
-  const publish = useAtomSet(publishWorkflowAtom, { mode: "promise" });
   const switchEnabled = useAtomSet(switchWorkflowAtom, { mode: "promise" });
   const deleteWorkflow = useAtomSet(deleteWorkflowAtom, { mode: "promise" });
-  const listOptions = useAtomSet(listWorkflowOptionsAtom, { mode: "promise" });
   const queried = successValue(listed);
   const catalog = successValue(catalogResult);
   const templates = successValue(templatesResult);
@@ -186,17 +175,8 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
       setCreatedWorkflows((current) => new Map(current).set(workflow.id, workflow));
       return workflow;
     },
-    edit: (id, edits) => edit({ payload: { id, edits } }),
-    publish: (id, revision) => publish({ payload: { id, revision } }),
-    switchEnabled: async (id, enabled) => {
-      const workflow = (await switchEnabled({ payload: { id, enabled } })).workflow;
-      if (workflow.enabled) {
-        window.cogwork.notifications
-          .enable()
-          .catch((error) => reportRendererError(error, "desktop notifications"));
-      }
-      return workflow;
-    },
+    switchEnabled: async (id, enabled) =>
+      enableNotificationsWhenOn((await switchEnabled({ payload: { id, enabled } })).workflow),
     delete: async (id) => {
       const deleted = await deleteWorkflow({ payload: { id } });
       setCreatedWorkflows((current) => {
@@ -207,7 +187,6 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
       });
       return deleted;
     },
-    listOptions: (entry, parameter, workspaces) => listOptions({ payload: { entry, parameter, workspaces } }),
   };
   const value = workflowProviderValue(
     {

@@ -10,12 +10,13 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import {
   type ActionContext,
   type ActionEntry,
   type ActionExecutor,
   decodeFailure,
+  type EngineToolName,
   invalidTarget,
   parameterValues,
   stringInput,
@@ -129,7 +130,6 @@ const issueActionRow = (
   name: string,
   agentInputs: ReadonlyArray<string>,
   parameters: WorkflowCatalogEntry["parameters"] = [],
-  actsOn: ReadonlyArray<string> = ["*"],
 ) =>
   ({
     key: Schema.decodeSync(WorkflowCatalogKey)(`${system}.${id}`),
@@ -140,7 +140,7 @@ const issueActionRow = (
     requires: [],
     parameters,
     itemKind: null,
-    actsOn,
+    actsOn: ["*"],
     requiresWorkspace: true,
     permissionProfile: "read-only",
     agentInputs,
@@ -221,16 +221,27 @@ const issueEntry = (
   target: TargetProducer,
   execute: ActionExecutor,
   workspaceSource: WorkflowWorkspaceSource,
+  tools: ReadonlyArray<EngineToolName> = [],
 ): ActionEntry => ({
   row: { ...row, workspaceSource },
   target,
   execute,
   phase: "write",
-  tools: [],
+  tools,
 });
 
-const currentIssueEntry = (row: IssueActionRow, execute: ActionExecutor) =>
-  issueEntry(row, currentIssueTargetProducer, execute, "item-else-agent");
+const currentIssueEntry = (
+  row: IssueActionRow,
+  execute: ActionExecutor,
+  tools: ReadonlyArray<EngineToolName> = [],
+) =>
+  issueEntry(
+    { ...row, actsOn: [`${row.system}.issue`] },
+    currentIssueTargetProducer,
+    execute,
+    "item-else-agent",
+    tools,
+  );
 
 const issueEntries = (system: IssueTrackerApp) => [
   issueEntry(
@@ -244,29 +255,29 @@ const issueEntries = (system: IssueTrackerApp) => [
     newIssueTargetProducer,
     createIssue,
     "agent",
+    ["issue-search"],
   ),
   issueEntry(
     issueActionRow(system, "comment-issue", "Comment on an existing issue", ["issue", "comment"]),
     existingIssueTargetProducer,
     commentIssue,
     "agent",
+    ["issue-search"],
   ),
   currentIssueEntry(
-    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], ["issue"]),
+    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"]),
     commentIssue,
+    ["issue-search"],
   ),
   currentIssueEntry(
-    issueActionRow(system, "add-label", "Add a label", [], [issueParameter("label", true)], ["issue"]),
+    issueActionRow(system, "add-label", "Add a label", [], [issueParameter("label", true)]),
     addLabel,
   ),
   currentIssueEntry(
-    issueActionRow(system, "remove-label", "Remove a label", [], [issueParameter("label", true)], ["issue"]),
+    issueActionRow(system, "remove-label", "Remove a label", [], [issueParameter("label", true)]),
     removeLabel,
   ),
-  currentIssueEntry(
-    issueActionRow(system, "close-this-issue", "Close this issue", [], [], ["issue"]),
-    closeIssue,
-  ),
+  currentIssueEntry(issueActionRow(system, "close-this-issue", "Close this issue", []), closeIssue),
 ];
 
 export const issueActionEntries = issueTrackerApps.flatMap(issueEntries);

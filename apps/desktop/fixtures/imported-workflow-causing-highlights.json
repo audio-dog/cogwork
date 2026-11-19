@@ -1,0 +1,65 @@
+{
+  "name": "Import Workflow causing highlights",
+  "workspaces": { "_tag": "Listed", "workspaces": ["their-machine"] },
+  "triggers": [
+    {
+      "id": "bot-finding",
+      "entry": "github.new-finding-from-bot",
+      "parameters": [{ "id": "bot", "value": "cursor[bot]" }],
+      "filters": [],
+      "start": "follow-up"
+    },
+    {
+      "id": "mentioned",
+      "entry": "slack.i-am-mentioned",
+      "parameters": [{ "id": "channel", "value": "C01THEIRCH" }],
+      "filters": [],
+      "start": "reply"
+    }
+  ],
+  "operations": [
+    {
+      "id": "follow-up",
+      "name": "Follow up",
+      "instructionPackage": null,
+      "instruction": "Read the bot finding and request a review.",
+      "permissionProfile": "read-only",
+      "requires": ["plugin:linear/mcp/linear"],
+      "model": { "harness": "codex", "model": null, "options": [] },
+      "forEach": null,
+      "questions": [],
+      "transitions": [
+        {
+          "when": [],
+          "actions": [
+            {
+              "entry": "github.request-review",
+              "parameters": [{ "id": "reviewer", "value": "octocat" }]
+            }
+          ],
+          "handOff": null
+        }
+      ],
+      "hints": []
+    },
+    {
+      "id": "reply",
+      "name": "Reply",
+      "instructionPackage": null,
+      "instruction": "Draft a short reply to the mention.",
+      "permissionProfile": "read-only",
+      "requires": [],
+      "model": { "harness": null, "model": null, "options": [] },
+      "forEach": null,
+      "questions": [],
+      "transitions": [
+        {
+          "when": [],
+          "actions": [{ "entry": "slack.draft-reply-in-slack", "parameters": [] }],
+          "handOff": null
+        }
+      ],
+      "hints": []
+    }
+  ]
+}

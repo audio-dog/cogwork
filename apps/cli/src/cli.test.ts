@@ -1,17 +1,26 @@
 import { OperationSettingRefused } from "@cogwork/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
+import * as Command from "effect/cli/Command";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
+import { RpcClientError } from "effect/rpc/RpcClientError";
+import { SocketCloseError } from "effect/socket/Socket";
 import { TestConsole } from "effect/testing";
-import * as Command from "effect/unstable/cli/Command";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import { SocketCloseError } from "effect/unstable/socket/Socket";
 import { cli } from "./cli";
-import { operationSettingError, reportDaemonTransportError } from "./commands";
+import { reportDaemonTransportError } from "./commands";
+import { operationSettingError } from "./operation-settings-commands";
 
-layer(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer))((it) => {
+layer(
+  Layer.mergeAll(
+    FetchHttpClient.layer,
+    NodeServices.layer,
+    NodeCrypto.layerSecureRandom,
+    NodeCrypto.layerDigest,
+  ),
+)((it) => {
   it.effect("offers every Workflow RPC command", () =>
     Effect.gen(function* () {
       yield* Command.runWith(cli, { version: "0.0.1" })(["workflow", "--help"]);
@@ -22,6 +31,23 @@ layer(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer))((it) => {
           assert.include(output, command);
         },
       );
+    }),
+  );
+
+  it.effect("refuses Workflow edits with keys the edit does not declare", () =>
+    Effect.gen(function* () {
+      const failure = yield* Effect.flip(
+        Command.runWith(cli, { version: "0.0.1" })([
+          "workflow",
+          "edit",
+          "triage",
+          '[{"_tag":"Rename","name":"Edited","extra":true}]',
+        ]),
+      );
+
+      assert.strictEqual(failure._tag, "UserError");
+      if (failure._tag !== "UserError") return assert.fail("expected a user error");
+      assert.include(failure.userMessage, "Invalid Workflow edits JSON");
     }),
   );
 
