@@ -1,0 +1,27 @@
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_b48b3bccd711fb::t_ec5726bf153f49 22,30,40,117,123,125
+packages/engine/src/github/client-pulls.test.ts
+  s_b48b3bccd711fb::t_4465833e9462b8 57,76-79
+packages/engine/src/github/client.ts
+  s_b48b3bccd711fb::t_711d1a1ff97096 146
+packages/engine/src/github/provider.ts
+  s_b48b3bccd711fb::t_84ecdde989e3d0 34
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_b48b3bccd711fb::t_e989d653dc3e86 154-155,157,159-163,168,187,189,197-198,328
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "964bec257d36114331c7bbf9d2db899b7ee3eeb6",
+  "prompts": {},
+  "sessions": {
+    "s_b48b3bccd711fb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d355938-dec0-4f53-b1e7-d8c5bf949ef9",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
