@@ -80,7 +80,8 @@ export type ActionExecutor = (
 export const actionPhases = ["approval", "write", "notify", "terminal"] as const;
 export type ActionPhase = (typeof actionPhases)[number];
 
-export type EngineToolName = "issue-search" | "pull-request" | "worktree-setup";
+export const engineToolNames = ["issue-search", "pull-request", "worktree-setup"] as const;
+export type EngineToolName = (typeof engineToolNames)[number];
 
 export interface ActionEntry {
   readonly row: WorkflowCatalogEntry;

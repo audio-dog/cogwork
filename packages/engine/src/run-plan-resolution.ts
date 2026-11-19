@@ -23,7 +23,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { AssembledContext } from "./context-assembler";
 import type { TriggerAdmission } from "./trigger-observation";
-import { type EngineToolName, itemWorkspaceOf } from "./workflow-action-entry";
+import { type EngineToolName, engineToolNames, itemWorkspaceOf } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
 
 export interface PreparedHarness {
@@ -81,8 +81,10 @@ const actionToolsFor = (operation: WorkflowOperation, catalog: WorkflowCatalog) 
     .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []);
 };
 
-const worktreeToolsFor = ({ operation, worktreeSetup }: RunPlanFacts): ReadonlyArray<EngineToolName> =>
-  operation.permissionProfile !== "read-only" && worktreeSetup.length > 0 ? ["worktree-setup"] : [];
+const worktreeToolsFor = ({ operation, worktreeSetup }: RunPlanFacts): ReadonlyArray<EngineToolName> => {
+  const writableRunWithSetup = operation.permissionProfile !== "read-only" && worktreeSetup.length > 0;
+  return writableRunWithSetup ? ["worktree-setup"] : [];
+};
 
 const engineToolsFor = (facts: RunPlanFacts) =>
   new Set([...actionToolsFor(facts.operation, facts.catalog), ...worktreeToolsFor(facts)]);
@@ -99,8 +101,6 @@ const encodeArtifactContext = Schema.encodeSync(
     ),
   ),
 );
-
-const engineToolOrder: ReadonlyArray<EngineToolName> = ["issue-search", "pull-request", "worktree-setup"];
 
 const projection = [
   "Harness Adapter",
@@ -199,7 +199,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
     },
     messages: [{ role: "user", content: operationMessage(operation, facts.handback) }],
     tools: harness.projectedMembers.includes("Tools")
-      ? engineToolOrder.filter((tool) => toolNeeds.has(tool))
+      ? engineToolNames.filter((tool) => toolNeeds.has(tool))
       : [],
     skills: facts.skills,
     mcp: [],

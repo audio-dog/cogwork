@@ -1,5 +1,6 @@
 import { Harness, SessionStore } from "@cogwork/engine";
 import { assert, describe, it } from "@effect/vitest";
+import { toolDefinition } from "@tanstack/ai";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -101,6 +102,35 @@ describe("Claude Code host Harness", { timeout: 30_000 }, () => {
         assert.strictEqual(argumentAfter(defaultCapture.args, "--effort"), "high");
         assert.strictEqual(argumentAfter(selectedCapture.args, "--model"), "opus");
         assert.strictEqual(argumentAfter(selectedCapture.args, "--effort"), "xhigh");
+      }),
+    );
+
+    it.effect("gives the engine tool bridge the Run budget as Claude's MCP tool timeouts", () =>
+      Effect.gen(function* () {
+        const engineTool = toolDefinition({ name: "worktree-setup", description: "Run setup" }).server(() =>
+          Promise.resolve({}),
+        );
+        const withTools = yield* makeLiveHarness();
+        const toolCapture = yield* captureFrom(
+          yield* withTools.harness
+            .run(makeRequest(withTools.handle.id, { engineTools: [engineTool] }))
+            .pipe(Stream.runCollect),
+        );
+        const withoutTools = yield* makeLiveHarness();
+        const plainCapture = yield* captureFrom(
+          yield* withoutTools.harness.run(makeRequest(withoutTools.handle.id)).pipe(Stream.runCollect),
+        );
+
+        assert.deepStrictEqual(
+          [toolCapture, plainCapture].map(({ mcpToolTimeout, mcpToolIdleTimeout }) => ({
+            mcpToolTimeout,
+            mcpToolIdleTimeout,
+          })),
+          [
+            { mcpToolTimeout: "7200000", mcpToolIdleTimeout: "7200000" },
+            { mcpToolTimeout: null, mcpToolIdleTimeout: null },
+          ],
+        );
       }),
     );
 

@@ -299,16 +299,17 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
 // Codex stops waiting for an MCP tool call after 60 seconds unless the server sets
 // `tool_timeout_sec`. An engine tool such as `worktree-setup` can run a cold dependency
 // install, so the bridge gets the Run's own budget.
-const engineToolTimeout = (
-  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
-): Record<string, string> =>
-  request.tools.length === 0
-    ? {}
-    : {
-        [`mcp_servers.${BRIDGED_MCP_SERVER_NAME}.tool_timeout_sec`]: String(
-          Duration.toSeconds(Provider.defaultRunBudget(request.policy)),
-        ),
-      };
+const engineToolTimeout = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
+  Object.fromEntries(
+    request.tools.length === 0
+      ? []
+      : [
+          [
+            `mcp_servers.${BRIDGED_MCP_SERVER_NAME}.tool_timeout_sec`,
+            String(Duration.toSeconds(Provider.defaultRunBudget(request.policy))),
+          ],
+        ],
+  );
 
 const codexDescriptor = (
   options: CodexRunnerOptions,

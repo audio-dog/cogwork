@@ -10,22 +10,25 @@ const failedSetup = (error: WorktreeFsError) => ({
   status: "failed" as const,
   command: error.operation,
   exitCode: error.exitCode ?? null,
-  outputTail: error.message.slice(-maxOutputTailLength),
+  outputTail: (error.output ?? error.message).slice(-maxOutputTailLength),
 });
 
-export const makeWorktreeSetupTool = (setup: Effect.Effect<void, WorktreeFsError>) =>
+type RunPromise = <A>(effect: Effect.Effect<A>, options?: Effect.RunOptions) => Promise<A>;
+
+export const makeWorktreeSetupTool = (setup: Effect.Effect<void, WorktreeFsError>, runPromise: RunPromise) =>
   toolDefinition({
     name: "worktree-setup",
     description:
       "Run the Workspace's configured worktree setup (linked paths, then each setup command, such as a dependency install) in this Run's worktree, outside the sandbox. Call it after a change to a dependency manifest or lockfile. It takes no input.",
     inputSchema,
-  }).server(() =>
-    Effect.runPromise(
+  }).server((_input, context) =>
+    runPromise(
       setup.pipe(
         Effect.match({
           onFailure: failedSetup,
           onSuccess: () => ({ status: "completed" as const }),
         }),
       ),
+      { signal: context?.abortSignal },
     ),
   );

@@ -1,6 +1,8 @@
 import * as Effect from "effect/Effect";
+import * as FiberSet from "effect/FiberSet";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+import * as Semaphore from "effect/Semaphore";
 import { makeIssueSearchTool } from "./issue-search-tool";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
@@ -20,10 +22,16 @@ export const make = Effect.gen(function* () {
   const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
   const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
 
-  const worktreeSetupTools = (runWorktree: RunWorktree | null) =>
-    worktrees && runWorktree
-      ? [makeWorktreeSetupTool(worktrees.setup(runWorktree.workspace, runWorktree.path))]
-      : [];
+  const worktreeSetupTools = Effect.fn("WorkflowRun.worktreeSetupTools")(function* (
+    runWorktree: RunWorktree | null,
+  ) {
+    const canRunSetup = worktrees !== null && runWorktree !== null;
+    if (!canRunSetup) return [];
+    const runPromise = yield* FiberSet.makeRuntimePromise();
+    const oneSetupAtATime = yield* Semaphore.make(1);
+    const setup = oneSetupAtATime.withPermit(worktrees.setup(runWorktree.workspace, runWorktree.path));
+    return [makeWorktreeSetupTool(setup, runPromise)];
+  });
 
   return Effect.fn("WorkflowRun.engineTools")(function* (
     toolNeeds: ReadonlySet<EngineToolName>,
@@ -45,7 +53,7 @@ export const make = Effect.gen(function* () {
             ),
           ]
         : []),
-      ...(toolNeeds.has("worktree-setup") ? worktreeSetupTools(runWorktree) : []),
+      ...(toolNeeds.has("worktree-setup") ? yield* worktreeSetupTools(runWorktree) : []),
     ];
     return { tools, reviewedPullRequests: Ref.get(pullRequestSnapshots) };
   });

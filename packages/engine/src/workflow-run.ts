@@ -256,10 +256,8 @@ export const make = Effect.gen(function* () {
       Effect.uninterruptible,
     );
 
-    const runWorktree =
-      workspace === null || prepared.checkout.branch === null
-        ? null
-        : { workspace, path: prepared.checkout.path };
+    const runOwnsWorktree = workspace !== null && prepared.checkout.branch !== null;
+    const runWorktree = runOwnsWorktree ? { workspace, path: prepared.checkout.path } : null;
     const engineTools = yield* runEngineTools(toolNeeds, toolWorkspaces, runWorktree);
     const eventsExit = yield* harness
       .run({ plan, session: prepared.session, mcpCredentials: new Map(), engineTools: engineTools.tools })

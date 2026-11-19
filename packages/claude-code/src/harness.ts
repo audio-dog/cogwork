@@ -1,5 +1,5 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
+import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge, Provider } from "@cogwork/engine";
 import {
   type ClaudeCodeModel,
   type ClaudeCodeTextAdapter,
@@ -9,6 +9,7 @@ import {
 } from "@tanstack/ai-claude-code";
 import { claudeCodeByok } from "@tanstack/ai-claude-code/byok";
 import { createSecrets, type SandboxHandle } from "@tanstack/ai-sandbox";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -354,6 +355,18 @@ const disallowedToolsFor = (policy: Harness.OperationPolicyProfile) => [
   "NotebookEdit",
 ];
 
+// Claude Code cuts an HTTP MCP tool call at `MCP_TOOL_TIMEOUT` (60 seconds when unset) and after
+// `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` without output (5 minutes when unset). An engine tool such as
+// `worktree-setup` can run a cold dependency install, so the bridge gets the Run's own budget.
+const engineToolTimeoutEnvironment = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => {
+  const milliseconds = String(Duration.toMillis(Provider.defaultRunBudget(request.policy)));
+  const timeouts = ["MCP_TOOL_TIMEOUT", "CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT"].map((name) => [
+    name,
+    milliseconds,
+  ]);
+  return Object.fromEntries(request.tools.length === 0 ? [] : timeouts);
+};
+
 const adapterConfig = (
   executable: string,
   request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
@@ -370,6 +383,7 @@ const adapterConfig = (
     cwd: ".",
     claudeExecutable: claudeExecutableFor(executable, request, effort),
     disallowedTools: disallowedToolsFor(request.policy),
+    env: engineToolTimeoutEnvironment(request),
     ...(request.checkout.gitWritablePaths.length > 0
       ? { addDirs: [...request.checkout.gitWritablePaths] }
       : {}),

@@ -14,11 +14,13 @@ describe("worktree setup command", () => {
         const worktreeFs = yield* WorktreeFs.WorktreeFs;
         const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-setup-command-" });
 
-        const error = yield* Effect.flip(worktreeFs.runCommand(cwd, "echo lockfile is stale >&2; exit 17"));
+        const error = yield* Effect.flip(
+          worktreeFs.runCommand(cwd, "echo installing; echo lockfile is stale >&2; exit 17"),
+        );
 
         assert.deepStrictEqual(
-          { operation: error.operation, exitCode: error.exitCode, message: error.message },
-          { operation: "echo lockfile is stale >&2; exit 17", exitCode: 17, message: "lockfile is stale" },
+          { _tag: error._tag, exitCode: error.exitCode, output: error.output },
+          { _tag: "WorktreeFsError", exitCode: 17, output: "installing\nlockfile is stale\n" },
         );
       }).pipe(Effect.scoped),
     );

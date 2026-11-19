@@ -6,6 +6,7 @@ export class WorktreeFsError extends Schema.TaggedError<WorktreeFsError>()("Work
   operation: Schema.String,
   message: Schema.String,
   exitCode: Schema.optional(Schema.Number),
+  output: Schema.optional(Schema.String),
   retryable: Schema.Boolean,
 }) {}
 

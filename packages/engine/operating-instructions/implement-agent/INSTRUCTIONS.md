@@ -113,7 +113,7 @@ Take each failure the gate reports and:
 
 1. Commit your work first, so the base run cannot lose it.
 2. Find the base commit: `git merge-base HEAD origin/<base branch>`.
-3. Check that commit out detached in this same worktree, run the same command, and capture the output. Call the `worktree-setup` tool first when your diff touched a manifest or a lockfile, and again after you return to the engine's branch. Then return to the engine's branch — a detached base checkout is a measurement, and the branch rule above still holds.
+3. Check that commit out detached in this same worktree. Call the `worktree-setup` tool when your diff touched a manifest or a lockfile, then run the same command and capture the output. Then return to the engine's branch, and call the `worktree-setup` tool again if you called it at the base — a detached base checkout is a measurement, and the branch rule above still holds.
 4. Compare by **identity**, not by color: the same test and assertion, the same file and lint rule, the same type error at the same symbol. A suite red before and red now is not a match, and a failure whose message moved is a new failure.
 
 A failure that reproduces by identity at the base is a **baseline failure** — leave it. Every other failure is yours: fix it and re-run the failed check or build. Do not run another review round. A baseline failure the brief asked you to fix is yours too, whatever the base does.
