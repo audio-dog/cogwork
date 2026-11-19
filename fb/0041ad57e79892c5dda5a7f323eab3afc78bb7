@@ -1,0 +1,77 @@
+apps/cli/src/platform-setup-command.test.ts
+  s_e4cfb012e06511::t_fd9598bcc04f67 1-26
+packages/engine/src/daemon-composition-fixtures.ts
+  s_e4cfb012e06511::t_84d8f02998364c 1-341
+packages/engine/src/daemon-composition-slack-review-fixtures.ts
+  s_e4cfb012e06511::t_278ab43b93f481 1-300
+packages/engine/src/daemon-composition-slack-review.test.ts
+  s_76676c30711ade::t_ecadf181600609 1-185
+packages/engine/src/daemon-composition.test.ts
+  s_76676c30711ade::t_9b5a82b18308f6 1,7-18,21
+packages/engine/src/run-plan-resolution.test.ts
+  s_dcb7718c18428a::t_55def1d9f6728e 154,450-477
+packages/engine/src/run-plan-resolution.ts
+  s_dcb7718c18428a::t_a5fa63fd189a14 66,76,78-81,84-89,103,247
+packages/engine/src/workflow-run-engine-tools.ts
+  s_dcb7718c18428a::t_68a6c970195030 10-16,21-26,31,48
+packages/engine/src/workflow-run.ts
+  s_dcb7718c18428a::t_e0d46c71c741ad 227,259-263
+apps/cli/src/platform.ts
+  s_6ee5ea91686986::t_b88878cad17ab6 397
+packages/codex-cli/src/harness-configuration.test.ts
+  s_b03179dc172c65::t_d49a00244b3196 282
+packages/engine/src/workflow-action-entry.ts
+  s_6ee5ea91686986::t_2a7f52bac9fe68 83
+packages/engine/src/worktree-fs.ts
+  s_6ee5ea91686986::t_8e89637873ccef 8
+packages/engine/src/worktree.ts
+  s_6ee5ea91686986::t_cccf872af1ed72 206-209,513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb0041ad57e79892c5dda5a7f323eab3afc78bb7",
+  "prompts": {},
+  "sessions": {
+    "s_6ee5ea91686986": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a9c5a0330dc45fd98",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_76676c30711ade": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9e340f49-e042-4fb6-80ba-bf8f51052a8f",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b03179dc172c65": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "465ff710-6470-4aff-8404-20940a9b2c8f",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dcb7718c18428a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7c6f599e-5104-412d-b913-373fbf1a1628",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e4cfb012e06511": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "852875b8-1870-4b17-bcd3-51dc8d61105c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
