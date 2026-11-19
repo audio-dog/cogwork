@@ -87,7 +87,7 @@ describe("GitHub priority source", () => {
 describe("assignee allowlist identities", () => {
   const linearUserId = "5f8c1a2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b";
   const update = (type: string, assigneeAllowlist: ReadonlyArray<string>) => ({
-    name: "cogwork",
+    displayName: "cogwork",
     issueTracker: { type, connectionId: `${type}/acme`, assigneeAllowlist },
   });
   const refusal = (input: unknown) => {
@@ -109,7 +109,8 @@ describe("assignee allowlist identities", () => {
   it("still publishes a stored workspace whose allowlist holds a username", () => {
     const state = Schema.decodeUnknownSync(WorkspaceState)({
       _tag: "Registered",
-      name: "cogwork",
+      id: "cogwork",
+      displayName: "cogwork",
       checkoutPath: "/repos/cogwork",
       issueTracker: "linear",
       record: {
