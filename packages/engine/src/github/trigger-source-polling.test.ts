@@ -8,6 +8,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
+import type { TriggerEvent } from "../trigger-source";
 import { GitHubClient, type GitHubClientService } from "./client";
 import {
   firstIssueId,
@@ -17,7 +18,6 @@ import {
   registryState,
   secondIssueId,
   subscription,
-  thirdIssueId,
   workspaceId,
 } from "./trigger-source-fixtures";
 
@@ -72,7 +72,9 @@ describe("GitHub Trigger sources", () => {
       const client = yield* GitHubClient;
       const source = githubTrackerInstance(client, Effect.succeed(registryState));
       const running = yield* source
-        .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
+        .observe([
+          subscription("github.new-comment-from-person", "comment", [{ id: "label", value: "needs-triage" }]),
+        ])
         .pipe(
           Stream.tap(() => Deferred.succeed(firstEvent, undefined)),
           Stream.runDrain,
@@ -90,55 +92,64 @@ describe("GitHub Trigger sources", () => {
         Layer.mock(GitHubClient, {
           ...issueReads,
           listIssues,
-          listIssueEvents: () =>
-            Effect.succeed([{ id: 1, event: "labeled", labelName: "needs-triage", createdAtMillis: 90_000 }]),
-          listTriggerComments: () => Effect.succeed([]),
+          listTriggerComments: () =>
+            Effect.succeed([
+              {
+                id: 1,
+                authorLogin: "maintainer",
+                authorAssociation: "MEMBER",
+                body: "new",
+                createdAtMillis: 90_000,
+              },
+            ]),
         }),
       ),
     );
   });
 
-  it.effect("skips a failed GitHub issue read and advances the workspace cursor", () => {
-    const listIssues = vi
-      .fn<GitHubClientService["listIssues"]>()
-      .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]))
-      .mockReturnValue(Effect.succeed([issue(3)]));
+  it.effect("skips a failed GitHub issue read and admits the unchanged issue on the next poll", () => {
+    const changedOnce = vi
+      .fn<GitHubClientService["listIssues"]>(() => Effect.succeed([]))
+      .mockReturnValueOnce(Effect.succeed([issue(1), issue(2)]));
+    const listIssues: GitHubClientService["listIssues"] = (target, query) =>
+      query?.label === undefined ? changedOnce(target, query) : Effect.succeed([issue(1), issue(2)]);
+    const listIssueEvents = vi
+      .fn<GitHubClientService["listIssueEvents"]>((_target, number) =>
+        Effect.succeed([
+          { id: number, event: "labeled", labelName: "needs-triage", createdAtMillis: number },
+        ]),
+      )
+      .mockReturnValueOnce(
+        Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue read failed" })),
+      );
 
     return Effect.gen(function* () {
       yield* TestClock.setTime(100_000);
       const client = yield* GitHubClient;
       const source = githubTrackerInstance(client, Effect.succeed(registryState));
-      const observed = yield* source
+      const admitted: Array<TriggerEvent["key"]> = [];
+      const observing = yield* source
         .observe([subscription("github.issue-has-label", "label", [{ id: "label", value: "needs-triage" }])])
         .pipe(
-          Stream.take(2),
-          Stream.runCollect,
-          Effect.catchTag("SourceFailure", () => Effect.succeed([] as const)),
+          Stream.runForEach(({ key }) => Effect.sync(() => admitted.push(key))),
           Effect.forkChild({ startImmediately: true }),
         );
       yield* Effect.yieldNow;
       yield* TestClock.adjust("60 seconds");
-      const events = yield* Fiber.join(observed);
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(observing);
 
-      assert.deepStrictEqual(
-        [...events].map(({ key }) => key),
-        [
-          { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
-          { _tag: "Issue", workspace: workspaceId, id: thirdIssueId },
-        ],
-      );
-      assert.strictEqual(listIssues.mock.calls[1]?.[1]?.since, 70_000);
+      assert.deepStrictEqual(admitted, [
+        { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+        { _tag: "Issue", workspace: workspaceId, id: firstIssueId },
+        { _tag: "Issue", workspace: workspaceId, id: secondIssueId },
+      ]);
     }).pipe(
       Effect.provide(
         Layer.mock(GitHubClient, {
           ...issueReads,
           listIssues,
-          listIssueEvents: (_target, number) =>
-            number === 1
-              ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "issue read failed" }))
-              : Effect.succeed([
-                  { id: number, event: "labeled", labelName: "needs-triage", createdAtMillis: number },
-                ]),
+          listIssueEvents,
           listTriggerComments: () => Effect.succeed([]),
         }),
       ),

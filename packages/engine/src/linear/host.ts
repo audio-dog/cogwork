@@ -16,7 +16,10 @@ import {
 } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
-import { isResolvedState, type LinearClientService, type LinearTeamRef, type RawIssue } from "./client";
+import type { LinearClientService } from "./client";
+import type { RawIssue } from "./client-issue-mapping";
+import { isResolvedState } from "./client-queries";
+import type { LinearTeamRef } from "./client-transport";
 import { hasCogworkMarker, wireCodec } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
@@ -149,10 +152,14 @@ export const makeIssueReads = (client: LinearClientService) => {
   return {
     observe: (workspace: WorkspaceIssueTrackerBinding) =>
       listItems(workspace, (target) => client.observeIssues(target, null)),
-    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
-      listItems(workspace, (target) => client.observeIssues(target, null, null, sinceMillis, true)),
+    openItemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      listItems(workspace, (target) =>
+        client.observeOpenIssuesSince(target, sinceMillis, workspace.config.issueTracker.assigneeAllowlist),
+      ),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
-      listItems(workspace, (target) => client.observeLabelledIssues(target, label)),
+      listItems(workspace, (target) =>
+        client.observeLabelledIssues(target, label, workspace.config.issueTracker.assigneeAllowlist),
+      ),
     readItem: Effect.fn("linear.readItem")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
