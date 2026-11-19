@@ -133,7 +133,7 @@ describe("WorkflowRun", () => {
           harnesses: [],
         },
         machine: {
-          workspaces: [{ id: workspace.config.name, binds: ["github"] }],
+          workspaces: [{ id: workspace.config.id, binds: ["github"] }],
           connections: [],
           harnesses: [{ name: harnessName, available: true }],
           defaultHarness: harnessName,
@@ -151,7 +151,7 @@ describe("WorkflowRun", () => {
           cause: triggerId === "needs-info-comment" ? { _tag: "Person" } : { _tag: "Unknown" },
           atMillis: 1_000,
           entry: selected.entry,
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           parameters: selected.parameters,
         },
         subscription: {
@@ -161,7 +161,7 @@ describe("WorkflowRun", () => {
           entry: selected.entry,
           parameters: selected.parameters,
           filters: [],
-          workspaces: [workspace.config.name],
+          workspaces: [workspace.config.id],
           catchUp: { since: 0 },
         },
         lineage: {
@@ -197,7 +197,7 @@ describe("WorkflowRun", () => {
       const issue = (id: string) =>
         ({
           _tag: "Issue",
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           id: decodeWorkItem(id),
         }) satisfies WorkItemRef;
       const needsInfoProgram = yield* runCodingAdmission(admissionFor("needs-triage", issue("#800")), {
@@ -221,7 +221,7 @@ describe("WorkflowRun", () => {
       yield* runCodingAdmission(
         admissionFor("checks-failed", {
           _tag: "PullRequest",
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           number: 803,
         }),
         {

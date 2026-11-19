@@ -182,7 +182,7 @@ describe("WorkflowRun", () => {
       });
       const granolaDocument = WorkflowDocument.make({
         ...document,
-        workspaces: { _tag: "Listed", workspaces: [repo.config.name] },
+        workspaces: { _tag: "Listed", workspaces: [repo.config.id] },
         operations: [
           {
             ...document.operations[0],
@@ -238,7 +238,7 @@ describe("WorkflowRun", () => {
             return [
               WorkflowActionArtifact.make({
                 kind: "IssueCreated",
-                workspace: workspace.config.name,
+                workspace: workspace.config.id,
                 issue,
                 url: `https://example.test/issues/${issue.slice(1)}`,
                 origin: input.origin,

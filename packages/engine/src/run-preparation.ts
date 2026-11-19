@@ -76,7 +76,7 @@ export const selectedWorkspaceIds = (
   document: WorkflowDocument,
   workspaces: ReadonlyArray<RegisteredWorkspace>,
 ) => {
-  const registered = workspaces.map(({ config }) => config.name);
+  const registered = workspaces.map(({ config }) => config.id);
   return document.workspaces._tag === "Every"
     ? registered
     : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
@@ -108,7 +108,7 @@ export const make = Effect.gen(function* () {
     required: ReadonlyArray<string>,
   ) {
     if (workspace === null) return [];
-    const fromPlugins = yield* plugins.contributions(workspace.config.name).pipe(
+    const fromPlugins = yield* plugins.contributions(workspace.config.id).pipe(
       Effect.map((contributions) =>
         contributions.filter(({ load }) => PluginContributionLoad.guards.Loaded(load)),
       ),

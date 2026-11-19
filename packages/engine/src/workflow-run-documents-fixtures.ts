@@ -219,7 +219,7 @@ export const reviewOutput = {
   summary: "Review ready",
   stuck: false,
   answers: { done: "yes" },
-  workspace: reviewWorkspace.config.name,
+  workspace: reviewWorkspace.config.id,
   inputs: {
     pull_request: "#826",
     review_body: "Looks good.",

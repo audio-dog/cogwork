@@ -51,7 +51,7 @@ export const makeWorkflowRunTouchpoints = Effect.fn("WorkflowRun.makeTouchpoints
       (plan) => {
         const target = waitingReviewTarget(plan);
         if (target?._tag !== "NamedPullRequest") return Effect.void;
-        const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+        const workspace = workspaces.find(({ config }) => config.id === target.workspace);
         if (!workspace) return Effect.void;
         return sourceControl.readPullRequest(workspace, `#${target.number}`).pipe(
           Effect.flatMap((pullRequest) => {

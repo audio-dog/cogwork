@@ -172,7 +172,7 @@ export const make = Effect.gen(function* () {
     const catalogResult = yield* workflows.catalog;
     const registryState = yield* registry.state;
     const workspace =
-      registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
+      registryState.workspaces.find(({ config }) => config.id === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
     const resultSchema = workflowOperationResultSchema(
       operation,
@@ -181,7 +181,7 @@ export const make = Effect.gen(function* () {
       itemWorkspaceOf(admission),
     );
     const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
-      outputWorkspaces.includes(config.name),
+      outputWorkspaces.includes(config.id),
     );
     const preflight = yield* preparation.preflight(operation, catalogResult.machine);
     const ready = readyHarness(preflight);

@@ -117,7 +117,7 @@ describe("WorkflowRun", () => {
       inputs: { issue: "#12", comment: `Step ${position}` },
       target: {
         _tag: "ExistingIssue",
-        workspace: reviewWorkspace.config.name,
+        workspace: reviewWorkspace.config.id,
         app: IssueTrackerType.make("github"),
         issueTracker: reviewWorkspace.config.issueTracker,
         repository: null,
@@ -237,7 +237,7 @@ describe("WorkflowRun", () => {
             summary: "Comment ready",
             stuck: false,
             answers: { done: "yes" },
-            workspace: reviewWorkspace.config.name,
+            workspace: reviewWorkspace.config.id,
             inputs: { issue: "#12", comment: "Captured" },
           },
         ],

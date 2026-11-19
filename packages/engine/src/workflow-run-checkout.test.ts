@@ -15,7 +15,7 @@ import { WorktreeError, WorktreeManager } from "./worktree";
 
 const checkoutAdmission: TriggerAdmission = {
   ...admission,
-  event: { ...admission.event, workspace: reviewWorkspace.config.name },
+  event: { ...admission.event, workspace: reviewWorkspace.config.id },
 };
 
 const checkoutDocument = WorkflowDocument.make({

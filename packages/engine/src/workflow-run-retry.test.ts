@@ -73,19 +73,19 @@ describe("WorkflowRun", () => {
       ...admission,
       event: {
         ...admission.event,
-        key: { _tag: "Issue", workspace: workspace.config.name, id: issue },
+        key: { _tag: "Issue", workspace: workspace.config.id, id: issue },
         entry: issueEntry,
-        workspace: workspace.config.name,
+        workspace: workspace.config.id,
       },
       subscription: {
         ...admission.subscription,
         entry: issueEntry,
-        workspaces: [workspace.config.name],
+        workspaces: [workspace.config.id],
       },
     } satisfies TriggerAdmission;
     const pullRequestDocument = Schema.decodeSync(WorkflowDocument)({
       ...document,
-      workspaces: { _tag: "Listed", workspaces: [workspace.config.name] },
+      workspaces: { _tag: "Listed", workspaces: [workspace.config.id] },
       triggers: [{ ...document.triggers[0], entry: issueEntry, parameters: [] }],
       operations: [
         {
@@ -160,7 +160,7 @@ describe("WorkflowRun", () => {
         machine: {
           workspaces: [
             {
-              id: workspace.config.name,
+              id: workspace.config.id,
               binds: ["github"],
             },
           ],
