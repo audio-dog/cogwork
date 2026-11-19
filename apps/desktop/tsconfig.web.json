@@ -3,8 +3,6 @@
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "resolvePackageJsonImports": true,
-    "verbatimModuleSyntax": true,
-    "resolveJsonModule": true,
     "jsx": "react-jsx",
     "plugins": [
       {
@@ -13,10 +11,5 @@
       }
     ]
   },
-  "include": [
-    "src/renderer/src/env.d.ts",
-    "src/renderer/src/**/*",
-    "src/renderer/src/**/*.tsx",
-    "src/preload/*.d.ts"
-  ]
+  "include": ["src/renderer/src/**/*", "src/preload/*.d.ts"]
 }
