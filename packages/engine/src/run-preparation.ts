@@ -6,6 +6,7 @@ import {
   type ParkReason,
   PluginContributionLoad,
   RunId,
+  sessionResumable,
   type WorkflowDocument,
   type WorkflowOperation,
   WorkItemId,
@@ -89,6 +90,7 @@ export interface RunPreparationInput {
   readonly harness: HarnessName;
   readonly run: { readonly id: RunId; readonly workspace: WorkspaceId; readonly startedAtMillis: number };
   readonly pendingPlanAttempt: RunId | null;
+  readonly resend: { readonly run: RunId; readonly request: string } | null;
 }
 
 export const make = Effect.gen(function* () {
@@ -195,6 +197,17 @@ export const make = Effect.gen(function* () {
       PlatformError: () => null,
     });
 
+  const resendResumption = Effect.fn("RunPreparation.resendResumption")(function* (
+    resend: RunPreparationInput["resend"],
+    selectedHarness: HarnessName,
+  ) {
+    if (resend === null) return null;
+    const sessionId = (yield* ledger.getRun(resend.run))?.session ?? null;
+    const session = sessionId === null ? null : yield* ledger.getSession(sessionId);
+    const resumable = session?.harness === selectedHarness && sessionResumable(session);
+    return resumable ? { session: session.id, request: resend.request } : null;
+  });
+
   const prepare = Effect.fn("RunPreparation.prepare")(function* (input: RunPreparationInput) {
     const { admission, workspace, operation, run } = input;
     const view = yield* coordination.read(admission.event.key);
@@ -204,7 +217,8 @@ export const make = Effect.gen(function* () {
       handback === null || admission.lineage.parent === null ? null : RunId.make(admission.lineage.parent);
     const resumedAttempt = input.pendingPlanAttempt ?? handedBackAttempt;
     const resumedRun = resumedAttempt === null ? null : yield* ledger.getRun(resumedAttempt);
-    const resumedSession = resumedRun?.session ?? null;
+    const resent = resumedAttempt === null ? yield* resendResumption(input.resend, input.harness) : null;
+    const resumedSession = resumedRun?.session ?? resent?.session ?? null;
     const checkout = yield* ensureCheckout(
       admission,
       workspace,
@@ -232,6 +246,7 @@ export const make = Effect.gen(function* () {
       checkout,
       session,
       handback,
+      resendRequest: resent?.request ?? null,
       instructions,
       lineageArtifacts: yield* artifacts.byLineage(admission.lineage.root),
       subagents: yield* subagentMembers(workspace?.contributions ?? [], operation.requires),

@@ -117,12 +117,22 @@ export const selectedWorkspace: RegisteredWorkspace = {
     issueTracker: { type: "github", assigneeAllowlist: ["owner"] },
   }),
 };
+export const ungatedWorkspace: RegisteredWorkspace = {
+  ...selectedWorkspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    id: selectedWorkspaceId,
+    displayName: "Test workspace",
+    checkoutPath: "/repos/selected",
+    issueTracker: { type: "github" },
+  }),
+};
 export const selectedDocument = Schema.decodeSync(WorkflowDocument)({
   ...document,
   workspaces: { _tag: "Listed", workspaces: [selectedWorkspaceId] },
 });
 export const selectedIssueId = Schema.decodeSync(WorkItemId)("#1");
 export const nextSelectedIssueId = Schema.decodeSync(WorkItemId)("#2");
+export const unassignedIssueId = Schema.decodeSync(WorkItemId)("#3");
 export const selectedEvent = {
   ...event,
   key: { _tag: "Issue", workspace: selectedWorkspaceId, id: selectedIssueId },
@@ -141,10 +151,8 @@ export const selectedTrackerItem: TrackerItem = {
 export const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWorkspaceObservation")(
   function* (
     options: {
-      readonly observedItems?: ReadonlyArray<TrackerItem>;
-      readonly exactAssignees?: (
-        itemId: WorkItemId,
-      ) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+      readonly assignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+      readonly workspace?: RegisteredWorkspace;
       readonly store?: TriggerObservationStoreService;
       readonly document?: WorkflowDocument;
       readonly source?: { readonly id: TriggerSourceId; readonly entries: TriggerSource["entries"] };
@@ -154,30 +162,19 @@ export const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWo
     const processed = yield* Ref.make<string | null>(null);
     const observed = yield* Ref.make(0);
     const sourceRevision = yield* Ref.make<string | null>(null);
-    const trackerCalls = yield* Ref.make(0);
-    const exactAssigneeCalls = yield* Ref.make(0);
+    const assigneeReads = yield* Ref.make<ReadonlyArray<WorkItemId>>([]);
     const scripted = yield* makeScriptedSource(
       options.source?.id ?? "clock",
       options.source?.entries ?? clockEntries,
     );
     const store = options.store ?? (yield* makeMemoryTriggerObservationStore);
     const bus = yield* makeDaemonEventBus;
-    const emptyTracker = yield* makeEmptyIssueTracker;
-    const exactAssignees = options.exactAssignees;
+    const readAssignees = options.assignees ?? (() => Effect.succeed(["owner"]));
     const tracker = {
-      ...emptyTracker,
-      observe: () =>
-        Ref.update(trackerCalls, (count) => count + 1).pipe(
-          Effect.map(() => options.observedItems ?? [selectedTrackerItem]),
-        ),
-      ...(exactAssignees === undefined
-        ? {}
-        : {
-            assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
-              Ref.update(exactAssigneeCalls, (count) => count + 1).pipe(
-                Effect.andThen(exactAssignees(itemId)),
-              ),
-          }),
+      ...(yield* makeEmptyIssueTracker),
+      observe: () => Effect.die("the assignee gate read the whole Workspace"),
+      assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
+        Ref.update(assigneeReads, (reads) => [...reads, itemId]).pipe(Effect.andThen(readAssignees(itemId))),
     };
     const coordination = coordinationService(processed, observed, sourceRevision);
     const observation = yield* make.pipe(
@@ -189,12 +186,12 @@ export const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWo
       Effect.provideService(IssueTracker, tracker),
       Effect.provideService(
         WorkspaceRegistry,
-        readOnlyRegistry({ workspaces: [selectedWorkspace], failures: [] }),
+        readOnlyRegistry({ workspaces: [options.workspace ?? selectedWorkspace], failures: [] }),
       ),
     );
     yield* Effect.yieldNow;
     yield* observation.refresh;
-    return { observation, scripted, trackerCalls, exactAssigneeCalls, observed, coordination, store };
+    return { observation, scripted, assigneeReads, observed, coordination, store };
   },
 );
 

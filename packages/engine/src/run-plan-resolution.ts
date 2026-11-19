@@ -65,6 +65,7 @@ export interface RunPlanFacts {
   readonly workspaceCheckout: string | null;
   readonly instructions: AssembledContext;
   readonly previousResultIssues: string | null;
+  readonly resendRequest: string | null;
   readonly lineageArtifacts: ReadonlyArray<Pick<WorkflowActionArtifact, "workspace" | "issue" | "url">>;
   readonly claim: Claim;
   readonly handback: HandbackRecord | null;
@@ -195,7 +196,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
           : [{ source: "previous-result-issues", content: facts.previousResultIssues }]),
       ],
     },
-    messages: [{ role: "user", content: operationMessage(operation, facts.handback) }],
+    messages: [{ role: "user", content: facts.resendRequest ?? operationMessage(operation, facts.handback) }],
     tools: harness.projectedMembers.includes("Tools")
       ? engineToolOrder.filter((tool) => toolNeeds.has(tool))
       : [],
