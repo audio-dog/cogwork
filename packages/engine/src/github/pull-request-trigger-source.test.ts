@@ -1,28 +1,94 @@
-import { IssueTrackerError } from "@cogwork/contracts";
+import { IssueTrackerError, WorkspaceConfig } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
-import { GitHubClient } from "./client";
+import type { RegisteredWorkspace } from "../projector";
+import { GitHubClient, type RawPull } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
-  botRegistryState,
   githubTrackerInstance,
   issue,
   issueReads,
-  pullClientLayer,
   registryState,
   reviewTrigger,
   subscription,
-  targetOf,
-  trustedPull,
   workflow,
+  workspace,
   workspaceId,
 } from "./trigger-source-fixtures";
+
+const botWorkspace: RegisteredWorkspace = {
+  ...workspace,
+  config: Schema.decodeSync(WorkspaceConfig)({
+    name: workspaceId,
+    checkoutPath: "/repos/example",
+    issueTracker: { type: "github" },
+    sourceControl: { type: "github", botAllowlist: ["maintainer"] },
+  }),
+};
+const botRegistryState = { workspaces: [botWorkspace], failures: [] };
+
+const trustedPull: RawPull = {
+  number: 10,
+  url: "https://github.com/acme/example/pull/10",
+  authorLogin: "maintainer",
+  authorAssociation: "MEMBER",
+  draft: false,
+  headSha: "head-sha",
+  baseSha: "base-sha",
+  headRef: "7-work",
+  headRepository: "acme/example",
+  closingIssueNumbers: [7],
+  updatedAtMillis: 3_000,
+};
+
+const pulls: Array<RawPull> = [
+  {
+    number: 11,
+    url: "https://github.com/acme/example/pull/11",
+    authorLogin: "outside-user",
+    authorAssociation: "NONE",
+    draft: false,
+    headSha: "outside-sha",
+    baseSha: "base-sha",
+    headRef: "99-work",
+    headRepository: "outside/fork",
+    closingIssueNumbers: [99],
+    updatedAtMillis: 2_900,
+  },
+  trustedPull,
+];
+
+const pullClientLayer = (listedPulls = pulls) =>
+  Layer.mock(GitHubClient, {
+    authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+    listPulls: () => Effect.succeed(listedPulls),
+    listCheckRuns: () =>
+      Effect.succeed([{ name: "test", status: "completed", conclusion: "failure", startedAtMillis: 2_500 }]),
+    pullMergeableState: () => Effect.succeed("dirty"),
+    listTriggerComments: () => Effect.succeed([]),
+    listReviewComments: () => Effect.succeed([]),
+    listReviews: () =>
+      Effect.succeed([
+        {
+          id: 88,
+          authorLogin: "maintainer",
+          authorAssociation: "MEMBER",
+          authorType: "User",
+          state: "COMMENTED",
+          body: "Review body",
+          submittedAtMillis: 2_800,
+        },
+      ]),
+  });
+
+const targetOf = (event: object) => ("target" in event ? event.target : undefined);
 
 describe("GitHub pull request Trigger source", () => {
   it.effect("keys pull conditions by head and base revisions", () =>

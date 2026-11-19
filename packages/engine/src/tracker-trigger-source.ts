@@ -71,7 +71,7 @@ const uniqueItems = (items: ReadonlyArray<ListedTrackerItem>) => [
   ...new Map(items.map((item) => [item.id, item])).values(),
 ];
 
-const changedSince = (
+const modifiedSinceLowerBound = (
   cursor: number | undefined,
   occurrences: ReadonlyArray<TriggerSubscription>,
   now: number,
@@ -180,7 +180,7 @@ export const makeTrackerTriggerSource = (
     const name = workspace.config.name;
     const selected = workspaceSubscriptions(name, subscriptions);
     if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: name };
-    const since = changedSince(
+    const since = modifiedSinceLowerBound(
       cursor,
       selected.filter(({ entry }) => !conditionEntries.has(entry)),
       now,

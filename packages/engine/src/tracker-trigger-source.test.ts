@@ -194,18 +194,21 @@ describe("Tracker Trigger source", () => {
     () => {
       const source = makeTrackerTriggerSource(
         "github",
-        tracker({ changed: [item(1)], labelled: [item(3), item(4, { labels: ["other"] })] }),
+        tracker({ labelled: [item(3), item(4, { labels: ["other"] })] }),
         Effect.succeed(registryState),
         null,
       );
-      const filtered = { ...subscription(issueHasLabelKey, "unblocked"), filters: [issueNotBlockedKey] };
+      const filtered = { ...subscription(newCommentKey, "unblocked"), filters: [issueNotBlockedKey] };
       return Effect.gen(function* () {
-        const events = yield* source.observe([filtered]).pipe(Stream.take(1), Stream.runCollect);
-
-        assert.deepStrictEqual(
-          [...events].map(({ key }) => key),
-          [{ _tag: "Issue", workspace: workspaceId, id: unchangedIssueId }],
+        const admitted: Array<TriggerEvent["key"]> = [];
+        const observing = yield* source.observe([filtered]).pipe(
+          Stream.runForEach(({ key }) => Effect.sync(() => admitted.push(key))),
+          Effect.forkChild({ startImmediately: true }),
         );
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(observing);
+
+        assert.deepStrictEqual(admitted, [{ _tag: "Issue", workspace: workspaceId, id: unchangedIssueId }]);
       });
     },
   );
