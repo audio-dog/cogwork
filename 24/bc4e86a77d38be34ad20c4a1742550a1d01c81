@@ -1,0 +1,19 @@
+.git-blame-ignore-revs
+  s_24a7036fab5f2b::t_89f5730f14ee09 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "24bc4e86a77d38be34ad20c4a1742550a1d01c81",
+  "prompts": {},
+  "sessions": {
+    "s_24a7036fab5f2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b8aa8c2-de7a-45a3-bbbd-cc9b5df09b19",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
