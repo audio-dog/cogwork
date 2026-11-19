@@ -3,6 +3,7 @@ import {
   agUiIsFileDiffEvent,
   agUiIsFileDiffUnavailableEvent,
   agUiIsSessionHandleEvent,
+  agUiIsSubagentEvent,
   agUiTextDelta,
   type RunActivity,
   type RunId,
@@ -123,8 +124,9 @@ const onRunFinished = (state: RunPreviewState, runId: string, event: NamedEvent<
 const onRunError = (state: RunPreviewState, runId: string, event: NamedEvent<"RUN_ERROR">) =>
   setEntry(state, runId, (entry) => withPreview(entry, "error", event.message ?? "run error"));
 
-export const applyRunPreview = (state: RunPreviewState, activity: RunActivity) =>
-  AgUiEvent.matchOrElse(
+export const applyRunPreview = (state: RunPreviewState, activity: RunActivity) => {
+  if (agUiIsSubagentEvent(activity.event)) return state;
+  return AgUiEvent.matchOrElse(
     activity.event,
     {
       RUN_STARTED: () => onRunStarted(state, activity),
@@ -141,6 +143,7 @@ export const applyRunPreview = (state: RunPreviewState, activity: RunActivity) =
     },
     () => state,
   );
+};
 
 export const previewMap = (state: RunPreviewState): ReadonlyMap<string, RunActivityPreview> =>
   new Map([...state].map(([runId, entry]) => [runId, entry.preview]));
@@ -230,8 +233,9 @@ const setDiffEntry = (state: TranscriptFold, path: string, diff: string) => {
   return setTranscriptEntry(state, key, entry);
 };
 
-const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
-  AgUiEvent.matchOrElse(
+const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) => {
+  if (agUiIsSubagentEvent(activity.event)) return state;
+  return AgUiEvent.matchOrElse(
     activity.event,
     {
       TEXT_MESSAGE_CONTENT: ({ messageId, delta }) =>
@@ -295,6 +299,7 @@ const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) =>
     },
     () => state,
   );
+};
 
 export const applyTranscriptActivities = (state: TranscriptFold, activities: ReadonlyArray<RunActivity>) =>
   activities.reduce((current, activity) => {

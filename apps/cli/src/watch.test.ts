@@ -129,6 +129,21 @@ describe("stepWatch", () => {
     assert.deepStrictEqual(lines, ['triage #44 · ✎ cursor.plan {"steps":2}']);
   });
 
+  it("shows no Subagent child event as parent output", () => {
+    const lines = drain([
+      content("parent "),
+      activity({ event: { type: "SUBAGENT_STARTED", subagentRunId: "child-1", name: "reviewer" } }),
+      activity({ event: { type: "TEXT_MESSAGE_CONTENT", delta: "child text", subagentRunId: "child-1" } }),
+      activity({
+        event: { type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "read", subagentRunId: "child-1" },
+      }),
+      activity({ event: { type: "SUBAGENT_FINISHED", subagentRunId: "child-1" } }),
+      content("text"),
+      messageEnd(),
+    ]);
+    assert.deepStrictEqual(lines, ["triage #44 · parent text"]);
+  });
+
   it("renders run error messages", () => {
     const lines = drain([activity({ event: { type: "RUN_ERROR", message: "boom" } })]);
     assert.deepStrictEqual(lines, ["triage #44 · ✖ boom"]);

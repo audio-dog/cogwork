@@ -1,6 +1,7 @@
 import {
   type AgUiEvent,
   agUiIsFileDiffUnavailableEvent,
+  agUiIsSubagentEvent,
   agUiTextDelta,
   agUiUsage,
   type ModelLevel,
@@ -206,7 +207,8 @@ describe("providerRunner stream", { timeout: 30_000 }, () => {
         ["Review the diff."],
       );
       assert.isTrue(parentCalls.some((options) => options.messages.at(-1)?.content === "Find the seam."));
-      assert.isFalse(events.some((event) => agUiTextDelta(event) === "review done"));
+      const reviewText = events.filter((event) => agUiTextDelta(event) === "review done");
+      assert.isTrue(reviewText.length > 0 && reviewText.every(agUiIsSubagentEvent));
       const finished = events.findLast((event) => event.type === "RUN_FINISHED");
       assert.strictEqual(finished ? agUiUsage(finished)?.totalTokens : null, 22);
     }),

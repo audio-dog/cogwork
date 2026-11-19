@@ -92,6 +92,8 @@ const eventMetadataFields = new Set([
   "stepName",
   "finishReason",
   "role",
+  "subagentRunId",
+  "parentToolCallId",
 ]);
 
 const scrubValue = (value: unknown, secrets: ReadonlyArray<string>): unknown => {

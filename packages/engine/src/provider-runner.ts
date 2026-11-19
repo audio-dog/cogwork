@@ -42,7 +42,14 @@ import { resolveModelAdapter } from "./provider-resolve";
 import { workContextMessage } from "./run-plan";
 import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import { SessionStore } from "./session-store";
-import { availableSubagents, levelModel, modelLevelRunner, subagentProjection } from "./subagent-runner";
+import {
+  availableSubagents,
+  levelModel,
+  makeSubagentFeed,
+  mergeSubagentFeed,
+  modelLevelRunner,
+  subagentProjection,
+} from "./subagent-runner";
 import {
   makeOwnedToolSet,
   mergeFileDiffFeed,
@@ -268,11 +275,13 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
           );
           const agentLoopStrategy = maxIterations(defaultLoopBudget(plan.harness.profile));
           const runner = modelLevelRunner(levels, reference, (model) => childAdapters.get(model) ?? adapter);
+          const feed = yield* makeSubagentFeed;
           const projection = subagentProjection(
             subagents,
             { runId: plan.id, threadId: session, tools: [...tools, ...engineTools] },
             runner,
             { tools: [...tools, ...engineTools], middleware: [], agentLoopStrategy },
+            feed,
           );
           const chatStream = runChat({
             adapter,
@@ -286,7 +295,7 @@ export const providerRunner = (options: ProviderRunnerOptions): HarnessRunner =>
             outputSchema: plan.structuredOutput ?? undefined,
           });
 
-          return yield* mergeProviderFileDiffs(bridgeChat(chatStream), (stop) =>
+          return yield* mergeProviderFileDiffs(mergeSubagentFeed(bridgeChat(chatStream), feed), (stop) =>
             watchWorktreeDiffs(sandbox, baseSha, stop),
           );
         }),

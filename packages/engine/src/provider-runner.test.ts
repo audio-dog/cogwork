@@ -1,6 +1,6 @@
-import { agUiTextDelta, RunPlan } from "@cogwork/contracts";
+import { AgUiEvent, agUiIsSubagentEvent, agUiTextDelta, RunPlan, RunPlanSubagent } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import { toolDefinition } from "@tanstack/ai";
+import { chat, toolDefinition } from "@tanstack/ai";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -34,6 +34,7 @@ import {
   sessionLayer,
   toAsyncIterable,
 } from "./provider-runner-fixtures";
+import { hasToolResults, scriptedAdapter, subagentCallTurn, textTurn } from "./testing/scripted-adapter";
 import { isPolicyDenied } from "./tools";
 
 describe("providerRunner", { timeout: 30_000 }, () => {
@@ -126,6 +127,61 @@ describe("providerRunner", { timeout: 30_000 }, () => {
       );
 
       assert.strictEqual(capturedOptions[0]?.threadId, sessionId);
+    }),
+  );
+
+  it.live("sends a child's events into the Run before RUN_FINISHED, with the parent tool call id", () =>
+    Effect.gen(function* () {
+      const reviewer = RunPlanSubagent.cases.Available.make({
+        identity: "local:repo/reviewer",
+        name: "reviewer",
+        source: ".agents/agents/reviewer.md",
+        description: "Reviews one change",
+        tools: [],
+        modelLevel: "standard",
+        prompt: "You review changes.",
+      });
+      const parent = scriptedAdapter("parent", (options) =>
+        hasToolResults(options)
+          ? textTurn('{"outcome":"done"}', 1)
+          : subagentCallTurn([{ id: "call-1", agent: "reviewer", task: "Review." }], 1),
+      );
+      const runChat: RunChat = (options) =>
+        chat({
+          adapter: parent,
+          messages: [...options.messages],
+          tools: [...options.tools],
+          middleware: [...options.middleware],
+          runId: options.runId,
+          threadId: options.threadId,
+          stream: true,
+        });
+      const makeAdapter: ModelAdapterFactory = () =>
+        scriptedAdapter("child", () => textTurn("child text", 1));
+      const runner = providerRunner({ name: harnessName, makeAdapter, runChat });
+      const base = request({ checkoutPath: null });
+
+      const events = yield* Stream.runCollect(
+        runner.run({ ...base, plan: RunPlan.make({ ...base.plan, subagents: [reviewer] }) }),
+      ).pipe(Effect.provide(providerRunnerLayer()));
+
+      const childEvents = events.filter(agUiIsSubagentEvent);
+      assert.deepStrictEqual(
+        childEvents.map(({ type }) => type),
+        [
+          "SUBAGENT_STARTED",
+          "TEXT_MESSAGE_START",
+          "TEXT_MESSAGE_CONTENT",
+          "TEXT_MESSAGE_END",
+          "SUBAGENT_FINISHED",
+        ],
+      );
+      const started = childEvents[0];
+      assert.strictEqual(
+        started && AgUiEvent.guards.SUBAGENT_STARTED(started) ? started.parentToolCallId : null,
+        "call-1",
+      );
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
     }),
   );
 

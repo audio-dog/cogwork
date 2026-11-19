@@ -1,7 +1,13 @@
-import { agUiUsage, type ModelLevel, RunPlan, RunPlanSubagent } from "@cogwork/contracts";
+import {
+  agUiIsSubagentEvent,
+  agUiUsage,
+  type ModelLevel,
+  RunPlan,
+  RunPlanSubagent,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { EventType, type StreamChunk, type TextOptions, toolDefinition } from "@tanstack/ai";
-import { getWorkspaceProjection } from "@tanstack/ai-sandbox";
+import { createSecrets, getWorkspaceProjection } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Predicate from "effect/Predicate";
@@ -213,6 +219,71 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           const finished = events.findLast((event) => event.type === EventType.RUN_FINISHED);
           assert.strictEqual(finished ? agUiUsage(finished)?.totalTokens : null, 22);
           assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
+        }),
+    );
+
+    it.effect(
+      "sends a child's events, scrubbed, into the Run before RUN_FINISHED, and estimates no child text",
+      () =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-subagent-events-" });
+          const secret = "anthropic-test-key-secret";
+          const reviewer = RunPlanSubagent.cases.Available.make({
+            identity: "local:repo/reviewer",
+            name: "reviewer",
+            source: ".agents/agents/reviewer.md",
+            description: "Reviews one change",
+            tools: [],
+            modelLevel: "standard",
+            prompt: "You review changes.",
+          });
+          const probe = new ControlledProbe();
+          const harness = makeHarness(
+            {
+              ...descriptor([], probe),
+              declaredMembers: ["Subagents"],
+              makeAdapter: ({ request: resolved }) => {
+                const turn = (options: TextOptions<ControlledOptions>) => {
+                  if (resolved.subagents.length === 0) return textTurn(`child saw ${secret}`, 1);
+                  return hasToolResults(options)
+                    ? terminalEvents
+                    : subagentCallTurn([{ id: "call-1", agent: "reviewer", task: "Review." }], 1);
+                };
+                return new ControlledAdapter((options) => toAsyncIterable(turn(options)), probe);
+              },
+            },
+            { authentication: Effect.succeed({ mode: "host", secrets: createSecrets({ KEY: secret }) }) },
+          );
+
+          const events = yield* harness
+            .run({
+              plan: RunPlan.make({
+                ...request,
+                subagents: [reviewer],
+                sandbox: { ...request.sandbox, workspace: checkout },
+              }),
+              session: freshSession,
+              mcpCredentials: new Map(),
+            })
+            .pipe(Stream.runCollect);
+
+          const childEvents = events.filter(agUiIsSubagentEvent);
+          assert.deepStrictEqual(
+            childEvents.map(({ type }) => type),
+            [
+              "SUBAGENT_STARTED",
+              "TEXT_MESSAGE_START",
+              "TEXT_MESSAGE_CONTENT",
+              "TEXT_MESSAGE_END",
+              "SUBAGENT_FINISHED",
+            ],
+          );
+          assert.strictEqual(new Set(childEvents.map(({ subagentRunId }) => subagentRunId)).size, 1);
+          assert.strictEqual(childEvents[2]?.delta, "child saw [redacted]");
+          const finished = events.at(-1);
+          assert.strictEqual(finished?.type, EventType.RUN_FINISHED);
+          assert.strictEqual(finished ? agUiUsage(finished)?.outputTokens : null, 0);
         }),
     );
 

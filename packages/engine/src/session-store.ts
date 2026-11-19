@@ -1,6 +1,7 @@
 import {
   AgUiEvent,
   agUiIsStructuredOutputComplete,
+  agUiIsSubagentEvent,
   type HarnessName,
   type Session,
   type SessionId,
@@ -127,7 +128,7 @@ const foldEvent = (state: FoldState, event: AgUiEvent): FoldState =>
 // Takes the harness events the recorder already decoded and folds them into transcript messages.
 // The recorder owns the decode, so this never touches a run event's stored payload.
 export const foldThread = (events: ReadonlyArray<AgUiEvent>) =>
-  flushText(events.reduce(foldEvent, emptyFold)).messages;
+  flushText(events.filter((event) => !agUiIsSubagentEvent(event)).reduce(foldEvent, emptyFold)).messages;
 
 const labelToolResult = (message: ThreadMessage) =>
   message.toolName ? `Result from ${message.toolName}:\n${message.content}` : message.content;

@@ -12,14 +12,14 @@ class FileDiffDrainTimeout extends Data.TaggedError("FileDiffDrainTimeout")<{
   readonly deadline: string;
 }> {}
 
-export const mergeFileDiffFeed = Effect.fn("Tools.mergeFileDiffFeed")(function* <E, R>(
+// A client stops reading at `RUN_FINISHED`, so the feed must drain before it.
+// `RUN_ERROR` is not held: the stream fails right behind it.
+export const mergeBeforeRunFinished = Effect.fn("Tools.mergeBeforeRunFinished")(function* <E, FE, R>(
   harnessEvents: Stream.Stream<AgUiEvent, E>,
-  fileDiffs: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, unknown, R>,
-  failureMessage: string,
+  feed: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, FE, R>,
 ) {
   const harnessDone = yield* Deferred.make<void>();
   const withheldTerminal = yield* Ref.make<AgUiEvent | null>(null);
-  const stop = Deferred.await(harnessDone);
   return Stream.merge(
     harnessEvents.pipe(
       Stream.filterEffect((event) =>
@@ -29,14 +29,7 @@ export const mergeFileDiffFeed = Effect.fn("Tools.mergeFileDiffFeed")(function* 
       ),
       Stream.ensuring(Deferred.succeed(harnessDone, undefined)),
     ),
-    fileDiffs(stop).pipe(
-      Stream.interruptWhen(
-        Effect.andThen(stop, Effect.sleep(feedDrainDeadline)).pipe(
-          Effect.andThen(Effect.fail(new FileDiffDrainTimeout({ deadline: feedDrainDeadline }))),
-        ),
-      ),
-      tolerateFeedDeath(failureMessage),
-    ),
+    feed(Deferred.await(harnessDone)),
     { haltStrategy: "both" },
   ).pipe(
     Stream.concat(
@@ -48,3 +41,19 @@ export const mergeFileDiffFeed = Effect.fn("Tools.mergeFileDiffFeed")(function* 
     ),
   );
 });
+
+export const mergeFileDiffFeed = <E, R>(
+  harnessEvents: Stream.Stream<AgUiEvent, E>,
+  fileDiffs: (stop: Effect.Effect<void>) => Stream.Stream<AgUiEvent, unknown, R>,
+  failureMessage: string,
+) =>
+  mergeBeforeRunFinished(harnessEvents, (stop) =>
+    fileDiffs(stop).pipe(
+      Stream.interruptWhen(
+        Effect.andThen(stop, Effect.sleep(feedDrainDeadline)).pipe(
+          Effect.andThen(Effect.fail(new FileDiffDrainTimeout({ deadline: feedDrainDeadline }))),
+        ),
+      ),
+      tolerateFeedDeath(failureMessage),
+    ),
+  );

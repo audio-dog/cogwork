@@ -36,6 +36,19 @@ const event = (seq: number, value: AgUiEvent): RunEvent => ({
 const layer = engineTestLayer();
 
 describe("foldThread", () => {
+  it("leaves Subagent child events out of the parent transcript", () => {
+    const events: ReadonlyArray<AgUiEvent> = [
+      { type: "TEXT_MESSAGE_CONTENT", delta: "Parent " },
+      { type: "SUBAGENT_STARTED", subagentRunId: "child-1", name: "reviewer" },
+      { type: "TEXT_MESSAGE_CONTENT", delta: "child text", subagentRunId: "child-1" },
+      { type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "read", subagentRunId: "child-1" },
+      { type: "SUBAGENT_FINISHED", subagentRunId: "child-1" },
+      { type: "TEXT_MESSAGE_CONTENT", delta: "text" },
+      { type: "RUN_FINISHED", finishReason: "stop" },
+    ];
+    assert.deepStrictEqual(foldThread(events), [{ role: "assistant", content: "Parent text" }]);
+  });
+
   it("splits assistant text on a tool call and keeps the tool's name and args", () => {
     const events: ReadonlyArray<AgUiEvent> = [
       { type: "TEXT_MESSAGE_CONTENT", delta: "Hello " },

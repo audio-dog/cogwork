@@ -43,7 +43,27 @@ const runActivity = (seq: number, agui: AgUiEvent & { type: string }) => activit
 const previewsOf = (activities: ReadonlyArray<RunActivity>) =>
   previewMap(activities.reduce<RunPreviewState>((state, next) => applyRunPreview(state, next), new Map()));
 
+type Event = AgUiEvent & { type: string };
+
+const parentText: Event = { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "parent text" };
+const parentToolStart: Event = { type: "TOOL_CALL_START", toolCallId: "t1", toolCallName: "reviewer" };
+const parentToolResult: Event = { type: "TOOL_CALL_RESULT", toolCallId: "t1", result: "review passed" };
+const childEvents: ReadonlyArray<Event> = [
+  { type: "SUBAGENT_STARTED", subagentRunId: "child-1", name: "reviewer" },
+  { type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "child text", subagentRunId: "child-1" },
+  { type: "TOOL_CALL_START", toolCallId: "c1", toolCallName: "read", subagentRunId: "child-1" },
+  { type: "SUBAGENT_FINISHED", subagentRunId: "child-1" },
+];
+
+const runActivities = (events: ReadonlyArray<Event>) => events.map((agui, seq) => runActivity(seq, agui));
+
 describe("applyRunPreview", () => {
+  it("shows a Run with Subagents as it shows the same Run without them", () => {
+    expect(previewsOf(runActivities([parentText, ...childEvents]))).toEqual(
+      previewsOf(runActivities([parentText])),
+    );
+  });
+
   it("has no preview when there are no events", () => {
     expect(previewsOf([]).size).toBe(0);
   });
@@ -143,6 +163,12 @@ describe("applyRunPreview", () => {
 });
 
 describe("foldTranscript", () => {
+  it("renders a Run with Subagents as it renders the same Run without them", () => {
+    expect(
+      foldTranscript(runActivities([parentText, parentToolStart, ...childEvents, parentToolResult])),
+    ).toEqual(foldTranscript(runActivities([parentText, parentToolStart, parentToolResult])));
+  });
+
   it("pulls each published transcript snapshot once across subscribers", () => {
     const pump = makeTranscriptPump();
     const pull = vi.fn();

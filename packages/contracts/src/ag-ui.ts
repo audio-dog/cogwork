@@ -23,55 +23,68 @@ const eventVariant = <const Type extends string, const Fields extends Schema.Str
   fields: Fields,
 ) => Schema.StructWithRest(Schema.Struct({ type: Schema.tag(type), ...fields }), [anyExtraKeys]);
 
+const subagentRunId = Schema.optional(Schema.String);
+
 const AgUiNamedEvent = Schema.Union([
   eventVariant("RUN_STARTED", {
     threadId: Schema.optional(Schema.String),
   }),
   eventVariant("TEXT_MESSAGE_START", {
+    subagentRunId,
     messageId: Schema.optional(Schema.String),
   }),
   eventVariant("TEXT_MESSAGE_CONTENT", {
+    subagentRunId,
     delta: Schema.optional(Schema.String),
     messageId: Schema.optional(Schema.String),
   }),
   eventVariant("TEXT_MESSAGE_END", {
+    subagentRunId,
     messageId: Schema.optional(Schema.String),
   }),
   eventVariant("REASONING_MESSAGE_CONTENT", {
+    subagentRunId,
     delta: Schema.optional(Schema.String),
     messageId: Schema.optional(Schema.String),
   }),
   eventVariant("TOOL_CALL_START", {
+    subagentRunId,
     toolCallId: Schema.optional(Schema.String),
     toolCallName: Schema.optional(Schema.String),
     args: Schema.optional(Schema.String),
   }),
   eventVariant("TOOL_CALL_ARGS", {
+    subagentRunId,
     toolCallId: Schema.optional(Schema.String),
     toolCallName: Schema.optional(Schema.String),
     delta: Schema.optional(Schema.String),
     args: Schema.optional(Schema.String),
   }),
   eventVariant("TOOL_CALL_END", {
+    subagentRunId,
     toolCallId: Schema.optional(Schema.String),
     toolCallName: Schema.optional(Schema.String),
     args: Schema.optional(Schema.String),
     result: Schema.optional(Schema.Unknown),
   }),
   eventVariant("TOOL_CALL_RESULT", {
+    subagentRunId,
     toolCallId: Schema.optional(Schema.String),
     toolCallName: Schema.optional(Schema.String),
     content: Schema.optional(Schema.Unknown),
     result: Schema.optional(Schema.Unknown),
   }),
   eventVariant("CUSTOM", {
+    subagentRunId,
     name: Schema.optional(Schema.String),
     value: Schema.optional(Schema.Unknown),
   }),
   eventVariant("STEP_STARTED", {
+    subagentRunId,
     stepName: Schema.optional(Schema.String),
   }),
   eventVariant("STEP_FINISHED", {
+    subagentRunId,
     stepName: Schema.optional(Schema.String),
   }),
   eventVariant("RUN_FINISHED", {
@@ -80,6 +93,20 @@ const AgUiNamedEvent = Schema.Union([
     usage: Schema.optional(AgUiUsage),
   }),
   eventVariant("RUN_ERROR", {
+    message: Schema.optional(Schema.String),
+  }),
+  eventVariant("SUBAGENT_STARTED", {
+    subagentRunId,
+    name: Schema.optional(Schema.String),
+    description: Schema.optional(Schema.String),
+    parentToolCallId: Schema.optional(Schema.String),
+  }),
+  eventVariant("SUBAGENT_FINISHED", {
+    subagentRunId,
+    result: Schema.optional(Schema.Unknown),
+  }),
+  eventVariant("SUBAGENT_ERROR", {
+    subagentRunId,
     message: Schema.optional(Schema.String),
   }),
 ]).pipe(Schema.toTaggedUnion("type"));
@@ -190,6 +217,8 @@ export const agUiCorrelation = (event: AgUiEvent) => ({
   messageId: stringField(event, "messageId"),
   toolCallId: stringField(event, "toolCallId"),
 });
+
+export const agUiIsSubagentEvent = (event: AgUiEvent) => stringField(event, "subagentRunId") !== null;
 
 export const agUiIsTerminal = (event: AgUiEvent) =>
   AgUiEvent.guards.RUN_FINISHED(event) || AgUiEvent.guards.RUN_ERROR(event);
