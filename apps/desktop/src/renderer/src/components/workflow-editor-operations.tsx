@@ -347,7 +347,7 @@ function OperationCard({ operation }: { readonly operation: WorkflowOperation })
             value={instruction.value}
             label={`Instructions for ${operation.name}`}
             placeholder="Instructions"
-            className="min-h-16 py-2 text-sm"
+            className="min-h-16 py-2 pe-3 text-sm"
             save={instruction.save}
           />
         </ScrollArea>
