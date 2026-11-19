@@ -1,0 +1,18 @@
+packages/engine/src/github/provider-slack-review-template.ts
+  h_46518a29d4dd91 1-130
+packages/engine/src/github/provider.ts
+  h_46518a29d4dd91 37
+packages/engine/src/workflow-fixtures.ts
+  h_46518a29d4dd91 18-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b1074bf79765fd384b65b0a9f192baf0c368ca6",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
