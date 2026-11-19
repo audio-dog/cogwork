@@ -6,11 +6,14 @@ export interface CheckRun {
   readonly conclusion: string | null;
   readonly startedAtMillis: number;
   readonly completedAtMillis?: number;
+  readonly detailsUrl?: string | null;
+  readonly outputTitle?: string | null;
+  readonly outputSummary?: string | null;
 }
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);
 
-const isFailing = (run: CheckRun) => run.conclusion !== null && failingConclusions.has(run.conclusion);
+export const isFailing = (run: CheckRun) => run.conclusion !== null && failingConclusions.has(run.conclusion);
 
 const latestPerName = (runs: ReadonlyArray<CheckRun>) => [
   ...runs
