@@ -14,7 +14,7 @@ import * as Ref from "effect/Ref";
 import { DaemonEventBus } from "./daemon-event-bus";
 import type { RegistryState } from "./projector";
 import { readyToMergeByWorkspace, schedulerStatsOf, workspaceStatesOf } from "./read-model";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { Scheduler } from "./scheduler";
 
 const withoutContributionDiagnostic = ({
@@ -29,7 +29,7 @@ const contributionSettingScopeExists = (
   ContributionSettingScope.match(scope, {
     SettingsProfile: () => true,
     PrivateWorkspaceOverlay: ({ workspace: scopeWorkspace }) =>
-      registry.workspaces.some((workspace) => workspace.config.name === scopeWorkspace),
+      registry.workspaces.some((workspace) => workspace.config.id === scopeWorkspace),
   });
 
 const contributionSettingInstalledByPlugin = (
@@ -44,7 +44,7 @@ const contributionSettingExistsInWorkspace = (
 ) =>
   registry.workspaces.some(
     (workspace) =>
-      contributionSettingApplies(row.scope, workspace.config.name) &&
+      contributionSettingApplies(row.scope, workspace.config.id) &&
       workspace.contributions.some((contribution) => contribution.id === row.contribution.id),
   );
 
@@ -106,10 +106,7 @@ export const make = Effect.gen(function* () {
     const read = yield* readyToMergeByWorkspace(state);
     const previous = yield* Ref.get(readyToMergeView);
     const current: ReadyToMergeView = new Map(
-      state.workspaces.map(({ config }) => [
-        config.name,
-        read.get(config.name) ?? previous.get(config.name) ?? [],
-      ]),
+      state.workspaces.map(({ config }) => [config.id, read.get(config.id) ?? previous.get(config.id) ?? []]),
     );
     yield* Ref.set(readyToMergeView, current);
     const workspaces = workspaceStatesOf(state, current);

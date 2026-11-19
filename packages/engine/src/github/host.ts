@@ -76,7 +76,7 @@ const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
 const notGitHub = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
-    message: `workspace ${workspace.config.name} does not use GitHub Issues`,
+    message: `workspace ${workspace.config.id} does not use GitHub Issues`,
   });
 
 const writeMarker = (writeKey: string) =>
@@ -289,7 +289,7 @@ export const makeIssueActions = (client: GitHubClientService) => {
   ) {
     return WorkflowActionArtifact.make({
       kind: "IssueCreated",
-      workspace: workspace.config.name,
+      workspace: workspace.config.id,
       issue: yield* itemId(issue.number),
       url: issue.url,
       origin,

@@ -15,7 +15,7 @@ Arguments: optionally the subject (a library or framework — `effect`, `react`)
 - **Pattern docs home**: the repo's existing pattern-doc directory (e.g. `docs/agent-patterns/`). The docs already in it ARE the house format — read one before writing any. No directory yet: create it, and this cycle's docs establish the format.
 - **Reference corpus**: everything that counts as evidence — vendored exemplar repos (`.repos/*`), the library's own vendored source, its ai-docs/llms teaching files, local skills. Enumerate the corpus before phase 1.
 - **The pinned source is the API authority.** Resolve the exact dependency version from the lockfile/catalog. Every API a doc names gets verified against that source — exemplar repos routinely pin older versions whose API names died before the pinned release. Vendored teaching files with an upstream (ai-docs on GitHub) get diffed against upstream before being cited.
-- **Documented decisions bind.** Glossaries (`CONTEXT.md`) and ADRs that touch a candidate pattern are constraints the doc must honor, not defects to fix. A deliberate looseness stays; the doc targets what drifts around it.
+- **Documented decisions bind.** Glossaries (`GLOSSARY.md`) and ADRs that touch a candidate pattern are constraints the doc must honor, not defects to fix. A deliberate looseness stays; the doc targets what drifts around it.
 
 ## Phase 1 — Survey the gap
 

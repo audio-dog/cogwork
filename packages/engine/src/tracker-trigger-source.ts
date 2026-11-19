@@ -108,12 +108,12 @@ export const makeTrackerTriggerSource = (
       return label !== undefined && item.labels.includes(label) ? [{ subscription, label }] : [];
     });
     if (!item.open || matching.length === 0) return [];
-    const name = workspace.config.name;
+    const workspaceId = workspace.config.id;
     const prose = yield* issueTracker.readTriggerProse(workspace, item.id);
-    const cause = yield* originCause(name, item.id);
+    const cause = yield* originCause(workspaceId, item.id);
     const shared = {
-      key: { _tag: "Issue", workspace: name, id: item.id },
-      workspace: name,
+      key: { _tag: "Issue", workspace: workspaceId, id: item.id },
+      workspace: workspaceId,
       priority: item.priority,
       passes: passedFilters(issueFilters, item),
       subject: providerSubject(item.title, item.url),
@@ -162,9 +162,9 @@ export const makeTrackerTriggerSource = (
     workspace: RegisteredWorkspace,
     now: number,
   ) {
-    const name = workspace.config.name;
-    const selected = workspaceSubscriptions(name, subscriptions);
-    if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: name };
+    const workspaceId = workspace.config.id;
+    const selected = workspaceSubscriptions(workspaceId, subscriptions);
+    if (selected.length === 0) return { events: [], cursor: cursor ?? 0, workspace: workspaceId };
     const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
     const [changed, labelled] = yield* Effect.all([
       issueTracker.openItemsChangedSince(workspace, since),
@@ -172,11 +172,11 @@ export const makeTrackerTriggerSource = (
     ]);
     const events = yield* Effect.forEach(uniqueItems([...changed, ...labelled.flat()]), (item) =>
       isolateProviderItemRead(
-        { source: system, workspace: name, item: item.id },
+        { source: system, workspace: workspaceId, item: item.id },
         eventsForItem(workspace, selected, item, now),
       ),
     );
-    return { events: events.flat(), cursor: providerCursorAfterRead(cursor, now), workspace: name };
+    return { events: events.flat(), cursor: providerCursorAfterRead(cursor, now), workspace: workspaceId };
   });
 
   const read = Effect.fn("TrackerTriggerSource.read")(function* (
@@ -187,7 +187,7 @@ export const makeTrackerTriggerSource = (
     const state = yield* registry;
     const workspaces = state.workspaces.filter(({ config }) => config.issueTracker.type === system);
     const reads = yield* Effect.forEach(workspaces, (workspace) =>
-      readWorkspace(checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
+      readWorkspace(checkpoint.cursors.get(workspace.config.id), subscriptions, workspace, now),
     );
     return {
       events: reads.flatMap(({ events }) => events),
@@ -204,7 +204,7 @@ export const makeTrackerTriggerSource = (
   ) {
     if (event.key._tag !== "Issue") return Recheck.Matches();
     const { id, workspace } = event.key;
-    const registered = (yield* registry).workspaces.find(({ config }) => config.name === workspace);
+    const registered = (yield* registry).workspaces.find(({ config }) => config.id === workspace);
     if (!registered) return Recheck.Matches();
     const item = yield* issueTracker
       .readItem(registered, id)

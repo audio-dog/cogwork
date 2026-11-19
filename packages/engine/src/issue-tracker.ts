@@ -116,7 +116,7 @@ export const unsupportedWorkflowActions: IssueTrackerActionService = {
 const noAdapter = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
-    message: `no work source adapter configured for ${workspace.config.name}`,
+    message: `no work source adapter configured for ${workspace.config.id}`,
   });
 
 const hasRemoteSource = (workspace: WorkspaceIssueTrackerBinding) => {

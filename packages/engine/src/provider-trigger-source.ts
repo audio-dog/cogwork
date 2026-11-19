@@ -164,7 +164,7 @@ export const workspaceOptionReader =
     Effect.gen(function* () {
       if (workspace === undefined) return [];
       const state = yield* registry;
-      const registered = state.workspaces.find(({ config }) => config.name === workspace);
+      const registered = state.workspaces.find(({ config }) => config.id === workspace);
       if (!registered) return [];
       const listed = yield* names(registered);
       return [...new Set(listed)].map(

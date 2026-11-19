@@ -10,7 +10,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import {
   type ActionContext,
   type ActionEntry,
@@ -42,19 +42,19 @@ const frozenIssueTarget = Effect.fn("WorkflowActionPlan.frozenIssueTarget")(func
   if (workspaceId === "none") return null;
   if (workspaceId === undefined) return yield* decodeFailure(`Action ${entry.key} needs a Workspace`);
   const app = issueTrackerApps.find((candidate) => candidate === entry.system);
-  const workspace = selected.find(({ config }) => config.name === workspaceId);
+  const workspace = selected.find(({ config }) => config.id === workspaceId);
   if (!app || workspace?.config.issueTracker.type !== app) {
     return yield* decodeFailure(`Workspace ${workspaceId} does not bind ${entry.system ?? "the action app"}`);
   }
   return {
     app: workspace.config.issueTracker.type,
-    config: { name: workspace.config.name, issueTracker: workspace.config.issueTracker },
+    config: { id: workspace.config.id, issueTracker: workspace.config.issueTracker },
     repository: workspace.repository,
   } satisfies FrozenIssueTarget;
 });
 
 const targetFields = (target: FrozenIssueTarget) => ({
-  workspace: target.config.name,
+  workspace: target.config.id,
   app: target.app,
   issueTracker: target.config.issueTracker,
   repository: target.repository ?? null,
@@ -63,7 +63,7 @@ const targetFields = (target: FrozenIssueTarget) => ({
 const currentIssueTarget = (admission: TriggerAdmission, target: FrozenIssueTarget | null) => {
   if (target === null) return Effect.succeed<WorkflowActionTarget>({ _tag: "NoWorkspace" });
   const ref = admission.event.key;
-  if (ref._tag !== "Issue" || ref.workspace !== target.config.name) {
+  if (ref._tag !== "Issue" || ref.workspace !== target.config.id) {
     return decodeFailure("The action cannot target this item in the selected Workspaces");
   }
   return Effect.succeed<WorkflowActionTarget>({
@@ -92,7 +92,7 @@ const existingIssueTarget = Effect.fn("WorkflowActionPlan.existingIssueTarget")(
   target: FrozenIssueTarget | null,
 ) {
   if (target === null) return { _tag: "NoWorkspace" } as const;
-  const prefix = `${target.config.name}:`;
+  const prefix = `${target.config.id}:`;
   const hasWorkspacePrefix = issueInput.includes(":");
   if (hasWorkspacePrefix && !issueInput.startsWith(prefix)) {
     return yield* decodeFailure("The issue input does not identify the selected Workspace");
@@ -130,7 +130,6 @@ const issueActionRow = (
   name: string,
   agentInputs: ReadonlyArray<string>,
   parameters: WorkflowCatalogEntry["parameters"] = [],
-  actsOn: ReadonlyArray<string> = ["*"],
 ) =>
   ({
     key: Schema.decodeSync(WorkflowCatalogKey)(`${system}.${id}`),
@@ -141,7 +140,7 @@ const issueActionRow = (
     requires: [],
     parameters,
     itemKind: null,
-    actsOn,
+    actsOn: ["*"],
     requiresWorkspace: true,
     permissionProfile: "read-only",
     agentInputs,
@@ -231,8 +230,18 @@ const issueEntry = (
   tools,
 });
 
-const currentIssueEntry = (row: IssueActionRow, execute: ActionExecutor) =>
-  issueEntry(row, currentIssueTargetProducer, execute, "item-else-agent");
+const currentIssueEntry = (
+  row: IssueActionRow,
+  execute: ActionExecutor,
+  tools: ReadonlyArray<EngineToolName> = [],
+) =>
+  issueEntry(
+    { ...row, actsOn: [`${row.system}.issue`] },
+    currentIssueTargetProducer,
+    execute,
+    "item-else-agent",
+    tools,
+  );
 
 const issueEntries = (system: IssueTrackerApp) => [
   issueEntry(
@@ -255,25 +264,20 @@ const issueEntries = (system: IssueTrackerApp) => [
     "agent",
     ["issue-search"],
   ),
-  issueEntry(
-    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"], [], ["issue"]),
-    currentIssueTargetProducer,
+  currentIssueEntry(
+    issueActionRow(system, "comment-this-item", "Comment on this item", ["comment"]),
     commentIssue,
-    "item-else-agent",
     ["issue-search"],
   ),
   currentIssueEntry(
-    issueActionRow(system, "add-label", "Add a label", [], [issueParameter("label", true)], ["issue"]),
+    issueActionRow(system, "add-label", "Add a label", [], [issueParameter("label", true)]),
     addLabel,
   ),
   currentIssueEntry(
-    issueActionRow(system, "remove-label", "Remove a label", [], [issueParameter("label", true)], ["issue"]),
+    issueActionRow(system, "remove-label", "Remove a label", [], [issueParameter("label", true)]),
     removeLabel,
   ),
-  currentIssueEntry(
-    issueActionRow(system, "close-this-issue", "Close this issue", [], [], ["issue"]),
-    closeIssue,
-  ),
+  currentIssueEntry(issueActionRow(system, "close-this-issue", "Close this issue", []), closeIssue),
 ];
 
 export const issueActionEntries = issueTrackerApps.flatMap(issueEntries);

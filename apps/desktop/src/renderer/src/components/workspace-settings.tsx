@@ -111,7 +111,7 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
 
   const workspace = workspaces.find((candidate) => workspaceKey(candidate) === workspaceId) ?? null;
   const baseline = workspace ? seededDraft(workspace) : null;
-  const load = scheduler?.perWorkspace.find((entry) => entry.name === workspaceId) ?? null;
+  const load = scheduler?.perWorkspace.find((entry) => entry.id === workspaceId) ?? null;
   // A Failed workspace input may hold no minted id, and then no act can target it.
   const identity = workspace ? workspaceIdentity(workspace) : null;
   const recordWritable = workspace ? workspaceRecordWritable(workspace) : false;
@@ -314,7 +314,7 @@ function PageHeader({ settings }: { readonly settings: WorkspaceSettings }) {
         ) : null}
         {settings.workspace && WorkspaceState.guards.Registered(settings.workspace) ? (
           <Badge variant="outline" className="font-mono">
-            {settings.workspace.name}
+            {settings.workspace.id}
           </Badge>
         ) : null}
       </div>

@@ -1,6 +1,7 @@
 import {
   keyOf,
   RunId,
+  validateWorkflow,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -20,11 +21,9 @@ import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalo
 import type { RegisteredWorkspace } from "./projector";
 import { SlackWrite } from "./slack-write";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import {
-  makeMemoryTriggerObservationStore,
-  type TriggerAdmission,
-  TriggerObservationStore,
-} from "./trigger-observation";
+import { trackerTriggerEntries } from "./tracker-trigger-source";
+import type { TriggerAdmission } from "./trigger-observation-admission";
+import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import {
   WorkflowActionPlanStore,
@@ -51,14 +50,15 @@ const workspaceFor = (system: IssueTrackerApp): RegisteredWorkspace => ({
   source: "control-store:workspace",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: `${system}-repo`,
+    id: `${system}-repo`,
+    displayName: `${system}-repo`,
     checkoutPath: `/${system}`,
     issueTracker: issueTrackers[system],
   }),
 });
 
 const admissionFor = (workspace: RegisteredWorkspace): TriggerAdmission => {
-  const ref = { _tag: "Issue", workspace: workspace.config.name, id: item } as const;
+  const ref = { _tag: "Issue", workspace: workspace.config.id, id: item } as const;
   const entry = decodeEntry(`${workspace.config.issueTracker.type}.issue-changed`);
   return {
     event: {
@@ -67,7 +67,7 @@ const admissionFor = (workspace: RegisteredWorkspace): TriggerAdmission => {
       cause: { _tag: "Unknown" },
       atMillis: 1,
       entry,
-      workspace: workspace.config.name,
+      workspace: workspace.config.id,
     },
     subscription: {
       workflow: Schema.decodeSync(WorkflowId)("issue-writes"),
@@ -76,7 +76,7 @@ const admissionFor = (workspace: RegisteredWorkspace): TriggerAdmission => {
       entry,
       parameters: [],
       filters: [],
-      workspaces: [workspace.config.name],
+      workspaces: [workspace.config.id],
       catchUp: { since: 0 },
     },
     lineage: {
@@ -145,11 +145,68 @@ describe("Issue Action entries", () => {
     }
   });
 
+  it("refuses each current-item action on an issue of the other tracker", () => {
+    const catalog = {
+      entries: issueTrackerApps.flatMap((system) => [
+        ...trackerTriggerEntries(system),
+        ...issueTrackerWorkflowCatalogContribution(system).entries,
+      ]),
+      instructionPackages: [],
+      harnesses: [],
+    };
+    const openPullRequest = {
+      ...writeOperation("github"),
+      transitions: [
+        {
+          when: [],
+          actions: [{ entry: decodeEntry("github.open-pull-request"), parameters: [] }],
+          handOff: null,
+        },
+      ],
+    };
+    const itemKindMessages = (triggerApp: IssueTrackerApp, write: WorkflowDocument["operations"][number]) =>
+      validateWorkflow(
+        WorkflowDocument.make({
+          name: "Cross-tracker writes",
+          workspaces: { _tag: "Every" },
+          triggers: [
+            {
+              id: Schema.decodeSync(WorkflowNodeId)("labelled"),
+              entry: decodeEntry(`${triggerApp}.issue-has-label`),
+              parameters: [{ id: "label", value: "ready" }],
+              filters: [],
+              start: operation,
+            },
+          ],
+          operations: [write],
+        }),
+        catalog,
+      )
+        .filter(({ code }) => code === "item-kind-mismatch")
+        .map(({ message }) => message);
+
+    assert.deepStrictEqual(itemKindMessages("linear", writeOperation("github")), [
+      "Action github.comment-this-item in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.add-label in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.remove-label in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.close-this-issue in Operation write acts only on github.issue, but linear.issue reaches it",
+    ]);
+    assert.deepStrictEqual(itemKindMessages("github", writeOperation("linear")), [
+      "Action linear.comment-this-item in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.add-label in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.remove-label in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.close-this-issue in Operation write acts only on linear.issue, but github.issue reaches it",
+    ]);
+    assert.deepStrictEqual(itemKindMessages("github", writeOperation("github")), []);
+    assert.deepStrictEqual(itemKindMessages("linear", writeOperation("linear")), []);
+    assert.deepStrictEqual(itemKindMessages("linear", openPullRequest), []);
+  });
+
   for (const system of issueTrackerApps) {
     it.effect(`freezes ${system} new and existing issue targets from the selected Workspace`, () =>
       Effect.gen(function* () {
         const workspace = workspaceFor(system);
-        const name = workspace.config.name;
+        const workspaceId = workspace.config.id;
         const targetOf = (action: string, selected: string, inputs: Record<string, string>) => {
           const entry = actionEntryFor(`${system}.${action}`);
           assert.isDefined(entry);
@@ -164,20 +221,23 @@ describe("Issue Action entries", () => {
           });
         };
         const frozen = {
-          workspace: name,
+          workspace: workspaceId,
           app: workspace.config.issueTracker.type,
           issueTracker: workspace.config.issueTracker,
           repository: null,
         };
 
-        assert.deepStrictEqual(yield* targetOf("create-issue", name, {}), { _tag: "NewIssue", ...frozen });
+        assert.deepStrictEqual(yield* targetOf("create-issue", workspaceId, {}), {
+          _tag: "NewIssue",
+          ...frozen,
+        });
         assert.deepStrictEqual(yield* targetOf("create-issue", "none", {}), { _tag: "NoWorkspace" });
         assert.deepStrictEqual(
-          yield* targetOf("comment-issue", name, { issue: `${name}:${existingIssue}` }),
+          yield* targetOf("comment-issue", workspaceId, { issue: `${workspaceId}:${existingIssue}` }),
           { _tag: "ExistingIssue", ...frozen, issue: existingIssue },
         );
         const otherWorkspace = yield* Effect.result(
-          targetOf("comment-issue", name, { issue: `other-repo:${existingIssue}` }),
+          targetOf("comment-issue", workspaceId, { issue: `other-repo:${existingIssue}` }),
         );
         assert.isTrue(Result.isFailure(otherWorkspace));
       }),
@@ -213,11 +273,11 @@ describe("Issue Action entries", () => {
         const tracker = {
           ...(yield* makeEmpty),
           commentIssue: (target, issue, body, writeKey) =>
-            record(`comment ${target.config.name} ${issue} ${body} ${writeKey}`),
+            record(`comment ${target.config.id} ${issue} ${body} ${writeKey}`),
           addLabels: (target, issue, labels) =>
-            record(`add ${target.config.name} ${issue} ${labels.join(",")}`),
-          removeLabel: (target, issue, label) => record(`remove ${target.config.name} ${issue} ${label}`),
-          closeIssue: (target, issue) => record(`close ${target.config.name} ${issue}`),
+            record(`add ${target.config.id} ${issue} ${labels.join(",")}`),
+          removeLabel: (target, issue, label) => record(`remove ${target.config.id} ${issue} ${label}`),
+          closeIssue: (target, issue) => record(`close ${target.config.id} ${issue}`),
         } satisfies typeof IssueTracker.Service;
         yield* (yield* WorkflowActionPlanStore).create(plan);
 
@@ -229,7 +289,7 @@ describe("Issue Action entries", () => {
           plan.steps.map(({ target }) => target),
           plan.steps.map(() => ({
             _tag: "CurrentIssue" as const,
-            workspace: workspace.config.name,
+            workspace: workspace.config.id,
             app: workspace.config.issueTracker.type,
             issueTracker: workspace.config.issueTracker,
             repository: null,
@@ -237,12 +297,12 @@ describe("Issue Action entries", () => {
           })),
         );
         assert.strictEqual(result._tag, "Complete");
-        const name = workspace.config.name;
+        const workspaceId = workspace.config.id;
         assert.deepStrictEqual(yield* Ref.get(calls), [
-          `comment ${name} ${item} Done ${plan.steps[0]?.writeKey}`,
-          `add ${name} ${item} ready`,
-          `remove ${name} ${item} triage`,
-          `close ${name} ${item}`,
+          `comment ${workspaceId} ${item} Done ${plan.steps[0]?.writeKey}`,
+          `add ${workspaceId} ${item} ready`,
+          `remove ${workspaceId} ${item} triage`,
+          `close ${workspaceId} ${item}`,
         ]);
       }).pipe(Effect.provide(requirements)),
     );

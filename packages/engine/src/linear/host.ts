@@ -11,7 +11,10 @@ import {
 } from "../issue-tracker";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { credentialAccountFor } from "./account";
-import { isResolvedState, type LinearClientService, type LinearTeamRef, type RawIssue } from "./client";
+import type { LinearClientService } from "./client";
+import type { RawIssue } from "./client-issue-mapping";
+import { isResolvedState } from "./client-queries";
+import type { LinearTeamRef } from "./client-transport";
 import { hasCogworkMarker, wireCodec } from "./markers";
 
 interface LinearTarget extends LinearTeamRef {
@@ -53,7 +56,7 @@ const itemId = (identifier: string) => decodeItemId(identifier).pipe(Effect.orDi
 const notLinear = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
-    message: `workspace ${workspace.config.name} is not a linear work source`,
+    message: `workspace ${workspace.config.id} is not a linear work source`,
   });
 
 const completedStateId = Effect.fn("linear.completedStateId")(function* (
@@ -218,7 +221,7 @@ export const makeIssueActions = (client: LinearClientService) => {
   ) {
     const targets = targetsFor(workspace);
     const origin = issueOriginOf(input.origin.item);
-    const originMatchesWorkspace = origin?.workspace === workspace.config.name;
+    const originMatchesWorkspace = origin?.workspace === workspace.config.id;
     const originTeam = originMatchesWorkspace ? teamKeyOf(origin.id) : null;
     const target = targets.find(({ team }) => team === originTeam) ?? targets.at(0);
     if (!target) return yield* notLinear(workspace);
@@ -263,7 +266,7 @@ export const makeIssueActions = (client: LinearClientService) => {
       if (existing) {
         return WorkflowActionArtifact.make({
           kind: "IssueCreated",
-          workspace: workspace.config.name,
+          workspace: workspace.config.id,
           issue: yield* itemId(existing.identifier),
           url: existing.url,
           origin: input.origin,
@@ -279,7 +282,7 @@ export const makeIssueActions = (client: LinearClientService) => {
       yield* confirmCreatedIssue(target, created, input.origin.writeKey);
       return WorkflowActionArtifact.make({
         kind: "IssueCreated",
-        workspace: workspace.config.name,
+        workspace: workspace.config.id,
         issue: yield* itemId(created.identifier),
         url: created.url,
         origin: input.origin,
