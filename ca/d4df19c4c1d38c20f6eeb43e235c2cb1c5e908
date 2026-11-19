@@ -1,0 +1,181 @@
+apps/cli/src/platform.test.ts
+  s_8e1045297badc0::t_5268bde02cd537 934-946,951-952,954-967,972-973,1095-1096,1100-1103,1113-1114,1120-1150,1156-1160,1169-1170
+apps/cli/src/platform.ts
+  s_8e1045297badc0::t_3ce424e7a2fcbb 87-88,92-114,151-163,166-184,189-190,193-197,201,204-232,334-335
+apps/cli/src/worktree-commands.ts
+  s_8e1045297badc0::t_232ccc48671eb5 86-88,90-91
+docs/adr/0009-mission-control-ui-client-stack.md
+  s_8e1045297badc0::t_775f30ca893603 3-4
+docs/adr/0038-oxlint-and-oxfmt-replace-biome-and-official-rules-win.md
+  s_8e1045297badc0::t_ed9681a00dd617 1-113
+docs/adr/0039-local-ui-state-is-effect-atom-state.md
+  s_8e1045297badc0::t_15162d6d015ae4 1-38
+docs/research/cursor-acp-versus-cursor-sdk.md
+  s_8e1045297badc0::t_9e525eddd5abf8 62,64-67
+packages/claude-code/src/harness.ts
+  s_8e1045297badc0::t_33881ae8a6f044 427
+packages/codex-cli/src/harness.ts
+  s_8e1045297badc0::t_002820cec45e9d 343
+packages/contracts/GLOSSARY-harness-contract.md
+  s_8e1045297badc0::t_d7ebb2c07baa6c 49
+packages/contracts/GLOSSARY-runs.md
+  s_8e1045297badc0::t_de074bb409368e 33
+packages/contracts/src/run-plan.ts
+  s_8e1045297badc0::t_d58d022a31e765 103-109,116
+packages/cursor-acp/GLOSSARY.md
+  s_8e1045297badc0::t_a24400cb52a456 13
+packages/cursor-acp/package.json
+  s_8e1045297badc0::t_5d1e0ed4643e6a 13,29
+packages/cursor-acp/src/harness.test.ts
+  s_8e1045297badc0::t_afb08640febca2 10,15,465,468,805-852
+packages/engine/GLOSSARY-coordination.md
+  s_8e1045297badc0::t_a4a2b2b471adb7 18
+packages/engine/GLOSSARY-harness.md
+  s_8e1045297badc0::t_28a36e0efa2aa4 30,38
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_8e1045297badc0::t_3b317fd6ea7764 23-32
+packages/engine/src/connection-verify.ts
+  s_8e1045297badc0::t_c30e3b39f2b0bc 11
+packages/engine/src/daemon-composition-fixtures.ts
+  s_8e1045297badc0::t_4a1eb47006a094 101-102
+packages/engine/src/daemon-composition-watch-events.test.ts
+  s_8e1045297badc0::t_774631736f270a 1-93
+packages/engine/src/external-harness-runtime-launch.ts
+  s_8e1045297badc0::t_dd81cf7d0b1387 156-157,180
+packages/engine/src/external-harness-runtime.test.ts
+  s_013828e5a77b04::t_5572fcfeb50cb2 61-62,102,119,121-133,276,306-317,319,322-324,326-328
+packages/engine/src/external-harness-runtime.ts
+  s_28938834456c04::t_d53935c1daca06 39,64,155,223-224,360
+packages/engine/src/git.test.ts
+  s_8e1045297badc0::t_b2978c6191b896 15-16
+packages/engine/src/git.ts
+  s_8e1045297badc0::t_29f77983adae56 37,39-43,79-83
+packages/engine/src/github/host.test.ts
+  s_8e1045297badc0::t_5831bbba0cc749 147,149,154-155,162-164,166-185,187-190
+packages/engine/src/github/host.ts
+  s_8e1045297badc0::t_5effde91fa1e4b 184,188,195-198,200
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_8e1045297badc0::t_94e20300e13679 9,75
+packages/engine/src/github/trigger-source-polling.test.ts
+  s_8e1045297badc0::t_d8daeef5213a82 11,75-77,95-104,110-124,130-131,134,139-140,142-146,152
+packages/engine/src/issue-tracker-router.test.ts
+  s_8e1045297badc0::t_5e5e4543009fd6 85-100,102-103,156,171,185,237
+packages/engine/src/issue-tracker-router.ts
+  s_8e1045297badc0::t_54c5dd55d0073a 15-16,23
+packages/engine/src/issue-tracker.ts
+  s_8e1045297badc0::t_95229f8ccaa6d7 138,151-152,156
+packages/engine/src/linear/client-errors.ts
+  s_8e1045297badc0::t_7b089534451d6e 1-123
+packages/engine/src/linear/client-issue-mapping.ts
+  s_8e1045297badc0::t_f0ed52b3547090 1-137
+packages/engine/src/linear/client-issue-reads.ts
+  s_8e1045297badc0::t_75252dbf5b48a4 1-217
+packages/engine/src/linear/client-queries.ts
+  s_8e1045297badc0::t_b2d35783969a1e 1-259
+packages/engine/src/linear/client-schemas.ts
+  s_8e1045297badc0::t_afe6d836407bad 1-180
+packages/engine/src/linear/client-transport.ts
+  s_8e1045297badc0::t_a2dbffa76af7bd 1-169
+packages/engine/src/linear/client.ts
+  s_8e1045297badc0::t_510f2149770a25 1,7-8,10-54,77-86,258
+packages/engine/src/linear/host.test.ts
+  s_8e1045297badc0::t_39bf03d1db24cd 5,7-8,10,66-91,93-97,99-104,106-109,111-120
+packages/engine/src/linear/host.ts
+  s_8e1045297badc0::t_95998af73429d3 14-17,142-145,147-149
+packages/engine/src/linear/index.ts
+  s_8e1045297badc0::t_bd1fe9c9829d65 9
+packages/engine/src/linear/trigger-source.test.ts
+  s_8e1045297badc0::t_5ab42eb3be31cf 21,56,153-154,202,238,288-296,301-302,305,310-311,313-317,321-324
+packages/engine/src/operation-result.ts
+  s_8e1045297badc0::t_34f5c33e2f45a3 78-84
+packages/engine/src/provider-trigger-source.ts
+  s_8e1045297badc0::t_5dc91fe6b82205 92-100,102,104-105
+packages/engine/src/run-plan-resolution.test.ts
+  s_8e1045297badc0::t_13cec68c82b9ab 162,171
+packages/engine/src/run-plan-resolution.ts
+  s_8e1045297badc0::t_a7f55d72808a24 25,69,73,162-173,213,239
+packages/engine/src/run-preparation.test.ts
+  s_8e1045297badc0::t_2ebcede788cfc3 142-147,228
+packages/engine/src/run-preparation.ts
+  s_8e1045297badc0::t_6db9fb620eac86 9,93,163,166,184,200-210,220-221,249
+packages/engine/src/run-recorder.test.ts
+  s_8e1045297badc0::t_d33b1c5674e2ac 326-358
+packages/engine/src/run-recorder.ts
+  s_8e1045297badc0::t_a80c4b21ecc4c4 65,74-76,86,90-96
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_8e1045297badc0::t_28667c1ed8f766 16-17,45-46,62-63,82-83
+packages/engine/src/testing/git-invocation-counting.ts
+  s_8e1045297badc0::t_c86e60e53a2142 28-29,78-81
+packages/engine/src/tracker-trigger-source.test.ts
+  s_8e1045297badc0::t_993ce3851a88bd 15,18,22,90,92-93,184,202,206,208-211,213-216,220-265
+packages/engine/src/tracker-trigger-source.ts
+  s_8e1045297badc0::t_03819033da0491 10,13,34,74-85,95-96,183-187,189-192,239
+packages/engine/src/trigger-observation-assignees.test.ts
+  s_8e1045297badc0::t_2e0783da8f7351 1,16-17,23,39,43,45-51,53,55,58-67,69-77,81,83-84,87,96,102-103,131
+packages/engine/src/trigger-observation-fixtures.ts
+  s_8e1045297badc0::t_90f786bccd3765 120-128,135,154-155,165,172,174-177,189,194
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_8e1045297badc0::t_aa68aa46f4b937 202
+packages/engine/src/trigger-observation.ts
+  s_8e1045297badc0::t_5a5b843aacd520 136
+packages/engine/src/workflow-run-attempts.ts
+  s_8e1045297badc0::t_a49012919e9f2c 18-24,56-72,109-116,255-260,385-386
+packages/engine/src/workflow-run-checkout.test.ts
+  s_8e1045297badc0::t_a8d16ff33d0c1f 1,7-9,15-17,56,82-204,207,212-309,311-319,321-323,328,330
+packages/engine/src/workflow-run-coding-template.test.ts
+  s_8e1045297badc0::t_1397a3ea0009bc 92
+packages/engine/src/workflow-run-fixtures.ts
+  s_8e1045297badc0::t_8b14511209bdf4 181,220,289-298
+packages/engine/src/workflow-run-hand-back.test.ts
+  s_8e1045297badc0::t_397c0ff22d3cb7 1-7,26,174-223
+packages/engine/src/workflow-run-retry.test.ts
+  s_8e1045297badc0::t_a5f246abd71daf 32,37-47,123-129,259,274,288,296,299,308,317,325-328,335-358
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_8e1045297badc0::t_16e60e8fcf187a 14,323,326,340-346
+packages/engine/src/workflow-run.ts
+  s_8e1045297badc0::t_ea8372a77a9228 49,89-90,208,217,233-234,238,287
+packages/engine/src/workspace-registry-fixtures.ts
+  s_8e1045297badc0::t_bb4980f5d29837 32-33
+packages/engine/src/worktree-diagnostics.ts
+  s_8e1045297badc0::t_4fe27bc0d6d2fd 1-63
+packages/engine/src/worktree-ensure-reuse.test.ts
+  s_8e1045297badc0::t_1d819ca916c418 41-46
+packages/engine/src/worktree-fixtures.ts
+  s_8e1045297badc0::t_9d0a276a45e3d1 144-145
+packages/engine/src/worktree.ts
+  s_8e1045297badc0::t_5bce8c9b820c38 13-20,96,268,273-278,283-284,290-296,323-324,326,328,345-350,357-362,365-371
+pnpm-lock.yaml
+  s_8e1045297badc0::t_6ff208b336bd80 723-725
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cad4df19c4c1d38c20f6eeb43e235c2cb1c5e908",
+  "prompts": {},
+  "sessions": {
+    "s_013828e5a77b04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d3760a1-3d27-49bb-be58-41386582e813",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_28938834456c04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "529cdaed-ab9c-467a-a991-28238d5c10c7",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_8e1045297badc0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c8c00e7-92c2-41a4-a3c5-3ba36ffcc6f0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
