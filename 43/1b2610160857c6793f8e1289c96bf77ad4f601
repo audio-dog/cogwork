@@ -1,0 +1,25 @@
+packages/engine/src/github/client-graphql.ts
+  s_623e13f22bdba2::t_d3218ae8683d14 1-294
+packages/engine/src/github/client-issues.ts
+  s_623e13f22bdba2::t_410e729fab1034 1-435
+packages/engine/src/github/client-transport.ts
+  s_623e13f22bdba2::t_6e54e30276eb78 1-384
+packages/engine/src/github/graphql.test.ts
+  s_623e13f22bdba2::t_48e5dcc7236c49 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "431b2610160857c6793f8e1289c96bf77ad4f601",
+  "prompts": {},
+  "sessions": {
+    "s_623e13f22bdba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a04357dc-1852-4aa2-b10b-7d0a40cb9aab",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
