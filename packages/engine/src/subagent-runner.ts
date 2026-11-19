@@ -25,7 +25,7 @@ import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { toEvent } from "./provider-bridge";
-import { mergeBeforeRunFinished } from "./tools/file-diff-feed-merge";
+import { mergeBeforeRunFinished } from "./tools/merge-before-run-finished";
 
 class SubagentFailure extends Data.TaggedError("SubagentFailure")<{ readonly message: string }> {}
 

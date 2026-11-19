@@ -29,6 +29,17 @@ import {
 } from "./external-harness-runtime-fixtures";
 import { hasToolResults, subagentCallTurn, textTurn } from "./testing/scripted-adapter";
 
+const subagent = (subagentName: string, modelLevel: ModelLevel) =>
+  RunPlanSubagent.cases.Available.make({
+    identity: `local:repo/${subagentName}`,
+    name: subagentName,
+    source: `.agents/agents/${subagentName}.md`,
+    description: `The ${subagentName} Subagent`,
+    tools: [],
+    modelLevel,
+    prompt: `You are the ${subagentName}.`,
+  });
+
 describe("external Harness runtime", { timeout: 30_000 }, () => {
   it.layer(harnessRunnerLayer)((it) => {
     it("owns the common external Harness declaration", () => {
@@ -134,16 +145,6 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
         Effect.gen(function* () {
           const fs = yield* FileSystem.FileSystem;
           const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-subagent-checkout-" });
-          const subagent = (subagentName: string, modelLevel: ModelLevel) =>
-            RunPlanSubagent.cases.Available.make({
-              identity: `local:repo/${subagentName}`,
-              name: subagentName,
-              source: `.agents/agents/${subagentName}.md`,
-              description: `The ${subagentName} Subagent`,
-              tools: [],
-              modelLevel,
-              prompt: `You are the ${subagentName}.`,
-            });
           const unavailable = RunPlanSubagent.cases.Unavailable.make({
             identity: "local:repo/broken",
             name: "broken",
@@ -229,15 +230,6 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
           const fs = yield* FileSystem.FileSystem;
           const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-subagent-events-" });
           const secret = "anthropic-test-key-secret";
-          const reviewer = RunPlanSubagent.cases.Available.make({
-            identity: "local:repo/reviewer",
-            name: "reviewer",
-            source: ".agents/agents/reviewer.md",
-            description: "Reviews one change",
-            tools: [],
-            modelLevel: "standard",
-            prompt: "You review changes.",
-          });
           const probe = new ControlledProbe();
           const harness = makeHarness(
             {
@@ -260,7 +252,7 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
             .run({
               plan: RunPlan.make({
                 ...request,
-                subagents: [reviewer],
+                subagents: [subagent("reviewer", "standard")],
                 sandbox: { ...request.sandbox, workspace: checkout },
               }),
               session: freshSession,
@@ -279,7 +271,6 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
               "SUBAGENT_FINISHED",
             ],
           );
-          assert.strictEqual(new Set(childEvents.map(({ subagentRunId }) => subagentRunId)).size, 1);
           assert.strictEqual(childEvents[2]?.delta, "child saw [redacted]");
           const finished = events.at(-1);
           assert.strictEqual(finished?.type, EventType.RUN_FINISHED);

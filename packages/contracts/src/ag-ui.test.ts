@@ -87,19 +87,19 @@ describe("AgUiEvent", () => {
       AgUiEvent.matchOrElse(
         event,
         {
-          SUBAGENT_STARTED: ({ parentToolCallId }) => `started from ${parentToolCallId}`,
-          SUBAGENT_FINISHED: ({ result }) => `finished with ${String(result)}`,
-          SUBAGENT_ERROR: ({ message }) => `failed with ${message}`,
+          SUBAGENT_STARTED: ({ subagentRunId }) => `${subagentRunId} started`,
+          SUBAGENT_FINISHED: ({ subagentRunId }) => `${subagentRunId} finished`,
+          SUBAGENT_ERROR: ({ subagentRunId }) => `${subagentRunId} failed`,
         },
         () => null,
       ),
     );
     assert.deepStrictEqual(lifecycle, [
       null,
-      "started from call-1",
+      "sub-1 started",
       null,
-      "finished with review passed",
-      "failed with model overloaded",
+      "sub-1 finished",
+      "sub-2 failed",
       null,
       null,
     ]);

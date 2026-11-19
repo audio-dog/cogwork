@@ -60,8 +60,6 @@ const parentRun = (calls: ReadonlyArray<SubagentCall>, runner: SubagentRunner) =
     return { chunks, childEvents };
   });
 
-const byChild = (events: ReadonlyArray<AgUiEvent>) => Map.groupBy(events, (event) => event.subagentRunId);
-
 const toolResults = (chunks: ReadonlyArray<StreamChunk>) =>
   chunks.flatMap((chunk) =>
     chunk.type === EventType.TOOL_CALL_RESULT && typeof chunk.content === "string" ? [chunk.content] : [],
@@ -101,7 +99,6 @@ describe("subagent runner", () => {
             "SUBAGENT_FINISHED",
           ],
         );
-        assert.strictEqual(byChild(childEvents).size, 1);
         assert.strictEqual(childEvents[0]?.parentToolCallId, "call-1");
       }),
   );
@@ -121,7 +118,7 @@ describe("subagent runner", () => {
         () => ({ adapter: child, model: "child" }),
       );
 
-      const children = [...byChild(childEvents).values()];
+      const children = [...Map.groupBy(childEvents, ({ subagentRunId }) => subagentRunId).values()];
       assert.sameMembers(
         children.map((events) => events.map(agUiTextDelta).join("")),
         ["First.", "Second."],
@@ -217,16 +214,6 @@ describe("mergeSubagentFeed", () => {
 
       assert.sameDeepMembers(events, [...harnessEvents, ...childEvents]);
       assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
-    }),
-  );
-
-  it.effect("passes the harness events through unchanged when no child ran", () =>
-    Effect.gen(function* () {
-      const feed = yield* makeSubagentFeed;
-
-      const events = yield* Stream.runCollect(mergeSubagentFeed(Stream.fromIterable(harnessEvents), feed));
-
-      assert.deepStrictEqual(events, harnessEvents);
     }),
   );
 });

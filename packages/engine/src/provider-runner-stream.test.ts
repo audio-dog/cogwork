@@ -209,6 +209,7 @@ describe("providerRunner stream", { timeout: 30_000 }, () => {
       assert.isTrue(parentCalls.some((options) => options.messages.at(-1)?.content === "Find the seam."));
       const reviewText = events.filter((event) => agUiTextDelta(event) === "review done");
       assert.isTrue(reviewText.length > 0 && reviewText.every(agUiIsSubagentEvent));
+      assert.strictEqual(events.at(-1)?.type, "RUN_FINISHED");
       const finished = events.findLast((event) => event.type === "RUN_FINISHED");
       assert.strictEqual(finished ? agUiUsage(finished)?.totalTokens : null, 22);
     }),
