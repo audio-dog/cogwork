@@ -109,7 +109,10 @@ const projection = [
   "Provenance",
 ].map((member) => ({ member, disposition: "projected" as const }));
 
-const memberDisposition = (projectedMembers: ReadonlyArray<RunPlanMember>, member: "Tools" | "Skills") =>
+const memberDisposition = (
+  projectedMembers: ReadonlyArray<RunPlanMember>,
+  member: "Tools" | "Skills" | "Subagents",
+) =>
   projectedMembers.includes(member)
     ? { member, disposition: "projected" as const }
     : {
@@ -232,6 +235,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
         ...projection,
         memberDisposition(harness.projectedMembers, "Tools"),
         memberDisposition(harness.projectedMembers, "Skills"),
+        memberDisposition(harness.projectedMembers, "Subagents"),
       ],
       observation,
     },

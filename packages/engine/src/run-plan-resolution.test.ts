@@ -276,6 +276,11 @@ describe("resolveRunPlan", () => {
           { member: "Provenance", disposition: "projected" },
           { member: "Tools", disposition: "projected" },
           { member: "Skills", disposition: "projected" },
+          {
+            member: "Subagents",
+            disposition: "not-projected",
+            reason: "selected harness does not project Subagents",
+          },
         ],
         observation: { generation: 7, observedAtMillis: 5_000 },
       },
@@ -416,7 +421,7 @@ describe("resolveRunPlan", () => {
     );
   });
 
-  it("lists no Tools and records both members unprojected when the Harness projects neither", () => {
+  it("lists no Tools and records every member unprojected when the Harness projects none", () => {
     const plan = encodePlan(
       resolvedPlan({
         ...issueFacts,
@@ -440,6 +445,11 @@ describe("resolveRunPlan", () => {
             member: "Skills",
             disposition: "not-projected" as const,
             reason: "selected harness does not project Skills",
+          },
+          {
+            member: "Subagents",
+            disposition: "not-projected" as const,
+            reason: "selected harness does not project Subagents",
           },
         ],
       },
