@@ -17,7 +17,7 @@ import { ControlStore } from "./control-store";
 import { HarnessReadinessCache } from "./harness-readiness";
 import { PluginManager } from "./plugin";
 import type { RegisteredWorkspace } from "./projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "./registry";
+import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { MachineReadinessSource, layer as machineReadinessLayer } from "./workflow-machine-readiness";
 
 const need = Schema.decodeSync(NeedIdentity);
@@ -73,7 +73,8 @@ const workspace: RegisteredWorkspace = {
     },
   ],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: workspaceId("web"),
+    id: workspaceId("web"),
+    displayName: "Test workspace",
     checkoutPath: "/repos/web",
     issueTracker: { type: "github" },
   }),

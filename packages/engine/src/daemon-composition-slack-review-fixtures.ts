@@ -28,7 +28,7 @@ import {
 import type { HarnessRunner } from "./harness";
 import { PerformanceHealthSource } from "./performance-health-source";
 import * as RunLedger from "./run-ledger";
-import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation";
+import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";
 
 interface PullRequestToolCall {
   readonly workspace: WorkspaceId;

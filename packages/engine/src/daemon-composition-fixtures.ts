@@ -1,13 +1,4 @@
-import {
-  HarnessName,
-  IssueTrackerType,
-  keyOf,
-  RunId,
-  type RunRecord,
-  SourceControlType,
-  WorkItemId,
-  WorkspaceId,
-} from "@cogwork/contracts";
+import { HarnessName, IssueTrackerType, SourceControlType } from "@cogwork/contracts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Context from "effect/Context";
@@ -24,6 +15,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Socket from "effect/socket/Socket";
 import * as SocketServer from "effect/socket/SocketServer";
+import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
@@ -278,23 +270,9 @@ export const testLayer = () =>
     ),
   ).pipe(Layer.provideMerge(Fixture.layer), Layer.provide(NodeServices.layer));
 
-export const crashedIssue = {
-  _tag: "Issue",
-  workspace: WorkspaceId.make("github"),
-  id: WorkItemId.make("#1"),
-} as const;
-
-export const issueRun = (id: string, status: RunRecord["status"], startedAtMillis: number) =>
-  ({
-    id: RunId.make(id),
-    workspace: crashedIssue.workspace,
-    workItem: WorkItemId.make(keyOf(crashedIssue)),
-    operation: "triage",
-    harness: harnessName,
-    branch: null,
-    session: null,
-    usage: null,
-    status,
-    startedAtMillis,
-    endedAtMillis: status === "running" ? null : startedAtMillis,
-  }) satisfies RunRecord;
+export const startHeartbeats = Effect.fn("DaemonCompositionTest.startHeartbeats")(function* () {
+  yield* Effect.forkScoped(
+    Daemon.heartbeats({ pollIntervalMillis: 60_000, drain: { graceMillis: 0, abort: Effect.never } }),
+  );
+  yield* TestClock.adjust("1 second");
+});

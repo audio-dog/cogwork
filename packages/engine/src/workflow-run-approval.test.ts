@@ -14,7 +14,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { emptyService as emptySourceControl, type SourceControlProviderService } from "./source-control";
@@ -232,7 +232,8 @@ describe("WorkflowRun", () => {
         repository: "owner/repo",
         contributions: [],
         config: yield* Schema.decodeEffect(WorkspaceConfig)({
-          name: "repo",
+          id: "repo",
+          displayName: "repo",
           checkoutPath: "/repo",
           issueTracker: { type: "github" },
         }),
@@ -256,7 +257,7 @@ describe("WorkflowRun", () => {
           review_comments: [],
           approval_request: "Post this review?",
         },
-        workspace: reviewWorkspace.config.name,
+        workspace: reviewWorkspace.config.id,
         lineage: admission.lineage,
         handOff: null,
         steps: [
@@ -282,7 +283,7 @@ describe("WorkflowRun", () => {
             },
             target: {
               _tag: "NamedPullRequest",
-              workspace: reviewWorkspace.config.name,
+              workspace: reviewWorkspace.config.id,
               app: githubSourceControlType,
               issueTracker: reviewWorkspace.config.issueTracker,
               repository: reviewWorkspace.repository ?? null,
@@ -333,7 +334,7 @@ describe("WorkflowRun", () => {
             Effect.map(() =>
               WorkflowActionArtifact.make({
                 kind: "PullRequestUpdated",
-                workspace: selected.config.name,
+                workspace: selected.config.id,
                 issue: WorkItemId.make(`#${pullRequest.number}`),
                 url: pullRequest.url,
                 origin,
@@ -349,7 +350,7 @@ describe("WorkflowRun", () => {
       yield* (yield* WorkflowActionPlanStore).create(reviewPlan);
       yield* (yield* RunLedger).insertRun({
         id: attempt,
-        workspace: reviewWorkspace.config.name,
+        workspace: reviewWorkspace.config.id,
         workItem: decodeWorkItem("#826"),
         operation: "implement",
         harness: harnessName,

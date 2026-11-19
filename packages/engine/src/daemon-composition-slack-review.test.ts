@@ -16,7 +16,7 @@ import {
 import { Scheduler } from "./scheduler";
 import { TriggerObservation } from "./trigger-observation";
 
-describe("daemon composition Slack review", () => {
+describe("daemon composition", () => {
   it.effect("runs the Slack review template through the composed daemon", () =>
     Effect.gen(function* () {
       const rpc = yield* RpcClient.make(DaemonRpcs);
@@ -42,7 +42,7 @@ describe("daemon composition Slack review", () => {
         establishment: { system: "slack", account: "review-team", source: { _tag: "Stored" } },
       });
       const registration = yield* Schema.decodeEffect(WorkspaceRegistration)({
-        name: "github",
+        displayName: "github",
         checkoutPath: fixture.root,
         issueTracker: { type: "github", connectionId: "github/connected-account" },
         sourceControl: { type: "github", connectionId: "github/connected-account" },
@@ -51,7 +51,7 @@ describe("daemon composition Slack review", () => {
       const workspace = yield* rpc.RegisterWorkspace({ registration });
       assert.strictEqual(workspace._tag, "Registered");
       if (workspace._tag !== "Registered") return;
-      yield* Ref.set(probe.workspace, workspace.name);
+      yield* Ref.set(probe.workspace, workspace.id);
       const template = (yield* rpc.GetWorkflowTemplates()).find(({ id }) => id === "slack-to-github-review");
       assert.isDefined(template);
       if (template === undefined) return;
@@ -174,8 +174,8 @@ describe("daemon composition Slack review", () => {
       );
       assert.isTrue(repliedAfterApproval);
       assert.deepStrictEqual(yield* Ref.get(probe.pullRequestToolCalls), [
-        { workspace: workspace.name, pull_request: "#827" },
-        { workspace: workspace.name, pull_request: "#827" },
+        { workspace: workspace.id, pull_request: "#827" },
+        { workspace: workspace.id, pull_request: "#827" },
       ]);
     }).pipe(
       Effect.provide(slackReviewServerTestLayer()),
