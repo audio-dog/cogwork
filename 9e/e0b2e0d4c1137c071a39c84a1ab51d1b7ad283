@@ -1,0 +1,119 @@
+apps/cli/src/daemon-commands.ts
+  s_faec89ee55d8cc::t_8664744f80fbe9 2,46
+packages/engine/src/commands-connections.ts
+  s_faec89ee55d8cc::t_c77d33cabd4040 24
+packages/engine/src/commands.ts
+  s_faec89ee55d8cc::t_1c71cb3905b6dd 46-47
+packages/engine/src/daemon-engine.ts
+  s_faec89ee55d8cc::t_92fc465b0d24f0 40-41
+packages/engine/src/daemon-handlers.ts
+  s_faec89ee55d8cc::t_1882c8e044f35f 42
+packages/engine/src/daemon-watch.ts
+  s_faec89ee55d8cc::t_f5914907028c1e 21
+packages/engine/src/event-publisher.test.ts
+  s_faec89ee55d8cc::t_9907ec0d09cbcd 18
+packages/engine/src/event-publisher.ts
+  s_faec89ee55d8cc::t_d08f757ef64f86 17
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_faec89ee55d8cc::t_51d569986d93a1 15
+packages/engine/src/github/performance-issue-filer.ts
+  s_faec89ee55d8cc::t_6d93fd5ed50e72 18
+packages/engine/src/github/provider.test.ts
+  s_faec89ee55d8cc::t_70d69355bb3081 9
+packages/engine/src/github/provider.ts
+  s_faec89ee55d8cc::t_794550f1c29dea 15
+packages/engine/src/index.ts
+  s_faec89ee55d8cc::t_a1a3ce6ad9228d 28,34-35
+packages/engine/src/park-notice.test.ts
+  s_faec89ee55d8cc::t_83e69897640afa 19
+packages/engine/src/park-notice.ts
+  s_faec89ee55d8cc::t_eac09deb0cde7f 8-9
+packages/engine/src/performance-regression-sensor.ts
+  s_faec89ee55d8cc::t_5139cfdbf8efdf 23
+packages/engine/src/registry-errors.ts
+  s_faec89ee55d8cc::t_1b9e9a82e7977b 1-24
+packages/engine/src/registry-loading.ts
+  s_faec89ee55d8cc::t_e1b34f915c6816 1-251
+packages/engine/src/registry-lookup.ts
+  s_faec89ee55d8cc::t_8df38a8eac4e0a 1-18
+packages/engine/src/registry-management.ts
+  s_faec89ee55d8cc::t_30c81e02203072 1-49
+packages/engine/src/registry-rows.ts
+  s_faec89ee55d8cc::t_a330a182e469d5 1-279
+packages/engine/src/registry-service.ts
+  s_faec89ee55d8cc::t_624f0591532b3b 1-18
+packages/engine/src/registry.ts
+  s_faec89ee55d8cc::t_0ad33fe6753457 1,13-14,16-38
+packages/engine/src/scheduler.ts
+  s_faec89ee55d8cc::t_6fa639b7a50165 13
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_faec89ee55d8cc::t_ab30dd4f1eff76 10
+packages/engine/src/trigger-observation-fixtures.ts
+  s_faec89ee55d8cc::t_5c6ffd7c51d7dc 29
+packages/engine/src/trigger-observation-recheck.test.ts
+  s_faec89ee55d8cc::t_4f7c13b2cc4193 12
+packages/engine/src/trigger-observation-sources.test.ts
+  s_faec89ee55d8cc::t_d9eb5146cd3a4b 16
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_faec89ee55d8cc::t_6b1e1fe4e58042 21
+packages/engine/src/trigger-observation-sweep.ts
+  s_faec89ee55d8cc::t_fa398205382f24 7
+packages/engine/src/trigger-observation.test.ts
+  s_faec89ee55d8cc::t_41cf77dc3751bb 17
+packages/engine/src/trigger-observation.ts
+  s_faec89ee55d8cc::t_1e8f027086a446 28
+packages/engine/src/workflow-action-plan-fixtures.ts
+  s_faec89ee55d8cc::t_bb7b7ee7f9b9f3 32
+packages/engine/src/workflow-action-plan-pull-requests.test.ts
+  s_faec89ee55d8cc::t_c536eb10894cff 17
+packages/engine/src/workflow-action-plan.ts
+  s_faec89ee55d8cc::t_131630cb90cf09 27
+packages/engine/src/workflow-machine-readiness.test.ts
+  s_faec89ee55d8cc::t_4257bddbe42ef3 20
+packages/engine/src/workflow-machine-readiness.ts
+  s_faec89ee55d8cc::t_dfb5025077c1cc 30
+packages/engine/src/workflow-run-approval.test.ts
+  s_faec89ee55d8cc::t_6b631564c75b08 17
+packages/engine/src/workflow-run-execution-context.ts
+  s_faec89ee55d8cc::t_a515b5ec709049 7
+packages/engine/src/workflow-run-fixtures.ts
+  s_faec89ee55d8cc::t_02bcef43223b44 28
+packages/engine/src/workflow-run-pending-plan.ts
+  s_faec89ee55d8cc::t_841f3673ba7941 13
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_faec89ee55d8cc::t_11a71bde709332 16
+packages/engine/src/workflow-run-settled-run.test.ts
+  s_faec89ee55d8cc::t_a5ec75b3bc3b48 18
+packages/engine/src/workflow-run-settlement.test.ts
+  s_faec89ee55d8cc::t_e352a13e294244 11
+packages/engine/src/workflow-run-touchpoints.ts
+  s_faec89ee55d8cc::t_ec7440eaba20c1 13
+packages/engine/src/workflow-run.ts
+  s_faec89ee55d8cc::t_d83a4ff1252774 30
+packages/engine/src/workspace-registry-authoring-trees.test.ts
+  s_faec89ee55d8cc::t_68a3a789479f0b 9-11
+packages/engine/src/workspace-registry-identity.test.ts
+  s_faec89ee55d8cc::t_415a53fd11423e 18-20
+packages/engine/src/workspace-registry-registration.test.ts
+  s_faec89ee55d8cc::t_bc693f30a7fd78 14-17
+packages/engine/src/workspace-registry-repository.test.ts
+  s_faec89ee55d8cc::t_93f91567ed83e7 13-16
+packages/engine/src/worktree-maintenance.ts
+  s_faec89ee55d8cc::t_90df5cbe866027 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ee0b2e0d4c1137c071a39c84a1ab51d1b7ad283",
+  "prompts": {},
+  "sessions": {
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
