@@ -1,0 +1,75 @@
+packages/engine/src/daemon-composition-slack-review-fixtures.ts
+  s_623e13f22bdba2::t_ea8bae502a270f 31
+packages/engine/src/github/trigger-source-comments.test.ts
+  s_623e13f22bdba2::t_6867bf3f0bddd7 8
+packages/engine/src/github/trigger-source-issue-labels.test.ts
+  s_623e13f22bdba2::t_96fa33056b769f 7
+packages/engine/src/linear/trigger-source.test.ts
+  s_623e13f22bdba2::t_96b1514e6709fe 20
+packages/engine/src/run-plan-resolution.test.ts
+  s_623e13f22bdba2::t_d57f3dbd12755c 22
+packages/engine/src/run-plan-resolution.ts
+  s_623e13f22bdba2::t_25ae9490dd8cba 25
+packages/engine/src/run-preparation.test.ts
+  s_623e13f22bdba2::t_8ab3040c9e96c4 38
+packages/engine/src/run-preparation.ts
+  s_623e13f22bdba2::t_ce36f2a151e493 32
+packages/engine/src/scheduler.ts
+  s_623e13f22bdba2::t_a5b59d47dc146e 16-17
+packages/engine/src/trigger-observation-admission.ts
+  s_623e13f22bdba2::t_33eef7fa8cd1e2 1-58
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_623e13f22bdba2::t_d083d1e03f0a15 11-12,23
+packages/engine/src/trigger-observation-fixtures.ts
+  s_623e13f22bdba2::t_1205031097595f 31,36
+packages/engine/src/trigger-observation-recheck.test.ts
+  s_623e13f22bdba2::t_0098d7bf437ebe 13-14,24
+packages/engine/src/trigger-observation-sources.test.ts
+  s_623e13f22bdba2::t_7f19b1aa802797 19,36
+packages/engine/src/trigger-observation-store.test.ts
+  s_623e13f22bdba2::t_f41f0768832da7 12,14
+packages/engine/src/trigger-observation-store.ts
+  s_623e13f22bdba2::t_36b6851d66eafe 1-331
+packages/engine/src/trigger-observation-subscriptions.test.ts
+  s_623e13f22bdba2::t_f4346ccfd9ca6a 12
+packages/engine/src/trigger-observation-subscriptions.ts
+  s_623e13f22bdba2::t_80c856e2a8009a 1-100
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_623e13f22bdba2::t_75bd89e36ee72a 22,29
+packages/engine/src/trigger-observation-sweep.ts
+  s_623e13f22bdba2::t_f873db8b13dfd3 1-183
+packages/engine/src/trigger-observation.test.ts
+  s_623e13f22bdba2::t_401e6e66980237 19,34-39
+packages/engine/src/trigger-observation.ts
+  s_623e13f22bdba2::t_9ab2c945c92a5a 5,29-46,50,54,130
+packages/engine/src/workflow-action-entry.ts
+  s_623e13f22bdba2::t_950bdf8c0d30e9 24-25
+packages/engine/src/workflow-action-plan-fixtures.ts
+  s_623e13f22bdba2::t_c011db0df828dd 40-41
+packages/engine/src/workflow-action-plan-parking.test.ts
+  s_623e13f22bdba2::t_a73ba7c34a3d40 7
+packages/engine/src/workflow-action-plan.ts
+  s_623e13f22bdba2::t_9f2f5adc406357 31-32
+packages/engine/src/workflow-actions-issue.test.ts
+  s_623e13f22bdba2::t_c4f7f837e74585 25-26
+packages/engine/src/workflow-actions-issue.ts
+  s_623e13f22bdba2::t_6a92688f7b10ac 13
+packages/engine/src/workflow-actions-slack.test.ts
+  s_623e13f22bdba2::t_03937636f41765 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a105985d7aed4929be29efc6c1c8cda626e2bd82",
+  "prompts": {},
+  "sessions": {
+    "s_623e13f22bdba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a04357dc-1852-4aa2-b10b-7d0a40cb9aab",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
