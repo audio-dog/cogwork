@@ -160,10 +160,10 @@ export const make = Effect.gen(function* () {
   ) {
     if (workspace === null) {
       const path = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workflow-" });
-      return { path, branch: null } as const;
+      return { path, branch: null, operationInProgress: null } as const;
     }
     if (permissionProfile === "read-only") {
-      return { path: workspace.config.checkoutPath, branch: null } as const;
+      return { path: workspace.config.checkoutPath, branch: null, operationInProgress: null } as const;
     }
     const pullRequest =
       sourceControl === null ? null : yield* sourceControl.resolvePullRequest(workspace, admission.event.key);
@@ -181,7 +181,7 @@ export const make = Effect.gen(function* () {
       pushOwner: "engine",
       resume,
     });
-    return { path: checkout.path, branch } as const;
+    return { path: checkout.path, branch, operationInProgress: checkout.operationInProgress } as const;
   });
 
   const checkoutPark = (error: Effect.Error<ReturnType<typeof ensureCheckout>>) =>
