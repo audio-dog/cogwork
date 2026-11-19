@@ -1,0 +1,45 @@
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_623e13f22bdba2::t_ccbe6279dd64a0 10,22,26,39-41,117,121,123-125
+packages/engine/src/ci.ts
+  s_623e13f22bdba2::t_76f2e84aca9e4c 9-11
+packages/engine/src/github/client-pulls.test.ts
+  s_623e13f22bdba2::t_b8af97fd98be25 1-82
+packages/engine/src/github/client-pulls.ts
+  s_623e13f22bdba2::t_4d97026b24b163 317,405-407
+packages/engine/src/github/client-responses.ts
+  s_623e13f22bdba2::t_e9ab8752738a66 160-166
+packages/engine/src/github/client.ts
+  s_623e13f22bdba2::t_60c080a2c62b70 82
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_62e0b0ef91aa3c::t_0dea87ecf99507 5,23-32,148-216,225-229,238,240,249,266-267,327-331
+packages/engine/src/github/trigger-source-comments.test.ts
+  s_623e13f22bdba2::t_26929ebdf10f59 16,167-168
+packages/engine/src/github/trigger-source-fixtures.ts
+  s_623e13f22bdba2::t_c2acaad99bfe93 136-145,151-173
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_623e13f22bdba2::t_aadb130015037c 14,48-125,157-158,216-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2cbdae5041e7e98f7cf2ca8604d1cabc5ecf38be",
+  "prompts": {},
+  "sessions": {
+    "s_623e13f22bdba2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a04357dc-1852-4aa2-b10b-7d0a40cb9aab",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_62e0b0ef91aa3c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1cca0a5d-9c82-4848-838b-589168fb6b15",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
