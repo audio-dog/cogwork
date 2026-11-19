@@ -1,0 +1,95 @@
+docs/research/cursor-acp-versus-cursor-sdk.md
+  s_5d54c7d8984ced::t_c64117eca312c3 62,64-67
+packages/claude-code/src/harness.ts
+  s_5d54c7d8984ced::t_fadbf32623b471 427
+packages/codex-cli/src/harness.ts
+  s_5d54c7d8984ced::t_2daf6177e07b10 343
+packages/cursor-acp/GLOSSARY.md
+  s_5d54c7d8984ced::t_e4d78b897ebd93 13
+packages/cursor-acp/package.json
+  s_5d54c7d8984ced::t_2f7651084a196e 13,29
+packages/cursor-acp/src/harness.test.ts
+  s_5d54c7d8984ced::t_baf84bd5cb4578 10,15,465,468,805-852
+packages/engine/GLOSSARY-harness.md
+  s_5d54c7d8984ced::t_bdc0343899a0fb 30,38
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_5d54c7d8984ced::t_15a7907be14aca 23-32
+packages/engine/src/connection-verify.ts
+  s_5d54c7d8984ced::t_c35a89bf6663cb 11
+packages/engine/src/external-harness-runtime-launch.ts
+  s_5d54c7d8984ced::t_ccdb28f89d43bc 156-157,180
+packages/engine/src/external-harness-runtime.test.ts
+  s_5d54c7d8984ced::t_ffa2d93f32e1ab 44-45,85,102-111,113-116,214,244-255,257,260-262,264-266
+packages/engine/src/external-harness-runtime.ts
+  s_5d54c7d8984ced::t_974e9043f9bf30 39,64,152,220-221,354
+packages/engine/src/github/host.test.ts
+  s_5d54c7d8984ced::t_a142694aef5f53 147,149,154-155,162-164,166-170,188
+packages/engine/src/github/host.ts
+  s_5d54c7d8984ced::t_94db655bbff30f 184,188,195,197-198,200
+packages/engine/src/issue-tracker-router.test.ts
+  s_5d54c7d8984ced::t_cd508a0a7af129 85-100,102-103,156,171,185,237
+packages/engine/src/issue-tracker-router.ts
+  s_5d54c7d8984ced::t_6187cdf20a0ac2 15-16,23
+packages/engine/src/issue-tracker.ts
+  s_5d54c7d8984ced::t_7ac57d63ae1aa4 138,151-152,156
+packages/engine/src/linear/client-errors.ts
+  s_5d54c7d8984ced::t_a5466f7333a5aa 1-123
+packages/engine/src/linear/client-issue-mapping.ts
+  s_5d54c7d8984ced::t_02374dc0b6ed9e 1-137
+packages/engine/src/linear/client-issue-reads.ts
+  s_5d54c7d8984ced::t_af26c923346f14 1-217
+packages/engine/src/linear/client-queries.ts
+  s_5d54c7d8984ced::t_d0d595d900552a 1-259
+packages/engine/src/linear/client-schemas.ts
+  s_5d54c7d8984ced::t_6654948c5972d3 1-180
+packages/engine/src/linear/client-transport.ts
+  s_5d54c7d8984ced::t_d8f5090e6605d1 1-169
+packages/engine/src/linear/client.ts
+  s_5d54c7d8984ced::t_de81651164b147 1,7-8,10-54,77-86,258
+packages/engine/src/linear/host.test.ts
+  s_5d54c7d8984ced::t_0c554247acf77f 5,7-8,10,66-91,93-97,99-104,106-109,111-120
+packages/engine/src/linear/host.ts
+  s_5d54c7d8984ced::t_13df1f9e6fc657 14-17,142-145,147-149
+packages/engine/src/linear/index.ts
+  s_5d54c7d8984ced::t_f6ee9edbc2e8aa 9
+packages/engine/src/linear/trigger-source.test.ts
+  s_5d54c7d8984ced::t_2053928750fbc8 56,153,238,290,321
+packages/engine/src/tracker-trigger-source.test.ts
+  s_5d54c7d8984ced::t_35a092416a1f1b 92
+packages/engine/src/tracker-trigger-source.ts
+  s_5d54c7d8984ced::t_c0db5242533a78 34,189
+packages/engine/src/trigger-observation-assignees.test.ts
+  s_f4fe9e255bd085::t_a4f5a8d1ebd3fb 20-21,56-59,71-74,80,86,101,138,140-146,148,150,153-162,164-172,176,178-179,182,191,197-198,226
+packages/engine/src/trigger-observation-fixtures.ts
+  s_f4fe9e255bd085::t_1bc588f555a7a4 120-128,135,154,156,166,173,175,177-181,198
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_5d54c7d8984ced::t_533a23611056e4 211
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_5d54c7d8984ced::t_fd7101ba1b5a7f 14,323,326,340-346
+pnpm-lock.yaml
+  s_5d54c7d8984ced::t_c85380557a5edf 723-725
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c6097f0ea5f4f2e53f11c3e555f9415c5191f072",
+  "prompts": {},
+  "sessions": {
+    "s_5d54c7d8984ced": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6a678564-bff5-4569-a0c8-57fde8a1ccfc",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_f4fe9e255bd085": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d687e984-a37f-4c44-b045-0660913d9b83",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
