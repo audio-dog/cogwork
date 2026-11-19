@@ -10,6 +10,14 @@ import * as Schema from "effect/Schema";
 import * as TxReentrantLock from "effect/TxReentrantLock";
 import { type BranchDivergence, Git, GitError, type GitOperationInProgress, type WorktreeEntry } from "./git";
 import type { RegisteredWorkspace } from "./projector";
+import {
+  isSameOperation,
+  logMissingRemote,
+  logRemovalFailure,
+  logUnrecordedOperation,
+  operationMessage,
+  unresolvableMessage,
+} from "./worktree-diagnostics";
 import { WorktreeFs } from "./worktree-fs";
 
 export const worktreeEnsureDuration = Metric.timer("cogwork_worktree_ensure_duration", {
@@ -85,6 +93,7 @@ export interface EnsuredWorktree {
   readonly branch: BranchName;
   readonly path: string;
   readonly created: boolean;
+  readonly operationInProgress: GitOperationInProgress | null;
 }
 
 export interface EnsureOptions {
@@ -118,40 +127,6 @@ export const PullRequestReadiness = Data.taggedEnum<PullRequestReadiness>();
 const declinedPullRequestReadiness = (reason: string) => PullRequestReadiness.Declined({ reason });
 
 const labelOf = (entry: WorktreeEntry) => entry.branch ?? entry.path;
-
-const logRemovalFailure = Effect.fn("Worktree.logRemovalFailure")(function* (path: string, message: string) {
-  yield* Effect.logWarning("worktree removal failed", { path, message });
-  return null;
-});
-
-const logMissingRemote = Effect.fn("Worktree.logMissingRemote")(function* (remote: string, branch: string) {
-  yield* Effect.logWarning(
-    "reusing a worktree whose branch has no counterpart on the remote; its local commits are kept as they are",
-    { branch, remote },
-  );
-});
-
-const commitWord = (count: number) => (count === 1 ? "commit" : "commits");
-
-const unresolvableMessage = (remote: string, branch: string, divergence: BranchDivergence, reason: string) =>
-  [
-    `branch ${branch} has diverged from ${remote}/${branch}`,
-    `(${divergence.ahead} local ${commitWord(divergence.ahead)} the remote lacks,`,
-    `${divergence.behind} remote ${commitWord(divergence.behind)} the branch lacks)`,
-    `and replaying the local commits onto ${remote}/${branch} failed: ${reason}.`,
-    "The worktree was left as it was, so no local commits were discarded —",
-    "a human needs to decide how to reconcile the branch.",
-  ].join(" ");
-
-const operationMessage = (branch: string, operation: GitOperationInProgress) => {
-  const conflicts = operation.unmergedPaths.length
-    ? `unmerged paths: ${operation.unmergedPaths.join(", ")}`
-    : "no unmerged paths remain";
-  return [
-    `branch ${branch} has a ${operation.operation} in progress (${conflicts}).`,
-    "The worktree was left as it was; a human needs to finish or abort the operation.",
-  ].join(" ");
-};
 
 export const make = Effect.gen(function* () {
   const git = yield* Git;
@@ -294,23 +269,35 @@ export const make = Effect.gen(function* () {
     return yield* replayOntoRemote(worktreePath, remote, branch, divergence);
   });
 
-  const refuseOperationInProgress = Effect.fn("Worktree.refuseOperationInProgress")(function* (
+  const acceptRecordedOperation = Effect.fn("Worktree.acceptRecordedOperation")(function* (
     worktreePath: string,
     branch: string,
   ) {
     const operation = yield* git.operationInProgress(worktreePath);
-    if (!operation) return;
+    if (!operation) {
+      yield* git.recordOperation(worktreePath, null);
+      return null;
+    }
+    const recorded = yield* git.recordedOperation(worktreePath);
+    if (isSameOperation(recorded, operation)) return operation;
     return yield* new WorktreeError({
       reason: "operation-in-progress",
       branch,
       path: worktreePath,
-      ...operation,
+      operation: operation.operation,
+      unmergedPaths: operation.unmergedPaths,
       message: operationMessage(branch, operation),
       retryable: false,
     });
   });
 
-  const ensure = Effect.fn("Worktree.ensure")(function* (
+  const recordOperationLeft = (worktreePath: string) =>
+    git.operationInProgress(worktreePath).pipe(
+      Effect.flatMap((operation) => git.recordOperation(worktreePath, operation)),
+      Effect.catchTag("GitError", (error) => logUnrecordedOperation(worktreePath, error)),
+    );
+
+  const acquire = Effect.fn("Worktree.acquire")(function* (
     workspace: RegisteredWorkspace,
     item: WorkItemRef,
     options?: EnsureOptions,
@@ -337,14 +324,13 @@ export const make = Effect.gen(function* () {
       ? "registered"
       : yield* recoverUnregisteredPath(repoPath, root, branch, worktreePath);
     const registered = targetState === "registered";
-    const resumesRegisteredWorktree = registered && options?.resume;
+    const operationInProgress = registered ? yield* acceptRecordedOperation(worktreePath, branch) : null;
+    const keepsWorktreeAsItIs = registered && (operationInProgress !== null || options?.resume);
 
-    if (resumesRegisteredWorktree) {
+    if (keepsWorktreeAsItIs) {
       yield* configurePush(worktreePath, remote, options?.pushOwner);
-      return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
+      return { branch, path: worktreePath, created: false, operationInProgress } satisfies EnsuredWorktree;
     }
-
-    if (registered) yield* refuseOperationInProgress(worktreePath, branch);
 
     const hasRemoteBranch = yield* git.remoteBranchExists(repoPath, remote, branch);
     if (!registered) {
@@ -360,15 +346,32 @@ export const make = Effect.gen(function* () {
             ? Effect.void
             : Effect.ignore(git.removeWorktree(repoPath, worktreePath, true)),
       );
-      return { branch, path: worktreePath, created: true } satisfies EnsuredWorktree;
+      return {
+        branch,
+        path: worktreePath,
+        created: true,
+        operationInProgress: null,
+      } satisfies EnsuredWorktree;
     }
 
     if (hasRemoteBranch) yield* syncBranch(worktreePath, remote, branch);
     else yield* logMissingRemote(remote, branch);
     yield* runSetup(repoPath, worktreePath, config);
     yield* configurePush(worktreePath, remote, options?.pushOwner);
-    return { branch, path: worktreePath, created: false } satisfies EnsuredWorktree;
+    return {
+      branch,
+      path: worktreePath,
+      created: false,
+      operationInProgress: null,
+    } satisfies EnsuredWorktree;
   }, Effect.trackDuration(worktreeEnsureDuration));
+
+  const ensure = (workspace: RegisteredWorkspace, item: WorkItemRef, options?: EnsureOptions) =>
+    Effect.uninterruptibleMask((restore) =>
+      restore(acquire(workspace, item, options)).pipe(
+        Effect.tap((ensured) => Effect.addFinalizer(() => recordOperationLeft(ensured.path))),
+      ),
+    );
 
   const pullRequestReadiness = Effect.fn("Worktree.pullRequestReadiness")(function* (
     workspace: RegisteredWorkspace,

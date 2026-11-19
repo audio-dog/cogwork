@@ -7,8 +7,6 @@ import {
   type ParkReason,
   type TriggerSourceHealth,
   type WorkflowCatalog,
-  type WorkItemId,
-  type WorkspaceId,
 } from "@cogwork/contracts";
 import * as EffectCause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -55,15 +53,7 @@ import {
 } from "./trigger-source";
 import { Workflows } from "./workflow";
 
-interface AssigneeSnapshot {
-  readonly atMillis: number;
-  readonly assignees: ReadonlyMap<WorkItemId, ReadonlyArray<string>>;
-}
-
 const decodeTriggerEvent = Schema.decodeUnknownEffect(TriggerEvent);
-const assigneeSnapshotTtl = 60_000;
-const freshAssignees = (snapshot: AssigneeSnapshot | undefined, now: number) =>
-  snapshot && now - snapshot.atMillis < assigneeSnapshotTtl ? snapshot.assignees : null;
 
 const lineageOf = (event: TriggerEvent): Lineage => {
   const root = event.cause._tag === "Clock" ? `${keyOf(event.key)}:${event.revision}` : keyOf(event.key);
@@ -124,8 +114,6 @@ export const make = Effect.gen(function* () {
   );
   const changes = yield* PubSub.unbounded<TriggerAdmission>();
   const refreshGate = Semaphore.makeUnsafe(1);
-  const assigneeGate = Semaphore.makeUnsafe(1);
-  const assigneeSnapshots = yield* Ref.make<ReadonlyMap<WorkspaceId, AssigneeSnapshot>>(new Map());
 
   const sweepReadPort = yield* makeSweepReadPort;
 
@@ -134,47 +122,6 @@ export const make = Effect.gen(function* () {
     status: TriggerSourceHealth["status"],
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
-
-  const refreshWorkspaceAssignees = Effect.fn("TriggerObservation.refreshWorkspaceAssignees")(function* (
-    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
-    now: number,
-  ) {
-    const current = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.id), now);
-    if (current) return current;
-    const items = yield* tracker.observe(workspace);
-    const assignees = new Map(items.map(({ id, assignees }) => [id, assignees] as const));
-    yield* Ref.update(assigneeSnapshots, (snapshots) =>
-      new Map(snapshots).set(workspace.config.id, { atMillis: now, assignees }),
-    );
-    return assignees;
-  });
-
-  const refreshItemAssignees = Effect.fn("TriggerObservation.refreshItemAssignees")(function* (
-    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
-    itemId: WorkItemId,
-    now: number,
-  ) {
-    const refreshed = yield* refreshWorkspaceAssignees(workspace, now);
-    if (refreshed.has(itemId)) return refreshed.get(itemId) ?? [];
-    const assignees = yield* tracker.assignees?.(workspace, itemId) ?? Effect.succeed([]);
-    yield* Ref.update(assigneeSnapshots, (snapshots) =>
-      new Map(snapshots).set(workspace.config.id, {
-        atMillis: now,
-        assignees: new Map(refreshed).set(itemId, assignees),
-      }),
-    );
-    return assignees;
-  });
-
-  const itemAssignees = Effect.fn("TriggerObservation.itemAssignees")(function* (
-    workspace: Effect.Success<typeof registry.state>["workspaces"][number],
-    itemId: WorkItemId,
-  ) {
-    const now = yield* Clock.currentTimeMillis;
-    const cached = freshAssignees((yield* Ref.get(assigneeSnapshots)).get(workspace.config.id), now);
-    if (cached?.has(itemId)) return cached.get(itemId) ?? [];
-    return yield* assigneeGate.withPermit(refreshItemAssignees(workspace, itemId, now));
-  });
 
   const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (
     event: TriggerEvent,
@@ -186,7 +133,7 @@ export const make = Effect.gen(function* () {
     const allowlist = workspace.config.issueTracker.assigneeAllowlist;
     if (allowlist === undefined) return true;
     if (event.key._tag !== "Issue") return true;
-    const assignees = yield* itemAssignees(workspace, event.key.id);
+    const assignees = yield* tracker.assignees(workspace, event.key.id);
     return assignees.some((assignee) => allowlist.includes(assignee));
   });
 

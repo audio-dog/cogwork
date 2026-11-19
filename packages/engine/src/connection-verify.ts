@@ -8,7 +8,7 @@ import * as Schema from "effect/Schema";
 import type { Credential } from "./credential-store";
 import { GitHubClient } from "./github/client";
 import { type GranolaHttpFailure, makeGranolaHttp } from "./granola-http";
-import { verifyCredential as verifyLinear } from "./linear/client";
+import { verifyCredential as verifyLinear } from "./linear/client-transport";
 
 // Connection readiness is "established, unrevoked, and usable" (contracts GLOSSARY.md). Resolving a
 // token locally answers the first two; only the system itself answers the third, so establishment

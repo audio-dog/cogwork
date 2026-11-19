@@ -355,7 +355,7 @@ const codexDescriptor = (
     catalog: catalogOptions,
     readiness: () => codexReadiness(executable),
     sharedGit: "required",
-    declaredMembers: ["Tools", "Skills", "Subagents"],
+    declaredMembers: ["Subagents"],
     modelLevels: codexModelLevels,
     inheritedEnvironment: ExternalHarnessRuntime.defaultInheritedEnvironment,
     makeAdapter: ({ model, nativeAuthentication, request }) => {

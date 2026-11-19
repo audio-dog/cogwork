@@ -46,7 +46,7 @@ import { itemWorkspaceOf } from "./workflow-action-entry";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { handOffAdmission, operationKeyOf, parkedAdmission } from "./workflow-run-admission";
-import { ClaimState, makeWorkflowRunAttempts } from "./workflow-run-attempts";
+import { ClaimState, makeWorkflowRunAttempts, resendOf } from "./workflow-run-attempts";
 import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
 import { makeWorkflowRunExecutionContext } from "./workflow-run-execution-context";
 import { touchpointFailure } from "./workflow-run-pending-plan";
@@ -86,7 +86,8 @@ export const make = Effect.gen(function* () {
   const triggerObservation = yield* TriggerObservation;
   const { executionContext, pullRequestBuildInput } = yield* makeWorkflowRunExecutionContext();
   const {
-    previousResultIssues,
+    previousRefusals,
+    takePriorRefusal,
     settleClaimed,
     recordClaimedAttempt,
     claimItem,
@@ -204,6 +205,7 @@ export const make = Effect.gen(function* () {
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(SecureRandom.uuidV4Unsafe());
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
+    const priorRefusal = yield* takePriorRefusal(keyOf(admission.event.key));
     const prepared = yield* preparation
       .prepare({
         admission,
@@ -212,6 +214,7 @@ export const make = Effect.gen(function* () {
         harness: selectedHarness,
         run: { id, workspace: runWorkspace, startedAtMillis },
         pendingPlanAttempt: resumed?.plan.attempt ?? null,
+        resend: resendOf(priorRefusal, key),
       })
       .pipe(Effect.catchTag("CheckoutRefused", Effect.succeed));
     if (prepared instanceof CheckoutRefused) {
@@ -228,10 +231,12 @@ export const make = Effect.gen(function* () {
       workspaceCheckout: workspace === null ? null : prepared.checkout.path,
       worktreeSetup: workspace?.config.worktrees?.setup ?? [],
       instructions: prepared.instructions,
-      previousResultIssues: (yield* Ref.get(previousResultIssues)).get(keyOf(admission.event.key)) ?? null,
+      previousResultIssues: priorRefusal?.agentText ?? null,
+      resendRequest: prepared.resendRequest,
       lineageArtifacts: prepared.lineageArtifacts,
       claim,
       handback: prepared.handback,
+      gitOperationInProgress: prepared.checkout.operationInProgress,
       skills,
       subagents: prepared.subagents,
     });
@@ -282,7 +287,7 @@ export const make = Effect.gen(function* () {
     });
     if (Result.isFailure(decoded)) return yield* refuseResult(admission, claimed, accepted, decoded.failure);
 
-    yield* Ref.update(previousResultIssues, (current) => {
+    yield* Ref.update(previousRefusals, (current) => {
       const next = new Map(current);
       next.delete(keyOf(admission.event.key));
       return next;
