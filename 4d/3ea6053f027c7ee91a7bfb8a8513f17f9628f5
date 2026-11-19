@@ -1,0 +1,35 @@
+apps/cli/tsconfig.json
+  s_7a86d35d06c9ed::t_46da5bd0f1b4f4 6
+apps/desktop/tsconfig.web.json
+  s_7a86d35d06c9ed::t_2dbc1e8c59e606 14
+packages/claude-code/tsconfig.json
+  s_7a86d35d06c9ed::t_54b39bf035c272 5
+packages/codex-cli/tsconfig.json
+  s_7a86d35d06c9ed::t_615aa6eda950fc 4
+packages/contracts/tsconfig.json
+  s_7a86d35d06c9ed::t_90f2bd361521b0 4
+packages/cursor-acp/tsconfig.json
+  s_7a86d35d06c9ed::t_5e4868d776f251 4
+packages/engine/tsconfig.json
+  s_7a86d35d06c9ed::t_049560b62eb890 4
+tsconfig.base.json
+  s_7a86d35d06c9ed::t_d4e443d9e6e1cb 13-14
+turbo.json
+  s_7a86d35d06c9ed::t_0f205f1b93557f 25-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d3ea6053f027c7ee91a7bfb8a8513f17f9628f5",
+  "prompts": {},
+  "sessions": {
+    "s_7a86d35d06c9ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9eb820f4-8034-4909-9fc8-72ab1d6db4d0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
