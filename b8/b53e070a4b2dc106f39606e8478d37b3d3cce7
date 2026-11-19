@@ -1,0 +1,22 @@
+docs/adr/0038-oxlint-and-oxfmt-replace-biome-and-official-rules-win.md
+  s_287408123df056::t_4c6b5acb4c01a3 1-26,29-57,84-97,102-113
+  s_287408123df056::t_a7314a99dd1c1d 98-101
+  s_287408123df056::t_43fe73c2be1e59 27-28
+  s_287408123df056::t_c73b154bcf6a21 58-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8b53e070a4b2dc106f39606e8478d37b3d3cce7",
+  "prompts": {},
+  "sessions": {
+    "s_287408123df056": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0f62d829-6f7b-4736-af38-77319dfa7e2a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
