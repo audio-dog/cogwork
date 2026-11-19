@@ -1,0 +1,23 @@
+AGENTS.md
+  s_24a7036fab5f2b::t_33858250cdbc69 14-16
+CODING_STANDARDS.md
+  s_24a7036fab5f2b::t_93fd098a81ac88 3-4
+scripts/format-edited-files.mjs
+  s_24a7036fab5f2b::t_d079dd95ec4b59 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ea80c43049ee9a34c5ec472400acedf6cc30fc84",
+  "prompts": {},
+  "sessions": {
+    "s_24a7036fab5f2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b8aa8c2-de7a-45a3-bbbd-cc9b5df09b19",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
