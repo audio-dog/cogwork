@@ -199,6 +199,7 @@ describe("TriggerObservation", () => {
               workspace.config.issueTracker.type === "linear" ? [parked(99, start - 200 * day)] : candidates,
             ),
           readProse: (_workspace, id) => Effect.succeed({ body: `Parked body ${id}`, comments: [] }),
+          assignees: () => Effect.succeed(["owner"]),
         }),
         Effect.provideService(
           WorkspaceRegistry,
