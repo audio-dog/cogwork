@@ -1,0 +1,41 @@
+apps/cli/src/cli.test.ts
+  s_faec89ee55d8cc::t_e35934833bec81 13-14
+apps/cli/src/cli.ts
+  s_faec89ee55d8cc::t_23f0ee119da7a6 3-4,7,9,12-15
+apps/cli/src/commands.test.ts
+  s_faec89ee55d8cc::t_f407671bdb4d94 20-22,28-33
+apps/cli/src/commands.ts
+  s_faec89ee55d8cc::t_d179755e27d869 1,8-9,11,16,40,47,52
+apps/cli/src/contribution-settings-commands.ts
+  s_faec89ee55d8cc::t_38560e8ace7281 1-142
+apps/cli/src/daemon-commands.ts
+  s_faec89ee55d8cc::t_fdfb5bb441553c 1-112
+apps/cli/src/limits-commands.ts
+  s_faec89ee55d8cc::t_07a6e1f0d701c8 1-64
+apps/cli/src/operation-settings-commands.ts
+  s_faec89ee55d8cc::t_fcf4837840c8f6 1-214
+apps/cli/src/run-commands.ts
+  s_faec89ee55d8cc::t_71b2fcfff9f603 1-76
+apps/cli/src/scheduling-commands.ts
+  s_faec89ee55d8cc::t_cb4f66731219a4 1-39
+apps/cli/src/status-commands.ts
+  s_faec89ee55d8cc::t_7143854eed0fe4 1-39
+apps/cli/src/watch-commands.ts
+  s_faec89ee55d8cc::t_8b3f7195f0d438 1-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4fddc897db0f76999d8d5a8e21cf95dcab4ffce7",
+  "prompts": {},
+  "sessions": {
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
