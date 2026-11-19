@@ -41,8 +41,8 @@ function SchedulerSummary({ scheduler }: { scheduler: SchedulerStats }) {
         {scheduler.dailyBudgetLimit} runs today
       </span>
       {busy.map((load) => (
-        <Badge key={load.name} variant="secondary">
-          {load.name} · {load.inFlight} / {load.limit}
+        <Badge key={load.id} variant="secondary">
+          {load.id} · {load.inFlight} / {load.limit}
         </Badge>
       ))}
     </div>

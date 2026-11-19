@@ -19,7 +19,7 @@ import {
   RunPlanResolution,
   resolveRunPlan,
 } from "./run-plan-resolution";
-import { TriggerAdmission } from "./trigger-observation";
+import { TriggerAdmission } from "./trigger-observation-admission";
 
 const encodePlan = Schema.encodeSync(RunPlan);
 const workspace = Schema.decodeSync(WorkspaceId);

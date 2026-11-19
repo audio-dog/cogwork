@@ -13,7 +13,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import type { HarnessRunner } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { emptyService as emptySourceControl } from "./source-control";
@@ -267,7 +267,8 @@ describe("WorkflowRun", () => {
         },
       ],
       config: yield* Schema.decodeEffect(WorkspaceConfig)({
-        name: "repo",
+        id: "repo",
+        displayName: "repo",
         checkoutPath: "/repo",
         issueTracker: { type: "github" },
       }),

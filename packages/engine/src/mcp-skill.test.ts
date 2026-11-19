@@ -10,7 +10,8 @@ import { make } from "./mcp-skill";
 
 const config = (over: Partial<typeof WorkspaceConfig.Encoded>) =>
   Schema.decodeSync(WorkspaceConfig)({
-    name: "lin",
+    id: "lin",
+    displayName: "lin",
     checkoutPath: "/repos/lin",
     issueTracker: {
       type: "linear",

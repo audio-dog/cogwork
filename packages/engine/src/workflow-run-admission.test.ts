@@ -8,7 +8,7 @@ import * as Stream from "effect/Stream";
 import { CoordinationError } from "./coordination";
 import { HarnessError } from "./harness";
 import { RunLedger } from "./run-ledger";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { Recheck } from "./trigger-source";
 import { admission, granolaAdmission, siblingGranolaAdmission } from "./workflow-run-admissions-fixtures";
 import {

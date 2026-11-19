@@ -22,7 +22,7 @@ import * as Data from "effect/Data";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { AssembledContext } from "./context-assembler";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { type EngineToolName, itemWorkspaceOf } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
 
