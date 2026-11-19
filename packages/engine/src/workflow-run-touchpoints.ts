@@ -21,7 +21,8 @@ import {
   makeWorkflowRunPendingPlans,
   type PendingPlanDependencies,
 } from "./workflow-run-pending-plan";
-import { operationInProgressSummary, WorktreeManager } from "./worktree";
+import { WorktreeManager } from "./worktree";
+import { operationInProgressSummary } from "./worktree-diagnostics";
 
 type WorktreeBlocked = Extract<ParkReason, { readonly _tag: "WorktreeBlocked" }>;
 

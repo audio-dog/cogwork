@@ -15,7 +15,13 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
-import { failureDetail, RefusedResult, refusalForAgent, refusalForPerson } from "./operation-result";
+import {
+  failureDetail,
+  RefusedResult,
+  refusalForAgent,
+  refusalForPerson,
+  refusalResumesSession,
+} from "./operation-result";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import type { TriggerAdmission } from "./trigger-observation-admission";
@@ -46,6 +52,23 @@ export type ClaimState = Data.TaggedEnum<{
 }>;
 export const ClaimState = Data.taggedEnum<ClaimState>();
 export type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
+
+export interface PriorRefusal {
+  readonly agentText: string;
+  readonly key: ClaimedWork["key"];
+  readonly resumableRun: RunId | null;
+}
+
+const sameOperation = (left: ClaimedWork["key"], right: ClaimedWork["key"]) =>
+  left.workflow === right.workflow && left.operation === right.operation;
+
+export const resendOf = (prior: PriorRefusal | null, key: ClaimedWork["key"]) =>
+  prior?.resumableRun && sameOperation(prior.key, key)
+    ? {
+        run: prior.resumableRun,
+        request: `${prior.agentText}\n\nDo no other work unless an issue above needs it.`,
+      }
+    : null;
 
 type BuildInput = Parameters<typeof buildWorkflowActionPlan>[0];
 
@@ -83,7 +106,14 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
   const recorder = yield* RunRecorder;
   const actionPlans = yield* WorkflowActionPlanStore;
   const observationStore = yield* TriggerObservationStore;
-  const previousResultIssues = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
+  const previousRefusals = yield* Ref.make<ReadonlyMap<string, PriorRefusal>>(new Map());
+
+  const takePriorRefusal = (itemKey: string) =>
+    Ref.modify(previousRefusals, (current) => {
+      const prior = current.get(itemKey) ?? null;
+      if (prior === null) return [prior, current];
+      return [prior, new Map(current).set(itemKey, { ...prior, resumableRun: null })];
+    });
 
   const settleRun = (attempt: RunId | null, status: RunRecord["status"]) =>
     attempt === null
@@ -222,9 +252,12 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     refusal: RefusedResult,
     status: "failed" | "declined" = "failed",
   ) {
-    yield* Ref.update(previousResultIssues, (current) =>
-      new Map(current).set(keyOf(admission.event.key), refusalForAgent(refusal)),
-    );
+    const prior: PriorRefusal = {
+      agentText: refusalForAgent(refusal),
+      key: work.key,
+      resumableRun: refusalResumesSession(refusal) ? work.run : null,
+    };
+    yield* Ref.update(previousRefusals, (current) => new Map(current).set(keyOf(admission.event.key), prior));
     return yield* failAttempt(admission, claimed, work, refusalForPerson(refusal), status);
   });
 
@@ -349,7 +382,8 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
   });
 
   return {
-    previousResultIssues,
+    previousRefusals,
+    takePriorRefusal,
     settleClaimed,
     recordClaimedAttempt,
     claimItem,

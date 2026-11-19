@@ -46,7 +46,7 @@ The one command that establishes a Harness's own login — `codex login`, `claud
 _Avoid_: Login flow, credential prompt, authenticate action
 
 **Operation result**:
-The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action takes its Workspace from the agent (see **Question**), a Workspace. One engine module accepts the result from the final `structured-output.complete` Harness event, or gives a **Refused result**.
+The tagged, Effect-Schema-defined value an operation returns through the harness stream. For a Workflow Operation the engine derives the schema from the published Operation, with no unions and no optional fields: a summary, the `stuck` flag, and one element — or, for a **fan-out**, a list of elements — each holding its answers, its agent inputs, and, when an action takes its Workspace from the agent (see **Question**), a Workspace. One engine module accepts the result from the final `structured-output.complete` Harness event, or gives a **Refused result**. After a schema-mismatch refusal, the next attempt resumes the refused attempt's **Session**, and its work request is the refusal's agent text: send the result again and do no other work unless an issue needs it. That resumed Run is a usual attempt, so the attempt limit still applies. A refusal of another kind does not resume the Session.
 _Avoid_: Footer, sentinel, disposition line, text protocol
 
 **Operating-instructions package**:
