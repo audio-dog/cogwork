@@ -1,0 +1,120 @@
+docs/adr/0009-mission-control-ui-client-stack.md
+  h_46518a29d4dd91 3-4
+docs/adr/0038-oxlint-and-oxfmt-replace-biome-and-official-rules-win.md
+  h_46518a29d4dd91 1-113
+docs/adr/0039-local-ui-state-is-effect-atom-state.md
+  h_46518a29d4dd91 1-38
+docs/research/cursor-acp-versus-cursor-sdk.md
+  h_46518a29d4dd91 62,64-67
+packages/claude-code/src/harness.ts
+  h_46518a29d4dd91 427
+packages/codex-cli/src/harness.ts
+  h_46518a29d4dd91 343
+packages/contracts/GLOSSARY-harness-contract.md
+  h_46518a29d4dd91 49
+packages/contracts/GLOSSARY-runs.md
+  h_46518a29d4dd91 33
+packages/cursor-acp/GLOSSARY.md
+  h_46518a29d4dd91 13
+packages/cursor-acp/package.json
+  h_46518a29d4dd91 13,29
+packages/cursor-acp/src/harness.test.ts
+  h_46518a29d4dd91 10,15,465,468,805-852
+packages/engine/GLOSSARY-harness.md
+  h_46518a29d4dd91 30,38
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  h_46518a29d4dd91 23-32
+packages/engine/src/connection-verify.ts
+  h_46518a29d4dd91 11
+packages/engine/src/external-harness-runtime-launch.ts
+  h_46518a29d4dd91 156-157,180
+packages/engine/src/external-harness-runtime.test.ts
+  h_46518a29d4dd91 44-45,85,102-111,113-116,214,244-255,257,260-262,264-266
+packages/engine/src/external-harness-runtime.ts
+  h_46518a29d4dd91 39,64,152,220-221,354
+packages/engine/src/github/host.test.ts
+  h_46518a29d4dd91 147,149,154-155,162-164,166-185,187-190
+packages/engine/src/github/host.ts
+  h_46518a29d4dd91 184,188,195-198,200
+packages/engine/src/github/pull-request-trigger-source.ts
+  h_46518a29d4dd91 9,75
+packages/engine/src/github/trigger-source-polling.test.ts
+  h_46518a29d4dd91 11,75-77,95-104,110-124,130-131,134,139-140,142-146,152
+packages/engine/src/issue-tracker-router.test.ts
+  h_46518a29d4dd91 85-100,102-103,156,171,185,237
+packages/engine/src/issue-tracker-router.ts
+  h_46518a29d4dd91 15-16,23
+packages/engine/src/issue-tracker.ts
+  h_46518a29d4dd91 138,151-152,156
+packages/engine/src/linear/client-errors.ts
+  h_46518a29d4dd91 1-123
+packages/engine/src/linear/client-issue-mapping.ts
+  h_46518a29d4dd91 1-137
+packages/engine/src/linear/client-issue-reads.ts
+  h_46518a29d4dd91 1-217
+packages/engine/src/linear/client-queries.ts
+  h_46518a29d4dd91 1-259
+packages/engine/src/linear/client-schemas.ts
+  h_46518a29d4dd91 1-180
+packages/engine/src/linear/client-transport.ts
+  h_46518a29d4dd91 1-169
+packages/engine/src/linear/client.ts
+  h_46518a29d4dd91 1,7-8,10-54,77-86,258
+packages/engine/src/linear/host.test.ts
+  h_46518a29d4dd91 5,7-8,10,66-91,93-97,99-104,106-109,111-120
+packages/engine/src/linear/host.ts
+  h_46518a29d4dd91 14-17,142-145,147-149
+packages/engine/src/linear/index.ts
+  h_46518a29d4dd91 9
+packages/engine/src/linear/trigger-source.test.ts
+  h_46518a29d4dd91 21,56,153-154,202,238,288-296,301-302,305,310-311,313-317,321-324
+packages/engine/src/operation-result.ts
+  h_46518a29d4dd91 78-84
+packages/engine/src/provider-trigger-source.ts
+  h_46518a29d4dd91 92-100,102,104-105
+packages/engine/src/run-plan-resolution.test.ts
+  h_46518a29d4dd91 162
+packages/engine/src/run-plan-resolution.ts
+  h_46518a29d4dd91 68,199
+packages/engine/src/run-preparation.test.ts
+  h_46518a29d4dd91 223
+packages/engine/src/run-preparation.ts
+  h_46518a29d4dd91 9,93,200-210,220-221,249
+packages/engine/src/tracker-trigger-source.test.ts
+  h_46518a29d4dd91 15,18,22,90,92-93,184,202,206,208-211,213-216,220-265
+packages/engine/src/tracker-trigger-source.ts
+  h_46518a29d4dd91 10,13,34,74-85,95-96,183-187,189-192,239
+packages/engine/src/trigger-observation-assignees.test.ts
+  h_46518a29d4dd91 1,16-17,23,39,43,45-51,53,55,58-67,69-77,81,83-84,87,96,102-103,131
+packages/engine/src/trigger-observation-fixtures.ts
+  h_46518a29d4dd91 120-128,135,154-155,165,172,174-177,189,194
+packages/engine/src/trigger-observation-sweep.test.ts
+  h_46518a29d4dd91 202
+packages/engine/src/trigger-observation.ts
+  h_46518a29d4dd91 136
+packages/engine/src/workflow-run-attempts.ts
+  h_46518a29d4dd91 18-24,57-73,110-117,256-261,392-393
+packages/engine/src/workflow-run-fixtures.ts
+  h_46518a29d4dd91 181,220,289-298
+packages/engine/src/workflow-run-hand-back.test.ts
+  h_46518a29d4dd91 1-7,26,174-223
+packages/engine/src/workflow-run-retry.test.ts
+  h_46518a29d4dd91 32,37-47,253,268,282,290,293,302,311,319-322,329-352
+packages/engine/src/workflow-run-run-plan.test.ts
+  h_46518a29d4dd91 14,323,326,340-346
+packages/engine/src/workflow-run.ts
+  h_46518a29d4dd91 50,83-84,194,203,219-220,272
+pnpm-lock.yaml
+  h_46518a29d4dd91 723-725
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8d7eb849b88cc5ce2c43b582688011a499b36704",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
