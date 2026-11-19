@@ -1,0 +1,31 @@
+docs/agent-patterns/effect-test-layers.md
+  s_faec89ee55d8cc::t_a4f4713ec5d977 125
+packages/engine/src/daemon-composition-coding-template.test.ts
+  s_faec89ee55d8cc::t_07eb26c599c0b3 1-70
+packages/engine/src/daemon-composition-crash-recovery.test.ts
+  s_faec89ee55d8cc::t_d66e8d5358d368 1-71
+packages/engine/src/daemon-composition-fixtures.ts
+  s_faec89ee55d8cc::t_b016c799382eea 1-278
+packages/engine/src/daemon-composition-slack-review-fixtures.ts
+  s_faec89ee55d8cc::t_870a7f84800ead 1,4,20-28,31,43-44,280,283,287,303
+packages/engine/src/daemon-composition-slack-review.test.ts
+  s_faec89ee55d8cc::t_b74537eab88ee3 1-186
+packages/engine/src/daemon-composition-worktree-maintenance.test.ts
+  s_faec89ee55d8cc::t_dc0d96136d2bd9 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4f614dbca976aec28b9124bb23c8dd7a2b60a1e7",
+  "prompts": {},
+  "sessions": {
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
