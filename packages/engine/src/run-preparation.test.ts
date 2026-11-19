@@ -220,6 +220,7 @@ const input = (pendingPlanAttempt: RunId | null): RunPreparationInput => ({
   harness: harnessName,
   run: { id: Schema.decodeSync(RunId)("run-next"), workspace: runWorkspace, startedAtMillis: 6_000 },
   pendingPlanAttempt,
+  resend: null,
 });
 
 const handback: HandbackRecord = { by: "taylor", atMillis: 7_000, note: "Use the smaller fix." };

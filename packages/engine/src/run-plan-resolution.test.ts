@@ -159,6 +159,7 @@ const issueFacts: RunPlanFacts = {
     sources: [],
   },
   previousResultIssues: "The summary was empty.",
+  resendRequest: null,
   lineageArtifacts: [],
   claim: {
     by: "cogwork",
