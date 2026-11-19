@@ -6,5 +6,9 @@
   "scripts": {
     "test": "node --test --test-reporter=spec --test-reporter=./tests/test-count-reporter.mjs --test-reporter-destination=stdout --test-reporter-destination=stdout tests/react-lint-scope.test.mjs tests/test-count-reporter.test.mjs",
     "test:rules": "node --test --test-reporter=spec tests/rules.test.mjs"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.94.0",
+    "oxlint": "1.94.0"
   }
 }
