@@ -6,8 +6,9 @@ import * as Ref from "effect/Ref";
 import * as RpcClient from "effect/rpc/RpcClient";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { advancingClock, harnessName } from "./daemon-composition-fixtures";
+import { harnessName } from "./daemon-composition-fixtures";
 import {
+  advancingClock,
   SlackReviewProbe,
   SlackReviewServerFixture,
   slackReviewServerTestLayer,
@@ -41,7 +42,7 @@ describe("daemon composition", () => {
         establishment: { system: "slack", account: "review-team", source: { _tag: "Stored" } },
       });
       const registration = yield* Schema.decodeEffect(WorkspaceRegistration)({
-        name: "github",
+        displayName: "github",
         checkoutPath: fixture.root,
         issueTracker: { type: "github", connectionId: "github/connected-account" },
         sourceControl: { type: "github", connectionId: "github/connected-account" },
@@ -50,7 +51,7 @@ describe("daemon composition", () => {
       const workspace = yield* rpc.RegisterWorkspace({ registration });
       assert.strictEqual(workspace._tag, "Registered");
       if (workspace._tag !== "Registered") return;
-      yield* Ref.set(probe.workspace, workspace.name);
+      yield* Ref.set(probe.workspace, workspace.id);
       const template = (yield* rpc.GetWorkflowTemplates()).find(({ id }) => id === "slack-to-github-review");
       assert.isDefined(template);
       if (template === undefined) return;
@@ -173,8 +174,8 @@ describe("daemon composition", () => {
       );
       assert.isTrue(repliedAfterApproval);
       assert.deepStrictEqual(yield* Ref.get(probe.pullRequestToolCalls), [
-        { workspace: workspace.name, pull_request: "#827" },
-        { workspace: workspace.name, pull_request: "#827" },
+        { workspace: workspace.id, pull_request: "#827" },
+        { workspace: workspace.id, pull_request: "#827" },
       ]);
     }).pipe(
       Effect.provide(slackReviewServerTestLayer()),

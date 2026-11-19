@@ -1,0 +1,4 @@
+### 19. Code facts the grills found (declared is not reachable)
+
+The daemon does not register the owned runner; only Cursor, Claude Code, and Codex run. ADR 0030's amendment (freeze the pull request's description and review comments) and ADR 0032 (resource references) are not built. There is no event stream, no inbound listener, no wall-clock scheduler, and no Granola, Slack, or watermark code. The Issue tracker port cannot create or close an issue; the Source control port writes only a comment and a pull request; the engine has no Slack write code. The desktop has a tray and no OS notifications, and its app id is set in two places with two values. The agent pushes the branch today. Cogwork ships no model choice for any Operation. Operation-settings resolution hard-codes the Workflow id `"coding"`.
+

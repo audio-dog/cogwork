@@ -14,34 +14,34 @@ const workspaceState = Schema.decodeSync(WorkspaceState);
 
 describe("formatRegistrationResult", () => {
   it("reports the minted identity when repository input fails", () => {
-    const name = workspaceId("0198f16a-21d7-7000-8000-000000000001");
+    const id = workspaceId("0198f16a-21d7-7000-8000-000000000001");
 
     assert.strictEqual(
       formatRegistrationResult("missing input", {
         _tag: "Failed",
-        name,
+        id,
         source: "/repos/missing",
         message: "Workspace input is missing",
       }),
-      `Registered missing input as ${name}, but Workspace input failed: Workspace input is missing`,
+      `Registered missing input as ${id}, but Workspace input failed: Workspace input is missing`,
     );
   });
 });
 
 describe("formatRebindResult", () => {
   it("reports the stable identity and new path", () => {
-    const name = workspaceId("0198f16a-21d7-7000-8000-000000000001");
+    const id = workspaceId("0198f16a-21d7-7000-8000-000000000001");
 
     assert.strictEqual(
       formatRebindResult(
         workspaceState({
           _tag: "Registered",
-          name,
+          id,
           displayName: "Cogwork",
           checkoutPath: "/repos/moved",
           issueTracker: "github",
           record: {
-            name: "Cogwork",
+            displayName: "Cogwork",
             checkoutPath: "/repos/moved",
             issueTracker: { type: "github" },
             linearHistory: false,
@@ -49,7 +49,7 @@ describe("formatRebindResult", () => {
           contributions: [],
         }),
       ),
-      `Re-bound Cogwork (${name}) to /repos/moved.`,
+      `Re-bound Cogwork (${id}) to /repos/moved.`,
     );
   });
 });
@@ -58,27 +58,27 @@ describe("formatUpdateResult", () => {
   it.effect("schema-decodes the JSON update input", () =>
     Effect.gen(function* () {
       const update = yield* decodeWorkspaceUpdateJson(
-        '{"name":"Cogwork","issueTracker":{"type":"github","connectionId":"github/acme"},"linearHistory":false,"concurrency":3}',
+        '{"displayName":"Cogwork","issueTracker":{"type":"github","connectionId":"github/acme"},"linearHistory":false,"concurrency":3}',
       );
 
-      assert.strictEqual(update.name, "Cogwork");
+      assert.strictEqual(update.displayName, "Cogwork");
       assert.strictEqual(update.concurrency, 3);
     }),
   );
 
   it("reports the edited workspace name", () => {
-    const name = workspaceId("0198f16a-21d7-7000-8000-000000000001");
+    const id = workspaceId("0198f16a-21d7-7000-8000-000000000001");
 
     assert.strictEqual(
       formatUpdateResult(
         workspaceState({
           _tag: "Registered",
-          name,
+          id,
           displayName: "Cogwork",
           checkoutPath: "/repos/cogwork",
           issueTracker: "github",
           record: {
-            name: "Cogwork",
+            displayName: "Cogwork",
             checkoutPath: "/repos/cogwork",
             issueTracker: { type: "github" },
             linearHistory: false,

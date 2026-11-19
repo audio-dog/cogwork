@@ -1,3 +1,4 @@
+import { RunPlanSubagent } from "@cogwork/contracts";
 import { Harness } from "@cogwork/engine";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
@@ -280,6 +281,28 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
           assert.include(args, "mcp_servers.test__linear_api__0.url=");
           assert.include(args, "mcp_servers.tanstack.url=");
           assert.include(args, "mcp_servers.tanstack.tool_timeout_sec=7200");
+        }),
+      ),
+    );
+
+    it.effect("gives the bridged tools a timeout past the Subagent child timeout", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const handle = yield* createSandbox();
+          const reviewer = RunPlanSubagent.cases.Available.make({
+            identity: "local:repo/reviewer",
+            name: "reviewer",
+            source: ".agents/agents/reviewer.md",
+            description: "Reviews one change",
+            tools: [],
+            modelLevel: "light",
+            prompt: "You review changes.",
+          });
+          const events = yield* runInRepository(Harness.make([runner()]), handle, { subagents: [reviewer] });
+          const args = (yield* structuredCapture(events)).args.join("\n");
+
+          assert.include(args, "mcp_servers.tanstack.url=");
+          assert.include(args, "mcp_servers.tanstack.tool_timeout_sec=660");
         }),
       ),
     );

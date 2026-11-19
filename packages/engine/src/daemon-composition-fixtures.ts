@@ -1,17 +1,6 @@
-import {
-  HarnessName,
-  IssueTrackerType,
-  keyOf,
-  LineageId,
-  RunId,
-  type RunRecord,
-  SourceControlType,
-  WorkItemId,
-  WorkspaceId,
-} from "@cogwork/contracts";
+import { HarnessName, IssueTrackerType, SourceControlType } from "@cogwork/contracts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -29,7 +18,6 @@ import * as SocketServer from "effect/socket/SocketServer";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
-import { Coordination } from "./coordination";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import { Git, type GitService } from "./git";
@@ -41,7 +29,7 @@ import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 export const harnessName = HarnessName.make("scripted");
 export const githubType = Schema.decodeSync(IssueTrackerType)("github");
 export const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
-export const structuredOutput = {
+const structuredOutput = {
   summary: "Ready for implementation",
   stuck: false,
   answers: { role: "ready-for-agent" },
@@ -118,7 +106,7 @@ export const gitLayer = Layer.succeed(Git, {
   pushBranch: () => Effect.die("unused"),
 } satisfies GitService);
 
-export const credentialsLayer = Layer.succeed(CredentialStore.CredentialStore, {
+const credentialsLayer = Layer.succeed(CredentialStore.CredentialStore, {
   resolveSource: () =>
     Effect.succeed({ source: "stored-key", token: Redacted.make("token"), identity: null }),
   bearerToken: () =>
@@ -153,7 +141,7 @@ export const socketServerLayer = (socket: Socket.Socket) =>
     run: (handler) => handler(socket).pipe(Effect.ignore, Effect.andThen(Effect.never)),
   });
 
-export const issueResponse = (labels: ReadonlyArray<string>) => ({
+const issueResponse = (labels: ReadonlyArray<string>) => ({
   node_id: "I_issue_1",
   number: 1,
   title: "Triage me",
@@ -165,32 +153,13 @@ export const issueResponse = (labels: ReadonlyArray<string>) => ({
   created_at: "2026-11-01T12:00:00Z",
 });
 
-export const jsonResponse = (body: unknown = {}, status = 200) =>
+const jsonResponse = (body: unknown = {}, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
   });
 
-export const advancingClock = () => {
-  const state = { millis: 0 };
-  const nextMillis = () => {
-    const current = state.millis;
-    state.millis = current + 1;
-    return current;
-  };
-  const nextNanos = () => BigInt(nextMillis()) * 1_000_000n;
-  return {
-    currentTimeMillisUnsafe: nextMillis,
-    currentTimeMillis: Effect.sync(nextMillis),
-    currentTimeNanosUnsafe: nextNanos,
-    currentTimeNanos: Effect.sync(nextNanos),
-    monotonicTimeNanosUnsafe: nextNanos,
-    monotonicTimeNanos: Effect.sync(nextNanos),
-    sleep: () => Effect.never,
-  } satisfies Clock.Clock;
-};
-
-export function makeFixture() {
+function makeFixture() {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -301,37 +270,6 @@ export const testLayer = () =>
       ),
     ),
   ).pipe(Layer.provideMerge(Fixture.layer), Layer.provide(NodeServices.layer));
-
-export const crashedIssue = {
-  _tag: "Issue",
-  workspace: WorkspaceId.make("github"),
-  id: WorkItemId.make("#1"),
-} as const;
-
-export const claimCrashedIssue = Effect.fn("DaemonCompositionTest.claimCrashedIssue")(function* () {
-  const coordination = yield* Coordination;
-  yield* coordination.observe(crashedIssue, "label:needs-triage:1", { _tag: "Unknown" });
-  yield* coordination.claim(crashedIssue, {
-    operation: { workflow: "coding", operation: "triage" },
-    lineage: { root: LineageId.make(keyOf(crashedIssue)), parent: null, hop: 0 },
-  });
-  yield* TestClock.adjust("1 minute");
-});
-
-export const issueRun = (id: string, status: RunRecord["status"], startedAtMillis: number) =>
-  ({
-    id: RunId.make(id),
-    workspace: crashedIssue.workspace,
-    workItem: WorkItemId.make(keyOf(crashedIssue)),
-    operation: "triage",
-    harness: harnessName,
-    branch: null,
-    session: null,
-    usage: null,
-    status,
-    startedAtMillis,
-    endedAtMillis: status === "running" ? null : startedAtMillis,
-  }) satisfies RunRecord;
 
 export const startHeartbeats = Effect.fn("DaemonCompositionTest.startHeartbeats")(function* () {
   yield* Effect.forkScoped(

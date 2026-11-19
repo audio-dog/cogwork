@@ -21,7 +21,8 @@ import type {
   SourceControlProvider,
   SourceControlProviderService,
 } from "./source-control";
-import type { TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
+import type { TriggerObservationStore } from "./trigger-observation-store";
 import type { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import type { WorkflowNotifications } from "./workflow-notification";
 import type { WorktreeManager, WorktreeManagerService } from "./worktree";

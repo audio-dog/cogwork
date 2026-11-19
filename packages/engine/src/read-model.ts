@@ -23,13 +23,13 @@ export const readyToMergeByWorkspace = Effect.fn("ReadModel.readyToMergeByWorksp
     sourceControl
       .readyToMerge(
         workspace,
-        artifacts.filter((artifact) => artifact.workspace === workspace.config.name),
+        artifacts.filter((artifact) => artifact.workspace === workspace.config.id),
       )
       .pipe(
-        Effect.map((items) => [[workspace.config.name, items] as const]),
+        Effect.map((items) => [[workspace.config.id, items] as const]),
         Effect.catchTag("IssueTrackerError", (error) =>
           Effect.logWarning("Ready to merge read failed", {
-            workspace: workspace.config.name,
+            workspace: workspace.config.id,
             message: error.message,
           }).pipe(Effect.map(() => [])),
         ),
@@ -40,7 +40,7 @@ export const readyToMergeByWorkspace = Effect.fn("ReadModel.readyToMergeByWorksp
 
 const workspaceRecordOf = (workspace: RegisteredWorkspace) =>
   workspace.record ?? {
-    name: workspace.config.displayName ?? workspace.config.name,
+    displayName: workspace.config.displayName,
     checkoutPath: workspace.config.checkoutPath,
     issueTracker: workspace.config.issueTracker,
     linearHistory: workspace.config.linearHistory,
@@ -54,8 +54,8 @@ export const workspaceInfoOf = (
   workspace: RegisteredWorkspace,
   readyToMerge: ReadonlyArray<ReadyToMergeItem> = [],
 ) => ({
-  name: workspace.config.name,
-  ...(workspace.config.displayName ? { displayName: workspace.config.displayName } : {}),
+  id: workspace.config.id,
+  displayName: workspace.config.displayName,
   checkoutPath: workspace.config.checkoutPath,
   issueTracker: workspace.config.issueTracker.type,
   record: workspaceRecordOf(workspace),
@@ -68,23 +68,23 @@ export const workspaceStatesOf = (
   readyToMerge: ReadonlyMap<string, ReadonlyArray<ReadyToMergeItem>> = new Map(),
 ) => [
   ...registry.workspaces.map((workspace) =>
-    workspaceStateFromInfo(workspaceInfoOf(workspace, readyToMerge.get(workspace.config.name))),
+    workspaceStateFromInfo(workspaceInfoOf(workspace, readyToMerge.get(workspace.config.id))),
   ),
   ...registry.failures.map(workspaceFailureState),
 ];
 
 const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, state: SchedulerState) => [
   ...registry.workspaces.map((workspace) => ({
-    name: workspace.config.name,
-    inFlight: state.perWorkspace.get(workspace.config.name) ?? 0,
+    id: workspace.config.id,
+    inFlight: state.perWorkspace.get(workspace.config.id) ?? 0,
     limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
   })),
   ...registry.failures.flatMap((failure) => {
-    if (failure.name === undefined) return [];
+    if (failure.id === undefined) return [];
     return [
       {
-        name: failure.name,
-        inFlight: state.perWorkspace.get(failure.name) ?? 0,
+        id: failure.id,
+        inFlight: state.perWorkspace.get(failure.id) ?? 0,
         limit: failure.workspaceLimit ?? config.perWorkspaceLimit,
       },
     ];

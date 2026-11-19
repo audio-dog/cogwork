@@ -1,6 +1,7 @@
 import { WorkspaceId } from "@cogwork/contracts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import type * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -27,14 +28,14 @@ import {
 import type { HarnessRunner } from "./harness";
 import { PerformanceHealthSource } from "./performance-health-source";
 import * as RunLedger from "./run-ledger";
-import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation";
+import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";
 
-export interface PullRequestToolCall {
+interface PullRequestToolCall {
   readonly workspace: WorkspaceId;
   readonly pull_request: string;
 }
 
-export interface SlackReviewProbeService {
+interface SlackReviewProbeService {
   readonly workspace: Ref.Ref<WorkspaceId>;
   readonly pullRequestToolCalls: Ref.Ref<ReadonlyArray<PullRequestToolCall>>;
 }
@@ -51,7 +52,7 @@ export class SlackReviewProbe extends Context.Service<SlackReviewProbe, SlackRev
   );
 }
 
-export const slackReviewRunner = (probe: SlackReviewProbeService): HarnessRunner => ({
+const slackReviewRunner = (probe: SlackReviewProbeService): HarnessRunner => ({
   ...runner,
   run: (request) => {
     const body = request.plan.workContext.prose.body;
@@ -129,7 +130,7 @@ export const slackReviewRunner = (probe: SlackReviewProbeService): HarnessRunner
   },
 });
 
-export const slackReviewCredentials = Layer.succeed(CredentialStore.CredentialStore, {
+const slackReviewCredentials = Layer.succeed(CredentialStore.CredentialStore, {
   resolveSource: () =>
     Effect.succeed({
       source: "stored-oauth",
@@ -150,7 +151,7 @@ export const slackReviewCredentials = Layer.succeed(CredentialStore.CredentialSt
   removeConnection: () => Effect.void,
 } satisfies CredentialStore.CredentialStoreService);
 
-export function makeSlackReviewServerFixture() {
+function makeSlackReviewServerFixture() {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -298,3 +299,22 @@ export const slackReviewServerTestLayer = () =>
     Layer.provideMerge(SlackReviewProbe.layer),
     Layer.provide(NodeServices.layer),
   );
+
+export const advancingClock = () => {
+  const state = { millis: 0 };
+  const nextMillis = () => {
+    const current = state.millis;
+    state.millis = current + 1;
+    return current;
+  };
+  const nextNanos = () => BigInt(nextMillis()) * 1_000_000n;
+  return {
+    currentTimeMillisUnsafe: nextMillis,
+    currentTimeMillis: Effect.sync(nextMillis),
+    currentTimeNanosUnsafe: nextNanos,
+    currentTimeNanos: Effect.sync(nextNanos),
+    monotonicTimeNanosUnsafe: nextNanos,
+    monotonicTimeNanos: Effect.sync(nextNanos),
+    sleep: () => Effect.never,
+  } satisfies Clock.Clock;
+};

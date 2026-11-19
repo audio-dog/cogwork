@@ -5,7 +5,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { SourceControlProvider } from "./source-control";
 import { ticketSlug, WorktreeManager, worktreePathFor, worktreeRoot } from "./worktree";
@@ -32,11 +32,11 @@ const ownedWorktreePaths = Effect.fn("WorktreeMaintenance.ownedWorktreePaths")(f
 ) {
   const ledger = yield* RunLedger;
   const running = yield* ledger.runningRuns;
-  const workspaceByName = new Map(workspaces.map((candidate) => [candidate.config.name, candidate]));
+  const workspaceById = new Map(workspaces.map((candidate) => [candidate.config.id, candidate]));
   const ownershipRoot = yield* canonicalWorktreeRoot(workspace);
   const ownershipPaths = [ownershipRoot.configuredPath, ownershipRoot.canonicalPath];
   const retained = yield* Effect.forEach(running, ({ branch, workspace: runWorkspace }) => {
-    const owner = workspaceByName.get(runWorkspace);
+    const owner = workspaceById.get(runWorkspace);
     if (owner === undefined || branch === null) return Effect.succeed([]);
     return Effect.map(canonicalWorktreeRoot(owner), (ownerRoot) => {
       const sharesOwnershipRoot =
@@ -79,7 +79,7 @@ export const maintainWorktrees = Effect.fn("WorktreeMaintenance.maintainWorktree
   yield* Effect.forEach(
     managed,
     (workspace) => {
-      const correlation = { workspace: workspace.config.name };
+      const correlation = { workspace: workspace.config.id };
       return manager.tryWithMaintenanceLock(maintainWorkspace(workspace, registry.workspaces)).pipe(
         Effect.flatMap(
           Option.match({

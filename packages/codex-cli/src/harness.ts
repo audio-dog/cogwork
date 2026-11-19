@@ -1,5 +1,13 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge, Provider } from "@cogwork/engine";
+import {
+  ExternalHarnessRuntime,
+  ExternalHarnessSandbox,
+  ExternalHarnessWorkspace,
+  Harness,
+  HarnessBridge,
+  Provider,
+  SubagentRunner,
+} from "@cogwork/engine";
 import {
   type CodexTextAdapter,
   type CodexTextConfig,
@@ -10,7 +18,7 @@ import { BRIDGED_MCP_SERVER_NAME, type SandboxHandle } from "@tanstack/ai-sandbo
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
-import { codexNativeEffort } from "./model";
+import { codexModelLevels, codexNativeEffort } from "./model";
 import { type CodexModel, codexCatalog, codexModels, defaultCodexModel } from "./models.generated";
 
 export type MakeCodexAdapter = (model: CodexModel, config: CodexTextConfig) => CodexTextAdapter<CodexModel>;
@@ -130,7 +138,7 @@ const codexCommand = Effect.fn("CodexRunner.command")(
 );
 
 const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
-  ExternalHarnessRuntime.withLocalProcessSandbox(
+  ExternalHarnessSandbox.withLocalProcessSandbox(
     process.cwd(),
     ExternalHarnessRuntime.defaultInheritedEnvironment,
     codexLaunchDiagnostics,
@@ -279,7 +287,7 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
     if (!codexConfigKeySafe.test(server.name)) {
       throw new Error(`MCP server name is not a safe Codex config key: ${server.name}`);
     }
-    const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
+    const environmentName = ExternalHarnessWorkspace.mcpBearerEnvironmentName(server.name);
     return {
       config: [
         [`mcp_servers.${server.name}.url`, tomlString(server.endpoint)] as const,
@@ -296,20 +304,30 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
   };
 };
 
-// Codex stops waiting for an MCP tool call after 60 seconds unless the server sets
-// `tool_timeout_sec`. An engine tool such as `worktree-setup` can run a cold dependency
-// install, so the bridge gets the Run's own budget.
-const engineToolTimeout = (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
-  Object.fromEntries(
-    request.tools.length === 0
-      ? []
-      : [
-          [
-            `mcp_servers.${BRIDGED_MCP_SERVER_NAME}.tool_timeout_sec`,
-            String(Duration.toSeconds(Provider.defaultRunBudget(request.policy))),
-          ],
-        ],
-  );
+// Codex ends a bridged MCP tool call at its own `tool_timeout_sec` (60 seconds when unset). An
+// engine tool such as `worktree-setup` can run a cold dependency install, so it gets the Run's own
+// budget. A Subagent child gets a margin past the engine's child timeout, so the model sees the
+// engine's tool error and not a Codex transport error.
+const bridgedToolTimeouts = [
+  {
+    applies: (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => request.tools.length > 0,
+    timeout: (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) =>
+      Duration.fromInputUnsafe(Provider.defaultRunBudget(request.policy)),
+  },
+  {
+    applies: (request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest) => request.subagents.length > 0,
+    timeout: () => Duration.sum(SubagentRunner.childTimeout, Duration.minutes(1)),
+  },
+];
+
+const bridgedToolTimeout = (
+  request: ExternalHarnessRuntime.ExternalHarnessResolvedRequest,
+): Record<string, string> => {
+  const rule = bridgedToolTimeouts.find(({ applies }) => applies(request));
+  if (rule === undefined) return {};
+  const seconds = Duration.toSeconds(rule.timeout(request));
+  return { [`mcp_servers.${BRIDGED_MCP_SERVER_NAME}.tool_timeout_sec`]: String(seconds) };
+};
 
 const codexDescriptor = (
   options: CodexRunnerOptions,
@@ -337,11 +355,12 @@ const codexDescriptor = (
     catalog: catalogOptions,
     readiness: () => codexReadiness(executable),
     sharedGit: "required",
-    declaredMembers: ["Tools", "Skills"],
+    declaredMembers: ["Tools", "Skills", "Subagents"],
+    modelLevels: codexModelLevels,
     inheritedEnvironment: ExternalHarnessRuntime.defaultInheritedEnvironment,
     makeAdapter: ({ model, nativeAuthentication, request }) => {
       const mcp = codexMcpProjection(request.mcp);
-      const config = { ...mcp.config, ...engineToolTimeout(request) };
+      const config = { ...mcp.config, ...bridgedToolTimeout(request) };
       return makeAdapter(model, {
         authMode: nativeAuthentication,
         approvalPolicy: "never",

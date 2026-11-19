@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import type { RegisteredWorkspace } from "../projector";
-import { readOnlyRegistry, WorkspaceRegistry } from "../registry";
+import { readOnlyRegistry, WorkspaceRegistry } from "../registry-service";
 import { SourceControlProvider } from "../source-control";
 import { GitHubClient, type RawIssueComment } from "./client";
 import { wireCodec } from "./markers";
@@ -21,7 +21,8 @@ const workspace: RegisteredWorkspace = {
   repository: "colonylabs/cogwork",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "cogwork",
+    id: "cogwork",
+    displayName: "cogwork",
     checkoutPath: "/repos/cogwork",
     issueTracker: { type: "github" },
   }),
