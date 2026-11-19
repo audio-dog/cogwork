@@ -1,0 +1,19 @@
+apps/desktop/src/renderer/src/components/workflow-editor-operations.tsx
+  s_abb171f1ebda64::t_1cbd3cd9c5bdab 350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "872ffb69602e2c12fcaff377539da6bde5abfb25",
+  "prompts": {},
+  "sessions": {
+    "s_abb171f1ebda64": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9a77e1da-82a2-4b58-91ed-707577c54e81",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
