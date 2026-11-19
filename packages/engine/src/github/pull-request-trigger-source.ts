@@ -7,6 +7,7 @@ import type { RegisteredWorkspace, RegistryState } from "../projector";
 import {
   catchUpParameter,
   catchUpSince,
+  conditionEntryKeys,
   isolateProviderItemRead,
   liveParameter,
   type ProviderPollCheckpoint,
@@ -80,7 +81,7 @@ export const githubPullRequestEntries = [
 ];
 
 const personAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-const conditionEntries = new Set([checksFailedKey, conflictsKey]);
+const conditionEntries = conditionEntryKeys(githubPullRequestEntries);
 
 interface Feedback {
   readonly id: string;
