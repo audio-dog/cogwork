@@ -1,0 +1,33 @@
+packages/engine/src/github/pull-request-trigger-source.test.ts
+  s_faec89ee55d8cc::t_639402b027fa1b 1,7,11-12,22,26-92
+packages/engine/src/github/trigger-source-fixtures.ts
+  s_faec89ee55d8cc::t_6a43195c42ed38 16,49
+packages/engine/src/github/host.test.ts
+  s_3cb83d2e01a45c::t_c9114ccf06283b 183,197,199
+packages/engine/src/tracker-trigger-source.ts
+  s_3cb83d2e01a45c::t_370eb068b95f55 74,183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ff88e097b0d30f859b8b241a943f5caa43a0386",
+  "prompts": {},
+  "sessions": {
+    "s_3cb83d2e01a45c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b3aea60-cc7e-47ab-9a69-83ac2afefc6f",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_faec89ee55d8cc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eadd1caf-d860-49aa-a80a-b38216a22512",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
