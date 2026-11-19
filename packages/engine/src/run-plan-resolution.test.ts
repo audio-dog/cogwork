@@ -168,6 +168,7 @@ const issueFacts: RunPlanFacts = {
     lineage: issueAdmission.lineage,
   },
   handback: null,
+  gitOperationInProgress: null,
   skills: [{ identity: "skill:tdd", name: "tdd", source: "/skills/tdd/SKILL.md" }],
   subagents: [
     {

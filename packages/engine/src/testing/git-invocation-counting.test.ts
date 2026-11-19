@@ -13,6 +13,8 @@ const baseGitLayer = Layer.succeed(Git, {
   fastForward: () => Effect.void,
   divergence: () => Effect.succeed({ ahead: 0, behind: 0 }),
   operationInProgress: () => Effect.succeed(null),
+  recordedOperation: () => Effect.succeed(null),
+  recordOperation: () => Effect.void,
   rebase: () => Effect.void,
   remoteUrl: () => Effect.succeed("file:///repo.git"),
   blockPush: () => Effect.void,
@@ -40,6 +42,8 @@ layer(countingLayer.pipe(Layer.provide(baseGitLayer)))((it) => {
       yield* git.fastForward("/worktree", "origin", "branch");
       yield* git.divergence("/worktree", "origin", "branch");
       yield* git.operationInProgress("/worktree");
+      yield* git.recordedOperation("/worktree");
+      yield* git.recordOperation("/worktree", null);
       yield* git.rebase("/worktree", "origin", "branch");
       yield* git.remoteUrl("/repo", "origin");
       yield* git.blockPush("/worktree", "origin");
@@ -55,6 +59,8 @@ layer(countingLayer.pipe(Layer.provide(baseGitLayer)))((it) => {
         fastForward: 1,
         divergence: 1,
         operationInProgress: 1,
+        recordedOperation: 1,
+        recordOperation: 1,
         rebase: 1,
         remoteUrl: 1,
         blockPush: 1,
@@ -73,6 +79,8 @@ layer(countingLayer.pipe(Layer.provide(baseGitLayer)))((it) => {
         fastForward: 0,
         divergence: 0,
         operationInProgress: 0,
+        recordedOperation: 0,
+        recordOperation: 0,
         rebase: 0,
         remoteUrl: 0,
         blockPush: 0,

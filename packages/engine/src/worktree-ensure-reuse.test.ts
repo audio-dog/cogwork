@@ -38,7 +38,12 @@ describe("Worktree.ensure", () => {
       const git = fakeGit(recorder, {
         worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
-        operation: { operation: "merge", unmergedPaths: ["src/a.ts", "src/b.ts"] },
+        operation: {
+          operation: "merge",
+          identity: "5eed0001",
+          head: "4ead0001",
+          unmergedPaths: ["src/a.ts", "src/b.ts"],
+        },
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
 
@@ -184,7 +189,6 @@ describe("Worktree.ensure", () => {
         worktrees: [{ path: worktreePath(), branch: "13-worktree-lifecycle" }],
         remoteBranches: ["13-worktree-lifecycle"],
         divergence: { ahead: 2, behind: 5 },
-        operation: { operation: "merge", unmergedPaths: ["src/a.ts"] },
       });
       const manager = yield* Effect.provide(Worktree.make, provide(git, fakeFs(recorder, {})));
       const result = yield* manager.ensure(workspaceWith({ setup: ["pnpm install"] }), item, {
@@ -194,7 +198,6 @@ describe("Worktree.ensure", () => {
       assert.strictEqual(result.path, worktreePath());
       assert.deepStrictEqual(yield* Ref.get(recorder.fastForwarded), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.rebased), []);
-      assert.deepStrictEqual(yield* Ref.get(recorder.operationProbes), []);
       assert.deepStrictEqual(yield* Ref.get(recorder.commands), []);
     }),
   );
