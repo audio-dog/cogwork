@@ -1,0 +1,19 @@
+packages/contracts/src/workspace.test.ts
+  s_c157a72f540b09::t_71f2598e9c7b44 90,112-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "069c98935996f24e442cb80a8db6c1b6d846a37c",
+  "prompts": {},
+  "sessions": {
+    "s_c157a72f540b09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e84ccaf-0853-4db5-9174-24c570526c36",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
