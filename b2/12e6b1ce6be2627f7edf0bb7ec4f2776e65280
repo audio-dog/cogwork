@@ -1,0 +1,1227 @@
+apps/cli/package.json
+  s_24a7036fab5f2b::t_4f3924191541fd 8
+apps/cli/src/cli.test.ts
+  s_24a7036fab5f2b::t_52c7e834d87d24 12
+apps/cli/src/cli.ts
+  s_24a7036fab5f2b::t_d988f3ddf41490 2
+apps/cli/src/commands.test.ts
+  s_24a7036fab5f2b::t_e4f47440c9485d 18,20
+apps/cli/src/commands.ts
+  s_24a7036fab5f2b::t_ae6577779c0d1b 3,8
+apps/cli/src/connection-commands.test.ts
+  s_24a7036fab5f2b::t_5c59038d21ced2 9
+apps/cli/src/connection-commands.ts
+  s_24a7036fab5f2b::t_5677ff247a7cd5 12,18
+apps/cli/src/contribution-settings-commands.ts
+  s_24a7036fab5f2b::t_6d5d342377b190 5,10
+apps/cli/src/credentials.test.ts
+  s_24a7036fab5f2b::t_339acb0425f89b 15
+apps/cli/src/credentials.ts
+  s_24a7036fab5f2b::t_80171589eca92c 11
+apps/cli/src/daemon-commands.ts
+  s_24a7036fab5f2b::t_37f7aa6385907d 11
+apps/cli/src/external-harness.test.ts
+  s_24a7036fab5f2b::t_91014c768d2775 7
+apps/cli/src/granola-login.test.ts
+  s_24a7036fab5f2b::t_ef4483a0504cc5 3,14
+apps/cli/src/granola-login.ts
+  s_24a7036fab5f2b::t_422ed793ad4d15 3,24
+apps/cli/src/hand-back-command.test.ts
+  s_24a7036fab5f2b::t_98e57e82535ea9 11
+apps/cli/src/hand-back-command.ts
+  s_24a7036fab5f2b::t_6a1a0b7f08a217 14,20
+apps/cli/src/harness-commands.test.ts
+  s_24a7036fab5f2b::t_8a86189de6448d 10
+apps/cli/src/harness-commands.ts
+  s_24a7036fab5f2b::t_a7c0e7eada8994 6,9
+apps/cli/src/ledger.test.ts
+  s_24a7036fab5f2b::t_1ff632723ccabe 2,32-33
+apps/cli/src/ledger.ts
+  s_24a7036fab5f2b::t_1d8258b04c0c9c 33
+apps/cli/src/limits-commands.ts
+  s_24a7036fab5f2b::t_6797f327acda86 3,5
+apps/cli/src/login-commands.ts
+  s_24a7036fab5f2b::t_3959861f3c19f6 5,9
+apps/cli/src/login.test.ts
+  s_24a7036fab5f2b::t_5c26216bbc2e13 3,25
+apps/cli/src/login.ts
+  s_24a7036fab5f2b::t_7497b2b2c3577e 3,63-78,80-81
+apps/cli/src/main.ts
+  s_24a7036fab5f2b::t_47aaff6ab9e9bd 8
+apps/cli/src/operation-settings-commands.ts
+  s_24a7036fab5f2b::t_f761865c839838 16,20
+apps/cli/src/performance-health.test.ts
+  s_24a7036fab5f2b::t_23b44f908fb11c 2,9
+apps/cli/src/performance-health.ts
+  s_24a7036fab5f2b::t_b211f11512867d 2
+apps/cli/src/platform.test.ts
+  s_24a7036fab5f2b::t_ecd7e0560a8ca3 25
+apps/cli/src/plugin-commands.test.ts
+  s_24a7036fab5f2b::t_b44387e8aa4ed8 2
+apps/cli/src/plugin-commands.ts
+  s_24a7036fab5f2b::t_23c3cb1aebba55 5,7
+apps/cli/src/process-profile-ipc.ts
+  s_24a7036fab5f2b::t_466e4287e03a72 18
+apps/cli/src/read-model-item.ts
+  s_24a7036fab5f2b::t_d2e478e919bfe9 2
+apps/cli/src/replay-commands.ts
+  s_24a7036fab5f2b::t_cf728b77580f8c 5,12
+apps/cli/src/rpc.test.ts
+  s_24a7036fab5f2b::t_adce95a05525b1 22
+apps/cli/src/rpc.ts
+  s_24a7036fab5f2b::t_51daed4e8db650 5,31
+apps/cli/src/run-commands.ts
+  s_24a7036fab5f2b::t_ee893b910c8d5f 4,7
+apps/cli/src/scheduling-commands.ts
+  s_24a7036fab5f2b::t_c06154bf87e9f8 3,5
+apps/cli/src/slack-login.test.ts
+  s_24a7036fab5f2b::t_6fc07e6aef3b45 18
+apps/cli/src/slack-login.ts
+  s_24a7036fab5f2b::t_6b45ec5380d88c 3,20
+apps/cli/src/status-commands.ts
+  s_24a7036fab5f2b::t_ae0103297ada39 4,6
+apps/cli/src/status.ts
+  s_24a7036fab5f2b::t_7ee1d08192c181 2
+apps/cli/src/stop-signal.test.ts
+  s_24a7036fab5f2b::t_b3098db9570efa 6
+apps/cli/src/telemetry.test.ts
+  s_24a7036fab5f2b::t_d63c6dc9ec7096 2,21
+apps/cli/src/telemetry.ts
+  s_24a7036fab5f2b::t_30ecf99f64bd92 13
+apps/cli/src/watch-commands.ts
+  s_24a7036fab5f2b::t_38eca4bc8e2f4d 14,23-24
+apps/cli/src/watch.test.ts
+  s_24a7036fab5f2b::t_1f5c3328a7fa12 15
+apps/cli/src/watch.ts
+  s_24a7036fab5f2b::t_8580606a99596d 10
+apps/cli/src/workflow-commands.ts
+  s_24a7036fab5f2b::t_23cf9aa153f83b 6,9
+apps/cli/src/workspace-commands.test.ts
+  s_24a7036fab5f2b::t_4da565857e961d 5
+apps/cli/src/workspace-commands.ts
+  s_24a7036fab5f2b::t_6f2c7dc4c41a4e 4,8
+apps/cli/src/worktree-commands.ts
+  s_24a7036fab5f2b::t_9dc1ed87b49587 11,15
+apps/desktop/package.json
+  s_24a7036fab5f2b::t_560d6a4b3209ef 6
+apps/desktop/src/main/daemon-bridge.test.ts
+  s_24a7036fab5f2b::t_5b15fd4a98528d 5,8
+apps/desktop/src/main/daemon-bridge.ts
+  s_24a7036fab5f2b::t_62356fcea27882 4
+apps/desktop/src/main/desktop-environment.test.ts
+  s_24a7036fab5f2b::t_3260c79f566205 16
+apps/desktop/src/main/desktop-notifications.test.ts
+  s_24a7036fab5f2b::t_61ed7ebf3b53c4 2,4
+apps/desktop/src/main/engine-command.test.ts
+  s_24a7036fab5f2b::t_2268a2210ff30b 2,4
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_24a7036fab5f2b::t_57539a3deab2f0 2,23
+apps/desktop/src/main/engine-supervisor.ts
+  s_24a7036fab5f2b::t_ae3a23a7ea207c 28
+apps/desktop/src/main/index.ts
+  s_24a7036fab5f2b::t_9bc49f9051ec9c 3,12
+apps/desktop/src/main/ipc.test.ts
+  s_24a7036fab5f2b::t_f8fa82becacad3 6,9
+apps/desktop/src/main/ipc.ts
+  s_24a7036fab5f2b::t_fb1db058d2d118 17
+apps/desktop/src/main/process-health.ts
+  s_24a7036fab5f2b::t_1c6656cd919d60 2,6
+apps/desktop/src/main/quit.test.ts
+  s_24a7036fab5f2b::t_f8192273307111 18
+apps/desktop/src/main/socket-probe.test.ts
+  s_24a7036fab5f2b::t_6ae139ce2f1437 5,8
+apps/desktop/src/main/socket-probe.ts
+  s_24a7036fab5f2b::t_7e062456ae9ebc 2
+apps/desktop/src/main/tray.ts
+  s_24a7036fab5f2b::t_0f2d5e46d28737 2
+apps/desktop/src/main/wait-for-socket.test.ts
+  s_24a7036fab5f2b::t_d45f3987001c87 5,9
+apps/desktop/src/main/wait-for-socket.ts
+  s_24a7036fab5f2b::t_c8a06af2df8f08 2
+apps/desktop/src/main/window-preferences.test.ts
+  s_24a7036fab5f2b::t_1d74c2c4256afc 4,6
+apps/desktop/src/main/window-preferences.ts
+  s_24a7036fab5f2b::t_9fe4fb3365364d 3,5
+apps/desktop/src/main/window.ts
+  s_24a7036fab5f2b::t_833de08576bdcc 2,6
+apps/desktop/src/preload/index.d.ts
+  s_24a7036fab5f2b::t_c441c09c4da907 2
+apps/desktop/src/preload/index.ts
+  s_24a7036fab5f2b::t_f04cbb0b9f4bd8 3
+apps/desktop/src/renderer/src/app.tsx
+  s_24a7036fab5f2b::t_fb2337a93e1ce8 3
+apps/desktop/src/renderer/src/components/activity-surface.tsx
+  s_24a7036fab5f2b::t_9cc5b059904ec0 3
+apps/desktop/src/renderer/src/components/activity-transcript.tsx
+  s_24a7036fab5f2b::t_eaac2dec4d9bfc 28,127,335
+apps/desktop/src/renderer/src/components/activity-view.tsx
+  s_24a7036fab5f2b::t_68de797ee30bc7 3
+apps/desktop/src/renderer/src/components/attention-board-card.tsx
+  s_24a7036fab5f2b::t_e2c61bbcc0d7cb 6
+apps/desktop/src/renderer/src/components/attention-board-context.tsx
+  s_24a7036fab5f2b::t_d7549f8194698f 3
+apps/desktop/src/renderer/src/components/attention-board-notification.tsx
+  s_24a7036fab5f2b::t_4cc5ac6e11243d 14
+apps/desktop/src/renderer/src/components/attention-board-parked.tsx
+  s_24a7036fab5f2b::t_f5dadfb8421e39 40
+apps/desktop/src/renderer/src/components/attention-board-skipped.tsx
+  s_24a7036fab5f2b::t_8275d9f238f090 11
+apps/desktop/src/renderer/src/components/attention-board.tsx
+  s_24a7036fab5f2b::t_b07226218396a4 8
+apps/desktop/src/renderer/src/components/attention-rail.tsx
+  s_24a7036fab5f2b::t_35421023ba1e2c 6
+apps/desktop/src/renderer/src/components/attention-surface.tsx
+  s_24a7036fab5f2b::t_93f64524a13ae3 3
+apps/desktop/src/renderer/src/components/badges.tsx
+  s_24a7036fab5f2b::t_172075bb193a6b 4
+apps/desktop/src/renderer/src/components/configuration-provider.test.ts
+  s_24a7036fab5f2b::t_7a40d898118be8 4
+apps/desktop/src/renderer/src/components/configuration-provider.tsx
+  s_24a7036fab5f2b::t_1779932bd1f73e 13
+apps/desktop/src/renderer/src/components/connection-establishment-form.tsx
+  s_24a7036fab5f2b::t_94d063a39962de 30
+apps/desktop/src/renderer/src/components/connections-surface.test.tsx
+  s_24a7036fab5f2b::t_45015a287d0bb3 3
+apps/desktop/src/renderer/src/components/connections-surface.tsx
+  s_24a7036fab5f2b::t_7db4ec91e5cf66 68
+apps/desktop/src/renderer/src/components/contribution-file-row.tsx
+  s_24a7036fab5f2b::t_73d1a15a328e97 2
+apps/desktop/src/renderer/src/components/contribution.tsx
+  s_24a7036fab5f2b::t_757eeb8395e33d 11
+apps/desktop/src/renderer/src/components/customize-empty.test.tsx
+  s_24a7036fab5f2b::t_3223882fcc1a5e 2
+apps/desktop/src/renderer/src/components/customize-empty.tsx
+  s_24a7036fab5f2b::t_dc1af84ae9bf5c 3
+apps/desktop/src/renderer/src/components/customize-facet-view.tsx
+  s_24a7036fab5f2b::t_23b803c90fe607 10
+apps/desktop/src/renderer/src/components/customize-filter.tsx
+  s_24a7036fab5f2b::t_f281e9b3d4261d 2
+apps/desktop/src/renderer/src/components/customize-list.test.tsx
+  s_24a7036fab5f2b::t_378241490aa484 3
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_24a7036fab5f2b::t_8a67e398cf4581 19
+apps/desktop/src/renderer/src/components/engine-gate.tsx
+  s_24a7036fab5f2b::t_3bf72e43cf173a 14
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_24a7036fab5f2b::t_e7f415778cef6c 9
+apps/desktop/src/renderer/src/components/file-surface.tsx
+  s_24a7036fab5f2b::t_3b177de665f182 3
+apps/desktop/src/renderer/src/components/funnel-filter.test.ts
+  s_24a7036fab5f2b::t_fae93e2e83d3fa 2
+apps/desktop/src/renderer/src/components/harness-alerts.tsx
+  s_24a7036fab5f2b::t_32f446c1f4a993 6
+apps/desktop/src/renderer/src/components/history-nav.test.ts
+  s_24a7036fab5f2b::t_8992620e7cf826 2
+apps/desktop/src/renderer/src/components/item-tab.tsx
+  s_24a7036fab5f2b::t_7ecb51855dd234 14
+apps/desktop/src/renderer/src/components/item-title.test.tsx
+  s_24a7036fab5f2b::t_ea5a1a1c8bfef9 3
+apps/desktop/src/renderer/src/components/markdown.tsx
+  s_24a7036fab5f2b::t_f6061d5ebebcce 5
+apps/desktop/src/renderer/src/components/mcp-configure-dialog.tsx
+  s_24a7036fab5f2b::t_4236e7b5a904dc 13
+apps/desktop/src/renderer/src/components/mcp-facet.test.tsx
+  s_24a7036fab5f2b::t_25f1c172c22d26 4
+apps/desktop/src/renderer/src/components/mcp-facet.tsx
+  s_24a7036fab5f2b::t_7a265fad7bc459 4
+apps/desktop/src/renderer/src/components/mcp-server-row.test.tsx
+  s_24a7036fab5f2b::t_31343726c0030c 4
+apps/desktop/src/renderer/src/components/mcp-server-row.tsx
+  s_24a7036fab5f2b::t_ec20ef733ce833 3
+apps/desktop/src/renderer/src/components/nav-sidebar.tsx
+  s_24a7036fab5f2b::t_d977948ef2d27e 39,209
+apps/desktop/src/renderer/src/components/operation-outcomes.tsx
+  s_24a7036fab5f2b::t_ad2f1d59282ec9 39
+apps/desktop/src/renderer/src/components/operation-settings.tsx
+  s_24a7036fab5f2b::t_9c0647979622f7 22
+apps/desktop/src/renderer/src/components/plugin-detail.test.tsx
+  s_24a7036fab5f2b::t_d1a32fc54941df 9
+apps/desktop/src/renderer/src/components/plugin-detail.tsx
+  s_24a7036fab5f2b::t_771ce823f73770 21
+apps/desktop/src/renderer/src/components/plugin-list-rows.tsx
+  s_24a7036fab5f2b::t_10759de9c5418e 6
+apps/desktop/src/renderer/src/components/plugins-facet.test.tsx
+  s_24a7036fab5f2b::t_9d9082f52a0464 9
+apps/desktop/src/renderer/src/components/plugins-facet.tsx
+  s_24a7036fab5f2b::t_61523e2a8ae315 4
+apps/desktop/src/renderer/src/components/provider-glyph.tsx
+  s_24a7036fab5f2b::t_87bd91d102f115 8
+apps/desktop/src/renderer/src/components/provider-picker.test.tsx
+  s_24a7036fab5f2b::t_b56dbd2d3b6cdd 11
+apps/desktop/src/renderer/src/components/provider-picker.tsx
+  s_24a7036fab5f2b::t_40da0bb1840856 11
+apps/desktop/src/renderer/src/components/pull-request.test.tsx
+  s_24a7036fab5f2b::t_8cd380eafdb715 4
+apps/desktop/src/renderer/src/components/pull-request.tsx
+  s_24a7036fab5f2b::t_3e992a24878e43 24
+apps/desktop/src/renderer/src/components/register-workspace-dialog.tsx
+  s_24a7036fab5f2b::t_58dbb4a7d3d76b 30
+apps/desktop/src/renderer/src/components/render-trigger.test.tsx
+  s_24a7036fab5f2b::t_ecdf1cc5a7e55d 5
+apps/desktop/src/renderer/src/components/right-panel-resize.tsx
+  s_24a7036fab5f2b::t_4c32599f6e1434 4
+apps/desktop/src/renderer/src/components/right-panel.test.tsx
+  s_24a7036fab5f2b::t_6cfc42630779d1 3
+apps/desktop/src/renderer/src/components/right-panel.tsx
+  s_24a7036fab5f2b::t_6f405ddf152acb 22
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_24a7036fab5f2b::t_de9277e6b9dda0 25,119
+apps/desktop/src/renderer/src/components/scheduler-gauges.test.tsx
+  s_24a7036fab5f2b::t_9b2d9983ade445 4
+apps/desktop/src/renderer/src/components/scheduler-gauges.tsx
+  s_24a7036fab5f2b::t_f0759223f4e64c 5
+apps/desktop/src/renderer/src/components/settings-parts.tsx
+  s_24a7036fab5f2b::t_eeae1b697683a5 5
+apps/desktop/src/renderer/src/components/settings-sidebar.tsx
+  s_24a7036fab5f2b::t_11dde6c407fd60 22
+apps/desktop/src/renderer/src/components/sidebar-resize.tsx
+  s_24a7036fab5f2b::t_b440ed2b658509 4
+apps/desktop/src/renderer/src/components/surface-catalog.tsx
+  s_24a7036fab5f2b::t_d8263c11e4f8bf 9
+apps/desktop/src/renderer/src/components/surface-tab.test.tsx
+  s_24a7036fab5f2b::t_dbb8d098f82a96 3
+apps/desktop/src/renderer/src/components/surface-tab.tsx
+  s_24a7036fab5f2b::t_a374de634261f5 12
+apps/desktop/src/renderer/src/components/terminal-surface.tsx
+  s_24a7036fab5f2b::t_b529dd1ef87d6c 4
+apps/desktop/src/renderer/src/components/traits-menu.test.tsx
+  s_24a7036fab5f2b::t_63f444a5e6d9bf 5
+apps/desktop/src/renderer/src/components/traits-menu.tsx
+  s_24a7036fab5f2b::t_eebd79bc85e77e 17
+apps/desktop/src/renderer/src/components/workflow-catalog-menu.tsx
+  s_24a7036fab5f2b::t_15fcd6a3f30cd8 38
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_24a7036fab5f2b::t_a425e101e9ee05 59
+apps/desktop/src/renderer/src/components/workflow-gate.tsx
+  s_24a7036fab5f2b::t_b130ac07b1d48c 7
+apps/desktop/src/renderer/src/components/workflows-list.tsx
+  s_24a7036fab5f2b::t_52ecbab6341a13 27,81
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_24a7036fab5f2b::t_3700a94d703624 11
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_24a7036fab5f2b::t_e49c8e3e71f806 3
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_24a7036fab5f2b::t_7a7cc1db446e41 20
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_24a7036fab5f2b::t_2713a57960795b 29
+apps/desktop/src/renderer/src/components/workspaces-provider.tsx
+  s_24a7036fab5f2b::t_e8954cf970a2d0 12
+apps/desktop/src/renderer/src/daemon/atom-registry.test.ts
+  s_24a7036fab5f2b::t_1c1ee30e790adc 5
+apps/desktop/src/renderer/src/daemon/atoms.test.ts
+  s_24a7036fab5f2b::t_db43f5bb5d924c 4
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_24a7036fab5f2b::t_542acf8338e698 16
+apps/desktop/src/renderer/src/daemon/process-health.test.ts
+  s_24a7036fab5f2b::t_ad2aacbc0012ab 5
+apps/desktop/src/renderer/src/daemon/process-health.ts
+  s_24a7036fab5f2b::t_af4519d59040e9 12
+apps/desktop/src/renderer/src/daemon/protocol.test.ts
+  s_24a7036fab5f2b::t_84e0e7ec8b9a74 4,29
+apps/desktop/src/renderer/src/daemon/protocol.ts
+  s_24a7036fab5f2b::t_872bab4bc5ac04 14
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  s_24a7036fab5f2b::t_4875e3a28cd4ab 8,13
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  s_24a7036fab5f2b::t_6edb6c896f6bb4 14
+apps/desktop/src/renderer/src/features/activity-session.test.ts
+  s_24a7036fab5f2b::t_aea2673b04daac 11
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_24a7036fab5f2b::t_1bdde42ee40e6f 20
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_24a7036fab5f2b::t_b76ea3e850c58b 16
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_24a7036fab5f2b::t_8ee6ebefbc00ae 20
+apps/desktop/src/renderer/src/features/attention.test.ts
+  s_24a7036fab5f2b::t_b47f3f033e72ef 4
+apps/desktop/src/renderer/src/features/configuration-icons.ts
+  s_24a7036fab5f2b::t_aa308ae6abfcb1 12
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_24a7036fab5f2b::t_e0ced2b9e32c00 4
+apps/desktop/src/renderer/src/features/configuration-picture.ts
+  s_24a7036fab5f2b::t_a2fe4c7ca1d599 11
+apps/desktop/src/renderer/src/features/configuration-resolve.test.ts
+  s_24a7036fab5f2b::t_749589088c05d1 2
+apps/desktop/src/renderer/src/features/connection-form.test.ts
+  s_24a7036fab5f2b::t_bc0ea191556647 3
+apps/desktop/src/renderer/src/features/connections-view.test.ts
+  s_24a7036fab5f2b::t_58ef0a72cb0218 3
+apps/desktop/src/renderer/src/features/customize-facets.test.ts
+  s_24a7036fab5f2b::t_76e188a7b946c6 2
+apps/desktop/src/renderer/src/features/customize-places.test.ts
+  s_24a7036fab5f2b::t_a511ebd1f09068 2
+apps/desktop/src/renderer/src/features/daemon-failure.test.ts
+  s_24a7036fab5f2b::t_84f836a9beba53 4
+apps/desktop/src/renderer/src/features/daemon-limit-state.test.ts
+  s_24a7036fab5f2b::t_9d20e9138a7288 3
+apps/desktop/src/renderer/src/features/desktop-notifications.test.ts
+  s_24a7036fab5f2b::t_35f50d42e6df9a 4
+apps/desktop/src/renderer/src/features/desktop-notifications.tsx
+  s_24a7036fab5f2b::t_1993c11571a85d 6
+apps/desktop/src/renderer/src/features/engine-gate.test.ts
+  s_24a7036fab5f2b::t_11c4cdf2f17625 3
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_24a7036fab5f2b::t_c4af803cdd8721 12
+apps/desktop/src/renderer/src/features/format.test.ts
+  s_24a7036fab5f2b::t_b4f11d33c3e411 2
+apps/desktop/src/renderer/src/features/harness-alerts.test.ts
+  s_24a7036fab5f2b::t_b355b02dd9d222 12
+apps/desktop/src/renderer/src/features/harness-alerts.ts
+  s_24a7036fab5f2b::t_7c5ab062c4eaa5 9
+apps/desktop/src/renderer/src/features/harnesses-view.test.ts
+  s_24a7036fab5f2b::t_5f27e58bf360be 12
+apps/desktop/src/renderer/src/features/item-tab.test.ts
+  s_24a7036fab5f2b::t_17e14033048ca5 4
+apps/desktop/src/renderer/src/features/item-tab.ts
+  s_24a7036fab5f2b::t_c2cff770bf1f26 11
+apps/desktop/src/renderer/src/features/operation-settings.ts
+  s_24a7036fab5f2b::t_c9066665fc185b 22
+apps/desktop/src/renderer/src/features/plugin-configuration.test.ts
+  s_24a7036fab5f2b::t_7813ca0131df0e 12
+apps/desktop/src/renderer/src/features/plugin-configuration.ts
+  s_24a7036fab5f2b::t_da705641ab91c4 12
+apps/desktop/src/renderer/src/features/plugins-view.test.ts
+  s_24a7036fab5f2b::t_1ed2b4d514aa99 2
+apps/desktop/src/renderer/src/features/plugins-view.ts
+  s_24a7036fab5f2b::t_92064919552db2 2
+apps/desktop/src/renderer/src/features/provider-presentation.test.ts
+  s_24a7036fab5f2b::t_33cddae823ce8c 2
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_24a7036fab5f2b::t_426b9478cb8299 5
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_24a7036fab5f2b::t_def3c59dc7716d 20
+apps/desktop/src/renderer/src/features/run-status.test.ts
+  s_24a7036fab5f2b::t_1be75328e36e0e 2
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_24a7036fab5f2b::t_d5ce1786761cde 10
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_24a7036fab5f2b::t_7b0002267e842b 14
+apps/desktop/src/renderer/src/features/settings-catalog.test.ts
+  s_24a7036fab5f2b::t_31e89521913434 2
+apps/desktop/src/renderer/src/features/settings-values.test.ts
+  s_24a7036fab5f2b::t_58f7f33ea1e412 2
+apps/desktop/src/renderer/src/features/use-daemon-limit.ts
+  s_24a7036fab5f2b::t_b92214749f6044 4
+apps/desktop/src/renderer/src/features/use-engine-status.ts
+  s_24a7036fab5f2b::t_26b600df8cba2b 2
+apps/desktop/src/renderer/src/features/use-scheduling.ts
+  s_24a7036fab5f2b::t_b8b48b036f3971 3
+apps/desktop/src/renderer/src/features/use-settings-route.ts
+  s_24a7036fab5f2b::t_ce586f72bc0c48 2
+apps/desktop/src/renderer/src/features/use-window-preferences.ts
+  s_24a7036fab5f2b::t_a11a2f6d4573fc 2
+apps/desktop/src/renderer/src/features/workflow-daemon-provider.test.tsx
+  s_24a7036fab5f2b::t_00601cc641b607 8
+apps/desktop/src/renderer/src/features/workflow-edits.test.ts
+  s_24a7036fab5f2b::t_3e0c0f555e5479 4
+apps/desktop/src/renderer/src/features/workflow-import-review.test.ts
+  s_24a7036fab5f2b::t_896350ee4bb218 2,6
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_24a7036fab5f2b::t_7152563e162b13 2
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_24a7036fab5f2b::t_5b784c2d742334 18
+apps/desktop/src/renderer/src/features/workflow-session.tsx
+  s_24a7036fab5f2b::t_ce079d4245960b 18
+apps/desktop/src/renderer/src/features/workflow-transfer.test.ts
+  s_24a7036fab5f2b::t_d14980a34a7621 5
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  s_24a7036fab5f2b::t_4f73df14b4db23 16
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_24a7036fab5f2b::t_51d6a63a75ab50 11
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_24a7036fab5f2b::t_5513472ab575df 25
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_24a7036fab5f2b::t_57801abcbcb222 10
+apps/desktop/src/renderer/src/features/workspace-registration.test.ts
+  s_24a7036fab5f2b::t_d7ffc043108b98 2
+apps/desktop/src/renderer/src/main.tsx
+  s_24a7036fab5f2b::t_b9c957c2f0e460 4
+apps/desktop/src/renderer/src/router.tsx
+  s_24a7036fab5f2b::t_21577d05554a85 2
+apps/desktop/src/renderer/src/routes/__root.tsx
+  s_24a7036fab5f2b::t_6bbaacaf37303b 7
+apps/desktop/src/renderer/src/routes/_app/attention.tsx
+  s_24a7036fab5f2b::t_1ca5badf8167c2 4
+apps/desktop/src/renderer/src/routes/_app/connections.tsx
+  s_24a7036fab5f2b::t_b6692e618613fa 2
+apps/desktop/src/renderer/src/routes/_app/customize/$facet.tsx
+  s_24a7036fab5f2b::t_0645dd3bbb3e21 2
+apps/desktop/src/renderer/src/routes/_app/customize/index.tsx
+  s_24a7036fab5f2b::t_aff36d6dbaa769 2
+apps/desktop/src/renderer/src/routes/_app/customize/plugin.$pluginId.tsx
+  s_24a7036fab5f2b::t_95892f7ddc33f1 4
+apps/desktop/src/renderer/src/routes/_app/customize/route.tsx
+  s_24a7036fab5f2b::t_96662b333534ca 2
+apps/desktop/src/renderer/src/routes/_app/index.tsx
+  s_24a7036fab5f2b::t_d27be235a6bd3b 2
+apps/desktop/src/renderer/src/routes/_app/route.tsx
+  s_24a7036fab5f2b::t_c7e9863ccf8d55 7
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId.tsx
+  s_24a7036fab5f2b::t_a565997854f33e 2
+apps/desktop/src/renderer/src/routes/_app/workflows/$workflowId_.review.tsx
+  s_24a7036fab5f2b::t_99e7ff1710dbd1 2
+apps/desktop/src/renderer/src/routes/_app/workflows/index.tsx
+  s_24a7036fab5f2b::t_d22a7beeffc997 2
+apps/desktop/src/renderer/src/routes/_app/workflows/new.tsx
+  s_24a7036fab5f2b::t_c41883cc7eb4d5 2
+apps/desktop/src/renderer/src/routes/_app/workspaces/$workspaceId.tsx
+  s_24a7036fab5f2b::t_91e840cb318afb 2
+apps/desktop/src/renderer/src/routes/settings/-providers.test.ts
+  s_24a7036fab5f2b::t_f5a1b192da9159 4
+apps/desktop/src/renderer/src/routes/settings/appearance.tsx
+  s_24a7036fab5f2b::t_072f5506a2b7bd 6
+apps/desktop/src/renderer/src/routes/settings/general.tsx
+  s_24a7036fab5f2b::t_83056136c9bc30 5
+apps/desktop/src/renderer/src/routes/settings/providers.tsx
+  s_24a7036fab5f2b::t_5c2cbc5badc06d 25
+apps/desktop/src/renderer/src/routes/settings/route.tsx
+  s_24a7036fab5f2b::t_815f298865eb8d 4
+apps/desktop/src/renderer/src/routes/settings/scheduling.tsx
+  s_24a7036fab5f2b::t_abc41b21213cae 12
+apps/desktop/src/renderer/src/store/harness-alerts.ts
+  s_24a7036fab5f2b::t_b1837663aa9feb 3
+apps/desktop/src/renderer/src/store/right-panel.test.ts
+  s_24a7036fab5f2b::t_dc1cc13de4d0e3 4
+apps/desktop/src/renderer/src/testing/configuration.tsx
+  s_24a7036fab5f2b::t_0e3494a19d4c71 2
+apps/desktop/src/renderer/src/testing/working-copies.ts
+  s_24a7036fab5f2b::t_eea406d185a2c7 6
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_24a7036fab5f2b::t_32e9a64117a462 15
+apps/desktop/src/shared/process-health.test.ts
+  s_24a7036fab5f2b::t_0287aaf5e2e7a5 2
+configs/lint/tests/react-lint-scope.test.mjs
+  s_24a7036fab5f2b::t_8fbe5f0e341963 6
+configs/lint/tests/rules.test.mjs
+  s_24a7036fab5f2b::t_c0f3baa1c3a075 5
+configs/lint/tests/test-count-reporter.mjs
+  s_24a7036fab5f2b::t_b9928529a8745e 2
+configs/sensor/count-worktree-git-invocations.ts
+  s_24a7036fab5f2b::t_2396b88ea765af 14
+configs/sensor/test-compare.test.mjs
+  s_24a7036fab5f2b::t_aae16920065a78 2,4
+configs/sensor/test-measure-summary.test.mjs
+  s_24a7036fab5f2b::t_bcc39af90cd3b3 6
+configs/sensor/test-measure.mjs
+  s_24a7036fab5f2b::t_177fecb7125815 6
+configs/sensor/test-measure.test.mjs
+  s_24a7036fab5f2b::t_af5487642fd514 7,9
+configs/sensor/test-performance-filer.test.ts
+  s_24a7036fab5f2b::t_77c132d3a20cb1 10
+configs/sensor/test-performance-filer.ts
+  s_24a7036fab5f2b::t_9bc8aa4714a088 4
+configs/test/base.ts
+  s_24a7036fab5f2b::t_d8a134eeae5105 3
+configs/test/src/test-count-reporter.test.ts
+  s_24a7036fab5f2b::t_2c14da3b821d23 2
+package.json
+  s_24a7036fab5f2b::t_db939a42348f86 38-39
+packages/claude-code/package.json
+  s_24a7036fab5f2b::t_605058b6ceda82 6
+packages/claude-code/src/harness-byok.test.ts
+  s_24a7036fab5f2b::t_9e62bc99216559 6
+packages/claude-code/src/harness-environment.test.ts
+  s_24a7036fab5f2b::t_52617ba987b8ae 5
+packages/claude-code/src/harness-fixtures.ts
+  s_24a7036fab5f2b::t_8e205d5a692abf 24
+packages/claude-code/src/harness-host.test.ts
+  s_24a7036fab5f2b::t_ffd6d53a620eb1 7
+packages/claude-code/src/harness.ts
+  s_24a7036fab5f2b::t_0c0d5b5bd57771 22
+packages/claude-code/src/model.test.ts
+  s_24a7036fab5f2b::t_ac90c33c5cffdc 4
+packages/claude-code/src/model.ts
+  s_24a7036fab5f2b::t_65eb981678e300 8
+packages/codex-cli/package.json
+  s_24a7036fab5f2b::t_f557d668a7d4a1 6
+packages/codex-cli/src/harness-configuration.test.ts
+  s_24a7036fab5f2b::t_bf3bbbbc9aa1f6 13
+packages/codex-cli/src/harness-execution.test.ts
+  s_24a7036fab5f2b::t_51528a330b4fff 11
+packages/codex-cli/src/harness-failures.test.ts
+  s_24a7036fab5f2b::t_6358adf5605b96 7
+packages/codex-cli/src/harness-fixtures.ts
+  s_24a7036fab5f2b::t_834279f4056818 28
+packages/codex-cli/src/harness.ts
+  s_24a7036fab5f2b::t_22b11a9a8ac4c5 20
+packages/codex-cli/src/model.test.ts
+  s_24a7036fab5f2b::t_35d0b32c905086 4
+packages/codex-cli/src/model.ts
+  s_24a7036fab5f2b::t_fff83acb462cca 2
+packages/contracts/src/ag-ui.test.ts
+  s_24a7036fab5f2b::t_62c4ceb2d681f6 3
+packages/contracts/src/ag-ui.ts
+  s_24a7036fab5f2b::t_77c4256206cf90 2
+packages/contracts/src/board.test.ts
+  s_24a7036fab5f2b::t_5bb1cdbde450c4 5
+packages/contracts/src/board.ts
+  s_24a7036fab5f2b::t_dbea2945a7f3e0 2
+packages/contracts/src/connection.test.ts
+  s_24a7036fab5f2b::t_abdbf95b625a2f 4
+packages/contracts/src/connection.ts
+  s_24a7036fab5f2b::t_533d3617d38c59 2
+packages/contracts/src/contribution.test.ts
+  s_24a7036fab5f2b::t_65cbbb671bdb37 2
+packages/contracts/src/contribution.ts
+  s_24a7036fab5f2b::t_5934293ab320cf 2
+packages/contracts/src/coordination.test.ts
+  s_24a7036fab5f2b::t_af1a07d9be8afe 2
+packages/contracts/src/coordination.ts
+  s_24a7036fab5f2b::t_22581caff3c0e6 3
+packages/contracts/src/daemon-event.ts
+  s_24a7036fab5f2b::t_c4c6263f40f683 2
+packages/contracts/src/daemon-limit.test.ts
+  s_24a7036fab5f2b::t_7378faa4c19ca1 3
+packages/contracts/src/daemon.test.ts
+  s_24a7036fab5f2b::t_31986f30ddd278 3
+packages/contracts/src/daemon.ts
+  s_24a7036fab5f2b::t_fd9de60a96875a 3
+packages/contracts/src/harness.test.ts
+  s_24a7036fab5f2b::t_af1a72d540fef1 3
+packages/contracts/src/harness.ts
+  s_24a7036fab5f2b::t_8988a885f1d5b3 3
+packages/contracts/src/issue-tracker.ts
+  s_24a7036fab5f2b::t_c0934cd4766755 2
+packages/contracts/src/mcp-skill.ts
+  s_24a7036fab5f2b::t_2cecfff424637a 2
+packages/contracts/src/plugin.test.ts
+  s_24a7036fab5f2b::t_9abe89d76ba833 3
+packages/contracts/src/plugin.ts
+  s_24a7036fab5f2b::t_d9c96cc8812efb 2
+packages/contracts/src/principal.ts
+  s_24a7036fab5f2b::t_40accfe1e0f4fd 4
+packages/contracts/src/process-health.test.ts
+  s_24a7036fab5f2b::t_c2c8aeac6a2355 3
+packages/contracts/src/provenance.ts
+  s_24a7036fab5f2b::t_40cbc3dab920ea 2
+packages/contracts/src/rpc.test.ts
+  s_24a7036fab5f2b::t_689133e482b222 7
+packages/contracts/src/rpc.ts
+  s_24a7036fab5f2b::t_63a146ad6ab8f7 4
+packages/contracts/src/run-plan.ts
+  s_24a7036fab5f2b::t_3f6bf62df86a36 3
+packages/contracts/src/run.test.ts
+  s_24a7036fab5f2b::t_49350d479982ef 3
+packages/contracts/src/run.ts
+  s_24a7036fab5f2b::t_b66715acd29eeb 3
+packages/contracts/src/settings.test.ts
+  s_24a7036fab5f2b::t_aa740ee84bf29d 3
+packages/contracts/src/settings.ts
+  s_24a7036fab5f2b::t_da8499f02c2a25 2
+packages/contracts/src/work-item.ts
+  s_24a7036fab5f2b::t_67f6d748c4111c 2
+packages/contracts/src/workflow.test.ts
+  s_24a7036fab5f2b::t_9810e780ac16b0 5
+packages/contracts/src/workflow.ts
+  s_24a7036fab5f2b::t_3e71e44f396064 6
+packages/contracts/src/workspace.test.ts
+  s_24a7036fab5f2b::t_d249db8abb2d4a 3
+packages/contracts/src/workspace.ts
+  s_24a7036fab5f2b::t_2ee1ef7aa6d5aa 3
+packages/cursor-acp/package.json
+  s_24a7036fab5f2b::t_60851802c9e57b 6
+packages/cursor-acp/scripts/sync-models.ts
+  s_24a7036fab5f2b::t_330dcbbc58fd30 4,6
+packages/cursor-acp/src/estimate-accuracy.test.ts
+  s_24a7036fab5f2b::t_ce421a390eb2f0 3
+packages/cursor-acp/src/fixtures/fake-cursor-agent.mjs
+  s_24a7036fab5f2b::t_e7a2bc2ca1d12b 2
+packages/cursor-acp/src/harness.test.ts
+  s_24a7036fab5f2b::t_811078a7de882c 27
+packages/cursor-acp/src/harness.ts
+  s_24a7036fab5f2b::t_1ea5bc911a6cd8 19
+packages/cursor-acp/src/model.test.ts
+  s_24a7036fab5f2b::t_c76939272e77af 2
+packages/engine/src/authoring-tree.test.ts
+  s_24a7036fab5f2b::t_73d7bc409d3501 8
+packages/engine/src/ci.test.ts
+  s_24a7036fab5f2b::t_44dc181e82b130 2
+packages/engine/src/clock-source.test.ts
+  s_24a7036fab5f2b::t_14554ec92acf0e 9
+packages/engine/src/clock-source.ts
+  s_24a7036fab5f2b::t_9c2fc169860a2a 15
+packages/engine/src/commands-connections.ts
+  s_24a7036fab5f2b::t_dc13315ea652d6 15,37-38
+packages/engine/src/commands.ts
+  s_24a7036fab5f2b::t_1e465764289ccd 36
+packages/engine/src/connection-verify.test.ts
+  s_24a7036fab5f2b::t_afc02824ee398c 9
+packages/engine/src/connection-verify.ts
+  s_24a7036fab5f2b::t_7ddb73a486c58a 8
+packages/engine/src/connection.test.ts
+  s_24a7036fab5f2b::t_2e6be50b99559d 19
+packages/engine/src/connection.ts
+  s_24a7036fab5f2b::t_4ac8f437e544f5 17
+packages/engine/src/context-assembler.test.ts
+  s_24a7036fab5f2b::t_212ea6cb527037 13
+packages/engine/src/context-assembler.ts
+  s_24a7036fab5f2b::t_3e833fa22d411f 6
+packages/engine/src/control-store.test.ts
+  s_24a7036fab5f2b::t_e6f76f8d966dab 2,28,31
+packages/engine/src/control-store.ts
+  s_24a7036fab5f2b::t_94ee1941621599 2,47
+packages/engine/src/cooldown.test.ts
+  s_24a7036fab5f2b::t_c0bd7a0fc8dd37 5
+packages/engine/src/coordination-contract.ts
+  s_24a7036fab5f2b::t_f586bb1c39413b 6
+packages/engine/src/coordination-control-store.test.ts
+  s_24a7036fab5f2b::t_906a4c29df1033 9
+packages/engine/src/coordination-control-store.ts
+  s_24a7036fab5f2b::t_9fa4a01cb02a8a 17
+packages/engine/src/coordination-fold.test.ts
+  s_24a7036fab5f2b::t_285bb852ac2c54 3
+packages/engine/src/crash-recovery.ts
+  s_24a7036fab5f2b::t_ddd926a27952b2 4
+packages/engine/src/credential-store.test.ts
+  s_24a7036fab5f2b::t_18a3645c3c90a4 16
+packages/engine/src/daemon-composition-coding-template.test.ts
+  s_24a7036fab5f2b::t_c64fb9f39812a1 6
+packages/engine/src/daemon-composition-crash-recovery.test.ts
+  s_24a7036fab5f2b::t_7abadcc81c6de1 5
+packages/engine/src/daemon-composition-fixtures.ts
+  s_24a7036fab5f2b::t_74fabbbc809ac2 17,20
+packages/engine/src/daemon-composition-slack-review-fixtures.ts
+  s_24a7036fab5f2b::t_39f76beeac0c9a 16,18
+packages/engine/src/daemon-composition-slack-review.test.ts
+  s_24a7036fab5f2b::t_f737fe43149112 9
+packages/engine/src/daemon-composition-worktree-maintenance.test.ts
+  s_24a7036fab5f2b::t_7bda81b62c0925 6
+packages/engine/src/daemon-engine.ts
+  s_24a7036fab5f2b::t_e8edbc19296d8d 3,16
+packages/engine/src/daemon-event-bus.test.ts
+  s_24a7036fab5f2b::t_f3098dad4f977f 10
+packages/engine/src/daemon-handlers.ts
+  s_24a7036fab5f2b::t_1dc8506475b117 8
+packages/engine/src/daemon-watch.ts
+  s_24a7036fab5f2b::t_c981254429420f 12
+packages/engine/src/daemon.ts
+  s_24a7036fab5f2b::t_c0f53746fedc46 10
+packages/engine/src/event-publisher.test.ts
+  s_24a7036fab5f2b::t_e3279a17384736 14
+packages/engine/src/event-publisher.ts
+  s_24a7036fab5f2b::t_5b00b1ba539aaa 14
+packages/engine/src/external-harness-runtime-checkout.test.ts
+  s_24a7036fab5f2b::t_f948d34abc2f4a 8
+packages/engine/src/external-harness-runtime-events.test.ts
+  s_24a7036fab5f2b::t_42e8ab12202c05 8
+packages/engine/src/external-harness-runtime-events.ts
+  s_24a7036fab5f2b::t_e0503a13d97d66 5
+packages/engine/src/external-harness-runtime-fixtures.ts
+  s_24a7036fab5f2b::t_1de87d91895e67 17,44-49
+packages/engine/src/external-harness-runtime-launch.test.ts
+  s_24a7036fab5f2b::t_f5db95e7f2e936 7
+packages/engine/src/external-harness-runtime-launch.ts
+  s_24a7036fab5f2b::t_3579654d587c98 6
+packages/engine/src/external-harness-runtime-local-process.test.ts
+  s_24a7036fab5f2b::t_c36ec772816d83 4
+packages/engine/src/external-harness-runtime-mcp.test.ts
+  s_24a7036fab5f2b::t_e7e225aee2c4df 8
+packages/engine/src/external-harness-runtime-workspace.ts
+  s_24a7036fab5f2b::t_22ebfc6e6bab84 3,17,20
+packages/engine/src/external-harness-runtime.test.ts
+  s_24a7036fab5f2b::t_5341069994a644 9
+packages/engine/src/external-harness-runtime.ts
+  s_24a7036fab5f2b::t_f52e83582a21da 31
+packages/engine/src/git.test.ts
+  s_24a7036fab5f2b::t_624a943f158434 3
+packages/engine/src/github/adapter.ts
+  s_24a7036fab5f2b::t_a5771687e5b7bd 3
+packages/engine/src/github/cli-credential.test.ts
+  s_24a7036fab5f2b::t_b45498b386570d 13
+packages/engine/src/github/cli-credential.ts
+  s_24a7036fab5f2b::t_c3325167c5d490 10
+packages/engine/src/github/client.test.ts
+  s_24a7036fab5f2b::t_f437af554d3dbb 15
+packages/engine/src/github/client.ts
+  s_24a7036fab5f2b::t_f7d0ba81057c1a 26,1590-1604,1699-1705
+packages/engine/src/github/graphql.test.ts
+  s_24a7036fab5f2b::t_af91967a937aa0 2
+packages/engine/src/github/host.test.ts
+  s_24a7036fab5f2b::t_b15a0ce46a5462 7
+packages/engine/src/github/host.ts
+  s_24a7036fab5f2b::t_c79dad6a552060 13,165-177,238-245
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_24a7036fab5f2b::t_f82d905144bed4 8
+packages/engine/src/github/performance-issue-filer.ts
+  s_24a7036fab5f2b::t_ea2b86c14aba17 7
+packages/engine/src/github/provider.test.ts
+  s_24a7036fab5f2b::t_c9b266f5ca4566 8
+packages/engine/src/github/provider.ts
+  s_24a7036fab5f2b::t_10a443d405dde7 11
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_24a7036fab5f2b::t_84e01a7217c1d2 5
+packages/engine/src/github/ready-to-merge.test.ts
+  s_24a7036fab5f2b::t_5910559116dc70 4
+packages/engine/src/github/source-control-target.ts
+  s_24a7036fab5f2b::t_ade475fc3c6711 2
+packages/engine/src/github/trigger-source-comments.test.ts
+  s_24a7036fab5f2b::t_5df9d20720075e 8
+packages/engine/src/github/trigger-source-fixtures.ts
+  s_24a7036fab5f2b::t_43e7b41ef5705a 13
+packages/engine/src/github/trigger-source-issue-labels.test.ts
+  s_24a7036fab5f2b::t_542f51d4d3b6f9 7
+packages/engine/src/github/trigger-source-polling.test.ts
+  s_24a7036fab5f2b::t_7bf7c04ec400ac 11
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_24a7036fab5f2b::t_c39e9f92794e7f 10
+packages/engine/src/granola-http.ts
+  s_24a7036fab5f2b::t_241d84daf7a19a 7
+packages/engine/src/granola-login.ts
+  s_24a7036fab5f2b::t_deb00b27ac2006 4
+packages/engine/src/granola-source.test.ts
+  s_24a7036fab5f2b::t_69935b8c37e039 21
+packages/engine/src/granola-source.ts
+  s_24a7036fab5f2b::t_55dc5fc2cf038c 16
+packages/engine/src/harness-overview.test.ts
+  s_24a7036fab5f2b::t_e9fd91a3f33141 3
+packages/engine/src/harness-overview.ts
+  s_24a7036fab5f2b::t_e3a3f3dd3cfe52 2
+packages/engine/src/harness-readiness.test.ts
+  s_24a7036fab5f2b::t_75cff490c5ec70 11
+packages/engine/src/harness-readiness.ts
+  s_24a7036fab5f2b::t_08c04346019266 16
+packages/engine/src/harness.test.ts
+  s_24a7036fab5f2b::t_202757c8b1eb0a 11
+packages/engine/src/harness.ts
+  s_24a7036fab5f2b::t_159846778b3a64 29
+packages/engine/src/interrupt-store.test.ts
+  s_24a7036fab5f2b::t_2463615c067092 4
+packages/engine/src/issue-search-tool.test.ts
+  s_24a7036fab5f2b::t_1ab20b13279ec0 7
+packages/engine/src/issue-search-tool.ts
+  s_24a7036fab5f2b::t_020f46a9b070af 5
+packages/engine/src/issue-tracker-router.test.ts
+  s_24a7036fab5f2b::t_80e14421230398 6
+packages/engine/src/issue-tracker-router.ts
+  s_24a7036fab5f2b::t_d049913fa62115 3
+packages/engine/src/issue-tracker.ts
+  s_24a7036fab5f2b::t_73409d1a6a7db7 14
+packages/engine/src/issue-workflow-catalog.ts
+  s_24a7036fab5f2b::t_b1e80cf8b6a81c 3
+packages/engine/src/json-event-stream.ts
+  s_24a7036fab5f2b::t_6a758951c8cefe 2
+packages/engine/src/linear/account.ts
+  s_24a7036fab5f2b::t_281b88c694f44e 2
+packages/engine/src/linear/adapter.ts
+  s_24a7036fab5f2b::t_69e143a400da65 3
+packages/engine/src/linear/client-credentials.test.ts
+  s_24a7036fab5f2b::t_a4febbb85f65d5 10
+packages/engine/src/linear/client-credentials.ts
+  s_24a7036fab5f2b::t_713e272df89465 10
+packages/engine/src/linear/client.test.ts
+  s_24a7036fab5f2b::t_d85585ffa3c56b 6
+packages/engine/src/linear/client.ts
+  s_24a7036fab5f2b::t_c9f9688cded9d4 23
+packages/engine/src/linear/host.test.ts
+  s_24a7036fab5f2b::t_6721f2beb3a3e4 6
+packages/engine/src/linear/host.ts
+  s_24a7036fab5f2b::t_cf979d2453052d 5,111-123,174-181
+packages/engine/src/linear/index.ts
+  s_24a7036fab5f2b::t_392f21e815c7c0 3
+packages/engine/src/linear/oauth.test.ts
+  s_24a7036fab5f2b::t_3fcf7b84d062b5 12
+packages/engine/src/linear/oauth.ts
+  s_24a7036fab5f2b::t_6f495786b5e99d 12
+packages/engine/src/linear/trigger-source.test.ts
+  s_24a7036fab5f2b::t_066980ca716770 18
+packages/engine/src/mcp-skill.test.ts
+  s_24a7036fab5f2b::t_34300e6aabb678 7
+packages/engine/src/mcp-skill.ts
+  s_24a7036fab5f2b::t_b84ac3601a75d8 6
+packages/engine/src/model-catalog.test.ts
+  s_24a7036fab5f2b::t_1553799a19f7bf 10
+packages/engine/src/operation-result.ts
+  s_24a7036fab5f2b::t_6cef1bfe9fa881 7
+packages/engine/src/park-notice.test.ts
+  s_24a7036fab5f2b::t_30eff8d215125c 16
+packages/engine/src/park-notice.ts
+  s_24a7036fab5f2b::t_91b075f21eaf30 6
+packages/engine/src/performance-issue-filer.test.ts
+  s_24a7036fab5f2b::t_f404ccb21e3992 8
+packages/engine/src/performance-issue-filer.ts
+  s_24a7036fab5f2b::t_7ee34a457c71cc 9
+packages/engine/src/performance-metrics.test.ts
+  s_24a7036fab5f2b::t_f4ecd660668715 4
+packages/engine/src/performance-metrics.ts
+  s_24a7036fab5f2b::t_e4602d142f2815 3
+packages/engine/src/performance-regression-sensor.test.ts
+  s_24a7036fab5f2b::t_92cccb62b6541c 10
+packages/engine/src/performance-regression-sensor.ts
+  s_24a7036fab5f2b::t_e27df884651581 2,14
+packages/engine/src/plugin.test.ts
+  s_24a7036fab5f2b::t_d805b63d44a5fc 14
+packages/engine/src/plugin.ts
+  s_24a7036fab5f2b::t_68a2712643e67a 30
+packages/engine/src/principal.test.ts
+  s_24a7036fab5f2b::t_121c5e544f228d 9
+packages/engine/src/provider-adapter.ts
+  s_24a7036fab5f2b::t_7465812c9afb9f 4,6
+packages/engine/src/provider-bridge.ts
+  s_24a7036fab5f2b::t_0fd6ce5fc52faf 6
+packages/engine/src/provider-resolve.test.ts
+  s_24a7036fab5f2b::t_7071efc4fcc6fd 4
+packages/engine/src/provider-resolve.ts
+  s_24a7036fab5f2b::t_77a0e030b27f6d 3
+packages/engine/src/provider-runner-fixtures.ts
+  s_24a7036fab5f2b::t_c7dabf4ae1d9bd 11,17
+packages/engine/src/provider-runner-stream.test.ts
+  s_24a7036fab5f2b::t_97b1163e00a169 18
+packages/engine/src/provider-runner.test.ts
+  s_24a7036fab5f2b::t_1c71cc087f4f52 10
+packages/engine/src/provider-runner.ts
+  s_24a7036fab5f2b::t_29f48b6b7f23bd 20,26
+packages/engine/src/provider-trigger-source.ts
+  s_24a7036fab5f2b::t_8eb81fda6433f7 15
+packages/engine/src/providers.test.ts
+  s_24a7036fab5f2b::t_c23ce3d83ddbf1 6
+packages/engine/src/providers.ts
+  s_24a7036fab5f2b::t_ceb58661dcef3f 2,34-36
+packages/engine/src/pull-request-tool.test.ts
+  s_24a7036fab5f2b::t_6ca3085f3323f8 6
+packages/engine/src/pull-request-tool.ts
+  s_24a7036fab5f2b::t_f6e8208ebb5d07 5
+packages/engine/src/read-model.ts
+  s_24a7036fab5f2b::t_4423398207c3a0 4
+packages/engine/src/registry-loading.ts
+  s_24a7036fab5f2b::t_2ee271afc8e5fc 12
+packages/engine/src/registry-management.ts
+  s_24a7036fab5f2b::t_0b20d63f2a8726 11
+packages/engine/src/registry-rows.ts
+  s_24a7036fab5f2b::t_2b2bcf9f76b36a 14
+packages/engine/src/registry-service.ts
+  s_24a7036fab5f2b::t_60c78c09442d67 4
+packages/engine/src/registry.ts
+  s_24a7036fab5f2b::t_6a91c9b6ea04e4 11
+packages/engine/src/replay-harness.test.ts
+  s_24a7036fab5f2b::t_e251976f886339 11
+packages/engine/src/replay-harness.ts
+  s_24a7036fab5f2b::t_2a463a7c36191a 10
+packages/engine/src/resume-policy.test.ts
+  s_24a7036fab5f2b::t_7cb4b9dbb4cbe2 2
+packages/engine/src/run-control.test.ts
+  s_24a7036fab5f2b::t_0766dc73179e84 14
+packages/engine/src/run-control.ts
+  s_24a7036fab5f2b::t_112372de1d736b 11
+packages/engine/src/run-ledger.test.ts
+  s_24a7036fab5f2b::t_8a64bb3305ea1d 18
+packages/engine/src/run-ledger.ts
+  s_24a7036fab5f2b::t_4b22c2121ab741 28
+packages/engine/src/run-plan-resolution.test.ts
+  s_24a7036fab5f2b::t_1b4be12d433de5 15
+packages/engine/src/run-plan-resolution.ts
+  s_24a7036fab5f2b::t_beadd0ef85b9fd 24
+packages/engine/src/run-plan.test.ts
+  s_24a7036fab5f2b::t_dcfc26ab4a5926 8
+packages/engine/src/run-plan.ts
+  s_24a7036fab5f2b::t_fbb23e7f07839d 11
+packages/engine/src/run-preparation.test.ts
+  s_24a7036fab5f2b::t_4927832190bb12 22
+packages/engine/src/run-preparation.ts
+  s_24a7036fab5f2b::t_5ac286c0491bb3 21
+packages/engine/src/run-recorder.test.ts
+  s_24a7036fab5f2b::t_1c802994b83279 18
+packages/engine/src/run-recorder.ts
+  s_24a7036fab5f2b::t_ff65dcb17fa125 10
+packages/engine/src/scheduler.ts
+  s_24a7036fab5f2b::t_160d006475de3d 13
+packages/engine/src/scripted-source.ts
+  s_24a7036fab5f2b::t_a16dee56659a83 7
+packages/engine/src/session-choice.test.ts
+  s_24a7036fab5f2b::t_7e01c664d67d53 10
+packages/engine/src/session-choice.ts
+  s_24a7036fab5f2b::t_2946081faf3eee 3
+packages/engine/src/session-store.test.ts
+  s_24a7036fab5f2b::t_c470db09582206 17
+packages/engine/src/session-store.ts
+  s_24a7036fab5f2b::t_b98450f717e374 24
+packages/engine/src/slack-login.ts
+  s_24a7036fab5f2b::t_6afa904fa1a801 4
+packages/engine/src/slack-source.test.ts
+  s_24a7036fab5f2b::t_8ceb5b3fb944c8 25
+packages/engine/src/slack-source.ts
+  s_24a7036fab5f2b::t_6a6c9b536f8cee 24,392-394
+packages/engine/src/slack-write.test.ts
+  s_24a7036fab5f2b::t_3aea895e2ff749 18
+packages/engine/src/slack-write.ts
+  s_24a7036fab5f2b::t_a67fcb94d0b01c 19
+packages/engine/src/source-control.ts
+  s_24a7036fab5f2b::t_1c04ef65348194 12
+packages/engine/src/subagent-file.test.ts
+  s_24a7036fab5f2b::t_1d613ef21fc9e5 3
+packages/engine/src/subagent-runner.test.ts
+  s_24a7036fab5f2b::t_dcac579f61cc16 5
+packages/engine/src/testing/engine-test-layer.test.ts
+  s_24a7036fab5f2b::t_5e15c0c52aab49 7
+packages/engine/src/testing/engine-test-layer.ts
+  s_24a7036fab5f2b::t_85ee900b917704 5
+packages/engine/src/testing/git-invocation-counting.test.ts
+  s_24a7036fab5f2b::t_2cdcc1c8290abd 4
+packages/engine/src/testing/git-invocation-counting.ts
+  s_24a7036fab5f2b::t_28acc84fae07a4 5
+packages/engine/src/testing/harness-probe-layer.ts
+  s_24a7036fab5f2b::t_475dce02e69060 5
+packages/engine/src/testing/scripted-adapter.ts
+  s_24a7036fab5f2b::t_f7fd4c97c5d487 42-46
+packages/engine/src/testing/temporary-control-store.ts
+  s_24a7036fab5f2b::t_3231592ecb9eba 6
+packages/engine/src/tools/confinement.test.ts
+  s_24a7036fab5f2b::t_5787758d0286bb 3
+packages/engine/src/tools/confinement.ts
+  s_24a7036fab5f2b::t_f61bd35e3f26ca 2
+packages/engine/src/tools/file-diff-feed-content.test.ts
+  s_24a7036fab5f2b::t_9479c2658cf241 10
+packages/engine/src/tools/file-diff-feed-delivery.test.ts
+  s_24a7036fab5f2b::t_d758877ad54587 8
+packages/engine/src/tools/file-diff-feed-fallback.test.ts
+  s_24a7036fab5f2b::t_79bf66f82978c9 18
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_24a7036fab5f2b::t_d558967ebc208e 12
+packages/engine/src/tools/file-diff-feed.ts
+  s_24a7036fab5f2b::t_57caae2a6c315a 3,25,1026-1037
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_24a7036fab5f2b::t_0694b615c13e39 3,17
+packages/engine/src/tools/owned-tools.test.ts
+  s_24a7036fab5f2b::t_468edf8c60609b 16-17
+packages/engine/src/tools/owned-tools.ts
+  s_24a7036fab5f2b::t_7660af00f80191 11,666-669
+packages/engine/src/tools/policy.ts
+  s_24a7036fab5f2b::t_15e7cced31ca6a 7
+packages/engine/src/tools/sandbox.test.ts
+  s_24a7036fab5f2b::t_7008e106b7af36 10
+packages/engine/src/tools/sandbox.ts
+  s_24a7036fab5f2b::t_f0affd601a02c4 4
+packages/engine/src/tracker-trigger-source.test.ts
+  s_24a7036fab5f2b::t_02b5d7e8f91446 19
+packages/engine/src/tracker-trigger-source.ts
+  s_24a7036fab5f2b::t_e20b3e0ce1f40a 5,103-106
+packages/engine/src/trigger-observation-admission.ts
+  s_24a7036fab5f2b::t_21814d431251fc 3
+packages/engine/src/trigger-observation-assignees.test.ts
+  s_24a7036fab5f2b::t_e8e18c65738ed4 8
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_24a7036fab5f2b::t_f7a12c28e635cc 6
+packages/engine/src/trigger-observation-fixtures.ts
+  s_24a7036fab5f2b::t_7877f8453d1ba3 19
+packages/engine/src/trigger-observation-recheck.test.ts
+  s_24a7036fab5f2b::t_b0d818f269c0db 7
+packages/engine/src/trigger-observation-sources.test.ts
+  s_24a7036fab5f2b::t_d5bff09e9b3112 10
+packages/engine/src/trigger-observation-store.test.ts
+  s_24a7036fab5f2b::t_b65a855dffc9d5 10
+packages/engine/src/trigger-observation-store.ts
+  s_24a7036fab5f2b::t_58956cf9aa29da 10
+packages/engine/src/trigger-observation-subscriptions.test.ts
+  s_24a7036fab5f2b::t_911cbccebe1416 4
+packages/engine/src/trigger-observation-subscriptions.ts
+  s_24a7036fab5f2b::t_3e5d5f3085c256 2
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_24a7036fab5f2b::t_d1415d1ed20915 16
+packages/engine/src/trigger-observation-sweep.ts
+  s_24a7036fab5f2b::t_b272789cd4c70d 3
+packages/engine/src/trigger-observation.test.ts
+  s_24a7036fab5f2b::t_17c005da648c9d 11
+packages/engine/src/trigger-observation.ts
+  s_24a7036fab5f2b::t_b59388917ea331 25
+packages/engine/src/trigger-source.ts
+  s_24a7036fab5f2b::t_625ace5ec44014 20
+packages/engine/src/watch-activity.test.ts
+  s_24a7036fab5f2b::t_a0da5dcf8daa96 9
+packages/engine/src/workflow-action-entry.test.ts
+  s_24a7036fab5f2b::t_369c9732cb420a 2
+packages/engine/src/workflow-action-entry.ts
+  s_24a7036fab5f2b::t_5845292b6147b5 14
+packages/engine/src/workflow-action-plan-fixtures.ts
+  s_24a7036fab5f2b::t_beb39703a0f4d4 28
+packages/engine/src/workflow-action-plan-parking.test.ts
+  s_24a7036fab5f2b::t_f4085cb260b7f3 6
+packages/engine/src/workflow-action-plan-pull-requests.test.ts
+  s_24a7036fab5f2b::t_26c6d602f9ff7d 14
+packages/engine/src/workflow-action-plan-slack.test.ts
+  s_24a7036fab5f2b::t_80e97339f98a68 5
+packages/engine/src/workflow-action-plan-store.ts
+  s_24a7036fab5f2b::t_21a247e61a2adb 14
+packages/engine/src/workflow-action-plan.ts
+  s_24a7036fab5f2b::t_a8f2d98c3ad0e1 3,25
+packages/engine/src/workflow-actions-cogwork.ts
+  s_24a7036fab5f2b::t_a84ecbcec5abe2 11
+packages/engine/src/workflow-actions-issue.test.ts
+  s_24a7036fab5f2b::t_6fafd240d9056b 18
+packages/engine/src/workflow-actions-issue.ts
+  s_24a7036fab5f2b::t_e3110b7bd9a043 12,85-86
+packages/engine/src/workflow-actions-slack.test.ts
+  s_24a7036fab5f2b::t_5f7049a218ecbb 14
+packages/engine/src/workflow-actions-slack.ts
+  s_24a7036fab5f2b::t_61cb4f0e8a7cca 12
+packages/engine/src/workflow-actions-source-control.test.ts
+  s_24a7036fab5f2b::t_a14c338527a042 16
+packages/engine/src/workflow-actions-source-control.ts
+  s_24a7036fab5f2b::t_58f67c51cbba6f 13
+packages/engine/src/workflow-artifact-store.test.ts
+  s_24a7036fab5f2b::t_c610f3cf360fc2 14
+packages/engine/src/workflow-artifact-store.ts
+  s_24a7036fab5f2b::t_f8fbb8b3bb6e79 15
+packages/engine/src/workflow-attention.test.ts
+  s_24a7036fab5f2b::t_494f5a98612f4a 19
+packages/engine/src/workflow-attention.ts
+  s_24a7036fab5f2b::t_68624a092514ed 11
+packages/engine/src/workflow-catalog.test.ts
+  s_24a7036fab5f2b::t_ae68280590aa6f 6
+packages/engine/src/workflow-catalog.ts
+  s_24a7036fab5f2b::t_a46e9a42fb4b87 5
+packages/engine/src/workflow-fixtures.ts
+  s_24a7036fab5f2b::t_953b0aaf0ae66a 2,16
+packages/engine/src/workflow-lifecycle.test.ts
+  s_24a7036fab5f2b::t_e0034d953ca3b6 22
+packages/engine/src/workflow-machine-readiness.test.ts
+  s_24a7036fab5f2b::t_87fe620bb1ceab 15
+packages/engine/src/workflow-machine-readiness.ts
+  s_24a7036fab5f2b::t_6dd4814601cfee 26
+packages/engine/src/workflow-notification.ts
+  s_24a7036fab5f2b::t_e90191401d9172 13
+packages/engine/src/workflow-options.ts
+  s_24a7036fab5f2b::t_f4c602c4e61edf 3
+packages/engine/src/workflow-run-admission.test.ts
+  s_24a7036fab5f2b::t_75af7e0e801650 8
+packages/engine/src/workflow-run-admission.ts
+  s_24a7036fab5f2b::t_019ef461b38ee1 2
+packages/engine/src/workflow-run-admissions-fixtures.ts
+  s_24a7036fab5f2b::t_2b036e6d51d705 2
+packages/engine/src/workflow-run-approval.test.ts
+  s_24a7036fab5f2b::t_34a9192b6a4c3b 15
+packages/engine/src/workflow-run-attempts.ts
+  s_24a7036fab5f2b::t_3f554031b96bef 17
+packages/engine/src/workflow-run-checkout.test.ts
+  s_24a7036fab5f2b::t_2d44a5e8f9915c 7
+packages/engine/src/workflow-run-coding-template.test.ts
+  s_24a7036fab5f2b::t_e4681eb84bcfbe 15
+packages/engine/src/workflow-run-documents-fixtures.ts
+  s_24a7036fab5f2b::t_1587e8691adc31 19
+packages/engine/src/workflow-run-engine-tools.ts
+  s_24a7036fab5f2b::t_97d8bd1f2f5d86 4
+packages/engine/src/workflow-run-execution-context.ts
+  s_24a7036fab5f2b::t_cf96aa43c115f0 4
+packages/engine/src/workflow-run-fan-out.test.ts
+  s_24a7036fab5f2b::t_3db62da5699423 14
+packages/engine/src/workflow-run-fixtures.ts
+  s_24a7036fab5f2b::t_a0a3114b0509fc 17
+packages/engine/src/workflow-run-hand-back.test.ts
+  s_24a7036fab5f2b::t_cd7a6f76d1bc64 7
+packages/engine/src/workflow-run-hand-off.test.ts
+  s_24a7036fab5f2b::t_ab0376e5ab343b 6
+packages/engine/src/workflow-run-pending-plan.ts
+  s_24a7036fab5f2b::t_72e7da36a5497a 12
+packages/engine/src/workflow-run-retry.test.ts
+  s_24a7036fab5f2b::t_42f6bcfeb85cbd 8
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_24a7036fab5f2b::t_f60a8080bb841d 14
+packages/engine/src/workflow-run-settled-run.test.ts
+  s_24a7036fab5f2b::t_5cca74dc899955 13
+packages/engine/src/workflow-run-settlement.test.ts
+  s_24a7036fab5f2b::t_60c92b7267bee5 10
+packages/engine/src/workflow-run-touchpoints.ts
+  s_24a7036fab5f2b::t_2c0048553861dd 12
+packages/engine/src/workflow-run.ts
+  s_24a7036fab5f2b::t_fe5ab3716bdba6 26
+packages/engine/src/workflow-templates.test.ts
+  s_24a7036fab5f2b::t_60b3cf08d27586 4
+packages/engine/src/workflow.ts
+  s_24a7036fab5f2b::t_76b3c076d0a441 41
+packages/engine/src/workspace-registry-authoring-trees.test.ts
+  s_24a7036fab5f2b::t_f73eac3ae589c4 9
+packages/engine/src/workspace-registry-fixtures.ts
+  s_24a7036fab5f2b::t_f030115e88c9b3 9
+packages/engine/src/workspace-registry-identity.test.ts
+  s_24a7036fab5f2b::t_47e25b9471294d 13
+packages/engine/src/workspace-registry-registration.test.ts
+  s_24a7036fab5f2b::t_f6b53c1c08e5c3 13
+packages/engine/src/workspace-registry-repository.test.ts
+  s_24a7036fab5f2b::t_3c9a856d21cbd3 11
+packages/engine/src/worktree-ensure-reuse.test.ts
+  s_24a7036fab5f2b::t_1f1bd7bd4abb5c 4
+packages/engine/src/worktree-ensure.test.ts
+  s_24a7036fab5f2b::t_ff668762bbc686 8
+packages/engine/src/worktree-fixtures.ts
+  s_24a7036fab5f2b::t_016e62b8448f84 7
+packages/engine/src/worktree-maintenance.ts
+  s_24a7036fab5f2b::t_a559e38a4c5a83 6
+packages/engine/src/worktree-naming.test.ts
+  s_24a7036fab5f2b::t_48c62249c8e89c 2
+packages/engine/src/worktree-pull-request.test.ts
+  s_24a7036fab5f2b::t_64e2b849e866db 5
+packages/engine/src/worktree-reconcile.test.ts
+  s_24a7036fab5f2b::t_1b8089f5f99930 7
+packages/engine/src/worktree-remove.test.ts
+  s_24a7036fab5f2b::t_b7e017d36a3a10 4
+packages/engine/src/worktree.ts
+  s_24a7036fab5f2b::t_468c300929a687 11
+packages/process-diagnostics/src/process-profile-protocol.ts
+  s_24a7036fab5f2b::t_9034ffea126ef2 3
+packages/process-diagnostics/src/process-profiler.test.ts
+  s_24a7036fab5f2b::t_ba49ab9fa08bad 5
+packages/process-diagnostics/src/process-profiler.ts
+  s_24a7036fab5f2b::t_e00e1a82430dc7 2,10
+packages/ui/src/components/alert-dialog.tsx
+  s_24a7036fab5f2b::t_1f7ae7ac9c00e1 3,46
+packages/ui/src/components/alert.tsx
+  s_24a7036fab5f2b::t_a679e11f2f1939 63
+packages/ui/src/components/attachment.tsx
+  s_24a7036fab5f2b::t_271a9b7ecda9a9 125
+packages/ui/src/components/checkbox.tsx
+  s_24a7036fab5f2b::t_4febe9a27d69b1 3
+packages/ui/src/components/code-block.tsx
+  s_24a7036fab5f2b::t_56123f8cf4fabb 5
+packages/ui/src/components/context-menu.tsx
+  s_24a7036fab5f2b::t_c4336cea8fba2f 4,123,153,186
+packages/ui/src/components/dialog.tsx
+  s_24a7036fab5f2b::t_1e8038a2657824 4,51,60
+packages/ui/src/components/dropdown-menu.tsx
+  s_24a7036fab5f2b::t_bf1f798c929793 4,118,161,197
+packages/ui/src/components/field.tsx
+  s_24a7036fab5f2b::t_8c4b3c983d8935 3
+packages/ui/src/components/input-group.tsx
+  s_24a7036fab5f2b::t_4b4489c632b6bd 3
+packages/ui/src/components/item.tsx
+  s_24a7036fab5f2b::t_50625c5e844e6a 5
+packages/ui/src/components/menubar.tsx
+  s_24a7036fab5f2b::t_43779fadce596a 5,114,147
+packages/ui/src/components/message-scroller.tsx
+  s_24a7036fab5f2b::t_584c74ca84c99d 10,98
+packages/ui/src/components/radio-group.tsx
+  s_24a7036fab5f2b::t_08f6ca079cc67d 26
+packages/ui/src/components/resizable.tsx
+  s_24a7036fab5f2b::t_7ffd9044b17be1 30
+packages/ui/src/components/select.tsx
+  s_24a7036fab5f2b::t_198bbe55f84694 4,38,108
+packages/ui/src/components/sheet.tsx
+  s_24a7036fab5f2b::t_19c6c8a1964f0b 4,54,63
+packages/ui/src/components/sidebar.tsx
+  s_24a7036fab5f2b::t_aef0e665f4150f 8,278,280,406,538,607,642
+packages/ui/src/components/spinner.tsx
+  s_24a7036fab5f2b::t_5ef8a67ba05c51 3
+packages/ui/src/components/switch.tsx
+  s_24a7036fab5f2b::t_6a184431791dec 24
+packages/ui/src/components/tabs.tsx
+  s_24a7036fab5f2b::t_de48fe81f74f56 3
+packages/ui/src/components/toggle-group.tsx
+  s_24a7036fab5f2b::t_f4877521743170 7
+packages/ui/src/components/tooltip.tsx
+  s_24a7036fab5f2b::t_b38c74bea7342e 55
+packages/ui/src/components/trace.tsx
+  s_24a7036fab5f2b::t_02f2e503e0662f 4,130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b212e6b1ce6be2627f7edf0bb7ec4f2776e65280",
+  "prompts": {},
+  "sessions": {
+    "s_24a7036fab5f2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1b8aa8c2-de7a-45a3-bbbd-cc9b5df09b19",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
