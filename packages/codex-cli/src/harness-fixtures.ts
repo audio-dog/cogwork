@@ -4,6 +4,7 @@ import {
   HarnessName,
   RunId,
   RunPlan,
+  type RunPlanSubagent,
   SessionId,
   WorkItemId,
 } from "@cogwork/contracts";
@@ -83,6 +84,7 @@ interface RequestOverrides {
   readonly prompt?: string;
   readonly mcpSkills?: ReadonlyArray<Harness.ResolvedMcpSkill>;
   readonly engineTools?: ReadonlyArray<AnyTool>;
+  readonly subagents?: ReadonlyArray<RunPlanSubagent>;
 }
 
 const projectedMcpName = (name: string, index: number) =>
@@ -120,7 +122,7 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
       tools: (overrides.engineTools ?? []).map(({ name }) => name),
       skills: [],
       mcp,
-      subagents: [],
+      subagents: overrides.subagents ?? [],
       hooks: [],
       middleware: ["sandbox"],
       structuredOutput,

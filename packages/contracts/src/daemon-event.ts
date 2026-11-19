@@ -16,15 +16,15 @@ export type ReadModelItem = typeof ReadModelItem.Type;
 
 export const WorkspaceState = Schema.TaggedUnion({
   Registered: {
-    name: WorkspaceId,
-    displayName: Schema.optional(TrimmedNonEmptyString),
+    id: WorkspaceId,
+    displayName: TrimmedNonEmptyString,
     checkoutPath: TrimmedNonEmptyString,
     issueTracker: IssueTrackerType,
     record: WorkspaceRegistration,
     contributions: Schema.Array(LocalContribution),
   },
   Failed: {
-    name: Schema.optional(WorkspaceId),
+    id: Schema.optional(WorkspaceId),
     displayName: Schema.optional(TrimmedNonEmptyString),
     source: TrimmedNonEmptyString,
     message: Schema.String,

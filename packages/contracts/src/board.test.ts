@@ -22,15 +22,16 @@ const harnessReadiness = Schema.decodeSync(HarnessReadiness);
 const decodeEvent = Schema.decodeUnknownSync(DaemonEvent);
 const event = (value: Record<string, unknown>) => decodeEvent({ ...value, emittedAtMillis: 0 });
 
-const registered = (name: string) =>
+const registered = (id: string) =>
   workspaceState({
     _tag: "Registered",
-    name,
-    checkoutPath: `/repos/${name}`,
+    id,
+    displayName: id,
+    checkoutPath: `/repos/${id}`,
     issueTracker: "github",
     record: {
-      name,
-      checkoutPath: `/repos/${name}`,
+      displayName: id,
+      checkoutPath: `/repos/${id}`,
       issueTracker: { type: "github" },
       linearHistory: false,
     },
@@ -61,7 +62,7 @@ describe("applyDaemonEvent", () => {
   it("keeps a failed workspace registration name in live state", () => {
     const state = workspaceState(
       workspaceFailureState({
-        name: workspace("0198f16a-21d7-7000-8000-000000000001"),
+        id: workspace("0198f16a-21d7-7000-8000-000000000001"),
         displayName: "Cogwork",
         source: "/repos/cogwork",
         message: "Workspace input is missing",
@@ -203,7 +204,7 @@ describe("applyDaemonEvent", () => {
       perWorkspaceLimit: 4,
       dailyBudgetUsed: 2,
       dailyBudgetLimit: 10,
-      perWorkspace: [{ name: "acme", inFlight: 1, limit: 3 }],
+      perWorkspace: [{ id: "acme", inFlight: 1, limit: 3 }],
     });
 
     const board = fold([
@@ -377,18 +378,19 @@ describe("applyDaemonEvent", () => {
     assert.strictEqual(board.runs.has("run-24"), true);
   });
 
-  it("records the latest workspace state per key, registered by name", () => {
+  it("records the latest workspace state per key, registered by id", () => {
     const board = fold([
       event({ _tag: "WorkspaceChanged", workspace: registered("acme") }),
       event({
         _tag: "WorkspaceChanged",
         workspace: workspaceState({
           _tag: "Registered",
-          name: "acme",
+          id: "acme",
+          displayName: "acme",
           checkoutPath: "/repos/acme",
           issueTracker: "linear",
           record: {
-            name: "acme",
+            displayName: "acme",
             checkoutPath: "/repos/acme",
             issueTracker: { type: "linear" },
             linearHistory: false,
@@ -446,7 +448,7 @@ describe("applyDaemonEvent", () => {
   it("replaces workspace states under their minted identity", () => {
     const failure = workspaceState({
       _tag: "Failed",
-      name: "acme",
+      id: "acme",
       source: "/repos/acme",
       message: "boom",
     });

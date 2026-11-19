@@ -5,7 +5,8 @@ import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import type { CoordinationService } from "./coordination";
 import { IssueTracker } from "./issue-tracker";
-import { findWorkspace, WorkspaceRegistry } from "./registry";
+import { findWorkspace } from "./registry-lookup";
+import { WorkspaceRegistry } from "./registry-service";
 import { parkCommandsByReason, parkSummary } from "./workflow-attention";
 
 const commandPhrases = {

@@ -14,7 +14,7 @@ import * as Schema from "effect/Schema";
 import { type IssueTrackerService, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { RunLedger } from "./run-ledger";
-import { TriggerObservationStoreError } from "./trigger-observation";
+import { TriggerObservationStoreError } from "./trigger-observation-store";
 import type { WorkflowsService } from "./workflow";
 import { admission, granolaAdmission } from "./workflow-run-admissions-fixtures";
 import {
@@ -152,7 +152,8 @@ describe("WorkflowRun", () => {
         contributions: [],
         repository: "colonylabs/cogwork",
         config: yield* Schema.decodeEffect(WorkspaceConfig)({
-          name: "cogwork",
+          id: "cogwork",
+          displayName: "cogwork",
           checkoutPath: "/cogwork",
           issueTracker: { type: "github" },
         }),
@@ -181,7 +182,7 @@ describe("WorkflowRun", () => {
       });
       const granolaDocument = WorkflowDocument.make({
         ...document,
-        workspaces: { _tag: "Listed", workspaces: [repo.config.name] },
+        workspaces: { _tag: "Listed", workspaces: [repo.config.id] },
         operations: [
           {
             ...document.operations[0],
@@ -237,7 +238,7 @@ describe("WorkflowRun", () => {
             return [
               WorkflowActionArtifact.make({
                 kind: "IssueCreated",
-                workspace: workspace.config.name,
+                workspace: workspace.config.id,
                 issue,
                 url: `https://example.test/issues/${issue.slice(1)}`,
                 origin: input.origin,

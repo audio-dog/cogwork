@@ -5,9 +5,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import { GitError } from "./git";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { admission } from "./workflow-run-admissions-fixtures";
 import { document, reviewWorkspace, workflowServiceWith } from "./workflow-run-documents-fixtures";
 import { requirements, testProgram } from "./workflow-run-fixtures";
@@ -15,7 +15,7 @@ import { WorktreeError, WorktreeManager } from "./worktree";
 
 const checkoutAdmission: TriggerAdmission = {
   ...admission,
-  event: { ...admission.event, workspace: reviewWorkspace.config.name },
+  event: { ...admission.event, workspace: reviewWorkspace.config.id },
 };
 
 const checkoutDocument = WorkflowDocument.make({

@@ -1,17 +1,21 @@
-import { HarnessName } from "@cogwork/contracts";
-import type * as Clock from "effect/Clock";
+import { HarnessName, IssueTrackerType, SourceControlType } from "@cogwork/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as NetAddress from "effect/net/NetAddress";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as RpcClient from "effect/rpc/RpcClient";
 import * as RpcServer from "effect/rpc/RpcServer";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Socket from "effect/socket/Socket";
 import * as SocketServer from "effect/socket/SocketServer";
+import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
@@ -23,7 +27,9 @@ import * as RunLedger from "./run-ledger";
 import { WorktreeManager, type WorktreeManagerService } from "./worktree";
 
 export const harnessName = HarnessName.make("scripted");
-export const structuredOutput = {
+export const githubType = Schema.decodeSync(IssueTrackerType)("github");
+export const githubSourceControl = Schema.decodeSync(SourceControlType)("github");
+const structuredOutput = {
   summary: "Ready for implementation",
   stuck: false,
   answers: { role: "ready-for-agent" },
@@ -147,30 +153,11 @@ const issueResponse = (labels: ReadonlyArray<string>) => ({
   created_at: "2026-11-01T12:00:00Z",
 });
 
-export const jsonResponse = (body: unknown = {}, status = 200) =>
+const jsonResponse = (body: unknown = {}, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
   });
-
-export const advancingClock = () => {
-  const state = { millis: 0 };
-  const nextMillis = () => {
-    const current = state.millis;
-    state.millis = current + 1;
-    return current;
-  };
-  const nextNanos = () => BigInt(nextMillis()) * 1_000_000n;
-  return {
-    currentTimeMillisUnsafe: nextMillis,
-    currentTimeMillis: Effect.sync(nextMillis),
-    currentTimeNanosUnsafe: nextNanos,
-    currentTimeNanos: Effect.sync(nextNanos),
-    monotonicTimeNanosUnsafe: nextNanos,
-    monotonicTimeNanos: Effect.sync(nextNanos),
-    sleep: () => Effect.never,
-  } satisfies Clock.Clock;
-};
 
 function makeFixture() {
   return Effect.gen(function* () {
@@ -271,3 +258,22 @@ export class Fixture extends Context.Service<Fixture, Effect.Success<ReturnType<
 ) {
   static readonly layer = Layer.effect(Fixture, makeFixture());
 }
+
+export const testLayer = () =>
+  Layer.unwrap(
+    Effect.map(Fixture, ({ clientLayer, fetchStub, serverLayer }) =>
+      Layer.merge(serverLayer, clientLayer).pipe(
+        Layer.provide(
+          Layer.mergeAll(NodeServices.layer, NodeCrypto.layerSecureRandom, NodeCrypto.layerDigest),
+        ),
+        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchStub)),
+      ),
+    ),
+  ).pipe(Layer.provideMerge(Fixture.layer), Layer.provide(NodeServices.layer));
+
+export const startHeartbeats = Effect.fn("DaemonCompositionTest.startHeartbeats")(function* () {
+  yield* Effect.forkScoped(
+    Daemon.heartbeats({ pollIntervalMillis: 60_000, drain: { graceMillis: 0, abort: Effect.never } }),
+  );
+  yield* TestClock.adjust("1 second");
+});

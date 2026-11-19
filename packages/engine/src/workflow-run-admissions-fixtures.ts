@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import {
   operation,
   scheduleEntry,

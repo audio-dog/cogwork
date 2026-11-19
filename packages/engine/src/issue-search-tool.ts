@@ -35,7 +35,7 @@ export const makeIssueSearchTool = (
           Effect.forEach(items, (item) =>
             tracker.readProse(workspace, item.id).pipe(
               Effect.map(({ body }) => ({
-                workspace: workspace.config.name,
+                workspace: workspace.config.id,
                 id: item.id,
                 title: item.title,
                 url: item.url,
