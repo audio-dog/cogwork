@@ -181,4 +181,24 @@ describe("GitHub issue listing", () => {
       );
     }),
   );
+
+  it.effect("omits the lower bound when it lists issues changed since the epoch", () =>
+    Effect.gen(function* () {
+      const sentSince: Array<number | undefined> = [];
+      const client = yield* GitHubClient.pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            listIssues: (_repo, query) => {
+              sentSince.push(query?.since);
+              return Effect.succeed([]);
+            },
+          }),
+        ),
+      );
+
+      yield* makeIssueReads(client).itemsChangedSince(workspace, 0);
+
+      assert.deepStrictEqual(sentSince, [undefined]);
+    }),
+  );
 });
