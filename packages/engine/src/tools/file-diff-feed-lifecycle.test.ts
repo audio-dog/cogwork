@@ -9,7 +9,7 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import { computeDiff, fileDiffExecDuration, watchWorktreeDiffs } from "./file-diff-feed";
+import { watchWorktreeDiffs } from "./file-diff-feed";
 import {
   advanceUntil,
   decodeDiffValue,
@@ -29,6 +29,7 @@ import {
   withExecProbe,
   yieldToHost,
 } from "./file-diff-fixtures";
+import { computeDiff, fileDiffExecDuration } from "./file-diff-git";
 import { writeFile } from "./owned-tools";
 import { resolveBaseSha, type WorktreeSandbox } from "./sandbox";
 

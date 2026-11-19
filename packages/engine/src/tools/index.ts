@@ -1,14 +1,14 @@
 export { confine } from "./confinement";
 export { ToolError, toolError } from "./errors";
 export {
-  computeDiff,
   FILE_DIFF_EVENT,
   fileDiffEvent,
-  mergeFileDiffFeed,
   toFileDiffEvent,
   tolerateFeedDeath,
   watchWorktreeDiffs,
 } from "./file-diff-feed";
+export { mergeFileDiffFeed } from "./file-diff-feed-merge";
+export { computeDiff } from "./file-diff-git";
 export {
   BashArgs,
   EditArgs,

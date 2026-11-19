@@ -8,7 +8,9 @@ import type {
 } from "./external-harness-runtime";
 import { scrubEvent } from "./external-harness-runtime-workspace";
 import type { HarnessError } from "./harness";
-import { boundedDiff, ignored, mergeFileDiffFeed, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { ignored, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { mergeFileDiffFeed } from "./tools/file-diff-feed-merge";
+import { boundedDiff } from "./tools/file-diff-git";
 import { openWorktreeSandbox, resolveBaseSha } from "./tools/sandbox";
 
 const outputCharacters = (event: AgUiEvent) =>
