@@ -1,26 +1,22 @@
 {
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "resolvePackageJsonImports": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": false
+      }
+    ]
+  },
   "include": [
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.tsx",
-    "src/preload/*.d.ts",
-    "src/shared/**/*"
-  ],
-  "compilerOptions": {
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "resolvePackageJsonImports": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext",
-    "composite": true,
-    "jsx": "react-jsx"
-  }
+    "src/preload/*.d.ts"
+  ]
 }

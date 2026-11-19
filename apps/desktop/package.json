@@ -21,8 +21,8 @@
     "postinstall": "node scripts/ensure-electron.mjs && electron-builder install-app-deps",
     "start": "electron-vite preview",
     "test": "vitest run",
-    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
-    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "pnpm run typecheck:node && npm run typecheck:web"
   },
   "dependencies": {

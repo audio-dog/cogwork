@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off processEnv:off globalConsole:off
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

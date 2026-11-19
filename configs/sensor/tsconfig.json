@@ -1,16 +1,5 @@
 {
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "module": "esnext",
-    "moduleDetection": "force",
-    "moduleResolution": "bundler",
-    "noEmit": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext"
-  },
+  "extends": "../../tsconfig.base.json",
   "include": ["*.ts"],
   "exclude": ["node_modules"]
 }

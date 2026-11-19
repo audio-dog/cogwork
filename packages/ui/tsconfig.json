@@ -1,18 +1,16 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "esModuleInterop": true,
-    "isolatedModules": true,
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
     "verbatimModuleSyntax": true,
-    "noEmit": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext",
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": false
+      }
+    ]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
