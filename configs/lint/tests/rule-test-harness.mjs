@@ -11,11 +11,10 @@ const lintRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 export const fixtureRoot = path.join(lintRoot, "tests", "fixtures");
 export const repoRoot = path.resolve(lintRoot, "../..");
 
-const resolveBiomeBin = () => {
-  const packagePath = require.resolve("@biomejs/biome/package.json");
-  const biomePackage = require(packagePath);
-  const bin = typeof biomePackage.bin === "string" ? biomePackage.bin : biomePackage.bin.biome;
-  return path.resolve(path.dirname(packagePath), bin);
+const resolveBin = (packageName, binName) => {
+  const packagePath = require.resolve(`${packageName}/package.json`);
+  const { bin } = require(packagePath);
+  return path.resolve(path.dirname(packagePath), typeof bin === "string" ? bin : bin[binName]);
 };
 
 export const lintWithRule = (rulePath, fixturePath) => {
@@ -27,7 +26,7 @@ export const lintWithRule = (rulePath, fixturePath) => {
     const result = spawnSync(
       process.execPath,
       [
-        resolveBiomeBin(),
+        resolveBin("@biomejs/biome", "biome"),
         "lint",
         "--reporter=json",
         "--max-diagnostics=none",
@@ -41,6 +40,29 @@ export const lintWithRule = (rulePath, fixturePath) => {
       diagnostics: JSON.parse(result.stdout).diagnostics,
       output: `${result.stdout}${result.stderr}`,
       status: result.status ?? 1,
+    };
+  } finally {
+    rmSync(tempDirectory, { force: true, recursive: true });
+  }
+};
+
+export const lintWithOxlint = (config, fixturePaths) => {
+  const tempDirectory = mkdtempSync(path.join(tmpdir(), "cogwork-oxlint-rule-"));
+  const configPath = path.join(tempDirectory, ".oxlintrc.json");
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [resolveBin("oxlint", "oxlint"), "-A", "all", "-f", "json", "-c", configPath, ...fixturePaths],
+      { cwd: lintRoot, encoding: "utf8" },
+    );
+    const diagnostics = JSON.parse(result.stdout).diagnostics;
+
+    return {
+      diagnosticsFor: (fixturePath) =>
+        diagnostics.filter((diagnostic) => path.resolve(lintRoot, diagnostic.filename) === fixturePath),
+      output: `${result.stdout}${result.stderr}`,
     };
   } finally {
     rmSync(tempDirectory, { force: true, recursive: true });

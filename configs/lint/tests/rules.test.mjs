@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { fixtureRoot, lintWithRule, repoRoot } from "./rule-test-harness.mjs";
+import oxlintConfig from "../oxlint/cogwork.ts";
+import oxlintPlugin from "../oxlint-plugin/index.ts";
+import { fixtureRoot, lintWithOxlint, lintWithRule, repoRoot } from "./rule-test-harness.mjs";
 
 const ruleCases = [
   {
@@ -279,5 +281,68 @@ for (const ruleCase of ruleCases) {
       [],
       result.output,
     );
+  });
+}
+
+const oxlintRuleCases = [
+  {
+    message:
+      "Rule: do not export from a test file. Why: a module that imports from a test file also loads that file and registers its tests. Fix: move the shared value to a module that is not a test file, and import it from there.",
+    name: "no-export-in-test",
+  },
+];
+
+const oxlintPluginName = oxlintPlugin.meta.name;
+const registeredOxlintRules = [
+  ...new Set(
+    [oxlintConfig, ...oxlintConfig.overrides]
+      .flatMap((source) => Object.keys(source.rules ?? {}))
+      .filter((rule) => rule.startsWith(`${oxlintPluginName}/`)),
+  ),
+];
+
+test("every Oxlint plugin rule is registered in the Oxlint config", () => {
+  const defined = Object.keys(oxlintPlugin.rules).map((name) => `${oxlintPluginName}/${name}`);
+
+  assert.deepEqual([...registeredOxlintRules].sort(), defined.sort());
+});
+
+test("every message an Oxlint plugin rule registers belongs to a tested rule", () => {
+  const tested = new Set(oxlintRuleCases.map((rule) => rule.message));
+  const untested = Object.entries(oxlintPlugin.rules).flatMap(([name, rule]) =>
+    Object.values(rule.meta.messages)
+      .filter((message) => !tested.has(message))
+      .map((message) => ({ name, message })),
+  );
+
+  assert.deepEqual(untested, []);
+});
+
+const oxlintFixture = (name, kind) => path.join(fixtureRoot, name, `${kind}-example.ts`);
+// The registered rules run on every fixture, so each case reads only its own rule's diagnostics.
+const oxlintRun = lintWithOxlint(
+  {
+    jsPlugins: oxlintConfig.jsPlugins,
+    rules: Object.fromEntries(registeredOxlintRules.map((rule) => [rule, "error"])),
+  },
+  oxlintRuleCases.flatMap(({ name }) => [oxlintFixture(name, "invalid"), oxlintFixture(name, "valid")]),
+);
+
+for (const ruleCase of oxlintRuleCases) {
+  const ownDiagnostics = (kind) =>
+    oxlintRun
+      .diagnosticsFor(oxlintFixture(ruleCase.name, kind))
+      .filter((diagnostic) => diagnostic.code === `${oxlintPluginName}(${ruleCase.name})`);
+
+  test(`${ruleCase.name} catches its prohibited pattern`, () => {
+    assert.deepEqual(
+      ownDiagnostics("invalid").map((diagnostic) => diagnostic.message),
+      [ruleCase.message],
+      oxlintRun.output,
+    );
+  });
+
+  test(`${ruleCase.name} allows its supported alternative`, () => {
+    assert.deepEqual(ownDiagnostics("valid"), [], oxlintRun.output);
   });
 }
