@@ -157,6 +157,13 @@ const CheckRunSchema = Schema.Struct({
   conclusion: Schema.NullOr(Schema.String),
   started_at: Schema.NullOr(Schema.String),
   completed_at: Schema.NullOr(Schema.String),
+  details_url: Schema.optional(Schema.NullOr(Schema.String)),
+  output: Schema.optional(
+    Schema.Struct({
+      title: Schema.optional(Schema.NullOr(Schema.String)),
+      summary: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+  ),
 });
 
 const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema) });

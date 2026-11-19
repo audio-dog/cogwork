@@ -2,6 +2,7 @@ import { WorkflowCatalogKey, type WorkItemRef } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import type { CheckRun } from "../ci";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import {
   catchUpParameter,
@@ -19,7 +20,16 @@ import {
   workspaceSubscriptions,
 } from "../provider-trigger-source";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "../trigger-source";
-import type { GitHubClientService, RawIssueComment, RawPull, RawReview, RawReviewComment } from "./client";
+import {
+  type GitHubClientService,
+  type RawIssueComment,
+  type RawPull,
+  type RawPullDetail,
+  type RawPullFile,
+  type RawReview,
+  type RawReviewComment,
+  reviewDecisionOf,
+} from "./client";
 import { trustedBotFeedback } from "./feedback";
 import { hasCogworkMarker } from "./markers";
 import {
@@ -135,8 +145,75 @@ const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull):
   number: pull.number,
 });
 
-const proseOf = (pull: RawPull, feedback: ReadonlyArray<Feedback>) => ({
-  body: `Pull request #${pull.number}`,
+const isFailingCheck = ({ conclusion }: CheckRun) =>
+  conclusion !== null && failingConclusions.has(conclusion);
+
+const indented = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join("\n");
+
+const checkLines = (check: CheckRun) => [
+  `- ${check.name}: ${check.status}, ${check.conclusion ?? "no conclusion"}, ${check.detailsUrl ?? "no details URL"}`,
+  ...(isFailingCheck(check)
+    ? [`  - Title: ${check.outputTitle ?? "none"}`, "  - Summary:", indented(check.outputSummary ?? "none")]
+    : []),
+];
+
+const fileLine = (file: RawPullFile) =>
+  `- ${file.path} (${file.status}, +${file.additions} -${file.deletions})`;
+
+const listOrNone = (lines: ReadonlyArray<string>) => (lines.length === 0 ? "none" : lines.join("\n"));
+
+const mergeabilityOf = (mergeableState: string | null) =>
+  baseDivergenceOf(mergeableState) === "conflict"
+    ? `${mergeableState}, conflicts with base`
+    : (mergeableState ?? "unknown");
+
+const reviewStateOf = (reviews: ReadonlyArray<RawReview>) =>
+  reviewDecisionOf(
+    reviews
+      .filter((review) => personAssociations.has(review.authorAssociation))
+      .map((review) => ({ login: review.authorLogin, state: review.state })),
+  );
+
+interface PullRequestFacts {
+  readonly pull: RawPull;
+  readonly detail: RawPullDetail;
+  readonly checks: ReadonlyArray<CheckRun>;
+  readonly reviews: ReadonlyArray<RawReview>;
+  readonly files: ReadonlyArray<RawPullFile>;
+}
+
+const pullRequestBody = ({ pull, detail, checks, reviews, files }: PullRequestFacts) =>
+  [
+    `# ${detail.title}`,
+    "",
+    detail.url,
+    "",
+    "## Description",
+    detail.body || "none",
+    "",
+    "## Head and base",
+    `- Head: ${pull.headRef}@${pull.headSha}`,
+    `- Base: ${pull.baseRef ?? "unknown"}@${pull.baseSha ?? "unknown"}`,
+    "",
+    "## Mergeability",
+    mergeabilityOf(detail.mergeableState),
+    "",
+    "## Review state",
+    reviewStateOf(reviews),
+    "",
+    "## Checks",
+    listOrNone(checks.flatMap(checkLines)),
+    "",
+    "## Changed files",
+    listOrNone(files.map(fileLine)),
+  ].join("\n");
+
+const proseOf = (facts: PullRequestFacts, feedback: ReadonlyArray<Feedback>) => ({
+  body: pullRequestBody(facts),
   comments: feedback.map((comment) => ({
     author: comment.authorLogin,
     authorAssociation: comment.authorAssociation,
@@ -144,6 +221,11 @@ const proseOf = (pull: RawPull, feedback: ReadonlyArray<Feedback>) => ({
     createdAtMillis: comment.atMillis,
   })),
 });
+
+const changedFilesOf = (client: GitHubClientService, target: GitHubTargetConfig, pull: RawPull) =>
+  pull.baseSha === undefined
+    ? Effect.succeed<ReadonlyArray<RawPullFile>>([])
+    : client.listPullFiles(target, pull.baseSha, pull.headSha);
 
 const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(function* (
   client: GitHubClientService,
@@ -153,19 +235,18 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   pull: RawPull,
   now: number,
 ) {
-  const [checks, mergeable, issueComments, reviewComments, reviews] = yield* Effect.all([
+  const [checks, detail, issueComments, reviewComments, reviews] = yield* Effect.all([
     client.listCheckRuns(target, pull.headSha),
-    client.pullMergeableState(target, pull.number),
+    client.getPull(target, pull.number),
     client.listTriggerComments(target, pull.number),
     client.listReviewComments(target, pull.number),
     client.listReviews(target, pull.number),
   ]);
   const feedback = feedbackOf(issueComments, reviewComments, reviews);
   const ref = itemRef(workspace, pull);
-  const prose = proseOf(pull, feedback);
   const subject = providerSubject(pull.title, pull.url);
   const failed = checks
-    .filter(({ conclusion }) => conclusion !== null && failingConclusions.has(conclusion))
+    .filter(isFailingCheck)
     .map(({ name, conclusion }) => `${name}:${conclusion}`)
     .toSorted();
   const conditionEvents: ReadonlyArray<TriggerEvent> = [
@@ -179,11 +260,11 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             entry: checksFailedKey,
             workspace: workspace.config.id,
             subject,
-            workContext: prose,
           },
         ]
       : []),
-    ...(selected.some(({ entry }) => entry === conflictsKey) && baseDivergenceOf(mergeable) === "conflict"
+    ...(selected.some(({ entry }) => entry === conflictsKey) &&
+    baseDivergenceOf(detail.mergeableState) === "conflict"
       ? [
           {
             key: ref,
@@ -193,7 +274,6 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             entry: conflictsKey,
             workspace: workspace.config.id,
             subject,
-            workContext: prose,
           },
         ]
       : []),
@@ -221,7 +301,6 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
               workspace: workspace.config.id,
               target: { workflow: subscription.workflow, trigger: subscription.trigger },
               subject,
-              workContext: prose,
             }) satisfies TriggerEvent,
         );
     }
@@ -242,11 +321,14 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "bot", value: bot ?? "" }],
             subject,
-            workContext: prose,
           }) satisfies TriggerEvent,
       );
   });
-  return [...conditionEvents, ...occurrenceEvents];
+  const events = [...conditionEvents, ...occurrenceEvents];
+  if (events.length === 0) return events;
+  const files = yield* changedFilesOf(client, target, pull);
+  const workContext = proseOf({ pull, detail, checks, reviews, files }, feedback);
+  return events.map((event) => ({ ...event, workContext }));
 });
 
 const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(function* (

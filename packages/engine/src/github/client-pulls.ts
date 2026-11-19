@@ -314,6 +314,7 @@ export const makePullClient = (transport: GitHubTransport) => {
       updatedAtMillis: millisFromIso(pull.updated_at ?? null),
       title: pull.title,
       body: pull.body ?? "",
+      mergeableState: pull.mergeable_state ?? null,
     } satisfies RawPullDetail;
   });
 
@@ -401,6 +402,9 @@ export const makePullClient = (transport: GitHubTransport) => {
             conclusion: run.conclusion,
             startedAtMillis: millisFromIso(run.started_at),
             completedAtMillis: millisFromIso(run.completed_at),
+            detailsUrl: run.details_url ?? null,
+            outputTitle: run.output?.title ?? null,
+            outputSummary: run.output?.summary ?? null,
           }),
         );
         if (current.length < 100) return current;

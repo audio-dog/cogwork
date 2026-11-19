@@ -79,6 +79,7 @@ export interface RawPull {
 export interface RawPullDetail extends RawPull {
   readonly title: string;
   readonly body: string;
+  readonly mergeableState: string | null;
 }
 
 export interface RawPullFile {

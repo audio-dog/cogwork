@@ -6,6 +6,9 @@ export interface CheckRun {
   readonly conclusion: string | null;
   readonly startedAtMillis: number;
   readonly completedAtMillis?: number;
+  readonly detailsUrl?: string | null;
+  readonly outputTitle?: string | null;
+  readonly outputSummary?: string | null;
 }
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);

@@ -133,13 +133,44 @@ const pulls: Array<RawPull> = [
   trustedPull,
 ];
 
+export const pullDetail = (number: number, mergeableState: string) => ({
+  ...trustedPull,
+  number,
+  baseSha: trustedPull.baseSha,
+  baseRef: trustedPull.baseRef,
+  title: `Pull request ${number}`,
+  body: "Pull request description",
+  mergeableState,
+});
+
 export const pullClientLayer = (listedPulls = pulls) =>
   Layer.mock(GitHubClient, {
     authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
     listPulls: () => Effect.succeed(listedPulls),
     listCheckRuns: () =>
-      Effect.succeed([{ name: "test", status: "completed", conclusion: "failure", startedAtMillis: 2_500 }]),
-    pullMergeableState: () => Effect.succeed("dirty"),
+      Effect.succeed([
+        {
+          name: "test",
+          status: "completed",
+          conclusion: "failure",
+          startedAtMillis: 2_500,
+          detailsUrl: "https://github.com/acme/example/actions/runs/1",
+          outputTitle: "1 test failed",
+          outputSummary: "expected 1 to equal 2",
+        },
+      ]),
+    getPull: (_target, number) => Effect.succeed(pullDetail(number, "dirty")),
+    listPullFiles: () =>
+      Effect.succeed([
+        {
+          path: "src/index.ts",
+          status: "modified",
+          additions: 3,
+          deletions: 1,
+          changes: 4,
+          patch: "+secret patch",
+        },
+      ]),
     listTriggerComments: () => Effect.succeed([]),
     listReviewComments: () => Effect.succeed([]),
     listReviews: () =>

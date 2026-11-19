@@ -11,6 +11,7 @@ import { GitHubClient } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
   pullClientLayer,
+  pullDetail,
   registryState,
   reviewTrigger,
   subscription,
@@ -44,6 +45,84 @@ describe("GitHub Trigger sources", () => {
     }).pipe(Effect.provide(pullClientLayer())),
   );
 
+  it.effect(
+    "freezes the failed check, mergeability, refs and changed files in pull request Work Context",
+    () =>
+      Effect.gen(function* () {
+        const client = yield* GitHubClient;
+        const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
+        const events = yield* source
+          .observe([
+            subscription("github.pull-request-checks-failed", "checks"),
+            subscription("github.pull-request-conflicts-with-base", "conflicts"),
+          ])
+          .pipe(Stream.take(2), Stream.runCollect);
+        const [checksBody, conflictBody] = [...events].map(({ workContext }) => workContext?.body ?? "");
+
+        assert.include(
+          checksBody,
+          "- test: completed, failure, https://github.com/acme/example/actions/runs/1\n  - Title: 1 test failed\n  - Summary:\n    expected 1 to equal 2",
+        );
+        assert.include(conflictBody, "## Mergeability\ndirty, conflicts with base");
+        assert.include(conflictBody, "- Head: 7-work@head-sha\n- Base: unknown@base-sha");
+        assert.include(conflictBody, "## Changed files\n- src/index.ts (modified, +3 -1)");
+        assert.notInclude(conflictBody, "secret patch");
+      }).pipe(Effect.provide(pullClientLayer())),
+  );
+
+  it.effect(
+    "reads changed files only for a pull that emits an event and reads each pull once per poll",
+    () => {
+      const quietPull = { ...trustedPull, number: 12, headSha: "quiet-sha" };
+      const getPull = vi.fn((_target: unknown, number: number) =>
+        Effect.succeed(pullDetail(number, "clean")),
+      );
+      const listPullFiles = vi.fn((_target: unknown, _baseSha: string, _headSha: string) =>
+        Effect.succeed([]),
+      );
+
+      return Effect.gen(function* () {
+        const client = yield* GitHubClient;
+        yield* makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState))
+          .observe([
+            subscription("github.pull-request-checks-failed", "checks"),
+            subscription("github.pull-request-conflicts-with-base", "conflicts"),
+          ])
+          .pipe(Stream.take(1), Stream.runCollect);
+
+        assert.deepStrictEqual(
+          getPull.mock.calls.map(([, number]) => number),
+          [12, 10],
+        );
+        assert.deepStrictEqual(
+          listPullFiles.mock.calls.map(([, baseSha, headSha]) => [baseSha, headSha]),
+          [["base-sha", "head-sha"]],
+        );
+      }).pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+            listPulls: () => Effect.succeed([quietPull, trustedPull]),
+            listCheckRuns: (_target, sha) =>
+              Effect.succeed([
+                {
+                  name: "test",
+                  status: "completed",
+                  conclusion: sha === "quiet-sha" ? "success" : "failure",
+                  startedAtMillis: 2_500,
+                },
+              ]),
+            getPull,
+            listPullFiles,
+            listTriggerComments: () => Effect.succeed([]),
+            listReviewComments: () => Effect.succeed([]),
+            listReviews: () => Effect.succeed([]),
+          }),
+        ),
+      );
+    },
+  );
+
   it.effect("skips a failed GitHub pull request read", () => {
     const failedPull = { ...trustedPull, number: 12, headSha: "failed-sha", closingIssueNumbers: [12] };
     const healthyPull = { ...trustedPull, number: 13, headSha: "healthy-sha", closingIssueNumbers: [13] };
@@ -75,7 +154,8 @@ describe("GitHub Trigger sources", () => {
                     startedAtMillis: 2_500,
                   },
                 ]),
-          pullMergeableState: () => Effect.succeed("clean"),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () => Effect.succeed([]),
           listTriggerComments: () => Effect.succeed([]),
           listReviewComments: () => Effect.succeed([]),
           listReviews: () => Effect.succeed([]),
@@ -133,7 +213,8 @@ describe("GitHub Trigger sources", () => {
               },
             ]),
           listCheckRuns,
-          pullMergeableState: () => Effect.succeed("clean"),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () => Effect.succeed([]),
           listTriggerComments: () => Effect.succeed([]),
           listReviewComments: () => Effect.succeed([]),
           listReviews: () => Effect.succeed([]),
