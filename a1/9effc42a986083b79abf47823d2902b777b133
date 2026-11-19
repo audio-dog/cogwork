@@ -1,0 +1,43 @@
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_dd4d5d9bb236cf::t_7394fa0e716bb4 193
+packages/engine/src/run-preparation.ts
+  s_dd4d5d9bb236cf::t_eb6096d67457f2 79,111
+packages/engine/src/workflow-run-approval.test.ts
+  s_dd4d5d9bb236cf::t_9fa7c59679c6d0 260,286,337,353
+packages/engine/src/workflow-run-checkout.test.ts
+  s_dd4d5d9bb236cf::t_2b4a0c61ebb107 18
+packages/engine/src/workflow-run-coding-template.test.ts
+  s_dd4d5d9bb236cf::t_0859f1310bb6a2 136,154,164,200,224
+packages/engine/src/workflow-run-documents-fixtures.ts
+  s_dd4d5d9bb236cf::t_40a2d6b8037684 222
+packages/engine/src/workflow-run-engine-tools.ts
+  s_dd4d5d9bb236cf::t_794e267b62f1f7 29
+packages/engine/src/workflow-run-fan-out.test.ts
+  s_dd4d5d9bb236cf::t_594fe989263d58 185,241
+packages/engine/src/workflow-run-retry.test.ts
+  s_dd4d5d9bb236cf::t_136f4606236342 76,78,83,88,163
+packages/engine/src/workflow-run-settled-run.test.ts
+  s_dd4d5d9bb236cf::t_c685ce4b757c1c 120,240
+packages/engine/src/workflow-run-settlement.test.ts
+  s_dd4d5d9bb236cf::t_c5af273582794c 12
+packages/engine/src/workflow-run-touchpoints.ts
+  s_dd4d5d9bb236cf::t_922ee8860773c2 54
+packages/engine/src/workflow-run.ts
+  s_dd4d5d9bb236cf::t_795d4673225b66 175,184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a19effc42a986083b79abf47823d2902b777b133",
+  "prompts": {},
+  "sessions": {
+    "s_dd4d5d9bb236cf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "827eb511-0016-4735-9f5c-366cb45b82db",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
