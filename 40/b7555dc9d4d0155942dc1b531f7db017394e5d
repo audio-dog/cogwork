@@ -1,0 +1,19 @@
+.gitignore
+  s_013828e5a77b04::t_055ed3e3d786ad 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "40b7555dc9d4d0155942dc1b531f7db017394e5d",
+  "prompts": {},
+  "sessions": {
+    "s_013828e5a77b04": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4d3760a1-3d27-49bb-be58-41386582e813",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
