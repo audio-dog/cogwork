@@ -3,8 +3,8 @@
 `cogwork`, the command-line tool. It is a **client** that talks to a running daemon over RPC,
 and a **headless daemon host** for CI/SSH. On a laptop the desktop app is the primary daemon host;
 the CLI does not own that role. It speaks the shared kernel
-([contracts](../../packages/contracts/CONTEXT.md)) and drives the
-[engine](../../packages/engine/CONTEXT.md).
+([contracts](../../packages/contracts/GLOSSARY.md)) and drives the
+[engine](../../packages/engine/GLOSSARY.md).
 
 Role in the flow: start a headless daemon when no desktop host is present, then observe and control a
 running daemon — status, runs, live watch, limits, scheduling — or reach into the engine directly for

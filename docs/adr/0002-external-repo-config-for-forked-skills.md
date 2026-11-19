@@ -8,7 +8,7 @@
 The [mattpocock/skills](https://github.com/mattpocock/skills) engineering workflow
 (`triage`, `to-tickets`, `to-spec`, `wayfinder`, `code-review`, `domain-modeling`) assumes
 per-repo config **committed to the target repo**: `docs/agents/{issue-tracker,triage-labels,domain}.md`,
-an `## Agent skills` block in `AGENTS.md`/`CLAUDE.md`, and lazily created `CONTEXT.md`/ADR files.
+an `## Agent skills` block in `AGENTS.md`/`CLAUDE.md`, and lazily created `GLOSSARY.md`/ADR files.
 
 That was rejected in work repos with their own doc conventions
 (colony PR [#26924](https://github.com/colonylabs/colony/pull/26924) — conflicted with the
@@ -32,7 +32,7 @@ resolution worktree- and clone-proof.
 
 `setup-matt-pocock-skills` is forked as `setup-repo-config`: same interview, but it writes
 only to the external home and never touches the target repo (no `AGENTS.md` block, no
-`docs/agents/`). A repo's `domain.md` can relocate skill-written `CONTEXT.md`/ADRs to
+`docs/agents/`). A repo's `domain.md` can relocate skill-written `GLOSSARY.md`/ADRs to
 `repo-config/<slug>/domain/`, keeping domain modeling usable in repos that forbid
 skill-generated files.
 

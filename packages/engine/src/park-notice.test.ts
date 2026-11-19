@@ -117,3 +117,21 @@ parksWithRawFailure.map((reason) =>
     }).pipe(Effect.provide(environment(Effect.void))),
   ),
 );
+
+it.effect(
+  "names the branch and the operation but keeps the worktree path off the issue for a WorktreeBlocked park",
+  () =>
+    Effect.gen(function* () {
+      const { posted } = yield* park({
+        _tag: "WorktreeBlocked",
+        reason: "operation-in-progress",
+        branch: "947",
+        path: "/Users/someone/worktrees/947",
+        operation: "merge",
+        unmergedPaths: ["src/a.ts"],
+      });
+
+      assert.include(posted.body, "Branch 947 has a merge in progress in its worktree. Finish or abort it.");
+      assert.notInclude(posted.body, "/Users/someone");
+    }).pipe(Effect.provide(environment(Effect.void))),
+);

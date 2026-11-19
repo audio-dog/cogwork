@@ -13,12 +13,9 @@ allowBuilds:
   protobufjs: false
 
 catalog:
-  '@effect/tsgo': '0.38.0'
-  # drizzle-orm@1.0.0-rc.4 calls the beta-only `Schema.TaggedErrorClass` from its Effect driver, so
-  # `drizzle-orm/effect-sqlite-node` cannot be imported on the rc line at all. The rc5-tag build
-  # below calls `Schema.TaggedError` and loads. Move to the release that carries that fix.
-  drizzle-orm: '1.0.0-rc.5-169397b'
-  drizzle-kit: '1.0.0-rc.4'
+  '@effect/tsgo': '0.69.0'
+  drizzle-orm: '1.0.0-rc.5'
+  drizzle-kit: '1.0.0-rc.5'
   '@tanstack/ai': '1.0.0'
   '@tanstack/ai-acp': '1.0.0'
   '@tanstack/ai-anthropic': '1.0.0'
@@ -28,34 +25,38 @@ catalog:
   '@tanstack/ai-openai': '1.0.0'
   '@tanstack/ai-sandbox': '1.0.0'
   '@tanstack/ai-sandbox-local-process': '1.0.0'
+  '@tanstack/ai-skills': '1.0.0'
   '@tanstack/ai-persistence': '1.0.0'
-  '@tanstack/highlight': '^1.2.0'
-  '@tailwindcss/vite': '^4.3.3'
+  '@tanstack/highlight': ^1.2.12
+  '@tailwindcss/vite': ^4.3.5
   '@types/node': '^26.6.6'
-  '@types/react': '^19.2.7'
-  '@types/react-dom': '^19.2.5'
-  react: '^19.2.6'
-  react-dom: '^19.2.6'
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+  react: ^19.3.1
+  react-dom: ^19.3.1
   tsx: '^4.23.13'
   turbo: '^2.10.12'
   typescript: ^7.0.2
-  vitest: '^4.1.10'
+  # @effect/vitest@4.1 needs vitest 5. @tanstack/ai-persistence, ai-sandbox, and ai-skills 1.0.0
+  # still name an optional vitest ^4 peer for their unused testkits; pnpm reports it as unmet.
+  vitest: '^5.1.0'
 
 catalogs:
   effect:
-    effect: '4.0.0-rc.112'
-    '@effect/atom-react': '4.0.0-rc.112'
-    '@effect/opentelemetry': '4.0.0-rc.112'
-    '@effect/platform-node': '4.0.0-rc.112'
-    '@effect/sql-sqlite-node': '4.0.0-rc.112'
-    '@effect/vitest': '4.0.0-rc.112'
-
+    effect: '4.1.4'
+    '@effect/atom-react': '4.1.4'
+    '@effect/opentelemetry': '4.1.4'
+    '@effect/platform-node': '4.1.4'
+    '@effect/sql-sqlite-node': '4.1.4'
+    '@effect/vitest': '4.1.4'
 permissions:
   '@tanstack/ai':
     skills: true
   '@tanstack/ai-persistence':
     skills: true
   '@tanstack/ai-sandbox':
+    skills: true
+  '@tanstack/ai-skills':
     skills: true
   '@tanstack/devtools-vite':
     skills: true

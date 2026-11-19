@@ -1,5 +1,5 @@
 import * as Cause from "effect/Cause";
-import * as AsyncResult from "effect/unstable/reactivity/AsyncResult";
+import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
 import { harnessCheckState, providerMutationFailure } from "./providers";
 

@@ -26,9 +26,9 @@ import { cancelRunAtom } from "../daemon/atoms";
 import { useOperationName } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
 import { duration } from "../features/format";
-import { useRunTranscript } from "../features/run-activity";
+import { transcriptReplaying, useRunTranscript } from "../features/run-activity";
 import {
-  runLine,
+  headingLine,
   type StepView,
   stepBody,
   type TranscriptRow,
@@ -82,7 +82,7 @@ function RunTranscriptProvider({ run, children }: { run: RunSummary; children: R
         state: {
           run,
           rows,
-          line: runLine(rows, run.status),
+          line: headingLine(rows, run.status, transcriptReplaying(result)),
           running,
           streamError: result._tag === "Failure" ? daemonFailureMessage(result.cause) : null,
         },

@@ -108,7 +108,7 @@ A Node `Readable` does not need even that: `NodeStream.fromReadable({ evaluate: 
 
 The caller side follows: `ipc.ts` opens a child `Scope.fork` per renderer session, runs the socket in it, and closes the scope on `destroyed`. Do not reintroduce the hand-written version (a `Map` keyed by renderer id with manual teardown).
 
-This does not move any protocol logic. The CONTEXT.md rule that `main` is a dumb pipe — never decoding RPC, all client logic in the renderer — constrains what main understands, not how it owns its socket. A scope-owned `Socket` relaying opaque frames is still a dumb pipe.
+This does not move any protocol logic. The GLOSSARY.md rule that `main` is a dumb pipe — never decoding RPC, all client logic in the renderer — constrains what main understands, not how it owns its socket. A scope-owned `Socket` relaying opaque frames is still a dumb pipe.
 
 ## A subprocess is acquired, and its release is a kill ladder
 
@@ -126,7 +126,7 @@ const child = yield* Effect.acquireRelease(spawnEngine(command), (proc) => {
 
 The exit event becomes awaitable by completing a `Deferred` from `child.once("exit", ...)` at spawn time. Release never fails and never hangs; closing the owning scope (the `ManagedRuntime`'s, on `will-quit`) is the whole shutdown story.
 
-Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/unstable/process` — v4's rename of `Command`; `effect/unstable/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs its subprocesses through `ChildProcessSpawner`; the injected `spawn` in `apps/desktop/src/main/index.ts` is the only shipping raw `spawn` in the repo — the remaining migration.
+Prefer not building this by hand at all: `ChildProcess.make` + `ChildProcessSpawner` (`effect/process` — v4's rename of `Command`; `effect/cli/Command` is argument parsing, a different thing) carries the ladder as `forceKillAfter`, and streams stdout/stderr. The CLI already runs its subprocesses through `ChildProcessSpawner`; the injected `spawn` in `apps/desktop/src/main/index.ts` is the only shipping raw `spawn` in the repo — the remaining migration.
 
 ## Status is a SubscriptionRef, restarts are a Schedule
 
@@ -156,14 +156,14 @@ The same edge discipline applies inside harness adapters: cursor-acp reads its `
 - `.repos/effect/packages/effect/src/Effect.ts`: `callback` — `resume` takes an Effect, and the register may return a cleanup effect that runs on interruption.
 - `.repos/effect/packages/effect/src/Stream.ts`: `callback` hands the adapter a `Queue` and scopes its registration effect; `fromReadableStream`, `fromAsyncIterable`.
 - `.repos/effect/packages/platform/node-shared/src/NodeStream.ts` and `NodeSocket.ts` (import from `@effect/platform-node`): `fromReadable`; `makeNet` with `openTimeout` and a scope-finalized teardown.
-- `.repos/effect/packages/effect/src/unstable/process/ChildProcess.ts` and `ChildProcessSpawner.ts`: the v4 subprocess API.
+- `.repos/effect/packages/effect/src/process/ChildProcess.ts` and `ChildProcessSpawner.ts`: the v4 subprocess API.
 - `.repos/effect/ai-docs/src/01_effect/06_running/10_run-main.ts` and `20_layer-launch.ts`: the two entrypoint shapes.
 - `.repos/effect/ai-docs/src/04_integration/10_managed-runtime.ts`: shared `MemoMap`, one runtime for a non-Effect host, dispose on shutdown signal.
 - `apps/cli/src/main.ts`: the in-repo `runMain` entrypoint.
 - `apps/desktop/src/renderer/src/daemon/protocol.ts`: the renderer exemplar — scope-owned subscriptions, `Deferred` connection gate, exponential jittered reconnect.
 - `apps/desktop/src/main/engine-supervisor.ts`, `daemon-bridge.ts`, `socket-probe.ts`, `wait-for-socket.ts`, `ipc.ts`, `quit.ts`: the main-process exemplars — kill ladder, scope-owned sockets, per-renderer scopes, `SubscriptionRef` status, idempotent shutdown.
 - `apps/desktop/src/main/index.ts`: the one remaining raw `spawn` (injected as the supervisor's `SpawnEngine`).
-- `apps/desktop/CONTEXT.md` ("Engine supervisor", "RPC relay"): the behavioral spec, including the dumb-pipe rule this pattern preserves.
+- `apps/desktop/GLOSSARY.md` ("Engine supervisor", "RPC relay"): the behavioral spec, including the dumb-pipe rule this pattern preserves.
 - `packages/engine/src/daemon.ts`: the shared-credential-store comment — the memoization invariant a second runtime must not break.
 - `.repos/opencode/packages/core/src/cross-spawn-spawner.ts`: the production SIGTERM→SIGKILL release ladder and `NodeStream.fromReadable` stdout.
 - `.repos/opencode/packages/core/src/effect/runtime.ts` and `memo-map.ts`: one module-level `MemoMap` shared by every runtime.

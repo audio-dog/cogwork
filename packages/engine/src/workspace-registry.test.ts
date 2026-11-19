@@ -1,4 +1,5 @@
 import { WorkspaceRegistration, WorkspaceUpdate } from "@cogwork/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -11,7 +12,7 @@ import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import { controlStoreClientLayer } from "./control-store";
 import { Git, GitError, type GitService } from "./git";
 import * as Registry from "./registry";
@@ -112,7 +113,7 @@ const makeProbedCheckout = Effect.fn("test.makeProbedCheckout")(function* (root:
   return checkoutPath;
 });
 
-layer(NodeServices.layer)((it) => {
+layer(Layer.merge(NodeServices.layer, NodeCrypto.layerSecureRandom))((it) => {
   it.effect("refuses registration when the Control store is unavailable", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;

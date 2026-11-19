@@ -21,11 +21,11 @@ import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as ChildProcess from "effect/process/ChildProcess";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/sql/SqlClient";
 import { TestClock } from "effect/testing";
-import * as ChildProcess from "effect/unstable/process/ChildProcess";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { afterEach, vi } from "vitest";
 import {
   bootControlStoreLayer,
@@ -1083,6 +1083,26 @@ layer(NodeServices.layer)((it) => {
       }),
     );
   });
+
+  it.effect("recreates a non-empty table that gains a required column", () =>
+    Effect.gen(function* () {
+      const { storePath } = yield* temporaryStore();
+      yield* pokeConvergedStore(
+        storePath,
+        `ALTER TABLE plugin_installs DROP COLUMN principal;
+         INSERT INTO plugin_installs (plugin_id, resolved_identity, installed_at_millis)
+         VALUES ('plugin-1', 'identity', 1);`,
+      );
+
+      assert.deepStrictEqual(yield* storeAt(storePath), { health: "available" });
+      assert.isTrue(
+        (yield* query(storePath, "PRAGMA table_info(plugin_installs)")).some(
+          (column) => column.name === "principal",
+        ),
+      );
+      assert.deepStrictEqual(yield* query(storePath, "SELECT plugin_id FROM plugin_installs"), []);
+    }),
+  );
 
   it.effect("drops the one-artifact-per-item index in place and keeps the stored artifacts", () =>
     Effect.gen(function* () {

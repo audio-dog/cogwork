@@ -1,6 +1,7 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as JsonSchema from "effect/JsonSchema";
 import * as Schema from "effect/Schema";
 import {
   HarnessName,
@@ -168,7 +169,7 @@ export const WorkflowReviewComment = Schema.Struct({
   path: TrimmedNonEmptyString,
   line: Schema.Int.check(Schema.isGreaterThan(0)),
   body: TrimmedNonEmptyString,
-}).annotate({ parseOptions: { onExcessProperty: "error" } });
+});
 export type WorkflowReviewComment = typeof WorkflowReviewComment.Type;
 
 export const WorkflowAgentInputValue = Schema.Union([Schema.String, Schema.Array(WorkflowReviewComment)]);
@@ -342,7 +343,7 @@ export const WorkflowDocument = Schema.Struct({
   workspaces: WorkflowWorkspaceSelection,
   triggers: Schema.Array(WorkflowTrigger),
   operations: Schema.Array(WorkflowOperation),
-}).annotate({ parseOptions: { onExcessProperty: "error" } });
+});
 export type WorkflowDocument = typeof WorkflowDocument.Type;
 
 export const WorkflowEdit = Schema.TaggedUnion({
@@ -420,9 +421,7 @@ export const WorkflowEdit = Schema.TaggedUnion({
 });
 export type WorkflowEdit = typeof WorkflowEdit.Type;
 
-export const WorkflowEditBatch = Schema.NonEmptyArray(WorkflowEdit).annotate({
-  parseOptions: { onExcessProperty: "error" },
-});
+export const WorkflowEditBatch = Schema.NonEmptyArray(WorkflowEdit);
 export type WorkflowEditBatch = typeof WorkflowEditBatch.Type;
 
 export const WorkflowDiagnosticCode = Schema.Literals([
@@ -576,7 +575,6 @@ export const workflowOperationResultSchema = (
     answers: structOrEmpty(answerFields(operation)),
     inputs: structOrEmpty(inputFields(operation, catalog)),
   };
-  const parseOptions = { onExcessProperty: "error" } as const;
   const entries = operationActionEntries(operation, catalog);
   const agentChoosesWorkspace = (workspace: WorkspaceId | undefined) =>
     entries.some(
@@ -584,10 +582,8 @@ export const workflowOperationResultSchema = (
         workspaceSource !== null && agentChoosesWorkspaceFrom[workspaceSource](workspace),
     );
   const element = agentChoosesWorkspace(undefined)
-    ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) }).annotate({
-        parseOptions,
-      })
-    : Schema.Struct(elementFields).annotate({ parseOptions });
+    ? Schema.Struct({ ...elementFields, workspace: Schema.Literals(["none", ...workspaces]) })
+    : Schema.Struct(elementFields);
   const once = agentChoosesWorkspace(itemWorkspace)
     ? Schema.Struct({
         summary: TrimmedNonEmptyString,
@@ -595,20 +591,20 @@ export const workflowOperationResultSchema = (
         answers: elementFields.answers,
         inputs: elementFields.inputs,
         workspace: Schema.Literals(["none", ...workspaces]),
-      }).annotate({ parseOptions })
+      })
     : Schema.Struct({
         summary: TrimmedNonEmptyString,
         stuck: Schema.Boolean,
         answers: elementFields.answers,
         inputs: elementFields.inputs,
-      }).annotate({ parseOptions });
+      });
   return operation.forEach === null
     ? once
     : Schema.Struct({
         summary: TrimmedNonEmptyString,
         stuck: Schema.Boolean,
         elements: Schema.Array(element).check(Schema.isMaxLength(50)),
-      }).annotate({ parseOptions });
+      });
 };
 
 export const workflowOperationResultJsonSchema = (
@@ -616,10 +612,17 @@ export const workflowOperationResultJsonSchema = (
   catalog: WorkflowCatalog,
   workspaces: ReadonlyArray<WorkspaceId> = [],
   itemWorkspace?: WorkspaceId,
-) =>
-  Schema.toStandardJSONSchemaV1(
-    Schema.toStandardSchemaV1(workflowOperationResultSchema(operation, catalog, workspaces, itemWorkspace)),
+) => {
+  const document = Schema.toJsonSchemaDocument(
+    workflowOperationResultSchema(operation, catalog, workspaces, itemWorkspace),
+    { onExcessProperty: "error" },
   );
+  const schema: JsonSchema.JsonSchema = {
+    $schema: JsonSchema.META_SCHEMA_URI_DRAFT_2020_12,
+    ...document.schema,
+  };
+  return Object.keys(document.definitions).length === 0 ? schema : { ...schema, $defs: document.definitions };
+};
 
 export const matchWorkflowTransitions = (
   operation: WorkflowOperation,
@@ -928,7 +931,7 @@ const applyWorkflowEdit = (document: WorkflowDocument, edit: WorkflowEdit): Deco
     RemoveTrigger: ({ trigger }) => {
       const triggers = document.triggers.filter(({ id }) => id !== trigger);
       return triggers.length === document.triggers.length
-        ? refused([unknownTarget(trigger, "trigger")])
+        ? refused<WorkflowDocument>([unknownTarget(trigger, "trigger")])
         : ok({ ...document, triggers });
     },
     SetTriggerEntry: ({ trigger, entry }) =>
@@ -959,7 +962,7 @@ const applyWorkflowEdit = (document: WorkflowDocument, edit: WorkflowEdit): Deco
           })),
         }));
       return operations.length === document.operations.length
-        ? refused([unknownTarget(operation, "operation")])
+        ? refused<WorkflowDocument>([unknownTarget(operation, "operation")])
         : ok({ ...document, operations });
     },
     RenameOperation: ({ operation, name }) =>
@@ -1413,48 +1416,67 @@ const operationCapabilityDiagnostics = (document: WorkflowDocument, catalog: Wor
     return [...profile, ...workspace];
   });
 
-const reachableKinds = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
+interface ReachedItem {
+  readonly operation: WorkflowNodeId;
+  readonly system: string | null;
+  readonly kind: string;
+}
+
+const sameReach = (left: ReachedItem, right: ReachedItem) =>
+  left.operation === right.operation && left.system === right.system && left.kind === right.kind;
+
+const reachableItems = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
   const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
-  const seeds = document.triggers.flatMap((trigger) => {
-    const kind = entries.get(trigger.entry)?.itemKind;
-    return kind === null || kind === undefined ? [] : [[trigger.start, kind] as const];
+  const seeds = document.triggers.flatMap((trigger): ReadonlyArray<ReachedItem> => {
+    const entry = entries.get(trigger.entry);
+    return entry?.itemKind ? [{ operation: trigger.start, system: entry.system, kind: entry.itemKind }] : [];
   });
-  const next = (known: ReadonlyArray<readonly [WorkflowNodeId, string]>) => {
-    const additions = known.flatMap(([operationId, kind]) =>
+  const next = (known: ReadonlyArray<ReachedItem>) => {
+    const additions = known.flatMap((item) =>
       document.operations
-        .filter(({ id }) => id === operationId)
+        .filter(({ id }) => id === item.operation)
         .flatMap((operation) =>
           operation.transitions.flatMap(({ handOff }) =>
-            handOff === null ? [] : [[handOff, kind] as const],
+            handOff === null ? [] : [{ ...item, operation: handOff }],
           ),
         ),
     );
     return [...known, ...additions].filter(
-      (entry, index, values) =>
-        values.findIndex(([operationId, kind]) => operationId === entry[0] && kind === entry[1]) === index,
+      (item, index, values) => values.findIndex((other) => sameReach(item, other)) === index,
     );
   };
   return Array.from({ length: document.operations.length }, () => null).reduce(next, seeds);
 };
 
+const matchesAppLimit = (actsOnValue: string, { system, kind }: ReachedItem) => {
+  const [app, limitedKind] = actsOnValue.split(".");
+  const appUnknown = system === null;
+  return limitedKind === kind && (appUnknown || system === app);
+};
+
+const acceptsItem = (actsOn: ReadonlyArray<string>, item: ReachedItem) =>
+  actsOn.some((value) => value === "*" || value === item.kind || matchesAppLimit(value, item));
+
+const itemName = ({ system, kind }: ReachedItem) => (system === null ? kind : `${system}.${kind}`);
+
 const itemKindDiagnostics = (document: WorkflowDocument, catalog: WorkflowCatalog) => {
-  const kinds = reachableKinds(document, catalog);
+  const reached = reachableItems(document, catalog);
   return document.operations.flatMap((operation) => {
-    const operationKinds = kinds.filter(([id]) => id === operation.id).map(([, kind]) => kind);
-    const entries = actionEntries(operation, catalog);
-    const mismatch = entries.some(
-      ({ actsOn }) => !actsOn.includes("*") && operationKinds.some((kind) => !actsOn.includes(kind)),
-    );
-    return mismatch
-      ? [
-          diagnostic(
-            "item-kind-mismatch",
-            "incomplete",
-            `Operation ${operation.id} has an action that cannot act on its item kind`,
-            location("actions", { operation: operation.id }),
-          ),
-        ]
-      : [];
+    const operationItems = reached.filter((item) => item.operation === operation.id);
+    const actions = new Map(actionEntries(operation, catalog).map((entry) => [entry.key, entry]));
+    return Array.from(actions.values()).flatMap(({ key, actsOn }) => {
+      const refused = operationItems.find((item) => !acceptsItem(actsOn, item));
+      return refused
+        ? [
+            diagnostic(
+              "item-kind-mismatch",
+              "incomplete",
+              `Action ${key} in Operation ${operation.id} acts only on ${actsOn.join(", ")}, but ${itemName(refused)} reaches it`,
+              location("actions", { operation: operation.id }),
+            ),
+          ]
+        : [];
+    });
   });
 };
 

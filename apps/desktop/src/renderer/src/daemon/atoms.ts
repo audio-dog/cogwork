@@ -3,19 +3,16 @@ import {
   DaemonRpcs,
   type OperationSettingBatch,
   type RunId,
-  type WorkflowCatalogKey,
-  type WorkflowEditBatch,
-  type WorkflowId,
   type WorkItemId,
   type WorkspaceId,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+import * as Atom from "effect/reactivity/Atom";
+import * as AtomRpc from "effect/reactivity/AtomRpc";
+import * as RpcClient from "effect/rpc/RpcClient";
 import * as Stream from "effect/Stream";
-import * as Atom from "effect/unstable/reactivity/Atom";
-import * as AtomRpc from "effect/unstable/reactivity/AtomRpc";
-import * as RpcClient from "effect/unstable/rpc/RpcClient";
 import { electronDaemonBridge } from "./electron-bridge";
 import { reportDesktopProcessHealth } from "./process-health";
 import { layerProtocolIpc } from "./protocol";
@@ -159,24 +156,6 @@ export const workflowTemplatesAtom = Atom.keepAlive(DaemonAtomRpc.query("GetWork
 
 export const createWorkflowAtom = DaemonAtomRpc.mutation("CreateWorkflow");
 
-export const publishWorkflowAtom = DaemonAtomRpc.mutation("PublishWorkflow");
-
 export const switchWorkflowAtom = DaemonAtomRpc.mutation("SwitchWorkflow");
 
 export const deleteWorkflowAtom = DaemonAtomRpc.mutation("DeleteWorkflow");
-
-export const listWorkflowOptionsAtom = DaemonAtomRpc.runtime.fn<{
-  readonly payload: {
-    readonly entry: WorkflowCatalogKey;
-    readonly parameter: string;
-    readonly workspaces: ReadonlyArray<WorkspaceId>;
-  };
-}>()(({ payload }) => Effect.flatMap(DaemonAtomRpc, (client) => client("ListWorkflowOptions", payload)), {
-  concurrent: true,
-});
-
-export const applyWorkflowEditAtom = DaemonAtomRpc.runtime.fn<{
-  readonly payload: { readonly id: WorkflowId; readonly edits: WorkflowEditBatch };
-}>()(({ payload }) => Effect.flatMap(DaemonAtomRpc, (client) => client("EditWorkflow", payload)), {
-  concurrent: true,
-});

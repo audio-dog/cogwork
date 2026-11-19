@@ -39,7 +39,9 @@ export const acceptOperationResult = <S extends Schema.ConstraintDecoder<unknown
   readonly capabilities: HarnessCapabilityProfile | null;
 }) =>
   Result.mapError(
-    Schema.decodeUnknownResult(input.schema, { errors: "all" })(input.event?.value.object),
+    Schema.decodeUnknownResult(input.schema, { errors: "all", onExcessProperty: "error" })(
+      input.event?.value.object,
+    ),
     (error): RefusedResult => RefusedResult.SchemaMismatch({ issues: formatIssues(error.issue).issues }),
   );
 
@@ -53,7 +55,7 @@ const plainFailures = [
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const failureDetail = (cause: Cause.Cause<unknown>) =>
+export const failureDetail = (cause: Cause.Cause<unknown>) =>
   plainFailures.find(({ matches }) => matches(cause))?.detail ?? errorMessage(Cause.squash(cause));
 
 export const harnessStreamFailed = (cause: Cause.Cause<unknown>) =>

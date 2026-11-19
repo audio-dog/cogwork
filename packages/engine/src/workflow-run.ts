@@ -1,36 +1,21 @@
-import { randomUUID } from "node:crypto";
 import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
-  BranchName,
-  defaultPriority,
-  type HarnessName,
   keyOf,
-  LineageId,
-  matchWorkflowTransitions,
-  Principal,
   RunId,
-  RunPlan,
   type RunRecord,
-  sessionResumable,
-  WorkflowActionPlan,
-  WorkflowActionPlanStep,
-  type WorkflowAgentInputValue,
-  type WorkflowOperationElement,
+  type WorkflowActionPlan,
   WorkflowTouchpointFailure,
   WorkItemId,
-  WorkItemRef,
   WorkspaceId,
-  workflowOperationResultJsonSchema,
   workflowOperationResultSchema,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import * as Data from "effect/Data";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -38,502 +23,87 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { ContextAssembler } from "./context-assembler";
 import { Coordination, maxLineageHops } from "./coordination";
-import { Harness, type HarnessRunnerEnv } from "./harness";
-import { makeIssueSearchTool } from "./issue-search-tool";
-import { IssueTracker, IssueTrackerError } from "./issue-tracker";
-import {
-  acceptOperationResult,
-  harnessStreamFailed,
-  RefusedResult,
-  refusalForAgent,
-  refusalForPerson,
-  refusalResumesSession,
-} from "./operation-result";
-import type { RegisteredWorkspace } from "./projector";
+import { Harness } from "./harness";
+import { acceptOperationResult, harnessStreamFailed } from "./operation-result";
 import { defaultRunBudget } from "./provider-runner";
-import { makePullRequestTool } from "./pull-request-tool";
 import { WorkspaceRegistry } from "./registry";
 import { RunLedger } from "./run-ledger";
-import { subagentMembers } from "./run-plan";
+import {
+  type RunPlanRejection,
+  RunPlanResolution,
+  readyHarness,
+  resolveRunPlan,
+} from "./run-plan-resolution";
+import { CheckoutRefused, make as makeRunPreparation, selectedWorkspaceIds } from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
-import { SessionStore } from "./session-store";
-import { SlackWrite } from "./slack-write";
-import { type PullRequestContext, SourceControlProvider } from "./source-control";
 import { type TriggerAdmission, TriggerObservation, TriggerObservationStore } from "./trigger-observation";
 import { Recheck } from "./trigger-source";
 import { Workflows } from "./workflow";
-import { itemWorkspaceOf, type WorkflowActionPlanDecodeError } from "./workflow-action-entry";
-import {
-  buildWorkflowActionPlan,
-  executeWorkflowActionPlan,
-  type WorkflowActionPlanExecution,
-} from "./workflow-action-plan";
+import { itemWorkspaceOf } from "./workflow-action-entry";
+import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
-import { WorkflowArtifactStore } from "./workflow-artifact-store";
-import { WorkflowNotifications } from "./workflow-notification";
-import { ticketSlug, WorktreeManager } from "./worktree";
+import { handOffAdmission, operationKeyOf, parkedAdmission } from "./workflow-run-admission";
+import { ClaimState, makeWorkflowRunAttempts, resendOf } from "./workflow-run-attempts";
+import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
+import { makeWorkflowRunExecutionContext } from "./workflow-run-execution-context";
+import { touchpointFailure } from "./workflow-run-pending-plan";
+import { makeWorkflowRunTouchpoints } from "./workflow-run-touchpoints";
 
 const runId = Schema.decodeSync(RunId);
 const workspaceId = Schema.decodeSync(WorkspaceId);
 const workItemId = Schema.decodeSync(WorkItemId);
-const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
-const encodeDecision = Schema.encodeSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)));
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
-const encodeArtifactContext = Schema.encodeSync(
-  Schema.fromJsonString(
-    Schema.Array(
-      Schema.Struct({
-        workspace: WorkspaceId,
-        issue: WorkItemId,
-        url: Schema.String,
-      }),
-    ),
-  ),
-);
-const issueSearchActionNames = new Set(["create-issue", "comment-issue", "comment-this-item"]);
-const namedPullRequestActionNames = new Set(["comment-on-named-pull-request", "post-review", "draft-review"]);
-
-const needsActionTool = (
-  operation: Parameters<typeof workflowOperationResultSchema>[0],
-  catalog: Parameters<typeof workflowOperationResultSchema>[1],
-  names: ReadonlySet<string>,
-) => {
-  const entries = new Map(catalog.entries.map((entry) => [entry.key, entry]));
-  return operation.transitions
-    .flatMap(({ actions }) => actions)
-    .some(({ entry }) => {
-      const catalogEntry = entries.get(entry);
-      return catalogEntry?.kind === "action" && names.has(entry.slice(entry.indexOf(".") + 1));
-    });
-};
-
-const needsIssueSearch = (
-  operation: Parameters<typeof workflowOperationResultSchema>[0],
-  catalog: Parameters<typeof workflowOperationResultSchema>[1],
-) => needsActionTool(operation, catalog, issueSearchActionNames);
-
-const needsPullRequestTool = (
-  operation: Parameters<typeof workflowOperationResultSchema>[0],
-  catalog: Parameters<typeof workflowOperationResultSchema>[1],
-) => needsActionTool(operation, catalog, namedPullRequestActionNames);
-
-const agentInputIsMissing = (value: WorkflowAgentInputValue | undefined) =>
-  value === undefined || (typeof value === "string" && value.trim().length === 0);
-
-const fallbackBranch = WorkItemRef.match({
-  Issue: ({ id }) => ticketSlug(id),
-  PullRequest: () => "pull-request",
-  GranolaNote: () => "workflow",
-  SlackMessage: () => "workflow",
-  SlackConversation: () => "workflow",
-  ScheduleInstant: () => "workflow",
-  FanOutChild: () => "workflow",
-});
-
-const runItemId = WorkItemRef.match({
-  Issue: ({ id }) => id,
-  PullRequest: ({ number }) => workItemId(`#${number}`),
-  GranolaNote: () => workItemId("#workflow"),
-  SlackMessage: () => workItemId("#workflow"),
-  SlackConversation: () => workItemId("#workflow"),
-  ScheduleInstant: () => workItemId("#workflow"),
-  FanOutChild: () => workItemId("#workflow"),
-});
 
 export type WorkflowRunOutcome = "completed" | "retry" | "skipped" | "waiting";
-
-const workContextBody = (admission: TriggerAdmission, workflow: string) => {
-  const payload = admission.event.payload;
-  if (payload?._tag !== "GranolaNote") {
-    return `Scheduled instant ${admission.event.revision} for Workflow ${workflow}.`;
-  }
-  return [
-    `# ${payload.title}`,
-    "",
-    "## Attendees",
-    payload.attendees.join("\n"),
-    "",
-    "## Calendar event",
-    payload.calendarEvent,
-    "",
-    "## Summary",
-    payload.summary,
-    "",
-    "## Transcript",
-    payload.transcript,
-  ].join("\n");
-};
-
-const operationKeyOf = (admission: TriggerAdmission, operation: string) => ({
-  workflow: admission.subscription.workflow,
-  operation,
-});
-
-const handOffAdmission = (
-  admission: TriggerAdmission,
-  operation: TriggerAdmission["subscription"]["operation"],
-  attempt: RunId,
-) => ({
-  ...admission,
-  subscription: { ...admission.subscription, operation },
-  lineage: {
-    root: admission.lineage.root,
-    parent: LineageId.make(attempt),
-    hop: admission.lineage.hop + 1,
-  },
-});
-
-const parkedAdmission = (admission: TriggerAdmission, attempt: RunId): TriggerAdmission => ({
-  ...admission,
-  lineage: { ...admission.lineage, parent: LineageId.make(attempt) },
-});
-
-const fanOutAdmission = (
-  admission: TriggerAdmission,
-  attempt: RunId,
-  position: number,
-  element: WorkflowOperationElement,
-) => {
-  const parent = keyOf(admission.event.key);
-  return {
-    event: {
-      key: { _tag: "FanOutChild", parent, run: attempt, position },
-      revision: `${admission.event.revision}:${attempt}:${position}`,
-      cause: { _tag: "Cogwork", origin: parent, lineage: admission.lineage },
-      atMillis: admission.event.atMillis,
-      entry: admission.event.entry,
-      workspace: admission.event.workspace,
-      subject: admission.event.subject,
-      workContext: {
-        body: JSON.stringify(element, null, 2),
-        comments: [],
-      },
-    },
-    subscription: admission.subscription,
-    lineage: {
-      root: admission.lineage.root,
-      parent: LineageId.make(attempt),
-      hop: admission.lineage.hop + 1,
-    },
-  } satisfies TriggerAdmission;
-};
 
 interface AdmissionExecutionState {
   readonly current: TriggerAdmission | null;
   readonly outcome: WorkflowRunOutcome;
 }
 
-type ClaimState = Data.TaggedEnum<{
-  Idle: Record<never, never>;
-  Claimed: { readonly key: ReturnType<typeof operationKeyOf>; readonly run: RunId | null };
-  Attempted: { readonly run: RunId | null; readonly status: "succeeded" | "failed" };
-}>;
-const ClaimState = Data.taggedEnum<ClaimState>();
-type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
-
-interface PriorRefusal {
-  readonly agentText: string;
-  readonly key: ClaimedWork["key"];
-  readonly resumableRun: RunId | null;
-}
-
-const sameOperation = (left: ClaimedWork["key"], right: ClaimedWork["key"]) =>
-  left.workflow === right.workflow && left.operation === right.operation;
-
-const resendOf = (prior: PriorRefusal | null, key: ClaimedWork["key"]) =>
-  prior?.resumableRun && sameOperation(prior.key, key)
-    ? {
-        run: prior.resumableRun,
-        request: `${prior.agentText}\n\nDo no other work unless an issue above needs it.`,
-      }
-    : null;
-type Resend = NonNullable<ReturnType<typeof resendOf>>;
-
-const ownRunOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
-  admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
-
-const selectedWorkspaceIds = (
-  document: Parameters<typeof buildWorkflowActionPlan>[0]["document"],
-  workspaces: ReadonlyArray<RegisteredWorkspace>,
-) => {
-  const registered = workspaces.map(({ config }) => config.name);
-  return document.workspaces._tag === "Every"
-    ? registered
-    : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
-};
-
-const planRefusal = {
-  invalid: { status: "failed", result: (message: string) => RefusedResult.ActionPlanRefused({ message }) },
-  declined: { status: "declined", result: (reason: string) => RefusedResult.PullRequestDeclined({ reason }) },
+const resumedPlanHaltOutcome = {
+  Retry: "retry",
+  Parked: "completed",
+  AwaitingApproval: "completed",
+  HandedToYou: "completed",
 } as const;
 
-const projection = [
-  "Harness Adapter",
-  "Instructions",
-  "Messages",
-  "Work Context",
-  "Middleware",
-  "Sandbox",
-  "Structured Output",
-  "Persistence",
-  "Provenance",
-].map((member) => ({ member, disposition: "projected" as const }));
-
-const toolsDisposition = (projected: boolean) =>
-  projected
-    ? { member: "Tools", disposition: "projected" as const }
-    : {
-        member: "Tools",
-        disposition: "not-projected" as const,
-        reason: "selected harness does not project Tools",
-      };
+const resumedLineageParentOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
+  admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
 
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
   const coordination = yield* Coordination;
   const harness = yield* Harness;
-  const sessions = yield* SessionStore;
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
-  const contextAssembler = yield* ContextAssembler;
-  const notifications = yield* WorkflowNotifications;
   const actionPlans = yield* WorkflowActionPlanStore;
-  const artifacts = yield* WorkflowArtifactStore;
-  const issueTracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
-  const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
-  const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
-  const fs = yield* FileSystem.FileSystem;
   const observationStore = yield* TriggerObservationStore;
   const triggerObservation = yield* TriggerObservation;
-  const slack = yield* SlackWrite;
-  const harnessContext = yield* Effect.context<HarnessRunnerEnv>();
-  const coreExecutionContext = harnessContext.pipe(
-    Context.add(Coordination, coordination),
-    Context.add(IssueTracker, issueTracker),
-    Context.add(RunLedger, ledger),
-    Context.add(WorkflowActionPlanStore, actionPlans),
-    Context.add(WorkflowArtifactStore, artifacts),
-    Context.add(WorkflowNotifications, notifications),
-    Context.add(WorkspaceRegistry, registry),
-    Context.add(SlackWrite, slack),
-    Context.add(TriggerObservationStore, observationStore),
-  );
-  const sourceControlExecutionContext =
-    sourceControl === null
-      ? coreExecutionContext
-      : Context.add(coreExecutionContext, SourceControlProvider, sourceControl);
-  const executionContext =
-    worktrees === null
-      ? sourceControlExecutionContext
-      : Context.add(sourceControlExecutionContext, WorktreeManager, worktrees);
-  const pullRequestBuildInput = (runBranch: string | null) => ({
-    ...(sourceControl ? { sourceControl } : {}),
-    ...(worktrees ? { worktrees } : {}),
-    ...(runBranch ? { runBranch } : {}),
-  });
-  const previousRefusals = yield* Ref.make<ReadonlyMap<string, PriorRefusal>>(new Map());
+  const { executionContext, pullRequestBuildInput } = yield* makeWorkflowRunExecutionContext();
+  const {
+    previousRefusals,
+    takePriorRefusal,
+    settleClaimed,
+    recordClaimedAttempt,
+    claimItem,
+    complete,
+    parkCappedLineage,
+    skipNoLongerMatching,
+    rejectPlan,
+    refuseResult,
+    refusePreparation,
+    recoverClaimed,
+    actOnResult,
+  } = yield* makeWorkflowRunAttempts(pullRequestBuildInput);
+  const preparation = yield* makeRunPreparation;
+  const runEngineTools = yield* makeRunEngineTools;
   const touchpointGate = Semaphore.makeUnsafe(1);
 
-  const prepareCheckout = Effect.fn("WorkflowRun.prepareCheckout")(function* (
-    admission: TriggerAdmission,
-    workspace: RegisteredWorkspace | null,
-    permissionProfile: "read-only" | "full",
-  ) {
-    if (workspace === null) {
-      const path = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workflow-" });
-      return { path, branch: null } as const;
-    }
-    if (permissionProfile === "read-only") {
-      return { path: workspace.config.checkoutPath, branch: null } as const;
-    }
-    const pullRequest =
-      sourceControl === null ? null : yield* sourceControl.resolvePullRequest(workspace, admission.event.key);
-    const branch = BranchName.make(pullRequest?.headBranch ?? fallbackBranch(admission.event.key));
-    const item = { id: runItemId(admission.event.key), title: "" };
-    if (worktrees === null) {
-      return yield* new IssueTrackerError({
-        reason: "unavailable",
-        retryable: false,
-        message: "Worktree manager is not configured",
-      });
-    }
-    const checkout = yield* worktrees.ensure(workspace, item, {
-      branch,
-      pushOwner: "engine",
-    });
-    return { path: checkout.path, branch } as const;
-  });
-
-  const settle = (attempt: RunId, status: RunRecord["status"]) =>
-    Effect.flatMap(Clock.currentTimeMillis, (endedAtMillis) =>
-      ledger.updateRun(attempt, { status, usage: null, endedAtMillis }),
-    );
-
-  const settleRun = (attempt: RunId | null, status: RunRecord["status"]) =>
-    attempt === null ? Effect.void : settle(attempt, status);
-
-  const settleClaimed = Effect.fn("WorkflowRun.settleClaimed")(function* (
-    claimed: Ref.Ref<ClaimState>,
-    status: RunRecord["status"],
-  ) {
-    const settlement = ClaimState.$match(yield* Ref.get(claimed), {
-      Idle: () => ({ run: null, next: ClaimState.Idle() }),
-      Claimed: ({ key, run }) => ({
-        run,
-        next: status === "interrupted" ? ClaimState.Claimed({ key, run: null }) : ClaimState.Idle(),
-      }),
-      Attempted: ({ run }) => ({ run, next: ClaimState.Idle() }),
-    });
-    yield* settleRun(settlement.run, status);
-    yield* Ref.set(claimed, settlement.next);
-  });
-
-  const recordClaimedAttempt = Effect.fn("WorkflowRun.recordClaimedAttempt")(function* (
-    admission: TriggerAdmission,
-    claimed: Ref.Ref<ClaimState>,
-    work: ClaimedWork,
-    attempt: { readonly outcome: "succeeded" } | { readonly outcome: "failed"; readonly reason: string },
-  ) {
-    const view = yield* coordination.recordAttempt(admission.event.key, {
-      ...attempt,
-      operation: work.key,
-      lineage: admission.lineage,
-    });
-    yield* Ref.set(claimed, ClaimState.Attempted({ run: work.run, status: attempt.outcome }));
-    return view;
-  });
-
-  const claimItem = (admission: TriggerAdmission, claimed: Ref.Ref<ClaimState>, work: ClaimedWork) =>
-    Effect.acquireRelease(
-      coordination
-        .claim(admission.event.key, { operation: work.key, lineage: admission.lineage })
-        .pipe(Effect.tap(() => Ref.set(claimed, work))),
-      (activeClaim) =>
-        coordination
-          .release(admission.event.key, activeClaim)
-          .pipe(Effect.catch((error) => Effect.logError("Workflow Claim release failed", { error }))),
-    );
-
-  const closeRevision = (admission: TriggerAdmission) =>
-    coordination.markProcessed(admission.event.key, admission.event.revision);
-
-  const complete = Effect.fn("WorkflowRun.complete")(function* (admission: TriggerAdmission) {
-    yield* observationStore.complete(admission, closeRevision(admission));
-  });
-
-  const parkCappedLineage = Effect.fn("WorkflowRun.parkCappedLineage")(function* (
-    admission: TriggerAdmission,
-    key: ReturnType<typeof operationKeyOf>,
-  ) {
-    const view = yield* coordination.read(admission.event.key);
-    if (!view.counters(key).hopCapped) return false;
-    yield* coordination.park(admission.event.key, { _tag: "HopCap" }, key);
-    yield* complete(admission);
-    return true;
-  });
-
-  const skipNoLongerMatching = Effect.fn("WorkflowRun.skipNoLongerMatching")(function* (
-    admission: TriggerAdmission,
-    reason: string,
-  ) {
-    const skipped: TriggerAdmission = {
-      ...admission,
-      event: { ...admission.event, payload: { _tag: "NoLongerMatches", reason } },
-    };
-    yield* observationStore.putAll([skipped]);
-    yield* complete(skipped);
-    return "skipped" as const;
-  });
-
-  const rejectPlan = (admission: TriggerAdmission, reason: string) =>
-    coordination
-      .park(admission.event.key, { _tag: "PlanRejected", reason, entry: admission.event.entry })
-      .pipe(
-        Effect.andThen(complete(admission)),
-        Effect.map(() => "skipped" as const),
-      );
-
-  const failAttempt = Effect.fn("WorkflowRun.failAttempt")(function* (
-    admission: TriggerAdmission,
-    claimed: Ref.Ref<ClaimState>,
-    work: ClaimedWork,
-    reason: string,
-    status: "failed" | "declined" = "failed",
-  ) {
-    const view = yield* recordClaimedAttempt(admission, claimed, work, { outcome: "failed", reason });
-    const exhausted = view.counters(work.key).exhausted;
-    yield* settleClaimed(claimed, exhausted ? "exhausted" : status);
-    if (!exhausted) return "retry" as const;
-    yield* coordination.park(admission.event.key, { _tag: "Exhausted", reason }, work.key);
-    if (work.run !== null) yield* observationStore.putAll([parkedAdmission(admission, work.run)]);
-    return "completed" as const;
-  });
-
-  const refuseResult = Effect.fn("WorkflowRun.refuseResult")(function* (
-    admission: TriggerAdmission,
-    claimed: Ref.Ref<ClaimState>,
-    work: ClaimedWork,
-    refusal: RefusedResult,
-    status: "failed" | "declined" = "failed",
-  ) {
-    const prior: PriorRefusal = {
-      agentText: refusalForAgent(refusal),
-      key: work.key,
-      resumableRun: refusalResumesSession(refusal) ? work.run : null,
-    };
-    yield* Ref.update(previousRefusals, (current) => new Map(current).set(keyOf(admission.event.key), prior));
-    return yield* failAttempt(admission, claimed, work, refusalForPerson(refusal), status);
-  });
-
-  const resendResumption = Effect.fn("WorkflowRun.resendResumption")(function* (
-    resend: Resend,
-    selectedHarness: HarnessName,
-    workRequest: string,
-  ) {
-    const sessionId = (yield* ledger.getRun(resend.run))?.session ?? null;
-    const session = sessionId === null ? null : yield* ledger.getSession(sessionId);
-    const resumable = session?.harness === selectedHarness && sessionResumable(session);
-    if (!resumable) return { session: null, request: workRequest };
-    return { session: session.id, request: resend.request };
-  });
-
-  const takePriorRefusal = (itemKey: string) =>
-    Ref.modify(previousRefusals, (current) => {
-      const prior = current.get(itemKey) ?? null;
-      if (prior === null) return [prior, current];
-      return [prior, new Map(current).set(itemKey, { ...prior, resumableRun: null })];
-    });
-
-  const refusePlan = (
-    admission: TriggerAdmission,
-    claimed: Ref.Ref<ClaimState>,
-    work: ClaimedWork,
-    error: WorkflowActionPlanDecodeError,
-  ) =>
-    error.reason === "unavailable"
-      ? settleClaimed(claimed, "failed").pipe(Effect.map(() => "retry" as const))
-      : refuseResult(
-          admission,
-          claimed,
-          work,
-          planRefusal[error.reason].result(error.message),
-          planRefusal[error.reason].status,
-        );
-
-  const recoverClaimed = Effect.fn("WorkflowRun.recoverClaimed")(function* <E>(
-    admission: TriggerAdmission,
-    claimed: Ref.Ref<ClaimState>,
-    cause: Cause.Cause<E>,
-  ) {
-    return yield* ClaimState.$match(yield* Ref.get(claimed), {
-      Idle: () => Effect.failCause(cause),
-      Claimed: (work) => failAttempt(admission, claimed, work, String(cause)),
-      Attempted: ({ status }) => settleClaimed(claimed, status).pipe(Effect.andThen(Effect.failCause(cause))),
-    });
-  });
+  const declineRun = (reason: RunPlanRejection) =>
+    Effect.logDebug("Run Plan rejected", { reason }).pipe(Effect.map(() => "waiting" as const));
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (
     admission: TriggerAdmission,
@@ -549,7 +119,6 @@ export const make = Effect.gen(function* () {
         ? pendingPlan.operation
         : admission.subscription.operation;
     if (stalePlan) {
-      yield* settleRun(ownRunOf(admission, pendingPlan), "interrupted");
       yield* actionPlans.remove(pendingPlan.item, pendingPlan.workflow, pendingPlan.attempt);
     }
     const resumesPendingPlan = pendingPlan !== null && !stalePlan;
@@ -558,7 +127,8 @@ export const make = Effect.gen(function* () {
           plan: pendingPlan,
           work: ClaimState.Claimed({
             key: operationKeyOf(admission, pendingPlan.operation),
-            run: ownRunOf(admission, pendingPlan),
+            run: null,
+            lineageParent: resumedLineageParentOf(admission, pendingPlan),
           }),
         }
       : null;
@@ -569,17 +139,11 @@ export const make = Effect.gen(function* () {
       if (execution._tag === "Replan") {
         yield* settleClaimed(claimed, "interrupted");
       }
-      if (execution._tag === "Retry" || execution._tag === "Parked") {
-        yield* settleClaimed(claimed, "failed");
-        return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
-      }
-      if (execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou") {
-        yield* settleClaimed(claimed, "succeeded");
-        return "completed" as const;
+      if (execution._tag !== "Replan" && execution._tag !== "Complete") {
+        return resumedPlanHaltOutcome[execution._tag];
       }
       if (execution._tag === "Complete") {
         yield* recordClaimedAttempt(admission, claimed, resumed.work, { outcome: "succeeded" });
-        yield* settleClaimed(claimed, "succeeded");
         if (execution.handOff !== null) {
           return handOffAdmission(admission, execution.handOff, resumed.plan.attempt);
         }
@@ -609,202 +173,102 @@ export const make = Effect.gen(function* () {
     const workspace =
       registryState.workspaces.find(({ config }) => config.name === admission.event.workspace) ?? null;
     const outputWorkspaces = selectedWorkspaceIds(document, registryState.workspaces);
-    const itemWorkspace = itemWorkspaceOf(admission);
     const resultSchema = workflowOperationResultSchema(
       operation,
       catalogResult.catalog,
       outputWorkspaces,
-      itemWorkspace,
+      itemWorkspaceOf(admission),
     );
-    const issueSearchEnabled = needsIssueSearch(operation, catalogResult.catalog);
-    const pullRequestToolEnabled = needsPullRequestTool(operation, catalogResult.catalog);
     const toolWorkspaces = registryState.workspaces.filter(({ config }) =>
       outputWorkspaces.includes(config.name),
     );
-    const selectedHarness = operation.model.harness ?? catalogResult.machine.defaultHarness;
-    const hasMissingNeed = operation.requires.some(
-      (need) => !catalogResult.machine.readyNeeds.includes(need),
-    );
-    if (selectedHarness === null || hasMissingNeed) return "waiting" as const;
-    const options = Object.fromEntries(operation.model.options.map(({ id, value }) => [id, value]));
-    const preflight = yield* Effect.result(
-      harness.preflight(selectedHarness, operation.permissionProfile, operation.model.model, options),
-    );
-    if (Result.isFailure(preflight)) return "waiting" as const;
-    const projectsTools = harness.projectedMembers(selectedHarness).includes("Tools");
+    const preflight = yield* preparation.preflight(operation, catalogResult.machine);
+    const ready = readyHarness(preflight);
+    if (Result.isFailure(ready)) return yield* declineRun(ready.failure);
+    const selectedHarness = ready.success.name;
+    const skills = yield* preparation.admittedSkills(workspace, operation.requires);
+    const requiredSkill = skills.find(({ identity }) => operation.requires.some((need) => need === identity));
+    const requiredSkillUnsupplied =
+      requiredSkill !== undefined && !ready.success.projectedMembers.includes("Skills");
+    if (requiredSkillUnsupplied) {
+      return yield* rejectPlan(
+        admission,
+        `${selectedHarness} does not project Skills, so it cannot supply the required Skill ${requiredSkill.identity}`,
+      );
+    }
 
-    const claim =
-      pendingClaim ?? (yield* claimItem(admission, claimed, ClaimState.Claimed({ key, run: null })));
+    const preparing = ClaimState.Claimed({ key, run: null, lineageParent: null });
+    const claim = pendingClaim ?? (yield* claimItem(admission, claimed, preparing));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
-    const id = runId(randomUUID());
-    const checkout = yield* prepareCheckout(admission, workspace, operation.permissionProfile);
+    const id = runId(SecureRandom.uuidV4Unsafe());
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
-    const item = workItemId(keyOf(admission.event.key));
-    const coordinationView = yield* coordination.read(admission.event.key);
-    const handback =
-      coordinationView.handback !== null && coordinationView.handback.atMillis > admission.event.atMillis
-        ? coordinationView.handback
-        : null;
-    const parkedAttempt = admission.lineage.parent === null ? null : RunId.make(admission.lineage.parent);
-    const handbackNote = handback?.note?.trim();
-    const workRequest = handbackNote
-      ? `Run Workflow Operation: ${operation.name}\n\nPerson's note: ${handbackNote}`
-      : `Run Workflow Operation: ${operation.name}`;
     const priorRefusal = yield* takePriorRefusal(keyOf(admission.event.key));
-    const resend = resendOf(priorRefusal, key);
-    const runResumption = (attempt: RunId) =>
-      Effect.map(ledger.getRun(attempt), (run) => ({ session: run?.session ?? null, request: workRequest }));
-    const resumeReaders = [
-      resumed === null ? null : () => runResumption(resumed.plan.attempt),
-      handback !== null && parkedAttempt !== null ? () => runResumption(parkedAttempt) : null,
-      resend === null ? null : () => resendResumption(resend, selectedHarness, workRequest),
-    ];
-    const resumption = yield* resumeReaders.find((read) => read !== null)?.() ??
-      Effect.succeed({ session: null, request: workRequest });
-    const session =
-      resumption.session ??
-      (yield* sessions.mint(
-        { workspace: runWorkspace, harness: selectedHarness, createdAtMillis: startedAtMillis },
-        harness.sessionKind,
-      ));
-    const assembled = yield* contextAssembler.assemble({
-      runId: id,
-      workspace: runWorkspace,
-      cwd: checkout.path,
-      projectRoot: checkout.path,
-      operatingInstructions: operation,
-      contributions: [],
-    });
-    yield* Effect.addFinalizer(() => contextAssembler.cleanup(id).pipe(Effect.ignore));
-    const observation = {
-      generation: record.publishedRevision ?? 0,
-      observedAtMillis: admission.event.atMillis,
-    };
-    const lineageArtifacts = yield* artifacts.byLineage(admission.lineage.root);
-    const baseProse = admission.event.workContext ?? {
-      body: workContextBody(admission, record.id),
-      comments: [],
-    };
-    const artifactProse =
-      lineageArtifacts.length === 0
-        ? baseProse
-        : {
-            ...baseProse,
-            body: [
-              baseProse.body,
-              "",
-              "## Artifacts this lineage created",
-              encodeArtifactContext(
-                lineageArtifacts.map(({ workspace, issue, url }) => ({ workspace, issue, url })),
-              ),
-            ].join("\n"),
-          };
-    const subagents = yield* subagentMembers(workspace?.contributions ?? [], operation.requires);
-    const plan = RunPlan.make({
-      id,
-      operation: operation.id,
-      harness: {
-        name: selectedHarness,
-        model: operation.model.model,
-        options,
-        profile: operation.permissionProfile,
-      },
-      instructions: assembled.layers,
-      operatingInstructions: {
-        name: assembled.operatingInstructionsName,
-        path: assembled.operatingInstructionsPath,
-        resources: [
-          ...assembled.operatingInstructionResources,
-          ...(priorRefusal === null
-            ? []
-            : [{ source: "previous-result-issues", content: priorRefusal.agentText }]),
-        ],
-      },
-      messages: [{ role: "user", content: resumption.request }],
-      tools: projectsTools
-        ? [
-            ...(issueSearchEnabled ? ["issue-search" as const] : []),
-            ...(pullRequestToolEnabled ? ["pull-request" as const] : []),
-          ]
-        : [],
-      skills: [],
-      mcp: [],
-      subagents,
-      hooks: [],
-      middleware: [...harness.planMiddleware(selectedHarness)],
-      structuredOutput: workflowOperationResultJsonSchema(
+    const prepared = yield* preparation
+      .prepare({
+        admission,
+        workspace,
         operation,
-        catalogResult.catalog,
-        outputWorkspaces,
-        itemWorkspace,
-      )["~standard"].jsonSchema.input({ target: "draft-2020-12" }),
-      connections: [],
-      workContext: {
-        reference: { workItem: item, url: admission.event.subject?.url ?? null },
-        facts: {
-          assignees: [],
-          openBlockers: 0,
-          claim,
-          priority: admission.event.priority ?? defaultPriority,
-        },
-        prose: artifactProse,
-        observation,
-      },
-      sandbox: { workspace: workspace ? checkout.path : null, policy: operation.permissionProfile },
-      persistence: { sessionKind: harness.sessionKind(selectedHarness) },
-      provenance: {
-        resolution: [],
-        stamps: [],
-        projectedNames: [],
-        projection: [...projection, toolsDisposition(projectsTools)],
-        observation,
-      },
+        harness: selectedHarness,
+        run: { id, workspace: runWorkspace, startedAtMillis },
+        pendingPlanAttempt: resumed?.plan.attempt ?? null,
+        resend: resendOf(priorRefusal, key),
+      })
+      .pipe(Effect.catchTag("CheckoutRefused", Effect.succeed));
+    if (prepared instanceof CheckoutRefused) {
+      return yield* refusePreparation(admission, claimed, preparing, prepared.message, prepared.park);
+    }
+    const resolution = resolveRunPlan({
+      id,
+      operation,
+      harness: preflight,
+      admission,
+      workflow: record,
+      catalog: catalogResult.catalog,
+      outputWorkspaces,
+      workspaceCheckout: workspace === null ? null : prepared.checkout.path,
+      instructions: prepared.instructions,
+      previousResultIssues: priorRefusal?.agentText ?? null,
+      resendRequest: prepared.resendRequest,
+      lineageArtifacts: prepared.lineageArtifacts,
+      claim,
+      handback: prepared.handback,
+      skills,
+      subagents: prepared.subagents,
     });
+    if (RunPlanResolution.$is("Rejected")(resolution)) return yield* declineRun(resolution.reason);
+    const { plan, toolNeeds } = resolution;
     const run: RunRecord = {
       id,
       workspace: runWorkspace,
-      workItem: item,
+      workItem: workItemId(keyOf(admission.event.key)),
       ...(admission.event.subject ? { subject: admission.event.subject } : {}),
       workflow: record.id,
       operation: operation.id,
       harness: selectedHarness,
-      branch: checkout.branch,
-      session,
+      branch: prepared.checkout.branch,
+      session: prepared.session,
       usage: null,
       status: "running",
       startedAtMillis,
       endedAtMillis: null,
     };
-    const accepted = ClaimState.Claimed({ key, run: id });
+    const accepted = ClaimState.Claimed({ key, run: id, lineageParent: id });
     yield* Ref.set(claimed, accepted).pipe(
       Effect.andThen(ledger.acceptRun(run, plan)),
       Effect.uninterruptible,
     );
 
-    const pullRequestSnapshots = yield* Ref.make<
-      ReadonlyArray<{ readonly workspace: string; readonly pullRequest: PullRequestContext }>
-    >([]);
-    const engineTools = [
-      ...(issueSearchEnabled ? [makeIssueSearchTool(issueTracker, toolWorkspaces)] : []),
-      ...(pullRequestToolEnabled && sourceControl
-        ? [
-            makePullRequestTool(sourceControl, toolWorkspaces, (selected, pullRequest) =>
-              Ref.update(pullRequestSnapshots, (snapshots) => [
-                ...snapshots,
-                { workspace: selected.config.name, pullRequest },
-              ]),
-            ),
-          ]
-        : []),
-    ];
-    const eventsExit = yield* harness.run({ plan, session, mcpCredentials: new Map(), engineTools }).pipe(
-      Stream.tap((event) => recorder.record(run, event)),
-      Stream.filter(agUiIsStructuredOutputComplete),
-      Stream.runLast,
-      Effect.timeout(defaultRunBudget(operation.permissionProfile)),
-      Effect.exit,
-    );
+    const engineTools = yield* runEngineTools(toolNeeds, toolWorkspaces);
+    const eventsExit = yield* harness
+      .run({ plan, session: prepared.session, mcpCredentials: new Map(), engineTools: engineTools.tools })
+      .pipe(
+        Stream.tap((event) => recorder.record(run, event)),
+        Stream.filter(agUiIsStructuredOutputComplete),
+        Stream.runLast,
+        Effect.timeout(defaultRunBudget(operation.permissionProfile)),
+        Effect.exit,
+      );
     if (Exit.isFailure(eventsExit)) {
       yield* recorder.record(run, failedTerminal);
       return yield* refuseResult(admission, claimed, accepted, harnessStreamFailed(eventsExit.cause));
@@ -833,99 +297,22 @@ export const make = Effect.gen(function* () {
       return "completed" as const;
     }
 
-    const reviewedPullRequests = yield* Ref.get(pullRequestSnapshots);
-
-    if ("elements" in decoded.success) {
-      const children = decoded.success.elements.map((element, position) => ({
-        admission: fanOutAdmission(admission, run.id, position, element),
-        element,
-      }));
-      const acceptPlans = (plans: ReadonlyArray<WorkflowActionPlan>) =>
-        actionPlans.createAll(plans).pipe(
-          Effect.andThen(
-            Effect.forEach(
-              children,
-              ({ admission: child }) =>
-                coordination.observe(child.event.key, child.event.revision, child.event.cause),
-              { discard: true },
-            ),
-          ),
-          Effect.andThen(recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" })),
-          Effect.andThen(settleClaimed(claimed, "succeeded")),
-          Effect.andThen(
-            observationStore.fanOut(
-              admission,
-              children.map(({ admission: child }) => child),
-              closeRevision(admission),
-            ),
-          ),
-          Effect.map(() => "completed" as const),
-        );
-      return yield* Effect.forEach(children, ({ admission: child, element }) =>
-        buildWorkflowActionPlan({
-          admission: child,
-          document,
-          operation,
-          catalog: catalogResult.catalog,
-          workspaces: registryState.workspaces,
-          output: element,
-          attempt: run.id,
-          createdAtMillis: startedAtMillis,
-          workflowRevision: record.publishedRevision ?? record.workingRevision,
-          ...pullRequestBuildInput(run.branch),
-          pullRequestSnapshots: reviewedPullRequests,
-        }),
-      ).pipe(
-        Effect.matchEffect({
-          onFailure: (error) => refusePlan(admission, claimed, accepted, error),
-          onSuccess: acceptPlans,
-        }),
-      );
-    }
-
-    const actionPlanResult = yield* Effect.result(
-      buildWorkflowActionPlan({
-        admission,
+    return yield* actOnResult({
+      admission,
+      claimed,
+      accepted,
+      run,
+      output: decoded.success,
+      startedAtMillis,
+      plan: {
         document,
         operation,
         catalog: catalogResult.catalog,
         workspaces: registryState.workspaces,
-        output: decoded.success,
-        attempt: run.id,
-        createdAtMillis: yield* Clock.currentTimeMillis,
         workflowRevision: record.publishedRevision ?? record.workingRevision,
-        ...pullRequestBuildInput(run.branch),
-        pullRequestSnapshots: reviewedPullRequests,
-      }),
-    );
-    if (Result.isFailure(actionPlanResult)) {
-      return yield* refusePlan(admission, claimed, accepted, actionPlanResult.failure);
-    }
-    const actionPlan = yield* actionPlans.create(actionPlanResult.success);
-    const actionPlanEvent: AgUiEvent = {
-      type: "CUSTOM",
-      name: "workflow.action-plan",
-      value: { object: actionPlan, raw: encodeActionPlan(actionPlan) },
-    };
-    yield* recorder.record(run, actionPlanEvent);
-    const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
-    if (execution._tag === "Replan") {
-      yield* settleClaimed(claimed, "interrupted");
-      return admission;
-    }
-    if (execution._tag !== "Complete") {
-      const status =
-        execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou" ? "succeeded" : "failed";
-      yield* settleClaimed(claimed, status);
-      return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
-    }
-    yield* recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" });
-    yield* settleClaimed(claimed, "succeeded");
-    if (execution.handOff !== null) {
-      return handOffAdmission(admission, execution.handOff, run.id);
-    }
-    yield* complete(admission);
-    return "completed" as const;
+        pullRequestSnapshots: yield* engineTools.reviewedPullRequests,
+      },
+    });
   });
 
   const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (admission: TriggerAdmission) {
@@ -981,321 +368,10 @@ export const make = Effect.gen(function* () {
       Effect.map(({ outcome }) => outcome),
     );
 
-  const touchpointFailure = (reason: WorkflowTouchpointFailure["reason"], message: string) =>
-    new WorkflowTouchpointFailure({ reason, message });
-
-  const failTouchpoint = (reason: WorkflowTouchpointFailure["reason"], message: string) =>
-    Effect.fail(touchpointFailure(reason, message));
-
-  const currentPlan = Effect.fn("WorkflowRun.currentPlan")(function* (item: WorkItemRef, attempt: RunId) {
-    const itemKey = keyOf(item);
-    const plan = yield* actionPlans.find(itemKey, attempt);
-    if (plan === null) {
-      const hasCurrentPlan = (yield* actionPlans.list).some((candidate) => candidate.item === itemKey);
-      return yield* failTouchpoint(
-        hasCurrentPlan ? "stale-attempt" : "not-found",
-        hasCurrentPlan ? `Attempt ${attempt} is no longer current` : "No pending plan exists for this item",
-      );
-    }
-    const view = yield* coordination.read(item);
-    const observedRevision = view.revision?.observed;
-    if (observedRevision !== undefined && observedRevision !== plan.revision) {
-      return yield* failTouchpoint("stale-attempt", `Attempt ${attempt} is no longer current`);
-    }
-    const admissions = yield* observationStore.admissions;
-    const admission = admissions.find(
-      (candidate) =>
-        keyOf(candidate.event.key) === itemKey &&
-        candidate.subscription.workflow === plan.workflow &&
-        candidate.event.revision === plan.revision,
-    );
-    if (admission === undefined) {
-      return yield* failTouchpoint("stale-attempt", `Attempt ${attempt} is no longer current`);
-    }
-    return { plan, admission };
-  });
-
-  const waitingReviewTarget = (plan: WorkflowActionPlan) => {
-    const waiting = plan.steps.some(
-      ({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending",
-    );
-    if (!waiting) return null;
-    return plan.steps.find(({ target }) => target._tag === "NamedPullRequest")?.target ?? null;
-  };
-
-  const refreshReviewPlansRaw = Effect.fn("WorkflowRun.refreshReviewPlans")(function* () {
-    if (sourceControl === null) return;
-    const plans = yield* actionPlans.list;
-    const admissions = yield* observationStore.admissions;
-    const workspaces = (yield* registry.state).workspaces;
-    yield* Effect.forEach(
-      plans,
-      (plan) => {
-        const target = waitingReviewTarget(plan);
-        if (target?._tag !== "NamedPullRequest") return Effect.void;
-        const workspace = workspaces.find(({ config }) => config.name === target.workspace);
-        if (!workspace) return Effect.void;
-        return sourceControl.readPullRequest(workspace, `#${target.number}`).pipe(
-          Effect.flatMap((pullRequest) => {
-            if (pullRequest === null || pullRequest.headSha === target.headSha) return Effect.void;
-            const admission = admissions.find(
-              (candidate) =>
-                keyOf(candidate.event.key) === plan.item &&
-                candidate.subscription.workflow === plan.workflow &&
-                candidate.event.revision === plan.revision,
-            );
-            if (!admission) return Effect.void;
-            return coordination
-              .handBack(admission.event.key, {
-                by: "cogwork",
-                note: "The pull request received a new commit. Review the new head.",
-              })
-              .pipe(
-                Effect.andThen(actionPlans.remove(plan.item, plan.workflow, plan.attempt)),
-                Effect.andThen(settle(plan.attempt, "interrupted")),
-              );
-          }),
-        );
-      },
-      { discard: true },
-    );
-  });
-
-  const rebuildPlan = Effect.fn("WorkflowRun.rebuildPlan")(function* (
-    plan: WorkflowActionPlan,
-    admission: TriggerAdmission,
-    answers: Readonly<Record<string, string>>,
-    inputs: Readonly<Record<string, WorkflowAgentInputValue>>,
-    createdAtMillis: number,
-  ) {
-    const record = yield* workflows.get({ id: plan.workflow });
-    const document = record.publishedCopy;
-    const operation = document?.operations.find(({ id }) => id === plan.operation);
-    if (document === null || document === undefined || operation === undefined) {
-      return yield* failTouchpoint("unavailable", "The published Workflow operation is unavailable");
-    }
-    if (record.publishedRevision !== plan.workflowRevision) {
-      return yield* failTouchpoint(
-        "stale-digest",
-        "The published Workflow changed after this plan was displayed",
-      );
-    }
-    const catalogResult = yield* workflows.catalog;
-    const registryState = yield* registry.state;
-    const unknownAnswer = Object.keys(answers).find(
-      (answer) => !operation.questions.some(({ id }) => id === answer),
-    );
-    const invalidAnswer = operation.questions.find(
-      (question) => !question.choices.some(({ id }) => id === answers[question.id]),
-    );
-    const matchedTransitions = matchWorkflowTransitions(operation, answers);
-    const invalidAnswers =
-      unknownAnswer !== undefined || invalidAnswer !== undefined || matchedTransitions.length === 0;
-    if (invalidAnswers) {
-      return yield* failTouchpoint("invalid-edits", "The answers do not match the published Operation");
-    }
-    const matchedEntries = new Set(
-      matchedTransitions.flatMap(({ actions }) => actions.map(({ entry }) => entry)),
-    );
-    const missingInput = catalogResult.catalog.entries
-      .filter(({ key }) => matchedEntries.has(key))
-      .flatMap(({ agentInputs }) => agentInputs)
-      .find((input) => agentInputIsMissing(inputs[input]));
-    if (missingInput !== undefined) {
-      return yield* failTouchpoint("invalid-edits", `The plan needs input ${missingInput}`);
-    }
-    const attemptRun = yield* ledger.getRun(plan.attempt);
-    return yield* buildWorkflowActionPlan({
-      admission,
-      document,
-      operation,
-      catalog: catalogResult.catalog,
-      workspaces: registryState.workspaces,
-      output: {
-        summary: plan.summary,
-        answers,
-        inputs,
-        ...(plan.workspace === null ? {} : { workspace: plan.workspace }),
-      },
-      attempt: plan.attempt,
-      createdAtMillis,
-      workflowRevision: plan.workflowRevision,
-      ...pullRequestBuildInput(attemptRun?.branch ?? null),
-    }).pipe(Effect.mapError((error) => touchpointFailure("invalid-edits", error.message)));
-  });
-
-  const recordDecision = Effect.fn("WorkflowRun.recordDecision")(function* (
-    plan: WorkflowActionPlan,
-    name: string,
-    value: Readonly<Record<string, unknown>>,
-  ) {
-    const run = yield* ledger.getRun(plan.attempt);
-    if (run === null) return;
-    yield* recorder.record(run, {
-      type: "CUSTOM",
-      name,
-      value: { object: value, raw: encodeDecision(value) },
-    });
-  });
-
-  const finishTouchpointPlan = Effect.fn("WorkflowRun.finishTouchpointPlan")(function* (
-    plan: WorkflowActionPlan,
-    admission: TriggerAdmission,
-    execution: WorkflowActionPlanExecution,
-  ) {
-    if (execution._tag !== "Complete") return;
-    const key = operationKeyOf(admission, plan.operation);
-    yield* coordination.recordAttempt(admission.event.key, {
-      operation: key,
-      outcome: "succeeded",
-      lineage: admission.lineage,
-    });
-    yield* settle(plan.attempt, "succeeded");
-    if (execution.handOff === null) {
-      yield* complete(admission);
-      return;
-    }
-    yield* executeAdmission(handOffAdmission(admission, execution.handOff, plan.attempt));
-  });
-
-  const executeClaimedPlan = Effect.fn("WorkflowRun.executeClaimedPlan")(
-    (plan: WorkflowActionPlan, admission: TriggerAdmission) =>
-      Effect.acquireUseRelease(
-        coordination.claim(admission.event.key, {
-          operation: operationKeyOf(admission, plan.operation),
-          lineage: admission.lineage,
-        }),
-        () => executeWorkflowActionPlan(plan, admission),
-        (claim) => coordination.release(admission.event.key, claim).pipe(Effect.ignore),
-      ),
-  );
-
-  const approve = Effect.fn("WorkflowRun.approve")(function* (payload: {
-    readonly item: WorkItemRef;
-    readonly attempt: RunId;
-    readonly digest: string;
-    readonly edits?: Readonly<Record<string, string>>;
-  }) {
-    yield* refreshReviewPlansRaw();
-    const { plan, admission } = yield* currentPlan(payload.item, payload.attempt);
-    const waiting = plan.steps.some(
-      ({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending",
-    );
-    if (!waiting) {
-      return yield* failTouchpoint("not-awaiting-approval", "The item is not awaiting approval");
-    }
-    if (plan.digest !== payload.digest) {
-      return yield* failTouchpoint("stale-digest", "The plan changed after it was displayed");
-    }
-    const edits = payload.edits ?? {};
-    const knownInputs = new Set(Object.keys(plan.inputs));
-    const unknownEdit = Object.keys(edits).find((field) => !knownInputs.has(field));
-    if (unknownEdit !== undefined) {
-      return yield* failTouchpoint("invalid-edits", `The plan has no editable input ${unknownEdit}`);
-    }
-    const rebuilt =
-      Object.keys(edits).length === 0
-        ? plan
-        : yield* rebuildPlan(
-            plan,
-            admission,
-            plan.answers,
-            { ...plan.inputs, ...edits },
-            plan.createdAtMillis,
-          );
-    const approved = WorkflowActionPlan.make({
-      ...rebuilt,
-      steps: rebuilt.steps.map((step) =>
-        step.entry === "cogwork.wait-for-approval"
-          ? WorkflowActionPlanStep.make({ ...step, status: "completed" })
-          : step,
-      ),
-    });
-    const latest = yield* coordination.read(admission.event.key);
-    if (latest.revision?.observed !== undefined && latest.revision.observed !== approved.revision) {
-      return yield* failTouchpoint("stale-attempt", `Attempt ${approved.attempt} is no longer current`);
-    }
-    yield* actionPlans.save(approved);
-    yield* recordDecision(approved, "workflow.plan-approved", { digest: approved.digest });
-    const execution = yield* executeClaimedPlan(approved, admission);
-    yield* finishTouchpointPlan(approved, admission, execution);
-    return approved.digest;
-  });
-
-  const reject = Effect.fn("WorkflowRun.reject")(function* (payload: {
-    readonly item: WorkItemRef;
-    readonly attempt: RunId;
-    readonly note?: string;
-  }) {
-    const { plan, admission } = yield* currentPlan(payload.item, payload.attempt);
-    const waiting = plan.steps.some(
-      ({ entry, status }) => entry === "cogwork.wait-for-approval" && status === "pending",
-    );
-    if (!waiting) {
-      return yield* failTouchpoint("not-awaiting-approval", "The item is not awaiting approval");
-    }
-    const latest = yield* coordination.read(admission.event.key);
-    if (latest.revision?.observed !== undefined && latest.revision.observed !== plan.revision) {
-      return yield* failTouchpoint("stale-attempt", `Attempt ${plan.attempt} is no longer current`);
-    }
-    yield* recordDecision(plan, "workflow.plan-rejected", {
-      digest: plan.digest,
-      note: payload.note ?? null,
-    });
-    yield* actionPlans.remove(plan.item, plan.workflow, plan.attempt);
-    yield* coordination.recordAttempt(admission.event.key, {
-      operation: operationKeyOf(admission, plan.operation),
-      outcome: "succeeded",
-      lineage: admission.lineage,
-    });
-    yield* settle(plan.attempt, "succeeded");
-    yield* complete(admission);
-  });
-
-  const chooseAnswer = Effect.fn("WorkflowRun.chooseAnswer")(function* (payload: {
-    readonly item: WorkItemRef;
-    readonly attempt: RunId;
-    readonly answers: Readonly<Record<string, string>>;
-    readonly inputs: Readonly<Record<string, string>>;
-  }) {
-    const { plan, admission } = yield* currentPlan(payload.item, payload.attempt);
-    const handedToPerson = plan.steps.some(
-      ({ entry, status }) => entry === "cogwork.hand-to-me" && status === "completed",
-    );
-    if (!handedToPerson) {
-      return yield* failTouchpoint("not-handed-to-you", "The item is not handed to you");
-    }
-    const rebuilt = yield* rebuildPlan(
-      plan,
-      admission,
-      payload.answers,
-      { ...plan.inputs, ...payload.inputs },
-      yield* Clock.currentTimeMillis,
-    );
-    const latest = yield* coordination.read(admission.event.key);
-    if (latest.revision?.observed !== undefined && latest.revision.observed !== rebuilt.revision) {
-      return yield* failTouchpoint("stale-attempt", `Attempt ${rebuilt.attempt} is no longer current`);
-    }
-    const principal = yield* Principal;
-    yield* coordination.handBack(payload.item, { by: principal.id });
-    yield* actionPlans.save(rebuilt);
-    yield* recordDecision(rebuilt, "workflow.answer-chosen", {
-      answers: payload.answers,
-    });
-    const execution = yield* executeClaimedPlan(rebuilt, admission);
-    yield* finishTouchpointPlan(rebuilt, admission, execution);
-  });
-
-  const handBack = Effect.fn("WorkflowRun.handBack")(function* (payload: {
-    readonly item: WorkItemRef;
-    readonly note?: string;
-  }) {
-    const view = yield* coordination.read(payload.item);
-    if (view.park === null) {
-      return yield* failTouchpoint("not-found", "This item is not parked");
-    }
-    const principal = yield* Principal;
-    yield* coordination.handBack(payload.item, { by: principal.id, note: payload.note });
+  const touchpoints = yield* makeWorkflowRunTouchpoints({
+    complete,
+    executeAdmission,
+    pullRequestBuildInput,
   });
 
   const touchpoint = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -1312,11 +388,14 @@ export const make = Effect.gen(function* () {
 
   return {
     execute: executeAdmission,
-    refreshReviewPlans: () => touchpointGate.withPermit(refreshReviewPlansRaw()),
-    approve: (payload: Parameters<typeof approve>[0]) => runTouchpoint(approve(payload)),
-    reject: (payload: Parameters<typeof reject>[0]) => runTouchpoint(reject(payload)),
-    chooseAnswer: (payload: Parameters<typeof chooseAnswer>[0]) => runTouchpoint(chooseAnswer(payload)),
-    handBack: (payload: Parameters<typeof handBack>[0]) => runTouchpoint(handBack(payload)),
+    refreshReviewPlans: () => touchpointGate.withPermit(touchpoints.refreshReviewPlans()),
+    approve: (payload: Parameters<typeof touchpoints.approve>[0]) =>
+      runTouchpoint(touchpoints.approve(payload)),
+    reject: (payload: Parameters<typeof touchpoints.reject>[0]) => runTouchpoint(touchpoints.reject(payload)),
+    chooseAnswer: (payload: Parameters<typeof touchpoints.chooseAnswer>[0]) =>
+      runTouchpoint(touchpoints.chooseAnswer(payload)),
+    handBack: (payload: Parameters<typeof touchpoints.handBack>[0]) =>
+      runTouchpoint(touchpoints.handBack(payload)),
   } as const;
 });
 

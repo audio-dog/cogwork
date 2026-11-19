@@ -83,7 +83,7 @@ AgUiEvent.matchOrElse(
 );
 ```
 
-For the harness event specifically, the openness is a recorded decision (`packages/contracts/CONTEXT.md`, "Harness event": unnamed keys ride along instead of being dropped at decode). The pattern respects it: each named variant keeps its rest-record for unnamed keys, a catch-all variant carries every type the union does not name, and only the discriminant becomes closed.
+For the harness event specifically, the openness is a recorded decision (`packages/contracts/GLOSSARY.md`, "Harness event": unnamed keys ride along instead of being dropped at decode). The pattern respects it: each named variant keeps its rest-record for unnamed keys, a catch-all variant carries every type the union does not name, and only the discriminant becomes closed.
 
 ## In-process unions still get constructors and matching
 
@@ -143,7 +143,7 @@ A struct built from fields at run time can be empty. An empty `Schema.Struct({})
 - Single-variant tests use the generated `guards`, not `_tag ===`.
 - New identifiers are brands from `makeBrand` in contracts; service and port signatures take the branded type, never `string`.
 - Decoders are module-scope constants next to their schema. A payload field a consumer reads gets a schema in its variant; `Schema.Unknown` is reserved for payloads nobody reads.
-- Deliberate openness (the harness event's rest-record) is kept, and stays documented in the owning `CONTEXT.md`; it never justifies an undiscriminated `type: Schema.String`.
+- Deliberate openness (the harness event's rest-record) is kept, and stays documented in the owning `GLOSSARY.md`; it never justifies an undiscriminated `type: Schema.String`.
 
 ## Sources
 
@@ -155,6 +155,6 @@ A struct built from fields at run time can be empty. An empty `Schema.Struct({})
 - `packages/contracts/src/ag-ui.ts`, `apps/cli/src/watch.ts`, `apps/desktop/src/renderer/src/features/run-activity.ts`, and `apps/desktop/src/renderer/src/features/run-transcript.ts`: the flat event schema and its generated partial folds.
 - `packages/engine/src/session-choice.ts`: the process-local `Data.taggedEnum` exemplar.
 - `packages/engine/src/run-ledger.ts`: `workspace`/`workItem` are branded now; `branch` is the remaining raw-string parameter on the same signatures.
-- `packages/contracts/CONTEXT.md` ("Harness event"): the recorded openness decision the pattern preserves.
+- `packages/contracts/GLOSSARY.md` ("Harness event"): the recorded openness decision the pattern preserves.
 - `.repos/t3code/packages/contracts/src/baseSchemas.ts`: `makeEntityId` (the same brand factory) and `ForwardCompatibleArray`, a principled decode-time forward-compatibility transform.
-- `.repos/opencode/packages/opencode/src/session/schema.ts`: prefix-checked brands (note: opencode pins an older beta; `Schema.TaggedErrorClass` there is `Schema.TaggedError` on the rc line — verify names against `.repos/effect` before copying).
+- `.repos/opencode/packages/opencode/src/session/schema.ts`: prefix-checked brands (note: opencode pins an older beta; `Schema.TaggedErrorClass` there is `Schema.TaggedError` on the pinned 4.1 release — verify names against `.repos/effect` before copying).

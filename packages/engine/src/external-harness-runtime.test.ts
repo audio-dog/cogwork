@@ -33,11 +33,12 @@ import {
 } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
+import * as Predicate from "effect/Predicate";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { afterEach, vi } from "vitest";
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
@@ -523,6 +524,80 @@ describe("external Harness runtime", { timeout: 30_000 }, () => {
 
         assert.deepStrictEqual(yield* chatTools(["Tools"]), ["pull-request"]);
         assert.deepStrictEqual(yield* chatTools([]), []);
+      }),
+    );
+
+    it.effect("supplies Run Plan Skills through chat() only for a descriptor that declares Skills", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const checkout = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-skills-checkout-" });
+        const skillRoot = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-skills-source-" });
+        const skillFile = `${skillRoot}/release.md`;
+        yield* fs.writeFileString(
+          skillFile,
+          "---\nname: release-notes\ndescription: Cut a release.\n---\n# Release\nTag, then publish.",
+        );
+        yield* fs.writeFileString(`${skillRoot}/broken.md`, "# No frontmatter");
+        yield* fs.writeFileString(
+          `${skillRoot}/oversized.md`,
+          `---\nname: oversized\ndescription: Oversized ${"x".repeat(16_000)}\n---\nBody.`,
+        );
+        const plan = RunPlan.make({
+          ...request,
+          skills: [
+            { identity: "local:repo/skill/release", name: "release", source: skillFile },
+            { identity: "local:repo/skill/broken", name: "broken", source: `${skillRoot}/broken.md` },
+            { identity: "local:repo/skill/missing", name: "missing", source: `${skillRoot}/missing.md` },
+            {
+              identity: "local:repo/skill/oversized",
+              name: "oversized",
+              source: `${skillRoot}/oversized.md`,
+            },
+          ],
+          sandbox: { ...request.sandbox, workspace: checkout },
+        });
+        const loaded: Array<string> = [];
+        const runCatalog = (declaredMembers: ReadonlyArray<"Tools" | "Skills">) => {
+          const probe = new ControlledProbe();
+          probe.inspect = (options) => {
+            const loadSkill = options.tools?.find(({ name }) => name === "load_skill")?.execute;
+            if (!loadSkill) return Promise.resolve();
+            const load = (name: string) =>
+              Promise.resolve(loadSkill({ name })).then(
+                (result) => {
+                  loaded.push(Predicate.hasProperty(result, "content") ? String(result.content) : "");
+                },
+                (refusal) => {
+                  loaded.push(String(refusal));
+                },
+              );
+            return load("release").then(() => load("release-notes"));
+          };
+          return makeHarness({ ...descriptor(terminalEvents, probe), declaredMembers })
+            .run({ plan, session: freshSession, mcpCredentials: new Map() })
+            .pipe(
+              Stream.runDrain,
+              Effect.map(() =>
+                (probe.chatOptions[0]?.systemPrompts ?? [])
+                  .map((prompt) => (typeof prompt === "string" ? prompt : prompt.content))
+                  .join("\n"),
+              ),
+            );
+        };
+
+        const catalog = yield* runCatalog(["Tools", "Skills"]);
+        const withheld = yield* runCatalog(["Tools"]);
+
+        assert.include(catalog, "Cut a release.");
+        assert.notInclude(catalog, "release-notes");
+        assert.notInclude(catalog, "broken");
+        assert.notInclude(catalog, "missing");
+        assert.notInclude(catalog, "Oversized");
+        assert.lengthOf(loaded, 2);
+        assert.include(loaded[0], "Tag, then publish.");
+        assert.include(loaded[1], "Skill release-notes is not in the Run Plan");
+        assert.notInclude(withheld, "Cut a release.");
+        assert.deepStrictEqual(yield* fs.readDirectory(checkout), []);
       }),
     );
 

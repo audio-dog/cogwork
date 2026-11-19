@@ -26,14 +26,14 @@ import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import { ContextAssembler, type ContextAssemblerService, type InstructionLayer } from "./context-assembler";
 import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 import type { HarnessRequest } from "./harness";
@@ -369,6 +369,29 @@ describe("providerRunner", { timeout: 30_000 }, () => {
       );
 
       assert.isTrue(capturedOptions[0]?.tools.some(({ name }) => name === "issue-search"));
+    }),
+  );
+
+  it.live("supplies the Run Plan's Skills to the chat through the skills middleware", () =>
+    Effect.gen(function* () {
+      const capturedOptions: Array<RunChatOptions> = [];
+      const runChat: RunChat = (options) => {
+        capturedOptions.push(options);
+        return toAsyncIterable(scriptedChunks);
+      };
+      const runner = providerRunner({ name: harnessName, runChat });
+      const base = request({ checkoutPath: null });
+      const skills = [{ identity: "local:repo/skill/release", name: "release", source: "/skills/SKILL.md" }];
+
+      yield* Stream.runDrain(runner.run({ ...base, plan: RunPlan.make({ ...base.plan, skills }) })).pipe(
+        Effect.provide(providerRunnerLayer()),
+      );
+      yield* Stream.runDrain(runner.run(base)).pipe(Effect.provide(providerRunnerLayer()));
+
+      assert.deepStrictEqual(
+        capturedOptions.map(({ middleware }) => middleware.some(({ name }) => name === "skills")),
+        [true, false],
+      );
     }),
   );
 

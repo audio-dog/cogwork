@@ -11,6 +11,7 @@ import {
   PrincipalMiddleware,
   type RunActivity,
   type RunId,
+  RunWatchItem,
   type WorkspaceId,
 } from "@cogwork/contracts";
 
@@ -18,21 +19,22 @@ import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
-import type * as Crypto from "effect/Crypto";
+import type * as Digest from "effect/crypto/Digest";
+import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 import * as References from "effect/References";
+import * as RpcSerialization from "effect/rpc/RpcSerialization";
+import * as RpcServer from "effect/rpc/RpcServer";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as RpcSerialization from "effect/unstable/rpc/RpcSerialization";
-import * as RpcServer from "effect/unstable/rpc/RpcServer";
-import type { SqlError } from "effect/unstable/sql/SqlError";
+import type { SqlError } from "effect/sql/SqlError";
 import { makeClockSource } from "./clock-source";
 import {
   cancelRun,
@@ -134,7 +136,12 @@ export const daemonInfoLayer = Layer.effect(
   Effect.map(Clock.currentTimeMillis, (startedAtMillis) => ({ startedAtMillis })),
 );
 
-const isTerminalActivity = (activity: RunActivity) => agUiIsTerminal(activity.event);
+const watchedActivity = (activity: RunActivity) => ({ _tag: "RunActivity", activity }) satisfies RunWatchItem;
+
+const historyEnd = { _tag: "HistoryEnd" } satisfies RunWatchItem;
+
+const endsRun = (item: RunWatchItem) =>
+  RunWatchItem.guards.RunActivity(item) && agUiIsTerminal(item.activity.event);
 
 type ControlStoreSeedEvent = Omit<
   Extract<DaemonEvent, { readonly _tag: "ControlStoreChanged" }>,
@@ -177,7 +184,7 @@ const pluginSeedEvent = (plugins: PluginSeedEvent["plugins"]) =>
 
 export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: RunId | undefined) {
   const bus = yield* DaemonEventBus;
-  if (id === undefined) return bus.activity;
+  if (id === undefined) return bus.activity.pipe(Stream.map(watchedActivity));
 
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
@@ -185,13 +192,18 @@ export const watchActivity = Effect.fn("Daemon.watchActivity")(function* (id: Ru
   const run = yield* ledger.getRun(id);
   if (run === null) return Stream.empty;
   const historyHead = (yield* ledger.latestSeq(id)) ?? -1;
-  const history = recorder.replay(run).pipe(Stream.takeWhile((item) => item.seq <= historyHead));
+  const history = recorder.replay(run).pipe(
+    Stream.takeWhile((item) => item.seq <= historyHead),
+    Stream.map(watchedActivity),
+    Stream.concat(Stream.make(historyEnd)),
+  );
   const live = runActivityStream(Stream.fromSubscription(subscription)).pipe(
     Stream.filter((item) => item.runId === id && item.seq > historyHead),
+    Stream.map(watchedActivity),
   );
   const settled = run.status !== "running";
   const base = settled ? history : Stream.concat(history, live);
-  return base.pipe(Stream.takeUntil(isTerminalActivity));
+  return base.pipe(Stream.takeUntil(endsRun));
 });
 
 const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
@@ -394,8 +406,12 @@ export const principalMiddlewareLayer = Layer.succeed(PrincipalMiddleware)(
 export interface HostAdapters<E = never, R = never> {
   readonly transport: Layer.Layer<RpcServer.Protocol, E, RpcSerialization.RpcSerialization | R>;
   readonly credentials: Layer.Layer<CredentialStore, E, HttpClient.HttpClient | R>;
-  readonly granolaLogin?: Layer.Layer<never, E, R | Crypto.Crypto>;
-  readonly slackLogin?: Layer.Layer<never, E, R | Crypto.Crypto | HttpClient.HttpClient>;
+  readonly granolaLogin?: Layer.Layer<never, E, R | SecureRandom.SecureRandom>;
+  readonly slackLogin?: Layer.Layer<
+    never,
+    E,
+    R | SecureRandom.SecureRandom | Digest.Digest | HttpClient.HttpClient
+  >;
   readonly contextAssembler: Layer.Layer<ContextAssembler, E, R>;
   readonly runLedger: Layer.Layer<CoreRunLedger, E, SqliteClient.SqliteClient | R>;
   readonly controlStorePath: string;
@@ -468,17 +484,20 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     Layer.provide(githubClient),
     Layer.provide(registry),
   );
-  const runLedger: Layer.Layer<RunLedger, E | PlatformError, R | FileSystem.FileSystem | Path.Path> =
-    runLedgerPublishingLayer.pipe(
-      Layer.provide(
-        Layer.unwrap(
-          Effect.map(ControlStore, (store) =>
-            store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
-          ),
-        ).pipe(Layer.provide(controlStore)),
-      ),
-      Layer.provide(daemonEventBusLayer),
-    );
+  const runLedger: Layer.Layer<
+    RunLedger,
+    E | PlatformError | SqlError,
+    R | FileSystem.FileSystem | Path.Path
+  > = runLedgerPublishingLayer.pipe(
+    Layer.provide(
+      Layer.unwrap(
+        Effect.map(ControlStore, (store) =>
+          store.health === "available" ? adapters.runLedger : memoryRunLedgerLayer,
+        ),
+      ).pipe(Layer.provide(controlStore)),
+    ),
+    Layer.provide(daemonEventBusLayer),
+  );
   const runRecorder = runRecorderLayer.pipe(Layer.provide(runLedger), Layer.provide(daemonEventBusLayer));
   const sessionStore = SessionStore.layer.pipe(Layer.provide(runLedger), Layer.provide(runRecorder));
   const runnerRequirements = Layer.mergeAll(
@@ -507,7 +526,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   const triggerSources: Layer.Layer<
     TriggerSources,
     E | PlatformError | SqlError,
-    R | Crypto.Crypto | FileSystem.FileSystem | Git | HttpClient.HttpClient | Path.Path
+    R | SecureRandom.SecureRandom | FileSystem.FileSystem | Git | HttpClient.HttpClient | Path.Path
   > = Layer.effect(
     TriggerSources,
     Effect.gen(function* () {
@@ -558,6 +577,7 @@ function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         harnessRuntime,
         issueTracker,
         registry,
+        plugins,
         runLedger,
         runRecorder,
         workflowActionPlans,

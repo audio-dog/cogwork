@@ -1,5 +1,5 @@
+import { SqliteSchema } from "@cogwork/engine";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
-import * as DrizzleSqlite from "drizzle-kit/payload/sqlite";
 import { lt, sql } from "drizzle-orm";
 import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node";
 import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
@@ -9,7 +9,6 @@ import type * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
 import * as Formatter from "effect/Formatter";
 import * as Layer from "effect/Layer";
@@ -19,8 +18,8 @@ import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Tracer from "effect/Tracer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 const pageSize = 4096;
 const spanBatchSize = 1000;
@@ -109,30 +108,11 @@ class TelemetryStoreSchemaError extends Data.TaggedError("TelemetryStoreSchemaEr
 }> {}
 
 const telemetryStoreSchemaStatements = Effect.fn("TelemetryStore.schemaStatements")(function* () {
-  const sqlClient = yield* SqlClient.SqlClient;
-  return yield* Effect.scoped(
-    Effect.gen(function* () {
-      const runPromise = yield* FiberSet.makeRuntimePromise();
-      const database = {
-        query: <T = never>(query: string, params: ReadonlyArray<unknown> = []) =>
-          runPromise(sqlClient.unsafe<T & object>(query, params)).then((rows) => rows.map((row) => row)),
-        run: (query: string) => runPromise(sqlClient.unsafe(query)).then(() => undefined),
-        batch: (statements: ReadonlyArray<string>) =>
-          runPromise(
-            Effect.forEach(statements, (statement) => sqlClient.unsafe(statement), {
-              discard: true,
-            }),
-          ).then(() => undefined),
-      };
-      const result = yield* Effect.tryPromise({
-        try: () => DrizzleSqlite.pushSchema(telemetryStoreSchema, database),
-        catch: (error) =>
-          new TelemetryStoreSchemaError({
-            message: `Telemetry store schema diff failed: ${String(error)}`,
-          }),
-      });
-      return result.sqlStatements;
-    }),
+  return yield* SqliteSchema.statements(telemetryStoreSchema).pipe(
+    Effect.mapError(
+      (error) =>
+        new TelemetryStoreSchemaError({ message: `Telemetry store schema diff failed: ${error.message}` }),
+    ),
   );
 });
 

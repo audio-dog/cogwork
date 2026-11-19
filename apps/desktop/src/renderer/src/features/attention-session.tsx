@@ -17,7 +17,8 @@ import {
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { type ReactNode, useState } from "react";
-import { Attention, type AttentionLayout } from "../components/attention-board";
+import { Attention } from "../components/attention-board";
+import type { AttentionLayout } from "../components/attention-board-context";
 import type { CatalogIcon } from "./workflow-catalog";
 import type {
   Artifact,
@@ -126,11 +127,11 @@ const targetLabel = (target: WorkflowActionTarget) =>
   });
 
 const targetApp = (target: WorkflowActionTarget) =>
-  WorkflowActionTarget.match<CatalogIcon | null>(target, {
-    Cogwork: () => "cogwork",
+  WorkflowActionTarget.match(target, {
+    Cogwork: (): CatalogIcon => "cogwork",
     NoWorkspace: () => null,
-    SlackChannel: () => "slack",
-    SlackMessage: () => "slack",
+    SlackChannel: (): CatalogIcon => "slack",
+    SlackMessage: (): CatalogIcon => "slack",
     CurrentIssue: ({ app }) => catalogIcon(app),
     ExistingIssue: ({ app }) => catalogIcon(app),
     NewIssue: ({ app }) => catalogIcon(app),
@@ -224,8 +225,12 @@ const choicesFor = (
   });
 };
 
-const reasonOf = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>, catalog: WorkflowCatalog) =>
-  ParkReasonSchema.match<ParkReason>(park.reason, {
+const reasonOf = (
+  park: WorkflowPark,
+  workflows: ReadonlyArray<WorkflowRecord>,
+  catalog: WorkflowCatalog,
+): ParkReason =>
+  ParkReasonSchema.match(park.reason, {
     Stuck: ({ summary }) => ({ tag: "stuck", summary }) as const,
     Exhausted: ({ reason }) => ({ tag: "exhausted", failure: reason }) as const,
     HopCap: () => ({ tag: "hop-cap" }) as const,
@@ -234,6 +239,12 @@ const reasonOf = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>, 
     WriteFailed: ({ step, error }) => ({ tag: "write-failed", step, error }) as const,
     DraftOutcomeUnknown: ({ step }) => ({ tag: "draft-outcome-unknown", step }) as const,
     NoWorkspaceRecognized: () => ({ tag: "no-workspace-recognized" }) as const,
+    WorktreeBlocked: ({ path, unmergedPaths }) =>
+      ({
+        tag: "worktree-blocked",
+        path: path ?? null,
+        unmergedPaths: unmergedPaths ?? [],
+      }) as const,
     AwaitingApproval: ({ digest, revision }) =>
       ({ tag: "awaiting-approval", digest, builtOn: revision }) as const,
     HandedToYou: () =>
