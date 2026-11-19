@@ -1,0 +1,35 @@
+configs/lint/AGENTS.md
+  s_7a86d35d06c9ed::t_e957b9c6690c93 11
+configs/lint/oxlint/cogwork.ts
+  s_7a86d35d06c9ed::t_7440819e5372b2 5
+configs/lint/tests/fixtures/no-export-in-test/invalid-example.ts
+  s_72329c59f1a7e3::t_d460ab2a450034 4-6
+configs/lint/tests/rule-test-harness.mjs
+  s_7a86d35d06c9ed::t_59b0779de76ad4 16,59-60,66
+configs/lint/tests/rules.test.mjs
+  s_7a86d35d06c9ed::t_c02ee1913a0ac7 292,297,335
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "226dfc78786f2cf726f9648d81fd871e4bb193f8",
+  "prompts": {},
+  "sessions": {
+    "s_72329c59f1a7e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a07e3f68102bab313",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7a86d35d06c9ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9eb820f4-8034-4909-9fc8-72ab1d6db4d0",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
