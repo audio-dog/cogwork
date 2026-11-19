@@ -1,0 +1,25 @@
+packages/engine/src/tools/file-diff-batch.ts
+  s_c157a72f540b09::t_f025a5831810b2 1-364
+packages/engine/src/tools/file-diff-feed-content.test.ts
+  s_c157a72f540b09::t_ecadedd6872c28 10,24
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_c157a72f540b09::t_568ef74ca2a759 12,32
+packages/engine/src/tools/file-diff-git.ts
+  s_c157a72f540b09::t_6c4bedd0025078 1-318
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e00944344c1928e7164ee0b48b0aef2594bf83f3",
+  "prompts": {},
+  "sessions": {
+    "s_c157a72f540b09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e84ccaf-0853-4db5-9174-24c570526c36",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
