@@ -12,12 +12,14 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import type { ListedTrackerItem, TrackerComment } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { makeTrackerTriggerSource } from "./tracker-trigger-source";
-import type { TriggerSubscription } from "./trigger-source";
+import type { TriggerEvent, TriggerSubscription } from "./trigger-source";
 import type { WorkflowArtifactStoreService } from "./workflow-artifact-store";
 
 const workspaceId = Schema.decodeSync(WorkspaceId)("github-workspace");
@@ -80,10 +82,10 @@ const comments = [comment("1", 900, true), comment("2", 2_000, true), comment("5
 const tracker = (options: {
   readonly changed?: ReadonlyArray<ListedTrackerItem>;
   readonly labelled?: ReadonlyArray<ListedTrackerItem>;
-  readonly read?: (workspace: WorkspaceIssueTrackerBinding) => void;
+  readonly read?: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) => void;
 }) => ({
-  itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding) => {
-    options.read?.(workspace);
+  itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) => {
+    options.read?.(workspace, sinceMillis);
     return Effect.succeed(options.changed ?? []);
   },
   openItemsWithLabel: (_workspace: WorkspaceIssueTrackerBinding, label: string) =>
@@ -174,7 +176,7 @@ describe("Tracker Trigger source", () => {
     } satisfies WorkflowArtifactStoreService;
     const source = makeTrackerTriggerSource(
       "github",
-      tracker({ changed: [item(1)] }),
+      tracker({ labelled: [item(1)] }),
       Effect.succeed(registryState),
       artifacts,
     );
@@ -207,4 +209,50 @@ describe("Tracker Trigger source", () => {
       });
     },
   );
+
+  it.effect("emits an open item that has a condition label at start, with no modified-since read", () => {
+    const changedReads: Array<number> = [];
+    const source = makeTrackerTriggerSource(
+      "github",
+      tracker({ labelled: [item(3)], read: (_workspace, since) => changedReads.push(since) }),
+      Effect.succeed(registryState),
+      null,
+    );
+    return Effect.gen(function* () {
+      const admitted: Array<TriggerEvent["key"]> = [];
+      const observing = yield* source.observe([subscription(issueHasLabelKey, "labelled")]).pipe(
+        Stream.runForEach(({ key }) => Effect.sync(() => admitted.push(key))),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(observing);
+
+      assert.deepStrictEqual(admitted, [{ _tag: "Issue", workspace: workspaceId, id: unchangedIssueId }]);
+      assert.deepStrictEqual(changedReads, []);
+    });
+  });
+
+  it.effect("starts the first modified-since read at the earliest catch-up cutoff, less the grace", () => {
+    const changedReads: Array<number> = [];
+    const source = makeTrackerTriggerSource(
+      "github",
+      tracker({ read: (_workspace, since) => changedReads.push(since) }),
+      Effect.succeed(registryState),
+      null,
+    );
+    const catchUpDays = (trigger: string, days: string) => ({
+      ...subscription(newCommentKey, trigger),
+      parameters: [...label, { id: "catch-up-at-most", value: days }],
+    });
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(864_000_000);
+      const observing = yield* source
+        .observe([catchUpDays("one-day", "1"), catchUpDays("three-days", "3")])
+        .pipe(Stream.runDrain, Effect.forkChild({ startImmediately: true }));
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(observing);
+
+      assert.deepStrictEqual(changedReads, [604_770_000]);
+    });
+  });
 });

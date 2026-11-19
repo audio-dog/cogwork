@@ -179,4 +179,27 @@ describe("GitHub issue listing", () => {
       );
     }),
   );
+
+  it.effect.each([
+    { case: "omits a lower bound at the epoch", since: 0, sent: undefined },
+    { case: "passes a later lower bound", since: 1, sent: 1 },
+  ])("$case when it lists issues changed since a moment", ({ since, sent }) =>
+    Effect.gen(function* () {
+      const sentSince: Array<number | undefined> = [];
+      const client = yield* GitHubClient.pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            listIssues: (_repo, query) => {
+              sentSince.push(query?.since);
+              return Effect.succeed([]);
+            },
+          }),
+        ),
+      );
+
+      yield* makeIssueReads(client).itemsChangedSince(workspace, since);
+
+      assert.deepStrictEqual(sentSince, [sent]);
+    }),
+  );
 });
