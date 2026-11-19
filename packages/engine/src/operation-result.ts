@@ -55,7 +55,7 @@ const plainFailures = [
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const failureDetail = (cause: Cause.Cause<unknown>) =>
+export const failureDetail = (cause: Cause.Cause<unknown>) =>
   plainFailures.find(({ matches }) => matches(cause))?.detail ?? errorMessage(Cause.squash(cause));
 
 export const harnessStreamFailed = (cause: Cause.Cause<unknown>) =>

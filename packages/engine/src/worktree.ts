@@ -57,21 +57,6 @@ export const ticketSlug = (id: string) => kebab(id) || `u--${codePointSlug(id)}`
 export const branchBelongsToTicketSlug = (branch: string, slug: string) =>
   branch === slug || (branch.startsWith(`${slug}-`) && !branch.startsWith(`${slug}--`));
 
-interface LinkKeyPull {
-  readonly headRef: string;
-  readonly closingIssueNumbers: ReadonlyArray<number>;
-}
-
-const numericIssue = /^#(\d+)$/;
-
-export const pullClosesWorkItem = (id: string, pull: LinkKeyPull) => {
-  const match = numericIssue.exec(id);
-  return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
-};
-
-export const pullMatchesLinkKey = (id: string, pull: LinkKeyPull) =>
-  pullClosesWorkItem(id, pull) || branchBelongsToTicketSlug(pull.headRef, ticketSlug(id));
-
 export const slugify = (title: string) => kebab(title);
 
 export const branchName = (item: WorkItemRef) => {
@@ -285,6 +270,7 @@ export const make = Effect.gen(function* () {
             reason: "diverged",
             remote,
             branch,
+            path: worktreePath,
             message: unresolvableMessage(remote, branch, divergence, error.message),
             retryable: false,
           }),
@@ -313,6 +299,7 @@ export const make = Effect.gen(function* () {
     return yield* new WorktreeError({
       reason: "operation-in-progress",
       branch,
+      path: worktreePath,
       ...operation,
       message: operationMessage(branch, operation),
       retryable: false,

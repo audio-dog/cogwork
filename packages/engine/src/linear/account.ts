@@ -1,14 +1,14 @@
 import { connectionAccountOf, linearTeams, type WorkspaceConfig } from "@cogwork/contracts";
 import type { CredentialAccount } from "../credential-store";
 
-type LinearWorkspaceConfig = Pick<WorkspaceConfig, "name" | "issueTracker">;
+type LinearWorkspaceConfig = Pick<WorkspaceConfig, "id" | "issueTracker">;
 
 // Several teams share one token, so a multi-team key can't be any single team key; it falls back to
-// the workspace name.
+// the workspace id.
 const linearAccountKey = (config: LinearWorkspaceConfig): string | null => {
   const [first, ...rest] = linearTeams(config.issueTracker);
   if (first === undefined) return null;
-  return rest.length === 0 ? first : config.name;
+  return rest.length === 0 ? first : config.id;
 };
 
 export const credentialAccountFor = (config: LinearWorkspaceConfig): CredentialAccount | null => {

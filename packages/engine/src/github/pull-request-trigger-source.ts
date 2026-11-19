@@ -131,7 +131,7 @@ const feedbackOf = (
 
 const itemRef = (workspace: RegistryState["workspaces"][number], pull: RawPull): WorkItemRef => ({
   _tag: "PullRequest",
-  workspace: workspace.config.name,
+  workspace: workspace.config.id,
   number: pull.number,
 });
 
@@ -177,7 +177,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             cause: { _tag: "Unknown" } as const,
             atMillis: pull.updatedAtMillis,
             entry: checksFailedKey,
-            workspace: workspace.config.name,
+            workspace: workspace.config.id,
             subject,
             workContext: prose,
           },
@@ -191,7 +191,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             cause: { _tag: "Unknown" } as const,
             atMillis: pull.updatedAtMillis,
             entry: conflictsKey,
-            workspace: workspace.config.name,
+            workspace: workspace.config.id,
             subject,
             workContext: prose,
           },
@@ -218,7 +218,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
               cause: { _tag: "Person" },
               atMillis: comment.atMillis,
               entry: reviewCommentKey,
-              workspace: workspace.config.name,
+              workspace: workspace.config.id,
               target: { workflow: subscription.workflow, trigger: subscription.trigger },
               subject,
               workContext: prose,
@@ -238,7 +238,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             cause: { _tag: "Unknown" },
             atMillis: comment.atMillis,
             entry: botFindingKey,
-            workspace: workspace.config.name,
+            workspace: workspace.config.id,
             target: { workflow: subscription.workflow, trigger: subscription.trigger },
             parameters: [{ id: "bot", value: bot ?? "" }],
             subject,
@@ -261,9 +261,9 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
   workspace: RegistryState["workspaces"][number],
   now: number,
 ) {
-  const selected = workspaceSubscriptions(workspace.config.name, subscriptions);
+  const selected = workspaceSubscriptions(workspace.config.id, subscriptions);
   const target = selected.length > 0 ? sourceControlTargetFor(workspace) : null;
-  if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.name };
+  if (!target) return { events: [], cursor: cursor ?? 0, workspace: workspace.config.id };
   const actorLogin = yield* client.authenticatedLogin(target);
   const since = cursor === undefined ? 0 : Math.max(0, cursor - providerModifiedSinceGraceMillis);
   const isTrustedPull = ({ authorAssociation, authorLogin }: RawPull) =>
@@ -276,14 +276,14 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
       : trustedPulls.filter(({ updatedAtMillis }) => updatedAtMillis >= since);
   const events = yield* Effect.forEach(pulls, (pull) =>
     isolateProviderItemRead(
-      { source: "github", workspace: workspace.config.name, item: `pull request #${pull.number}` },
+      { source: "github", workspace: workspace.config.id, item: `pull request #${pull.number}` },
       eventsForPull(client, target, workspace, selected, pull, now),
     ),
   );
   return {
     events: events.flat(),
     cursor: providerCursorAfterRead(cursor, now),
-    workspace: workspace.config.name,
+    workspace: workspace.config.id,
   };
 });
 
@@ -296,7 +296,7 @@ const read = Effect.fn("GitHubPullRequestTriggerSource.read")(function* (
   const now = yield* Clock.currentTimeMillis;
   const state = yield* registry;
   const reads = yield* Effect.forEach(state.workspaces, (workspace) =>
-    readWorkspace(client, checkpoint.cursors.get(workspace.config.name), subscriptions, workspace, now),
+    readWorkspace(client, checkpoint.cursors.get(workspace.config.id), subscriptions, workspace, now),
   );
   return {
     events: reads.flatMap(({ events }) => events),

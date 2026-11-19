@@ -32,12 +32,11 @@ const readUpdate = Effect.fn("workspace.readUpdate")(function* (inputPath: strin
 });
 export const formatRegistrationResult = (requestedName: string, workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
-    Registered: (registered) =>
-      `Registered ${registered.displayName ?? registered.name} as ${registered.name}.`,
+    Registered: (registered) => `Registered ${registered.displayName} as ${registered.id}.`,
     Failed: (failed) =>
-      failed.name === undefined
+      failed.id === undefined
         ? `Workspace input failed for ${failed.source}: ${failed.message}`
-        : `Registered ${requestedName} as ${failed.name}, but Workspace input failed: ${failed.message}`,
+        : `Registered ${requestedName} as ${failed.id}, but Workspace input failed: ${failed.message}`,
   });
 
 const runRegister = Effect.fn("workspace.register")(function* (options: {
@@ -47,7 +46,7 @@ const runRegister = Effect.fn("workspace.register")(function* (options: {
   const registration = yield* readRegistration(options.input);
   const client = yield* makeDaemonClient();
   const workspace = yield* client.RegisterWorkspace({ registration });
-  const message = formatRegistrationResult(registration.name, workspace);
+  const message = formatRegistrationResult(registration.displayName, workspace);
   if (WorkspaceState.guards.Failed(workspace)) return yield* Console.error(message);
   yield* Console.log(message);
 });
@@ -62,20 +61,16 @@ export const registerWorkspace = Effect.fn("workspace.registerWithLayers")(funct
 export const formatRebindResult = (workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
     Failed: (failed) =>
-      `Re-bound ${failed.displayName ?? failed.name ?? failed.source}, but Workspace input failed: ${failed.message}`,
-    Registered: (registered) => {
-      const identity = registered.displayName
-        ? `${registered.displayName} (${registered.name})`
-        : registered.name;
-      return `Re-bound ${identity} to ${registered.checkoutPath}.`;
-    },
+      `Re-bound ${failed.displayName ?? failed.id ?? failed.source}, but Workspace input failed: ${failed.message}`,
+    Registered: (registered) =>
+      `Re-bound ${registered.displayName} (${registered.id}) to ${registered.checkoutPath}.`,
   });
 
 export const formatUpdateResult = (workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
     Failed: (failed) =>
-      `Updated ${failed.displayName ?? failed.name ?? failed.source}, but Workspace input failed: ${failed.message}`,
-    Registered: (registered) => `Updated ${registered.displayName ?? registered.name}.`,
+      `Updated ${failed.displayName ?? failed.id ?? failed.source}, but Workspace input failed: ${failed.message}`,
+    Registered: (registered) => `Updated ${registered.displayName}.`,
   });
 
 const runDeregister = Effect.fn("workspace.deregister")(function* (options: {
