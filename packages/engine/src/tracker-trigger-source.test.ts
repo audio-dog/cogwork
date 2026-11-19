@@ -89,7 +89,7 @@ const tracker = (options: {
   readonly labelled?: ReadonlyArray<ListedTrackerItem>;
   readonly read?: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) => void;
 }) => ({
-  itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) => {
+  openItemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) => {
     options.read?.(workspace, sinceMillis);
     return Effect.succeed(options.changed ?? []);
   },
