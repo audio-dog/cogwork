@@ -12,17 +12,17 @@ import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import type * as Headers from "effect/http/Headers";
+import * as HttpClient from "effect/http/HttpClient";
+import type * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
-import type * as Headers from "effect/unstable/http/Headers";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import type * as HttpClientError from "effect/unstable/http/HttpClientError";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { CheckRun } from "../ci";
 import { CredentialStore } from "../credential-store";
 import { defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
@@ -918,7 +918,7 @@ const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpC
         );
       return yield* execute(request, credential.token, consume);
     }
-    const token = yield* Effect.mapError(Config.redacted(repo.tokenEnv), () =>
+    const token = yield* Effect.mapError(Config.Redacted(repo.tokenEnv), () =>
       permanentAttemptError(
         new IssueTrackerError({
           reason: "auth",

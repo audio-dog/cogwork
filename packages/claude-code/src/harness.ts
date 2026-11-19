@@ -1,5 +1,12 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { CredentialStore, ExternalHarnessRuntime, Harness, HarnessBridge } from "@cogwork/engine";
+import {
+  CredentialStore,
+  ExternalHarnessRuntime,
+  ExternalHarnessSandbox,
+  ExternalHarnessWorkspace,
+  Harness,
+  HarnessBridge,
+} from "@cogwork/engine";
 import {
   type ClaudeCodeModel,
   type ClaudeCodeTextAdapter,
@@ -115,7 +122,7 @@ const commandTimeoutError = (subject: string) =>
 
 const withProbeSandbox = <Value, Requirements>(
   use: (sandbox: SandboxHandle) => Effect.Effect<Value, Harness.HarnessError, Requirements>,
-) => ExternalHarnessRuntime.withLocalProcessSandbox(".", inheritedEnvironment, commandCauseError, use);
+) => ExternalHarnessSandbox.withLocalProcessSandbox(".", inheritedEnvironment, commandCauseError, use);
 
 const claudeCommand = Effect.fn("ClaudeCode.command")(
   (sandbox: SandboxHandle, executable: string, argument: string) =>
@@ -299,7 +306,7 @@ const turnDiagnostics = (mode: ClaudeAuthenticationMode, cause: unknown) => {
 };
 
 const mcpServerEntry = (server: Harness.ResolvedMcpSkill) => {
-  const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
+  const environmentName = ExternalHarnessWorkspace.mcpBearerEnvironmentName(server.name);
   return [
     server.name,
     {
@@ -318,8 +325,11 @@ const inlineMcpConfig = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>) => {
   );
 };
 
-const nativeSandboxSettings = (policy: Harness.OperationPolicyProfile) =>
+const nativeSettings = (policy: Harness.OperationPolicyProfile) =>
   JSON.stringify({
+    // `attribution: false` needs Claude Code 2.1.281; an earlier version rejects it and drops every
+    // setting in this argument, the sandbox included.
+    attribution: { commit: "", pr: "", sessionUrl: false },
     sandbox: {
       enabled: true,
       failIfUnavailable: true,
@@ -338,7 +348,7 @@ const claudeExecutableFor = (
     executable,
     ...(effort ? ["--effort", effort] : []),
     "--settings",
-    inlineSettingsArgument(nativeSandboxSettings(request.policy)),
+    inlineSettingsArgument(nativeSettings(request.policy)),
     ...(mcpConfig ? ["--mcp-config", mcpConfig] : []),
   ].join(" ");
 };

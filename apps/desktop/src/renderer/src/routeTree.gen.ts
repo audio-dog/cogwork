@@ -28,6 +28,7 @@ import { Route as AppWorkflowsWorkflowIdRouteImport } from './routes/_app/workfl
 import { Route as AppWorkflowsNewRouteImport } from './routes/_app/workflows/new'
 import { Route as AppWorkspacesWorkspaceIdRouteImport } from './routes/_app/workspaces/$workspaceId'
 import { Route as AppCustomizePluginPluginIdRouteImport } from './routes/_app/customize/plugin.$pluginId'
+import { Route as AppWorkflowsWorkflowIdReviewRouteImport } from './routes/_app/workflows/$workflowId_.review'
 
 const AppRouteRoute = AppRouteRouteImport.update({
   id: '/_app',
@@ -125,6 +126,12 @@ const AppCustomizePluginPluginIdRoute =
     path: '/plugin/$pluginId',
     getParentRoute: () => AppCustomizeRouteRoute,
   } as any)
+const AppWorkflowsWorkflowIdReviewRoute =
+  AppWorkflowsWorkflowIdReviewRouteImport.update({
+    id: '/workflows/$workflowId_/review',
+    path: '/workflows/$workflowId/review',
+    getParentRoute: () => AppRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/customize/': typeof AppCustomizeIndexRoute
   '/workflows/': typeof AppWorkflowsIndexRoute
   '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
+  '/workflows/$workflowId/review': typeof AppWorkflowsWorkflowIdReviewRoute
 }
 export interface FileRoutesByTo {
   '/attention': typeof AppAttentionRoute
@@ -163,6 +171,7 @@ export interface FileRoutesByTo {
   '/customize': typeof AppCustomizeIndexRoute
   '/workflows': typeof AppWorkflowsIndexRoute
   '/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
+  '/workflows/$workflowId/review': typeof AppWorkflowsWorkflowIdReviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -185,6 +194,7 @@ export interface FileRoutesById {
   '/_app/customize/': typeof AppCustomizeIndexRoute
   '/_app/workflows/': typeof AppWorkflowsIndexRoute
   '/_app/customize/plugin/$pluginId': typeof AppCustomizePluginPluginIdRoute
+  '/_app/workflows/$workflowId_/review': typeof AppWorkflowsWorkflowIdReviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/customize/'
     | '/workflows/'
     | '/customize/plugin/$pluginId'
+    | '/workflows/$workflowId/review'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/attention'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/customize'
     | '/workflows'
     | '/customize/plugin/$pluginId'
+    | '/workflows/$workflowId/review'
   id:
     | '__root__'
     | '/_app'
@@ -246,6 +258,7 @@ export interface FileRouteTypes {
     | '/_app/customize/'
     | '/_app/workflows/'
     | '/_app/customize/plugin/$pluginId'
+    | '/_app/workflows/$workflowId_/review'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -388,6 +401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCustomizePluginPluginIdRouteImport
       parentRoute: typeof AppCustomizeRouteRoute
     }
+    '/_app/workflows/$workflowId_/review': {
+      id: '/_app/workflows/$workflowId_/review'
+      path: '/workflows/$workflowId/review'
+      fullPath: '/workflows/$workflowId/review'
+      preLoaderRoute: typeof AppWorkflowsWorkflowIdReviewRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
   }
 }
 
@@ -415,6 +435,7 @@ interface AppRouteRouteChildren {
   AppWorkflowsNewRoute: typeof AppWorkflowsNewRoute
   AppWorkspacesWorkspaceIdRoute: typeof AppWorkspacesWorkspaceIdRoute
   AppWorkflowsIndexRoute: typeof AppWorkflowsIndexRoute
+  AppWorkflowsWorkflowIdReviewRoute: typeof AppWorkflowsWorkflowIdReviewRoute
 }
 
 const AppRouteRouteChildren: AppRouteRouteChildren = {
@@ -426,6 +447,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppWorkflowsNewRoute: AppWorkflowsNewRoute,
   AppWorkspacesWorkspaceIdRoute: AppWorkspacesWorkspaceIdRoute,
   AppWorkflowsIndexRoute: AppWorkflowsIndexRoute,
+  AppWorkflowsWorkflowIdReviewRoute: AppWorkflowsWorkflowIdReviewRoute,
 }
 
 const AppRouteRouteWithChildren = AppRouteRoute._addFileChildren(

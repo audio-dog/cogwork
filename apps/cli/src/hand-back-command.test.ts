@@ -1,12 +1,13 @@
 import { WorkflowTouchpointFailure, WorkItemId, WorkspaceId } from "@cogwork/contracts";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Command from "effect/cli/Command";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import { TestConsole } from "effect/testing";
-import * as Command from "effect/unstable/cli/Command";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
 import { cli } from "./cli";
 import { formatHandBackResult, handBackError, makeHandBackRequest } from "./hand-back-command";
 
@@ -82,7 +83,14 @@ describe("hand-back command", () => {
   it.effect("appears in root help", () =>
     Effect.gen(function* () {
       yield* Command.runWith(cli, { version: "0.0.1" })(["--help"]).pipe(
-        Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer)),
+        Effect.provide(
+          Layer.mergeAll(
+            FetchHttpClient.layer,
+            NodeServices.layer,
+            NodeCrypto.layerSecureRandom,
+            NodeCrypto.layerDigest,
+          ),
+        ),
       );
 
       assert.include((yield* TestConsole.logLines).join("\n"), "hand-back");

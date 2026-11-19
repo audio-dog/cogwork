@@ -21,8 +21,8 @@ import { withPersistence } from "@tanstack/ai-persistence";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+import type * as HttpClient from "effect/http/HttpClient";
 import * as Stream from "effect/Stream";
-import type * as HttpClient from "effect/unstable/http/HttpClient";
 import { CredentialStore } from "./credential-store";
 import {
   fullHarnessExecution,

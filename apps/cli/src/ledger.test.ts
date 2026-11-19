@@ -28,7 +28,7 @@ import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import * as GenericSqlClient from "effect/unstable/sql/SqlClient";
+import * as GenericSqlClient from "effect/sql/SqlClient";
 import { layer as ledgerLayer, runLedgerAppendDuration } from "./ledger";
 
 class TestStorePath extends Context.Service<TestStorePath, string>()(
@@ -534,6 +534,25 @@ describe("sqlite RunLedger", () => {
           ["interrupted", 5000],
           ["running", null],
           ["succeeded", 3850],
+        ]);
+      }),
+    );
+
+    it.effect("keeps a settled Run's status and end time when asked to change them", () =>
+      Effect.gen(function* () {
+        const ledger = yield* RunLedger.CoreRunLedger;
+        const logs = yield* LedgerLogProbe;
+        yield* ledger.insertRun(record("settled", 1000, { status: "crashed", endedAtMillis: 2000 }));
+        const before = (yield* logs.entries).length;
+
+        yield* ledger.updateRun(runId("settled"), { status: "succeeded", usage: null, endedAtMillis: 3000 });
+
+        assert.deepInclude(yield* ledger.getRun(runId("settled")), {
+          status: "crashed",
+          endedAtMillis: 2000,
+        });
+        assert.deepStrictEqual((yield* logs.entries).slice(before), [
+          ["refused a status change to a Run that is not running", { requested: "succeeded" }],
         ]);
       }),
     );

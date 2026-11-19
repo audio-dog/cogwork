@@ -1,14 +1,15 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
 import { Granola } from "@cogwork/engine";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as HttpClient from "effect/unstable/http/HttpClient";
 import { type GranolaLoginConfig, granolaLoginLayer, makeTokenRefresh } from "./granola-login";
 import { BrowserOpener } from "./login";
 
@@ -160,7 +161,10 @@ describe("Granola browser login", () => {
       assert.strictEqual(Redacted.value(refreshed.accessToken), "granola-refreshed");
       assert.strictEqual(refreshRequests[0]?.get("client_id"), "granola-client");
       assert.strictEqual(refreshRequests[0]?.get("resource"), `${baseOf(config.endpoint)}/mcp`);
-    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer))),
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer, NodeCrypto.layerSecureRandom)),
+    ),
   );
 });
 

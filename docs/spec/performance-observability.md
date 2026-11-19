@@ -147,5 +147,5 @@ a sensor to notice it.
 
 ## Glossary
 
-New terms land in `packages/engine/CONTEXT.md`: **Telemetry store**, **Performance regression sensor**, **Performance budget sensor**, **Performance budget**,
+New terms land in `packages/engine/GLOSSARY.md`: **Telemetry store**, **Performance regression sensor**, **Performance budget sensor**, **Performance budget**,
 **Replay runner**, **Health signal**, **Fingerprint**.

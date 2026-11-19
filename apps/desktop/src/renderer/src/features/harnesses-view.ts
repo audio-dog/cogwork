@@ -68,33 +68,33 @@ export const harnessSummary = (item: HarnessItem): HarnessSummary => {
   if (!item.enabled) {
     return { headline: "Disabled", detail: null, attention: "muted", signIn: null };
   }
-  return HarnessState.match<HarnessSummary>(item.state, {
-    Ready: () => ({ headline: "Ready", detail: null, attention: "none", signIn: null }),
-    NotInstalled: ({ diagnostic }) => ({
+  return HarnessState.match(item.state, {
+    Ready: (): HarnessSummary => ({ headline: "Ready", detail: null, attention: "none", signIn: null }),
+    NotInstalled: ({ diagnostic }): HarnessSummary => ({
       headline: "Not found",
       detail: diagnostic,
       attention: "fatal",
       signIn: null,
     }),
-    UnsupportedVersion: ({ requirement }) => ({
+    UnsupportedVersion: ({ requirement }): HarnessSummary => ({
       headline: "Version not supported",
       detail: requirement ? `Needs ${requirement}` : null,
       attention: "warning",
       signIn: null,
     }),
-    NotSignedIn: ({ signIn }) => ({
+    NotSignedIn: ({ signIn }): HarnessSummary => ({
       headline: "Not signed in",
       detail: null,
       attention: "warning",
       signIn: signIn?.command ?? null,
     }),
-    Unavailable: ({ diagnostic }) => ({
+    Unavailable: ({ diagnostic }): HarnessSummary => ({
       headline: "Needs attention",
       detail: diagnostic,
       attention: "warning",
       signIn: null,
     }),
-    Unknown: ({ diagnostic }) => ({
+    Unknown: ({ diagnostic }): HarnessSummary => ({
       headline: "Not checked yet",
       detail: diagnostic,
       attention: "warning",
@@ -105,11 +105,7 @@ export const harnessSummary = (item: HarnessItem): HarnessSummary => {
 
 export const installedVersion = (item: HarnessItem) => {
   const reported = versionLabel(item.version);
-  return HarnessState.match<{
-    readonly value: string;
-    readonly requirement: string | null;
-    readonly faulty: boolean;
-  }>(item.state, {
+  return HarnessState.match(item.state, {
     Ready: () => ({ value: reported ?? "installed", requirement: null, faulty: false }),
     NotInstalled: () => ({ value: "not found", requirement: null, faulty: true }),
     UnsupportedVersion: ({ requirement }) => ({

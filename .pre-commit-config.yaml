@@ -1,7 +1,7 @@
 # `pnpm install` installs the shims named here. Adding a hook type needs another `pnpm install`.
 # The shim is shared by every worktree, so it is installed with `--allow-missing-config`: a worktree
 # on a branch from before this file must still be able to commit.
-default_install_hook_types: [commit-msg]
+default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/compilerla/conventional-pre-commit
@@ -9,3 +9,22 @@ repos:
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: file-token-limit
+        name: file token limit
+        entry: node scripts/check-file-tokens.mjs
+        language: system
+        types: [text]
+        stages: [pre-commit]
+        # Only files an agent writes are limited. The `pnpm-*` skills are copies that
+        # `@tanstack/intent` writes from installed packages; the others are upstream skills.
+        exclude: |
+          (?x)^(
+            pnpm-lock\.yaml
+            | .*\.gen\.ts
+            | .*\.generated\.ts
+            | packages/engine/drizzle/.*
+            | \.agents/skills/(pnpm-[^/]+|react-composition-patterns|shadcn|tanstack-ai)/.*
+          )$

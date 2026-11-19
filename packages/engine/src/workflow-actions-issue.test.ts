@@ -1,6 +1,7 @@
 import {
   keyOf,
   RunId,
+  validateWorkflow,
   WorkflowCatalogKey,
   WorkflowDocument,
   WorkflowId,
@@ -20,6 +21,7 @@ import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalo
 import type { RegisteredWorkspace } from "./projector";
 import { SlackWrite } from "./slack-write";
 import { engineTestLayer } from "./testing/engine-test-layer";
+import { trackerTriggerEntries } from "./tracker-trigger-source";
 import {
   makeMemoryTriggerObservationStore,
   type TriggerAdmission,
@@ -143,6 +145,63 @@ describe("Issue Action entries", () => {
         assert.notInclude(cogworkKeys, key);
       }
     }
+  });
+
+  it("refuses each current-item action on an issue of the other tracker", () => {
+    const catalog = {
+      entries: issueTrackerApps.flatMap((system) => [
+        ...trackerTriggerEntries(system),
+        ...issueTrackerWorkflowCatalogContribution(system).entries,
+      ]),
+      instructionPackages: [],
+      harnesses: [],
+    };
+    const openPullRequest = {
+      ...writeOperation("github"),
+      transitions: [
+        {
+          when: [],
+          actions: [{ entry: decodeEntry("github.open-pull-request"), parameters: [] }],
+          handOff: null,
+        },
+      ],
+    };
+    const itemKindMessages = (triggerApp: IssueTrackerApp, write: WorkflowDocument["operations"][number]) =>
+      validateWorkflow(
+        WorkflowDocument.make({
+          name: "Cross-tracker writes",
+          workspaces: { _tag: "Every" },
+          triggers: [
+            {
+              id: Schema.decodeSync(WorkflowNodeId)("labelled"),
+              entry: decodeEntry(`${triggerApp}.issue-has-label`),
+              parameters: [{ id: "label", value: "ready" }],
+              filters: [],
+              start: operation,
+            },
+          ],
+          operations: [write],
+        }),
+        catalog,
+      )
+        .filter(({ code }) => code === "item-kind-mismatch")
+        .map(({ message }) => message);
+
+    assert.deepStrictEqual(itemKindMessages("linear", writeOperation("github")), [
+      "Action github.comment-this-item in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.add-label in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.remove-label in Operation write acts only on github.issue, but linear.issue reaches it",
+      "Action github.close-this-issue in Operation write acts only on github.issue, but linear.issue reaches it",
+    ]);
+    assert.deepStrictEqual(itemKindMessages("github", writeOperation("linear")), [
+      "Action linear.comment-this-item in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.add-label in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.remove-label in Operation write acts only on linear.issue, but github.issue reaches it",
+      "Action linear.close-this-issue in Operation write acts only on linear.issue, but github.issue reaches it",
+    ]);
+    assert.deepStrictEqual(itemKindMessages("github", writeOperation("github")), []);
+    assert.deepStrictEqual(itemKindMessages("linear", writeOperation("linear")), []);
+    assert.deepStrictEqual(itemKindMessages("linear", openPullRequest), []);
   });
 
   for (const system of issueTrackerApps) {

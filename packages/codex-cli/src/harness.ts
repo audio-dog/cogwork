@@ -1,5 +1,12 @@
 import type { HarnessName } from "@cogwork/contracts";
-import { ExternalHarnessRuntime, Harness, HarnessBridge, SubagentRunner } from "@cogwork/engine";
+import {
+  ExternalHarnessRuntime,
+  ExternalHarnessSandbox,
+  ExternalHarnessWorkspace,
+  Harness,
+  HarnessBridge,
+  SubagentRunner,
+} from "@cogwork/engine";
 import {
   type CodexTextAdapter,
   type CodexTextConfig,
@@ -130,7 +137,7 @@ const codexCommand = Effect.fn("CodexRunner.command")(
 );
 
 const codexPreflight = Effect.fn("CodexRunner.preflight")((executable: string) =>
-  ExternalHarnessRuntime.withLocalProcessSandbox(
+  ExternalHarnessSandbox.withLocalProcessSandbox(
     process.cwd(),
     ExternalHarnessRuntime.defaultInheritedEnvironment,
     codexLaunchDiagnostics,
@@ -279,7 +286,7 @@ const codexMcpProjection = (servers: ReadonlyArray<Harness.ResolvedMcpSkill>): C
     if (!codexConfigKeySafe.test(server.name)) {
       throw new Error(`MCP server name is not a safe Codex config key: ${server.name}`);
     }
-    const environmentName = ExternalHarnessRuntime.mcpBearerEnvironmentName(server.name);
+    const environmentName = ExternalHarnessWorkspace.mcpBearerEnvironmentName(server.name);
     return {
       config: [
         [`mcp_servers.${server.name}.url`, tomlString(server.endpoint)] as const,

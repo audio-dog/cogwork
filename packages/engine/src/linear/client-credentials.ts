@@ -4,9 +4,9 @@ import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Redacted from "effect/Redacted";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
 import {
   type ClientCredentialsGrant,
   type ClientCredentialsRef,
@@ -41,7 +41,7 @@ const failure = (key: GrantKey, message: string) =>
   new CredentialError({ account: key.account, message, retryable: false });
 
 const secretOf = Effect.fn("linear.clientCredentials.secret")(function* (key: GrantKey) {
-  const configured = yield* Effect.orElseSucceed(Config.redacted(key.secretEnv), () => Redacted.make(""));
+  const configured = yield* Effect.orElseSucceed(Config.Redacted(key.secretEnv), () => Redacted.make(""));
   const secret = Redacted.value(configured).trim();
   if (secret === "") {
     return yield* failure(

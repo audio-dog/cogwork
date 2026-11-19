@@ -28,7 +28,6 @@ import {
   StaleControlStoreWrite,
 } from "@cogwork/contracts";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
-import * as DrizzleSqlite from "drizzle-kit/payload/sqlite";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -36,16 +35,16 @@ import * as Data from "effect/Data";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as FiberSet from "effect/FiberSet";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import lockfile, { type LockOptions } from "proper-lockfile";
 import * as controlStoreSchema from "./control-store-schema";
+import * as SqliteSchema from "./sqlite-schema";
 
 export const controlStoreWriteGateWaitDuration = Metric.timer(
   "cogwork_control_store_write_gate_wait_duration",
@@ -196,11 +195,9 @@ const initializeStoreFile = Effect.fn("ControlStore.initializeStoreFile")((store
   }),
 );
 
-const schemaDiffError = (error: unknown) => {
-  const message = messageOf(error);
-  if (/resolver\([^)]*\) was called without a HintsHandler/.test(message))
-    return new RenameShapedControlStoreDiff({ message });
-  return new ControlStoreBootError({ message: `Control store schema diff failed: ${message}` });
+const schemaDiffError = (error: SqliteSchema.SqliteSchemaDiffError) => {
+  if (error.reason === "rename-shaped") return new RenameShapedControlStoreDiff({ message: error.message });
+  return new ControlStoreBootError({ message: `Control store schema diff failed: ${error.message}` });
 };
 
 const classifySchemaStatement = (statement: string) =>
@@ -759,28 +756,7 @@ const makeAvailableControlStore = Effect.fn("ControlStore.makeAvailable")(functi
 });
 
 const controlStoreSchemaStatements = Effect.fn("ControlStore.schemaStatements")(function* () {
-  const sql = yield* SqlClient.SqlClient;
-  return yield* Effect.scoped(
-    Effect.gen(function* () {
-      const runPromise = yield* FiberSet.makeRuntimePromise();
-      const database = {
-        query: <T = never>(query: string, params: ReadonlyArray<unknown> = []) =>
-          runPromise(sql.unsafe<T & object>(query, params)).then((rows) => rows.map((row) => row)),
-        run: (query: string) => runPromise(sql.unsafe(query)).then(() => undefined),
-        batch: (statements: ReadonlyArray<string>) =>
-          runPromise(
-            Effect.forEach(statements, (statement) => sql.unsafe(statement), {
-              discard: true,
-            }),
-          ).then(() => undefined),
-      };
-      const result = yield* Effect.tryPromise({
-        try: () => DrizzleSqlite.pushSchema(controlStoreSchema, database),
-        catch: schemaDiffError,
-      });
-      return result.sqlStatements;
-    }),
-  );
+  return yield* SqliteSchema.statements(controlStoreSchema).pipe(Effect.mapError(schemaDiffError));
 });
 
 const convergeSchema = Effect.fn("ControlStore.convergeSchema")(function* (
