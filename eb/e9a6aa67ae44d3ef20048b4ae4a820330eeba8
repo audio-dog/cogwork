@@ -1,0 +1,121 @@
+docs/adr/0009-mission-control-ui-client-stack.md
+  s_5d54c7d8984ced::t_e865919570beca 3-4
+docs/adr/0038-oxlint-and-oxfmt-replace-biome-and-official-rules-win.md
+  s_5d54c7d8984ced::t_3bfce5810cdc20 1-113
+docs/adr/0039-local-ui-state-is-effect-atom-state.md
+  s_5d54c7d8984ced::t_6dd0ff631c64a0 1-38
+docs/research/cursor-acp-versus-cursor-sdk.md
+  s_5d54c7d8984ced::t_acf804517f052c 62,64-67
+packages/claude-code/src/harness.ts
+  s_5d54c7d8984ced::t_576021a880aa4e 427
+packages/codex-cli/src/harness.ts
+  s_5d54c7d8984ced::t_201e109a3c17c9 343
+packages/contracts/GLOSSARY-harness-contract.md
+  s_5d54c7d8984ced::t_038001a20a29eb 49
+packages/contracts/GLOSSARY-runs.md
+  s_5d54c7d8984ced::t_a3dfa8aaf55a8e 33
+packages/cursor-acp/GLOSSARY.md
+  s_5d54c7d8984ced::t_df80d1be52f98b 13
+packages/cursor-acp/package.json
+  s_5d54c7d8984ced::t_f2788c34f2cc75 13,29
+packages/cursor-acp/src/harness.test.ts
+  s_5d54c7d8984ced::t_c0cf3f20f18ee0 10,15,465,468,805-852
+packages/engine/GLOSSARY-harness.md
+  s_5d54c7d8984ced::t_091eee37ccbe83 30,38
+packages/engine/docs/adr/0008-assignee-ownership-gate.md
+  s_5d54c7d8984ced::t_f939a83283ebe2 23-32
+packages/engine/src/connection-verify.ts
+  s_5d54c7d8984ced::t_ea5808d415dfa4 11
+packages/engine/src/external-harness-runtime-launch.ts
+  s_5d54c7d8984ced::t_fa3a5d288a49b6 156-157,180
+packages/engine/src/external-harness-runtime.test.ts
+  s_5d54c7d8984ced::t_eac2877c3d582e 44-45,85,102-111,113-116,214,244-255,257,260-262,264-266
+packages/engine/src/external-harness-runtime.ts
+  s_5d54c7d8984ced::t_0fb13048356a69 39,64,152,220-221,354
+packages/engine/src/github/host.test.ts
+  s_5d54c7d8984ced::t_aa0edb4b530ccc 147,149,154-155,162-164,166-185,187-190
+packages/engine/src/github/host.ts
+  s_5d54c7d8984ced::t_3081fc15660926 184,188,195-198,200
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_5d54c7d8984ced::t_baf2968963468c 9,75
+packages/engine/src/github/trigger-source-polling.test.ts
+  s_5d54c7d8984ced::t_c3d0a664f1229b 11,75-77,95-104,110-124,130-131,134,139-140,142-146,152
+packages/engine/src/issue-tracker-router.test.ts
+  s_5d54c7d8984ced::t_8ccb7e8906a782 85-100,102-103,156,171,185,237
+packages/engine/src/issue-tracker-router.ts
+  s_5d54c7d8984ced::t_0c20d16dd8e328 15-16,23
+packages/engine/src/issue-tracker.ts
+  s_5d54c7d8984ced::t_a4a1dc69619e3f 138,151-152,156
+packages/engine/src/linear/client-errors.ts
+  s_5d54c7d8984ced::t_74312fd8232e8c 1-123
+packages/engine/src/linear/client-issue-mapping.ts
+  s_5d54c7d8984ced::t_20d89f7fd63ffc 1-137
+packages/engine/src/linear/client-issue-reads.ts
+  s_5d54c7d8984ced::t_dd17207a06c537 1-217
+packages/engine/src/linear/client-schemas.ts
+  s_5d54c7d8984ced::t_47f2e9d858f244 1-180
+packages/engine/src/linear/client-transport.ts
+  s_5d54c7d8984ced::t_31939fdac87ea4 1-169
+packages/engine/src/linear/host.test.ts
+  s_5d54c7d8984ced::t_98204143ed517d 5,7-8,10,66-91,93-97,99-104,106-109,111-120
+packages/engine/src/linear/host.ts
+  s_5d54c7d8984ced::t_448356733599a0 19-22,155-158,160-162
+packages/engine/src/linear/index.ts
+  s_5d54c7d8984ced::t_96a06401642319 9
+packages/engine/src/linear/trigger-source.test.ts
+  s_5d54c7d8984ced::t_5ed0e92a04016f 21,56,153-154,202,238,288-296,301-302,305,310-311,313-317,321-324
+packages/engine/src/operation-result.ts
+  s_5d54c7d8984ced::t_393733f1d698d1 78-84
+packages/engine/src/provider-trigger-source.ts
+  s_5d54c7d8984ced::t_70b73b7b8a7f05 92-100,102,104-105
+packages/engine/src/run-plan-resolution.test.ts
+  s_5d54c7d8984ced::t_e85ed671af2a62 162
+packages/engine/src/run-plan-resolution.ts
+  s_5d54c7d8984ced::t_b93b6d321ec40b 68,199
+packages/engine/src/run-preparation.test.ts
+  s_5d54c7d8984ced::t_4e00f14e44968e 223
+packages/engine/src/run-preparation.ts
+  s_5d54c7d8984ced::t_af58d8dd323363 9,93,200-210,220-221,249
+packages/engine/src/tracker-trigger-source.test.ts
+  s_5d54c7d8984ced::t_adfe7d98c04cb0 15,18,22,90,92-93,184,202,206,208-211,213-216,220-265
+packages/engine/src/tracker-trigger-source.ts
+  s_5d54c7d8984ced::t_0947c42e7ab702 10,13,34,74-85,95-96,183-187,189-192,239
+packages/engine/src/trigger-observation-assignees.test.ts
+  s_5d54c7d8984ced::t_b8e65621d889eb 1,16-17,23,39,43,45-51,53,55,58-67,69-77,81,83-84,87,96,102-103,131
+packages/engine/src/trigger-observation-fixtures.ts
+  s_5d54c7d8984ced::t_2e5e66b0cea6eb 120-128,135,154-155,165,172,174-177,189,194
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_5d54c7d8984ced::t_4eb93c5f911e92 202
+packages/engine/src/trigger-observation.ts
+  s_5d54c7d8984ced::t_ed25856a9d4a52 136
+packages/engine/src/workflow-run-attempts.ts
+  s_5d54c7d8984ced::t_f64b3bb5dacfa5 18-24,56-72,109-116,255-260,385-386
+packages/engine/src/workflow-run-fixtures.ts
+  s_5d54c7d8984ced::t_e505f9007de526 181,220,289-298
+packages/engine/src/workflow-run-hand-back.test.ts
+  s_5d54c7d8984ced::t_07b4d42eda7c9d 1-7,26,174-223
+packages/engine/src/workflow-run-retry.test.ts
+  s_5d54c7d8984ced::t_53664916386f23 32,37-47,253,268,282,290,293,302,311,319-322,329-352
+packages/engine/src/workflow-run-run-plan.test.ts
+  s_5d54c7d8984ced::t_5a0c2499b33936 14,323,326,340-346
+packages/engine/src/workflow-run.ts
+  s_5d54c7d8984ced::t_f6a0bcad4ad4df 49,89-90,208,217,233-234,286
+pnpm-lock.yaml
+  s_5d54c7d8984ced::t_22503b620c38af 723-725
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ebe9a6aa67ae44d3ef20048b4ae4a820330eeba8",
+  "prompts": {},
+  "sessions": {
+    "s_5d54c7d8984ced": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6a678564-bff5-4569-a0c8-57fde8a1ccfc",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
