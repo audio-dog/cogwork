@@ -1,0 +1,23 @@
+packages/engine/GLOSSARY-runs.md
+  s_4a1c6ee7a27e58::t_b5309ecae3d03b 34
+packages/engine/src/coordination-fold.test.ts
+  s_4a1c6ee7a27e58::t_d8e464b5d5f462 46,52,58,106,116,125,136,139,144,151
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_4a1c6ee7a27e58::t_6ba88a31135bbe 226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eea1bebd6ab1fcce09014420ac96aa45e3a11004",
+  "prompts": {},
+  "sessions": {
+    "s_4a1c6ee7a27e58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeaf75bf-a9ed-4a48-b63b-170c596b0298",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
