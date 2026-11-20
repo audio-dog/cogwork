@@ -1,0 +1,43 @@
+packages/engine/GLOSSARY-runs.md
+  s_31b04941e62420::t_26f7ba4d3d79a9 34
+packages/engine/src/coordination-contract.ts
+  s_31b04941e62420::t_6ffcbe63406274 13,40,45,50,52
+packages/engine/src/coordination-fold.test.ts
+  s_31b04941e62420::t_8acf0976d047be 36,47-53,59-65,71,77,92,94,97-105,107,112-172,194,219
+packages/engine/src/coordination.ts
+  s_31b04941e62420::t_385bd90c8728b3 18,26,44,51-52,69-74,85-86,89-90,138,171-178,181,193-197,203,228,231,329-331
+packages/engine/src/granola-source-fixtures.ts
+  s_31b04941e62420::t_0cdb01aa4cbdb5 67
+packages/engine/src/run-preparation.test.ts
+  s_31b04941e62420::t_8bf98d1e5f738b 180
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_31b04941e62420::t_55a40ecd401c32 6-7,77,187,208-254
+packages/engine/src/trigger-observation-fixtures.ts
+  s_31b04941e62420::t_0386bb3e56e0a7 262
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_31b04941e62420::t_a82921cc9f7d04 132
+packages/engine/src/workflow-action-plan-fixtures.ts
+  s_31b04941e62420::t_d17f9d53df15cc 274
+packages/engine/src/workflow-actions-issue.test.ts
+  s_31b04941e62420::t_e7d667c3126575 125
+packages/engine/src/workflow-attention.test.ts
+  s_31b04941e62420::t_10b9d5de31294d 74
+packages/engine/src/workflow-run-fixtures.ts
+  s_31b04941e62420::t_21ae3544fead14 12,74,84,95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7f9f96344d018f64569d0eb71a3cd2026b3900f9",
+  "prompts": {},
+  "sessions": {
+    "s_31b04941e62420": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e6cb218-5bb6-4ab1-af2f-8a2048c116dd",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
