@@ -1,0 +1,61 @@
+apps/desktop/src/renderer/src/features/activity-session.tsx
+  s_e87725ffc0aeff::t_73aa909fb1da81 145,294
+apps/desktop/src/renderer/src/features/configuration-picture.test.ts
+  s_e87725ffc0aeff::t_d1dfa51958b28a 63
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_e87725ffc0aeff::t_87f322c881a35f 9,13,45-75
+apps/desktop/src/renderer/src/features/feed.ts
+  s_dfff94f7260c54::t_c3e6e970537c9e 4,21-26,65-69,73,122-126
+packages/contracts/src/board.test.ts
+  s_dfff94f7260c54::t_04256aed6781e6 316-335
+packages/contracts/src/board.ts
+  s_edc3740b0a8c73::t_7cf9244d3ba383 5,20,34,125
+packages/contracts/src/daemon-event.ts
+  s_edc3740b0a8c73::t_e5ebe30b3d66a0 8,35-47,69
+packages/engine/src/daemon-watch.ts
+  s_7592ef1404922d::t_96a20084d923d6 110-112,158
+packages/engine/src/daemon.ts
+  s_7592ef1404922d::t_e75db2a06130ce 50
+packages/engine/src/event-publisher.ts
+  s_7592ef1404922d::t_bbd6f8e73464f8 8,15,21,101-102,107,109,140-146,164,168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a15ee984a94416d92f2bcc445cb01cce058052c9",
+  "prompts": {},
+  "sessions": {
+    "s_7592ef1404922d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aa2991dbfdb8c5626",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dfff94f7260c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "109cf01b-b58c-4bff-bad9-ea2df8533942",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e87725ffc0aeff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d1c8edd-9b05-4ef3-820e-dbd71907d8d8",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_edc3740b0a8c73": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c949eccc-1e54-41b1-b2ec-6ec8801d4e48",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
