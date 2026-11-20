@@ -12,6 +12,7 @@ import {
   type WorkItemId,
   type WorkspaceId,
   WorkspaceState,
+  workspaceLabel,
 } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomSubscribe } from "@effect/atom-react";
 import * as Data from "effect/Data";
@@ -180,15 +181,15 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
       raw: pretty(run),
       lowSignal: false,
     }),
-    WorkspaceRemoved: ({ workspace }): ActivityRow => ({
+    WorkspaceRemoved: ({ workspace, displayName }): ActivityRow => ({
       id: rowId(ordinal),
       kind: "workspace",
       atMillis,
       label: activityLabels.workspace,
-      summary: `${workspace} deregistered`,
+      summary: `${workspaceLabel({ id: workspace, displayName })} deregistered`,
       severity: "info",
       entity: null,
-      raw: pretty({ workspace }),
+      raw: pretty({ workspace, displayName }),
       lowSignal: false,
     }),
     WorkspaceChanged: ({ workspace }): ActivityRow => {
@@ -197,8 +198,8 @@ const decodeEvent = (event: DaemonEvent, arrival: number, ordinal: number): Acti
           summary: `${source} failed · ${message}`,
           severity: "error",
         }),
-        Registered: ({ id, issueTracker }): Pick<ActivityRow, "summary" | "severity"> => ({
-          summary: `${id} registered · ${issueTracker}`,
+        Registered: ({ displayName, issueTracker }): Pick<ActivityRow, "summary" | "severity"> => ({
+          summary: `${displayName} registered · ${issueTracker}`,
           severity: "info",
         }),
       });

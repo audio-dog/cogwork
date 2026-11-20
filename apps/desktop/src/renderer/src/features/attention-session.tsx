@@ -3,6 +3,7 @@ import {
   matchWorkflowTransitions,
   ParkReason as ParkReasonSchema,
   type RunId,
+  refOfKey,
   WorkflowActionArtifact,
   WorkflowActionTarget,
   type WorkflowAgentInputValue,
@@ -20,6 +21,7 @@ import { type ReactNode, useState } from "react";
 
 import { Attention } from "../components/attention-board";
 import type { AttentionLayout } from "../components/attention-board-context";
+import { relativeTime } from "./format";
 import type { CatalogIcon } from "./workflow-catalog";
 import type {
   Artifact,
@@ -102,10 +104,25 @@ const workflowRef = (
   };
 };
 
-const operationOf = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>) =>
-  workflows
-    .find(({ id }) => id === park.workflow)
-    ?.publishedCopy?.operations.find(({ id }) => id === park.operation);
+const operationOf = (
+  { workflow, operation }: { readonly workflow: WorkflowPark["workflow"]; readonly operation: string },
+  workflows: ReadonlyArray<WorkflowRecord>,
+) =>
+  workflows.find(({ id }) => id === workflow)?.publishedCopy?.operations.find(({ id }) => id === operation);
+
+const parentRunLabel = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>) => {
+  if (park.parentRun === null) return "Earlier Run";
+  const { operation, startedAtMillis } = park.parentRun;
+  const name = operationOf({ workflow: park.workflow, operation }, workflows)?.name ?? operation;
+  return `${name} · started ${relativeTime(startedAtMillis)}`;
+};
+
+const parentHop = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>, workflowName: string) => {
+  if (park.lineage.parent === null) return [];
+  const parentItem = refOfKey(park.lineage.parent);
+  const hop = parentItem ? sourceOf(parentItem) : source("operation", parentRunLabel(park, workflows));
+  return [{ ...hop, workflow: workflowName }];
+};
 
 const titleCase = (value: string) =>
   value
@@ -267,9 +284,6 @@ const parkedItem = (
   const issueApp = park.plan?.steps.map(({ target }) => targetApp(target)).find((app) => app !== null);
   const source = sourceOf(park.item, issueApp ?? "cogwork");
   const workflow = workflowRef(park.workflow, park.publishedRevision, workflows);
-  const parent = park.lineage.parent
-    ? [{ app: "operation" as const, label: park.lineage.parent, workflow: workflow.name }]
-    : [];
   return {
     id: keyOf(park.item),
     ref: park.item,
@@ -278,7 +292,7 @@ const parkedItem = (
     source,
     workflow,
     operation: operationOf(park, workflows)?.name ?? park.operation,
-    lineage: [{ ...source, workflow: null }, ...parent],
+    lineage: [{ ...source, workflow: null }, ...parentHop(park, workflows, workflow.name)],
     summary: park.summary,
     changedSinceParked: park.changedSinceParked,
     parkedAtMillis: park.parkedAtMillis,

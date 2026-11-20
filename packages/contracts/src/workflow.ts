@@ -235,6 +235,9 @@ export const WorkflowPark = Schema.Struct({
   publishedRevision: Schema.Int,
   operation: WorkflowNodeId,
   lineage: Lineage,
+  parentRun: Schema.NullOr(
+    Schema.Struct({ operation: TrimmedNonEmptyString, startedAtMillis: Schema.Natural }),
+  ),
   summary: TrimmedNonEmptyString,
   changedSinceParked: Schema.Boolean,
   commands: Schema.Array(WorkflowParkCommand),

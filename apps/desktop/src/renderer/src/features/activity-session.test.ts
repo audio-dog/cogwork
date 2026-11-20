@@ -139,6 +139,36 @@ describe("activity session", () => {
     expect(reconnected.log.map((row) => row.summary)).toEqual(["42 · run running"]);
   });
 
+  it("names a registered and a deregistered workspace by display name", () => {
+    const id = "01a1a28e-b763-7ccb-9208-2b284d962dae";
+    const session = [
+      event({ _tag: "SeedEnd" }),
+      event({
+        _tag: "WorkspaceChanged",
+        workspace: {
+          _tag: "Registered",
+          id,
+          displayName: "cogwork",
+          checkoutPath: "/repos/cogwork",
+          issueTracker: "github",
+          record: {
+            displayName: "cogwork",
+            checkoutPath: "/repos/cogwork",
+            issueTracker: { type: "github" },
+            linearHistory: false,
+          },
+          contributions: [],
+        },
+      }),
+      event({ _tag: "WorkspaceRemoved", workspace: id, displayName: "cogwork" }),
+    ].reduce((current, next, arrival) => ingestDaemonEvent(current, next, arrival), initialActivitySession);
+
+    expect(session.log.map((row) => row.summary).toSorted()).toEqual([
+      "cogwork deregistered",
+      "cogwork registered · github",
+    ]);
+  });
+
   it("refreshes Workflow inputs for live changes, not seed events", () => {
     const changed = event({ _tag: "WorkspaceRemoved", workspace: "acme" });
     const seeded = ingestDaemonEvent(initialActivitySession, changed, 1);

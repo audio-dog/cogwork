@@ -120,8 +120,8 @@ export const make = Effect.gen(function* () {
     return workspaces;
   });
 
-  const publishWorkspaceRemoved = (workspace: WorkspaceId) =>
-    bus.publish({ _tag: "WorkspaceRemoved", workspace });
+  const publishWorkspaceRemoved = (workspace: WorkspaceId, displayName: string | undefined) =>
+    bus.publish({ _tag: "WorkspaceRemoved", workspace, displayName });
 
   const publishScheduler = Effect.fn("DaemonEventPublisher.publishScheduler")(function* () {
     const state = yield* registry.state;

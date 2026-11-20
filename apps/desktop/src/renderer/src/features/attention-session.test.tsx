@@ -167,6 +167,7 @@ const attentionWith = (
   commands: ReadonlyArray<string>,
   activePlan: unknown = plan,
   summary = "Ready to comment",
+  parked: { readonly lineage: unknown; readonly parentRun: unknown } = { lineage, parentRun: null },
 ) =>
   decodeAttention({
     parks: [
@@ -175,7 +176,7 @@ const attentionWith = (
         workflow: "triage",
         publishedRevision: 4,
         operation: "review",
-        lineage,
+        ...parked,
         summary,
         changedSinceParked: false,
         commands,
@@ -436,6 +437,40 @@ describe("AttentionClientProvider", () => {
     expect(text).toContain("/worktrees/947");
     expect(text).toContain("src/a.ts");
     expect(text).toContain("src/b.ts");
+    await act(async () => root.unmount());
+  });
+
+  const parentRunId = "8a30130e-a15e-411b-87c3-6b23cc581c24";
+  it.each([
+    {
+      parent: parentRunId,
+      parentRun: { operation: "review", startedAtMillis: 0 },
+      label: /^Review · started /,
+    },
+    { parent: parentRunId, parentRun: null, label: /^Earlier Run$/ },
+    { parent: "issue:acme:%2353", parentRun: null, label: /^#53$/ },
+  ])("labels the lineage parent without its raw id ($label)", async ({ parent, parentRun, label }) => {
+    const { container, root } = await renderAttention({
+      snapshot: snapshot(
+        attentionWith({ _tag: "Stuck", summary: "Need a person" }, ["hand-back"], null, "Need a person", {
+          lineage: { ...lineage, parent, hop: 1 },
+          parentRun,
+        }),
+      ),
+      client: defaultClient(),
+    });
+
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((candidate) => candidate.textContent?.includes("From #817"))
+        ?.click(),
+    );
+
+    const titles = [...container.querySelectorAll('[data-slot="trace-title"]')].map(
+      (node) => node.textContent,
+    );
+    expect(titles.some((title) => label.test(title ?? ""))).toBe(true);
+    expect(container.textContent).not.toContain(parent);
     await act(async () => root.unmount());
   });
 

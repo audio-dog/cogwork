@@ -30,7 +30,7 @@ import { useActivitySession } from "./activity-session";
 import { authorityLabel, type Contribution } from "./configuration-model";
 import { DesktopNotificationCoordinator } from "./desktop-notifications";
 import { reportRendererError } from "./report-error";
-import { workspaceLabel } from "./workspace-record";
+import { workspaceStateLabel } from "./workspace-record";
 
 export interface WorkflowClient {
   readonly create: (document: WorkflowDocument) => Promise<WorkflowRecord>;
@@ -195,7 +195,7 @@ export function DaemonWorkflowProvider({ children }: { readonly children: ReactN
       catalog: catalog?.catalog ?? null,
       machine: catalog?.machine ?? null,
       workspaceLabels: new Map(
-        [...session.board.workspaces].map(([id, workspace]) => [id, workspaceLabel(workspace)]),
+        [...session.board.workspaces].map(([id, workspace]) => [id, workspaceStateLabel(workspace)]),
       ),
       templates: templates ?? [],
       harnesses: {
