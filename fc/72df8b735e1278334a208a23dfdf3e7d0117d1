@@ -1,0 +1,115 @@
+.agents/skills/test-audit/SKILL.md
+  s_7592ef1404922d::t_bf3720d1766136 12,90
+.github/workflows/test-suite-seed.yml
+  s_7592ef1404922d::t_573932477e28f9 27-28
+GLOSSARY-MAP.md
+  s_7592ef1404922d::t_af7a242cd64784 27
+apps/desktop/GLOSSARY-settings.md
+  s_7592ef1404922d::t_d9f343316f1c3f 1,3,5,7-10,12-14,16-18,20-23
+apps/desktop/GLOSSARY-shell.md
+  s_7592ef1404922d::t_45df339091025c 1-77
+apps/desktop/GLOSSARY-surfaces.md
+  s_7592ef1404922d::t_7074a9ccb3a756 1-145
+apps/desktop/GLOSSARY.md
+  s_7592ef1404922d::t_11db4a249bb188 15,17-19,28
+apps/desktop/src/renderer/src/components/buffered-field.test.tsx
+  s_7592ef1404922d::t_df6d248d79d62b 1,3-6,8,10-12,15-39
+apps/desktop/src/renderer/src/components/buffered-field.tsx
+  s_7592ef1404922d::t_b712cc43fe2aab 39-43
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  s_7592ef1404922d::t_6cd66570675174 3,5,25-32,37,43-44,247-302,388
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_7592ef1404922d::t_cd3c1e5f27df83 165-171,173-237
+apps/desktop/src/renderer/src/features/run-activity.ts
+  s_7592ef1404922d::t_2d135015227878 171-183,248-308,310
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  s_7592ef1404922d::t_acab1bc64241fb 38-46,180-199,330-333
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  s_7592ef1404922d::t_145fe1a71ea1d8 14,217-226,235-240,260-261,297-306,312
+configs/lint/package.json
+  s_7592ef1404922d::t_bb960aa468928a 7
+configs/sensor/GLOSSARY.md
+  s_7592ef1404922d::t_2d58bd3a5fc727 3-5,15-16,20-22
+configs/sensor/package.json
+  s_7592ef1404922d::t_beed4d01155256 19
+configs/test/tsconfig.json
+  s_7592ef1404922d::t_349be6e42a6593 14
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_7592ef1404922d::t_6bc6f4efac9b80 5-6
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  s_7592ef1404922d::t_7e93cc1c448cf9 5-7
+docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md
+  s_7592ef1404922d::t_2fca64c973e24b 3
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  s_7592ef1404922d::t_8369041285c148 23,100-101
+docs/adr/0038-oxlint-and-oxfmt-replace-biome-and-official-rules-win.md
+  s_7592ef1404922d::t_6bab97b86906c8 111-113
+docs/adr/0040-the-test-suite-cost-sensor-is-removed.md
+  s_7592ef1404922d::t_ef7c50257726f5 1-78
+docs/agent-patterns/test-value.md
+  s_7592ef1404922d::t_2fd376a6bfe176 35-36,44-45
+docs/spec/performance-observability.md
+  s_7592ef1404922d::t_9a7b5eeeb16bf5 135-137
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_7592ef1404922d::t_a7d8e0c0a016fa 17-20
+packages/contracts/GLOSSARY.md
+  s_7592ef1404922d::t_5ac556522dd86c 21
+packages/contracts/src/ag-ui.ts
+  s_7592ef1404922d::t_20eb240f2dc40d 98-102,104-107
+packages/engine/GLOSSARY-harness.md
+  s_7592ef1404922d::t_8945fe73931a04 42
+packages/engine/GLOSSARY-performance.md
+  s_7592ef1404922d::t_6c71f1c398bb66 14-15,18,23
+packages/engine/docs/adr/0018-start-over-deletes-what-cogwork-knows-about-a-work-item.md
+  s_7592ef1404922d::t_760078e10f0bc4 1-14
+packages/engine/package.json
+  s_7592ef1404922d::t_bc4cb42ab6fd15 6
+packages/engine/src/performance-issue-filer.ts
+  s_7592ef1404922d::t_d4862c697424c0 45,126,134,141
+packages/engine/src/run-completion.test.ts
+  s_7592ef1404922d::t_91c01cf9e71bd3 1-43
+packages/engine/src/run-completion.ts
+  s_7592ef1404922d::t_b8e03397e83e29 1-36
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_e87725ffc0aeff::t_2b236011557941 1-9,12,15-16,22,28,30,33-34,36,44-88,162-226
+packages/engine/src/trigger-observation-fixtures.ts
+  s_7592ef1404922d::t_1999b14454b397 160,184
+packages/engine/src/trigger-observation-store.test.ts
+  s_7592ef1404922d::t_5d10a4cbb69397 13-20,134-163
+packages/engine/src/trigger-observation-store.ts
+  s_7592ef1404922d::t_7c7f6308f6540f 46-48,124-131,136,222-228,230-245,266
+packages/engine/src/trigger-observation-subscriptions.ts
+  s_7592ef1404922d::t_ef8f2cfabe13e6 6-12,14,34,37-42
+packages/engine/src/trigger-observation.ts
+  s_7592ef1404922d::t_784ba2ed1d19d2 23,37,40,71-86,153-155,177-178,181,187,193,394
+packages/engine/src/workflow-run-attempts.ts
+  s_7592ef1404922d::t_8cb3b8d5d28b22 25,293-313,386-388,404-405
+packages/engine/src/workflow-run-pending-plan.ts
+  s_7592ef1404922d::t_bf8341927af27d 14,169-170,172-173,176-182
+packages/engine/src/workflow-run.ts
+  s_7592ef1404922d::t_0be7ced79f3a94 31,49,95-96,136-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fc72df8b735e1278334a208a23dfdf3e7d0117d1",
+  "prompts": {},
+  "sessions": {
+    "s_7592ef1404922d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aa2991dbfdb8c5626",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e87725ffc0aeff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d1c8edd-9b05-4ef3-820e-dbd71907d8d8",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
