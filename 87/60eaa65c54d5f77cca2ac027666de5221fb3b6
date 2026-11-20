@@ -1,0 +1,45 @@
+oxfmt.config.ts
+  s_85888aeb54ffba::t_ad4646c6d23319 1-14
+biome.json
+  s_99e2a3125afbfa::t_879181f6678f8c 13,55
+package.json
+  s_99e2a3125afbfa::t_f04782cf0f299d 8-10,27,38-39
+packages/cursor-acp/scripts/sync-models.ts
+  s_99e2a3125afbfa::t_5daced666152ea 4,6,11,66
+pnpm-lock.yaml
+  s_38a924db7676a0::t_1d040717c018cf 290-292,2140-2261,5076-5091,5622-5625,7138-7194,9671-9694,10265-10266
+scripts/format-edited-files.mjs
+  s_99e2a3125afbfa::t_3573b0a8c8a28a 63,65-66,87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8760eaa65c54d5f77cca2ac027666de5221fb3b6",
+  "prompts": {},
+  "sessions": {
+    "s_38a924db7676a0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4142ece369e795db",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_85888aeb54ffba": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "92d47dfa-ed42-47b9-887c-677067064f45",
+        "model": "claude-opus-5-5-high"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_99e2a3125afbfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ce1a55e-228b-445b-bf04-26bce8d702ae",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
