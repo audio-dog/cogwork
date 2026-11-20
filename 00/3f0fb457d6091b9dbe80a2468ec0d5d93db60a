@@ -1,0 +1,19 @@
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_47c0b3dec987fc::t_5a882688ac92fb 74-79,126-137,231,244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "003f0fb457d6091b9dbe80a2468ec0d5d93db60a",
+  "prompts": {},
+  "sessions": {
+    "s_47c0b3dec987fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d71e340f-ef01-4ae2-a5cd-4931103195aa",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
