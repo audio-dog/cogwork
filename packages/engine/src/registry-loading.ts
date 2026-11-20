@@ -23,7 +23,7 @@ import {
   decodeWorkspaceConfig,
   decodeWorkspaceId,
   decodeWorkspaceIdOption,
-  decodeWorkspaceRegistration,
+  decodeWorkspaceRecord,
   selectRows,
   type WorkspaceBindingColumns,
   type WorkspaceRow,
@@ -171,7 +171,7 @@ const loadWorkspace = Effect.fn("WorkspaceRegistry.loadWorkspace")(function* (
   const binding = yield* decodeWorkspaceBindingColumns(row).pipe(
     Effect.mapError((error) => registrationError(error)),
   );
-  const record = yield* decodeWorkspaceRegistration({
+  const record = yield* decodeWorkspaceRecord({
     displayName: row.name,
     checkoutPath: row.checkoutPath,
     issueTracker: input.issueTracker,

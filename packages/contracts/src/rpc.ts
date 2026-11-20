@@ -54,6 +54,7 @@ import { WorkflowDiagnostic } from "./workflow-diagnostic";
 import { WorkflowEditBatch } from "./workflow-edit";
 import {
   GitHubPriorityField,
+  IssueTrackerPerson,
   WorkspaceRegistration,
   WorkspaceRegistrationError,
   WorkspaceRegistryError,
@@ -91,6 +92,12 @@ export const GetHarnessReadiness = Rpc.make("GetHarnessReadiness", {
 export const GetGitHubPriorityFields = Rpc.make("GetGitHubPriorityFields", {
   payload: { workspace: WorkspaceId, connection: ConnectionBindingId },
   success: Schema.Array(GitHubPriorityField),
+  error: Schema.Union([WorkspaceRegistryError, IssueTrackerError]),
+});
+
+export const GetIssueTrackerPeople = Rpc.make("GetIssueTrackerPeople", {
+  payload: { workspace: WorkspaceId, connection: ConnectionBindingId },
+  success: Schema.Array(IssueTrackerPerson),
   error: Schema.Union([WorkspaceRegistryError, IssueTrackerError]),
 });
 
@@ -168,6 +175,7 @@ export const DaemonQueries = RpcGroup.make(
   GetHarnessCatalogs,
   GetHarnessReadiness,
   GetGitHubPriorityFields,
+  GetIssueTrackerPeople,
   ListRuns,
   GetRunEvents,
   ResolveWatchTarget,

@@ -26,11 +26,14 @@ import { type CoordinationScope, makeIssueReads } from "./client-issue-reads";
 import {
   actionIssueMarkerShape,
   actionIssueQuery,
+  activeUsersQuery,
   commentsQuery,
   coordinationCommentsQuery,
+  decodeActiveUsers,
   issueAssigneesQuery,
   issueLabelQuery,
   issueMarkerQuery,
+  type LinearUser,
   labelNames,
   labelShape,
   metaShape,
@@ -101,6 +104,19 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     const data = yield* rawData(ref, workspaceLabelQuery, { label: name });
     const payload = yield* Effect.mapError(decodeWorkspaceLabels(data), toUnavailable);
     return { teamId: team.id, labelId: payload.issueLabels.nodes.at(0)?.id ?? null };
+  });
+
+  const listActiveUsers = Effect.fn("linear.listActiveUsers")(function* (ref: LinearTeamRef) {
+    const collect: (after?: string | null) => Effect.Effect<ReadonlyArray<LinearUser>, IssueTrackerError> =
+      Effect.fn("linear.collectActiveUserPages")(function* (after = null) {
+        const data = yield* rawData(ref, activeUsersQuery, { after });
+        const { users } = yield* Effect.mapError(decodeActiveUsers(data), toUnavailable);
+        if (!users.pageInfo.hasNextPage) return users.nodes;
+        const cursor = users.pageInfo.endCursor;
+        if (cursor === null) return yield* unavailable("Linear user page missing cursor");
+        return [...users.nodes, ...(yield* collect(cursor))];
+      });
+    return yield* withPaginationDeadline("user", collect());
   });
 
   // Team labels and workspace labels both apply to the team's issues.
@@ -312,6 +328,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     createIssue,
     readTriggerProse,
     listLabels,
+    listActiveUsers,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);
