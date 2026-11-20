@@ -7,6 +7,7 @@ import {
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+
 import {
   foldTranscript,
   makeTranscriptSource,

@@ -1,5 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as Effect from "effect/Effect";
+
 import type { WorktreeFsError } from "./worktree-fs";
 
 const inputSchema = { type: "object", properties: {}, additionalProperties: false } as const;

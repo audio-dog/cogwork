@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+
 import {
   localOwner,
   MachineReadiness,
@@ -12,6 +13,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+
 import { clockEntries, clockSource } from "./clock-source";
 import { bootControlStoreLayer } from "./control-store";
 import * as DaemonEventBus from "./daemon-event-bus";

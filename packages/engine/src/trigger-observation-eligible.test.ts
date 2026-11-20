@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";

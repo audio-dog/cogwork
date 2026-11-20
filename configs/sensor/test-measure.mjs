@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { globSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
 import { testCountMarker, testTimingMarker } from "../test/test-count-reporter.ts";
 
 const vitestCountPattern = new RegExp(`${testCountMarker}(\\d+)`, "g");

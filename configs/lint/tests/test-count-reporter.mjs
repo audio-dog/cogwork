@@ -1,4 +1,5 @@
 import path from "node:path";
+
 import { buildTestTimingReport, testCountMarker, testTimingMarker } from "../../test/test-count-reporter.ts";
 
 const fileTiming = (summary) => ({

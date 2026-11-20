@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { duration, elapsed, relativeTime } from "./format";
 
 describe("duration", () => {

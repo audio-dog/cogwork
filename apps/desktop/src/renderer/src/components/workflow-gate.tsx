@@ -4,6 +4,7 @@ import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwo
 import { RiNodeTree } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+
 import { useWorkflowSession } from "../features/workflow-session";
 
 export function WorkflowGate({

@@ -1,5 +1,6 @@
 import { Dialog, DialogTrigger } from "@cogwork/ui/components/dialog";
 import { ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
+
 import { kindIcons } from "../features/configuration-icons";
 import {
   type Contribution as ContributionRecord,

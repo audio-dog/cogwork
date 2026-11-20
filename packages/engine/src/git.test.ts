@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+
 import { type GitService, withTransitionLogging } from "./git";
 import { LogProbe } from "./testing/log-probe";
 

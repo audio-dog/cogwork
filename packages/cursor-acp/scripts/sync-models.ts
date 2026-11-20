@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
 import { HarnessModelOptionDescriptor } from "@cogwork/contracts";
+
 import { createCursorModelCatalog } from "../src/model.ts";
 
 const agentBin = process.env.CURSOR_AGENT_BIN ?? "agent";

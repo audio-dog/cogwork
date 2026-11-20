@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
+
 import { useRightPanelStore } from "../store/right-panel";
 import { RightPanel } from "./right-panel";
 

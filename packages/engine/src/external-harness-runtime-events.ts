@@ -2,6 +2,7 @@ import { AgUiEvent, agUiIsFileDiffEvent, agUiIsSubagentEvent, FILE_DIFF_EVENT } 
 import { DEFAULT_WORKSPACE_ROOT } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
+
 import type {
   ExternalHarnessResolvedRequest,
   ExternalHarnessUsageEstimator,

@@ -1,10 +1,11 @@
 import { readControlStore } from "@cogwork/engine";
-import * as Console from "effect/Console";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import { RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import { SocketErrorReason, SocketOpenError } from "effect/socket/Socket";
+
 import { defaultControlStorePath, defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 

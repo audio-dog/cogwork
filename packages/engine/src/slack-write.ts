@@ -16,6 +16,7 @@ import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { readJsonEventStream } from "./json-event-stream";
 import {

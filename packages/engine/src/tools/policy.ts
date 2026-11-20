@@ -4,6 +4,7 @@ import {
   type PolicyDecision,
   type SandboxPolicy,
 } from "@tanstack/ai-sandbox";
+
 import type { OperationPolicyProfile } from "../harness";
 
 export type OwnedToolName = "read" | "write" | "edit" | "bash" | "glob" | "grep" | "webfetch";

@@ -1,6 +1,7 @@
 import { LineageId, WorkflowActionArtifact } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import type { PrSignals } from "../source-control";
 import type { RawPull } from "./client";
 import { isReadyToMerge, readyToMergeArtifact } from "./provider";

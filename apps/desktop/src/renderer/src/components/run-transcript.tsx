@@ -22,6 +22,7 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
 import { RiArrowDownSLine, RiCheckLine, RiErrorWarningLine, RiStopCircleLine } from "@remixicon/react";
 import { createContext, type ReactNode, use } from "react";
+
 import { cancelRunAtom } from "../daemon/atoms";
 import { useOperationName } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
@@ -115,7 +116,7 @@ function Gutter({ children, className }: { children: ReactNode; className?: stri
 function StepDetail({ view }: { view: StepView }) {
   const body = stepBody(view);
   return (
-    <div className="mt-1 ms-8 border-s border-border/50 ps-3 pt-0.5">
+    <div className="ms-8 mt-1 border-s border-border/50 ps-3 pt-0.5">
       <pre className="max-h-64 cursor-text overflow-auto font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-muted-foreground select-text">
         {body}
       </pre>

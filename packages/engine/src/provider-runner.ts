@@ -16,13 +16,14 @@ import {
   maxIterations,
   type StreamChunk,
 } from "@tanstack/ai";
-import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { withPersistence } from "@tanstack/ai-persistence";
+import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import type * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
 import type * as HttpClient from "effect/http/HttpClient";
 import * as Stream from "effect/Stream";
+
 import { CredentialStore } from "./credential-store";
 import {
   fullHarnessExecution,

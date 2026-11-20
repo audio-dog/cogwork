@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@cogwork/ui/components
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiLayoutColumnLine, RiListUnordered } from "@remixicon/react";
 import type { ReactNode } from "react";
+
 import { byUrgency, skippedByWorkflow } from "../features/workflow-parks";
 import { AttentionProvider, isAttentionLayout, useAttention } from "./attention-board-context";
 import { NotificationCard } from "./attention-board-notification";

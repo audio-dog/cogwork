@@ -1,4 +1,5 @@
 import { PassThrough } from "node:stream";
+
 import { ProcessProfileRequest } from "@cogwork/process-diagnostics";
 import { NodeStream } from "@effect/platform-node";
 import { assert, describe, expect, it, vi } from "@effect/vitest";
@@ -19,6 +20,7 @@ import {
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Schema from "effect/Schema";
+
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
 import {

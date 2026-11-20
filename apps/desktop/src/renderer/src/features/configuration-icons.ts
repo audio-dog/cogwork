@@ -9,6 +9,7 @@ import {
   RiUserLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
+
 import type { ContributionKind, ScopeKind } from "./configuration-model";
 
 export const kindIcons: Record<ContributionKind, ComponentType> = {

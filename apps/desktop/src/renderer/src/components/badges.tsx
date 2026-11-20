@@ -1,6 +1,7 @@
 import type { PrBaseDivergence, PrChecks, PrReviewStatus, RunStatus } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import type { ComponentProps } from "react";
+
 import { runStatusLabel } from "../features/run-status";
 
 type BadgeVariant = ComponentProps<typeof Badge>["variant"];

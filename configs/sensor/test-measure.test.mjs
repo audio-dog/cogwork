@@ -4,7 +4,9 @@ import { once } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
 import { afterAll, test, vi } from "vitest";
+
 import { testTimingMarker } from "../test/test-count-reporter.ts";
 import {
   configurationComparisonVitestTestArgs,

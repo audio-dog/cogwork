@@ -1,6 +1,7 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiBox3Line } from "@remixicon/react";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
+
 import { useConfiguration } from "../../../components/configuration-provider";
 import { PluginDetail } from "../../../components/plugin-detail";
 import { PluginDetailState, pluginDetailOf } from "../../../features/plugin-configuration";

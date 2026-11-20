@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { pathToFileURL } from "node:url";
+
 import { GitHub, PerformanceIssueFiler as PerformanceIssueFilerModule } from "@cogwork/engine";
 import { wireCodec } from "@cogwork/engine/github/markers";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";

@@ -1,5 +1,6 @@
 import { Config, Effect } from "effect";
 import { defineConfig } from "vitest/config";
+
 import { TestCountReporter } from "./test-count-reporter.ts";
 
 export const localWorkerLimit = (isCi: boolean) => (isCi ? undefined : 1);

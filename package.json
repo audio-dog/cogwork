@@ -4,7 +4,6 @@
   "private": true,
   "description": "Orchestration control plane for AI coding agents: discover work, schedule runs, and drive harnesses.",
   "type": "module",
-  "packageManager": "pnpm@12.16.1",
   "scripts": {
     "format-and-lint:fix": "oxfmt --disable-nested-config && biome lint . --write",
     "format-and-lint:unsafe": "oxfmt --disable-nested-config && biome lint . --write --unsafe",
@@ -36,5 +35,6 @@
       "version": "^26.13.0",
       "onFail": "download"
     }
-  }
+  },
+  "packageManager": "pnpm@12.16.1"
 }

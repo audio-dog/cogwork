@@ -17,6 +17,7 @@ import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
+
 import type { ToolError } from "./errors";
 import {
   computeFileDiffBatch,
@@ -349,20 +350,18 @@ const recoverFeedStep = <A>(
     Effect.map(() => fallback),
   );
 
-const filterConfiguredEvents = Effect.fn("Tools.filterConfiguredFileDiffEvents")(
-  (
-    sandbox: WorktreeSandbox,
-    baseSha: string,
-    fallbackStarted: Deferred.Deferred<void>,
-    events: ReadonlyArray<SourcedWatchEvent>,
-  ) => {
-    const source = feedSource(events);
-    return retainConfiguredEvents(sandbox, baseSha, events).pipe(
-      Effect.catch((error) => recoverFeedStep(sandbox, source, fallbackStarted, error, [])),
-      (effect) => pollingContext(sandbox, source, effect),
-    );
-  },
-);
+const filterConfiguredEvents = Effect.fn("Tools.filterConfiguredFileDiffEvents")((
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  fallbackStarted: Deferred.Deferred<void>,
+  events: ReadonlyArray<SourcedWatchEvent>,
+) => {
+  const source = feedSource(events);
+  return retainConfiguredEvents(sandbox, baseSha, events).pipe(
+    Effect.catch((error) => recoverFeedStep(sandbox, source, fallbackStarted, error, [])),
+    (effect) => pollingContext(sandbox, source, effect),
+  );
+});
 
 const classifySourcedEvent = Effect.fn("Tools.classifySourcedFileDiffEvent")(function* (
   sandbox: WorktreeSandbox,

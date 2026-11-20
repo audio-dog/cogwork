@@ -1,4 +1,5 @@
 import { connectionAccountOf, linearTeams, type WorkspaceConfig } from "@cogwork/contracts";
+
 import type { CredentialAccount } from "../credential-store";
 
 type LinearWorkspaceConfig = Pick<WorkspaceConfig, "id" | "issueTracker">;

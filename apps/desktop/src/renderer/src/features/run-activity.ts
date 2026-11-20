@@ -18,6 +18,7 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Atom from "effect/reactivity/Atom";
 import { RpcClientError } from "effect/rpc/RpcClientError";
 import { useCallback } from "react";
+
 import { runActivityAtom } from "../daemon/atoms";
 
 export interface RunActivityPreview {

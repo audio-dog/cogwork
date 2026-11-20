@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+
 import type { BranchDivergence, GitError, GitOperationInProgress, GitOperationRecord } from "./git";
 
 export const logRemovalFailure = Effect.fn("Worktree.logRemovalFailure")(function* (

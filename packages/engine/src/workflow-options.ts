@@ -1,5 +1,6 @@
 import type { WorkflowCatalogEntry, WorkflowOption, WorkspaceId } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+
 import type { SourceFailure } from "./trigger-source";
 
 /** Reads one list for one workspace, or for no workspace when the list does not depend on one. */

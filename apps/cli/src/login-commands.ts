@@ -1,11 +1,12 @@
 import { type ConnectionEstablishment, ConnectionFailure } from "@cogwork/contracts";
 import { Linear } from "@cogwork/engine";
-import * as Console from "effect/Console";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
+
 import { layer as credentialsLayer } from "./credentials";
 import { browserOpenerLayer, loginKey, loginLinear, ProviderKeyError } from "./login";
 import { defaultCredentialsPath, defaultSocketPath } from "./paths";

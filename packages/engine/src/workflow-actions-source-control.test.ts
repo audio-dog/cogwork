@@ -13,6 +13,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import type { RegisteredWorkspace } from "./projector";
 import { emptyService as emptySourceControl, type PullRequestContext } from "./source-control";

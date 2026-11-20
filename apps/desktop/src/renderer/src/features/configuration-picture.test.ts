@@ -1,6 +1,7 @@
 import { type Board, LocalContribution, WorkspaceId, WorkspaceState } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+
 import { Authority, Diagnostic, LoadState } from "./configuration-model";
 import { configurationPicture } from "./configuration-picture";
 

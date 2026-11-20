@@ -13,6 +13,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import type { ConnectionStoreService } from "./connection";
 import type { CoordinationService } from "./coordination";
 import type { Credential } from "./credential-store";

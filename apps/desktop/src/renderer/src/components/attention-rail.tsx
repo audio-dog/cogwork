@@ -3,6 +3,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/co
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiExternalLinkLine, RiGitPullRequestLine } from "@remixicon/react";
+
 import { BoardResult, useBoard } from "../features/activity-session";
 import { type AttentionEntry, attentionEntries, filterAttention } from "../features/attention";
 import { registeredWorkspaces } from "../features/feed";

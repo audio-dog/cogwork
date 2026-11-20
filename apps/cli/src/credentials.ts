@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+
 import { makeTokenRefresh as makeGranolaTokenRefresh } from "./granola-login";
 import { makeTokenRefresh as makeSlackTokenRefresh } from "./slack-login";
 

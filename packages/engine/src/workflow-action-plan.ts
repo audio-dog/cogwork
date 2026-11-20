@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createHash } from "node:crypto";
+
 import {
   issueTrackerErrorIsPermanent,
   keyOf,
@@ -21,6 +22,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+
 import { Coordination } from "./coordination";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";

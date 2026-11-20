@@ -1,6 +1,7 @@
 import { RunId, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import { Schema } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { useRightPanelStore } from "./right-panel";
 
 const { storageEntries } = vi.hoisted(() => {

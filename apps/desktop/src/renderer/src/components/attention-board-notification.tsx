@@ -11,6 +11,7 @@ import {
   TraceTitle,
 } from "@cogwork/ui/components/trace";
 import { RiArrowRightUpLine, RiBellLine } from "@remixicon/react";
+
 import { plural } from "../features/format";
 import { safeHref } from "../features/safe-href";
 import {

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+
 import { WorkspaceSettingsPage } from "../../../components/workspace-settings";
 import { LiveWorkspacesProvider } from "../../../components/workspaces-provider";
 

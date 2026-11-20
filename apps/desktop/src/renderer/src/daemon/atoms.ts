@@ -13,6 +13,7 @@ import * as Atom from "effect/reactivity/Atom";
 import * as AtomRpc from "effect/reactivity/AtomRpc";
 import * as RpcClient from "effect/rpc/RpcClient";
 import * as Stream from "effect/Stream";
+
 import { electronDaemonBridge } from "./electron-bridge";
 import { reportDesktopProcessHealth } from "./process-health";
 import { layerProtocolIpc } from "./protocol";

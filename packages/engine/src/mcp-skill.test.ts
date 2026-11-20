@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import { type Credential, CredentialError, type CredentialStoreService } from "./credential-store";
 import { credentialAccountFor } from "./linear/account";
 import { make } from "./mcp-skill";

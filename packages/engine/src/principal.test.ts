@@ -6,6 +6,7 @@ import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
 import * as RpcTest from "effect/rpc/RpcTest";
 import * as Schema from "effect/Schema";
+
 import * as Daemon from "./daemon";
 
 const WhoAmI = Rpc.make("WhoAmI", { success: Schema.String });

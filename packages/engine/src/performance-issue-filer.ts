@@ -6,6 +6,7 @@ import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+
 import type { WireCodec } from "./github/markers";
 import type { IssueTrackerError } from "./issue-tracker";
 

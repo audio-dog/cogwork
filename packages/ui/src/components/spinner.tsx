@@ -1,5 +1,6 @@
 import { RiLoaderLine } from "@remixicon/react";
 import type { ComponentProps } from "react";
+
 import { cn } from "#lib/utils";
 
 function Spinner({ className, ...props }: ComponentProps<typeof RiLoaderLine>) {

@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+
 import * as Resource from "@effect/opentelemetry/Resource";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -17,6 +18,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Tracer from "effect/Tracer";
+
 import { telemetryLayer } from "./telemetry";
 
 const requests = Metric.counter("cogwork_telemetry_test_requests_total", {

@@ -1,4 +1,5 @@
 import type { WorkflowCatalogKey, WorkflowRecord } from "@cogwork/contracts";
+
 import { matchesScheduledInstant } from "./clock-source";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "./trigger-source";

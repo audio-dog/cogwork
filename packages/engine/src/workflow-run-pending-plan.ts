@@ -9,6 +9,7 @@ import {
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import { Coordination } from "./coordination";
 import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";

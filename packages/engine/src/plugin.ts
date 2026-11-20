@@ -17,7 +17,6 @@ import {
   TrimmedNonEmptyString,
   type WorkspaceId,
 } from "@cogwork/contracts";
-
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -28,6 +27,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
+
 import { ConnectionStore } from "./connection";
 import { ControlStore } from "./control-store";
 

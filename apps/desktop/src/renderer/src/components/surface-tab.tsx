@@ -9,6 +9,7 @@ import {
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiCloseLine } from "@remixicon/react";
 import type { ComponentProps, ReactNode } from "react";
+
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 
 const baseClassName = "group/surface-tab flex h-7 shrink-0 items-center gap-0.5 rounded-md pl-2 pr-1 text-xs";

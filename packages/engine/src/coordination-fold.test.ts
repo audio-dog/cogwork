@@ -1,5 +1,6 @@
 import { LineageId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+
 import { fold, maxLineageHops } from "./coordination";
 
 const operationOf = (operation: string) => ({ workflow: "workflow", operation });

@@ -16,6 +16,7 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import type { ModelAdapterFactory } from "./provider-adapter";
 import { mergeProviderFileDiffs, providerRunner, type RunChat, type RunChatOptions } from "./provider-runner";
 import {
