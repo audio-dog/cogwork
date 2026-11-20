@@ -7,8 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RiCheckLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use } from "react";
 import { BoardResult, useBoard, useOperationName } from "../features/activity-session";
-import type { FeedRun, OperationRun } from "../features/feed";
-import { recentlyDone, runningRuns } from "../features/feed";
+import type { FeedQueued, FeedRun, OperationRun } from "../features/feed";
+import { queuedItems, recentlyDone, runningRuns } from "../features/feed";
 import { elapsed, relativeTime } from "../features/format";
 import type { RunActivityPreview } from "../features/run-activity";
 import { runStatusLabel } from "../features/run-status";
@@ -20,6 +20,7 @@ import { useRightPanelStore } from "../store/right-panel";
 
 interface FeedState {
   running: ReadonlyArray<FeedRun>;
+  queued: ReadonlyArray<FeedQueued>;
   done: ReadonlyArray<FeedRun>;
   previews: ReadonlyMap<string, RunActivityPreview>;
 }
@@ -168,6 +169,66 @@ function LiveNowSection() {
   );
 }
 
+function QueuedRow({ entry }: { entry: FeedQueued }) {
+  const {
+    actions: { select },
+    meta: { workspaceName, operationName },
+  } = useFeed();
+  const { item, label, title } = entry;
+  return (
+    <TableRow
+      className="cursor-pointer"
+      onClick={() => select({ workspace: item.workspace, workItem: item.workItem })}
+    >
+      <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">{item.place}</TableCell>
+      <TableCell className="truncate font-mono text-xs text-muted-foreground">{label}</TableCell>
+      <TableCell className="truncate text-foreground">{title ?? label}</TableCell>
+      <TableCell>
+        <Badge variant="secondary">{operationName(item)}</Badge>
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline">{workspaceName(item.workspace)}</Badge>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function QueuedSection() {
+  const {
+    state: { queued },
+  } = useFeed();
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionHeading title="Queued" count={queued.length} />
+      {queued.length === 0 ? (
+        <EmptyNote>Nothing queued.</EmptyNote>
+      ) : (
+        <div className="overflow-hidden rounded-xl border">
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="w-12 text-[10px] tracking-wider uppercase">Place</TableHead>
+                <TableHead className="w-20 text-[10px] tracking-wider uppercase">Item</TableHead>
+                <TableHead className="text-[10px] tracking-wider uppercase">Title</TableHead>
+                <TableHead className="w-32 text-[10px] tracking-wider uppercase">Operation</TableHead>
+                <TableHead className="w-36 text-[10px] tracking-wider uppercase">Workspace</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {queued.map((entry) => (
+                <QueuedRow
+                  key={`q:${entry.item.workspace}:${entry.item.workItem}:${entry.item.workflow}`}
+                  entry={entry}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const runStateBadge: Record<
   FeedRun["run"]["status"],
   { variant: "secondary" | "destructive" | "outline"; icon?: ComponentType<{ className?: string }> }
@@ -258,11 +319,13 @@ const FeedCompound = {
   Provider: FeedProvider,
   Frame: FeedFrame,
   LiveNow: LiveNowSection,
+  Queued: QueuedSection,
   Ledger: LedgerSection,
 };
 
 function FeedContent({
   running,
+  queued,
   done,
   previews,
   workspaceName,
@@ -273,12 +336,13 @@ function FeedContent({
   const operationName = useOperationName();
   return (
     <FeedCompound.Provider
-      state={{ running, done, previews }}
+      state={{ running, queued, done, previews }}
       actions={{ select }}
       meta={{ now, workspaceName, operationName }}
     >
       <FeedCompound.Frame>
         <FeedCompound.LiveNow />
+        <FeedCompound.Queued />
         <FeedCompound.Ledger />
       </FeedCompound.Frame>
     </FeedCompound.Provider>
@@ -316,9 +380,11 @@ export function Feed() {
 
   const { board, previews } = result;
   const running = runningRuns(board, filter);
+  const queued = queuedItems(board, filter);
   const done = recentlyDone(board, filter);
+  const nothingInFlight = [running, queued, done].every((rows) => rows.length === 0);
 
-  if (running.length === 0 && done.length === 0) {
+  if (nothingInFlight) {
     return (
       <ScrollArea className="h-full">
         <div className="p-6">
@@ -326,7 +392,7 @@ export function Feed() {
             <EmptyHeader>
               <EmptyTitle>Nothing in flight</EmptyTitle>
               <EmptyDescription>
-                Running agents and recent results will appear here as the daemon works.
+                Running, queued, and recently finished work will appear here as the daemon works.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -338,6 +404,7 @@ export function Feed() {
   return (
     <FeedContent
       running={running}
+      queued={queued}
       done={done}
       previews={previews}
       workspaceName={(workspace) => workspaceLabelById(board, workspace)}

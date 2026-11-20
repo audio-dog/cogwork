@@ -60,6 +60,7 @@ const board: Board = {
   items: new Map(),
   runs: new Map(),
   scheduler: null,
+  queue: { queued: [] },
   workspaces: new Map([[workspace, registeredWorkspace]]),
   controlStore,
   plugins: null,

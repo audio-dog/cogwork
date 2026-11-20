@@ -6,10 +6,11 @@ import {
   WorkflowDocument,
   WorkflowId,
   type WorkflowRecord,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { operationNameOf, recentlyDone } from "./feed";
+import { operationNameOf, queuedItems, recentlyDone } from "./feed";
 
 const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
 const decodeWorkflowId = Schema.decodeUnknownSync(WorkflowId);
@@ -38,6 +39,37 @@ describe("recentlyDone", () => {
     const board = applyDaemonEvent(initialBoard, event);
 
     expect(recentlyDone(board, null).map(({ run }) => run.status)).toEqual(["declined"]);
+  });
+});
+
+describe("queuedItems", () => {
+  it("keeps the scheduler's order and place inside the Workspace filter", () => {
+    const queued = (place: number, workspace: string, workItem: string) => ({
+      place,
+      workspace,
+      workItem,
+      workflow: "coding",
+      operation: "implement",
+    });
+    const event = decodeDaemonEvent({
+      _tag: "QueueChanged",
+      emittedAtMillis: 0,
+      queue: {
+        queued: [queued(1, "acme", "3"), queued(2, "beta", "1"), queued(3, "acme", "2")],
+      },
+    });
+    const board = applyDaemonEvent(initialBoard, event);
+
+    expect(queuedItems(board, null).map(({ item }) => item.workItem)).toEqual(["3", "1", "2"]);
+    expect(
+      queuedItems(board, Schema.decodeUnknownSync(WorkspaceId)("acme")).map(({ item }) => [
+        item.place,
+        item.workItem,
+      ]),
+    ).toEqual([
+      [1, "3"],
+      [3, "2"],
+    ]);
   });
 });
 

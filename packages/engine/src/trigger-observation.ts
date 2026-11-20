@@ -5,8 +5,12 @@ import {
   type Lineage,
   LineageId,
   type ParkReason,
+  type QueuedItem,
+  type SchedulerQueue,
   type TriggerSourceHealth,
   type WorkflowCatalog,
+  WorkItemId,
+  WorkspaceId,
 } from "@cogwork/contracts";
 import * as EffectCause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -95,6 +99,21 @@ const samePlanRejection = (left: ParkReason | undefined, right: ParkReason | nul
   left.reason === right.reason &&
   left.entry === right.entry;
 
+const emptyQueue: SchedulerQueue = { queued: [] };
+
+const decodeWorkspaceId = Schema.decodeSync(WorkspaceId);
+const decodeWorkItemId = Schema.decodeSync(WorkItemId);
+
+const queuedItemOf = (admission: TriggerAdmission, index: number) =>
+  ({
+    place: index + 1,
+    workspace: admission.event.workspace ?? decodeWorkspaceId(admission.subscription.workflow),
+    workItem: decodeWorkItemId(keyOf(admission.event.key)),
+    ...(admission.event.subject ? { subject: admission.event.subject } : {}),
+    workflow: admission.subscription.workflow,
+    operation: admission.subscription.operation,
+  }) satisfies QueuedItem;
+
 const waitForRetry = (failure: SourceFailure) => {
   const retryRules = [
     { matches: failure.reason === "connection-not-ready", wait: Effect.never },
@@ -105,6 +124,7 @@ const waitForRetry = (failure: SourceFailure) => {
 
 export interface TriggerObservationService {
   readonly eligible: Effect.Effect<ReadonlyArray<TriggerAdmission>>;
+  readonly queue: Effect.Effect<SchedulerQueue>;
   readonly recheck: (admission: TriggerAdmission) => Effect.Effect<Recheck, ControlStoreFailure>;
   readonly changes: Stream.Stream<TriggerAdmission>;
   readonly health: Effect.Effect<ReadonlyArray<TriggerSourceHealth>>;
@@ -336,66 +356,88 @@ export const make = Effect.gen(function* () {
       );
   });
 
-  return {
-    eligible: Effect.all([workflows.list, store.admissions]).pipe(
-      Effect.flatMap(([listed, current]) => {
-        const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
-        return Effect.forEach(oldestRevisionAdmissions(current), (admission) =>
-          coordination.read(admission.event.key).pipe(
-            Effect.flatMap((view) => {
-              const canAdvance = view.park !== null && revisionAdvancedParks.has(view.park.reason._tag);
-              if (!canAdvance) return Effect.succeed(admission);
-              const next = current
-                .filter((candidate) => sameSubscription(candidate, admission))
-                .filter((candidate) => admissionIsOlder(admission, candidate))
-                .toSorted((left, right) => (admissionIsOlder(left, right) ? -1 : 1))
-                .at(0);
-              if (next === undefined) return Effect.succeed(admission);
-              return store.complete(admission, Effect.void).pipe(Effect.map(() => next));
-            }),
-          ),
-        ).pipe(
-          Effect.flatMap((oldest) => {
-            const active = oldest.filter(({ subscription }) => enabled.has(subscription.workflow));
-            const inactive = oldest.filter(({ subscription }) => !enabled.has(subscription.workflow));
-            return Effect.forEach(
-              inactive,
-              (admission) =>
-                store.complete(
-                  admission,
-                  coordination.markProcessed(admission.event.key, admission.event.revision),
-                ),
-              { discard: true },
-            ).pipe(
-              Effect.andThen(
-                Effect.forEach(active, (admission) =>
-                  coordination.read(admission.event.key).pipe(
-                    Effect.map((view) => ({
-                      admission,
-                      actedOn: view.actedOn(admission.subscription.workflow),
-                      isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
-                      gate: view.gate(
-                        {
-                          workflow: admission.subscription.workflow,
-                          operation: admission.subscription.operation,
-                        },
-                        admission.event.revision,
-                      ),
-                    })),
-                  ),
-                ),
-              ),
-            );
-          }),
-        );
+  const advancedPast = (current: ReadonlyArray<TriggerAdmission>, admission: TriggerAdmission) =>
+    coordination.read(admission.event.key).pipe(
+      Effect.map((view) => {
+        const canAdvance = view.park !== null && revisionAdvancedParks.has(view.park.reason._tag);
+        const next = canAdvance
+          ? current
+              .filter((candidate) => sameSubscription(candidate, admission))
+              .filter((candidate) => admissionIsOlder(admission, candidate))
+              .toSorted((left, right) => (admissionIsOlder(left, right) ? -1 : 1))
+              .at(0)
+          : undefined;
+        if (next === undefined) return { admission, superseded: [] };
+        return { admission: next, superseded: [admission] };
       }),
+    );
+
+  const candidates = Effect.fn("TriggerObservation.candidates")(function* () {
+    const [listed, current] = yield* Effect.all([workflows.list, store.admissions]);
+    const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
+    const advanced = yield* Effect.forEach(oldestRevisionAdmissions(current), (admission) =>
+      advancedPast(current, admission),
+    );
+    const oldest = advanced.map(({ admission }) => admission);
+    return {
+      superseded: advanced.flatMap(({ superseded }) => superseded),
+      active: oldest.filter(({ subscription }) => enabled.has(subscription.workflow)),
+      inactive: oldest.filter(({ subscription }) => !enabled.has(subscription.workflow)),
+    };
+  });
+
+  const offerable = (active: ReadonlyArray<TriggerAdmission>) =>
+    Effect.forEach(active, (admission) =>
+      coordination.read(admission.event.key).pipe(
+        Effect.map((view) => ({
+          admission,
+          actedOn: view.actedOn(admission.subscription.workflow),
+          isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
+          gate: view.gate(
+            {
+              workflow: admission.subscription.workflow,
+              operation: admission.subscription.operation,
+            },
+            admission.event.revision,
+          ),
+        })),
+      ),
+    ).pipe(
       Effect.map((states) =>
         states
           .filter(isOfferable)
           .toSorted(waitingAdmissionOrder)
           .map(({ admission }) => admission),
       ),
+    );
+
+  const settleStale = ({ superseded, inactive }: Effect.Success<ReturnType<typeof candidates>>) =>
+    Effect.forEach(superseded, (admission) => store.complete(admission, Effect.void), {
+      discard: true,
+    }).pipe(
+      Effect.andThen(
+        Effect.forEach(
+          inactive,
+          (admission) =>
+            store.complete(
+              admission,
+              coordination.markProcessed(admission.event.key, admission.event.revision),
+            ),
+          { discard: true },
+        ),
+      ),
+    );
+
+  return {
+    eligible: candidates().pipe(
+      Effect.tap(settleStale),
+      Effect.flatMap(({ active }) => offerable(active)),
       Effect.catchCause(() => Effect.succeed([])),
+    ),
+    queue: candidates().pipe(
+      Effect.flatMap(({ active }) => offerable(active)),
+      Effect.map((queued) => ({ queued: queued.map(queuedItemOf) })),
+      Effect.catchCause(() => Effect.succeed(emptyQueue)),
     ),
     recheck,
     changes: Stream.fromPubSub(changes),
@@ -407,6 +449,7 @@ export const make = Effect.gen(function* () {
 
 const unavailableObservation: TriggerObservationService = {
   eligible: Effect.succeed([]),
+  queue: Effect.succeed(emptyQueue),
   recheck: () => Effect.succeed(Recheck.Matches()),
   changes: Stream.empty,
   health: Effect.succeed([]),

@@ -5,7 +5,7 @@ import { LocalContribution } from "./contribution";
 import { ControlStore, ReadyToMergeItem, SchedulerStats } from "./daemon";
 import { HarnessReadiness } from "./harness";
 import { PluginOverview } from "./plugin";
-import { RunActivity, RunSummary } from "./run";
+import { RunActivity, RunSubject, RunSummary } from "./run";
 import { WorkflowRecord } from "./workflow-catalog";
 import { WorkspaceRecord } from "./workspace";
 
@@ -32,6 +32,19 @@ export const WorkspaceState = Schema.TaggedUnion({
 });
 export type WorkspaceState = typeof WorkspaceState.Type;
 
+export const QueuedItem = Schema.Struct({
+  place: Schema.Int.check(Schema.isGreaterThan(0)),
+  workspace: WorkspaceId,
+  workItem: WorkItemId,
+  subject: Schema.optionalKey(RunSubject),
+  workflow: WorkflowId,
+  operation: TrimmedNonEmptyString,
+});
+export type QueuedItem = typeof QueuedItem.Type;
+
+export const SchedulerQueue = Schema.Struct({ queued: Schema.Array(QueuedItem) });
+export type SchedulerQueue = typeof SchedulerQueue.Type;
+
 export const DaemonEvent = Schema.TaggedUnion({
   SeedEnd: { emittedAtMillis: Schema.Finite },
   RunActivity: { emittedAtMillis: Schema.Finite, activity: RunActivity },
@@ -53,6 +66,7 @@ export const DaemonEvent = Schema.TaggedUnion({
   },
   HarnessesChanged: { emittedAtMillis: Schema.Finite, readiness: HarnessReadiness },
   SchedulerChanged: { emittedAtMillis: Schema.Finite, scheduler: SchedulerStats },
+  QueueChanged: { emittedAtMillis: Schema.Finite, queue: SchedulerQueue },
   WorkflowChanged: { emittedAtMillis: Schema.Finite, workflow: WorkflowRecord },
   WorkflowDeleted: { emittedAtMillis: Schema.Finite, id: WorkflowId },
 });

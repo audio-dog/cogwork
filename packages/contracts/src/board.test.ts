@@ -313,6 +313,26 @@ describe("applyDaemonEvent", () => {
     assert.deepStrictEqual(board.pluginNotices, []);
   });
 
+  it("replaces the queue picture with the latest one", () => {
+    const queued = (place: number, workItem: string) => ({
+      place,
+      workspace: "acme",
+      workItem,
+      workflow: "coding",
+      operation: "implement",
+    });
+
+    const board = fold([
+      event({ _tag: "QueueChanged", queue: { queued: [queued(1, "#1"), queued(2, "#2")] } }),
+      event({ _tag: "QueueChanged", queue: { queued: [queued(1, "#3")] } }),
+    ]);
+
+    assert.deepStrictEqual(
+      board.queue.queued.map(({ place, workItem }) => [place, workItem]),
+      [[1, "#3"]],
+    );
+  });
+
   it("tracks the latest cached Harness readiness", () => {
     const readiness = harnessReadiness({
       checkedAtMillis: 12,

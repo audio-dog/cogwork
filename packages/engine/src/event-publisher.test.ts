@@ -1,6 +1,8 @@
 import {
   type DaemonEvent,
   type ReadyToMergeItem,
+  type SchedulerQueue,
+  WorkflowId,
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
@@ -18,6 +20,7 @@ import type { RegisteredWorkspace } from "./projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { Scheduler } from "./scheduler";
 import { emptyService, SourceControlProvider } from "./source-control";
+import { TriggerObservation } from "./trigger-observation";
 import { memoryLayer as workflowArtifactsLayer } from "./workflow-artifact-store";
 
 const workspaceId = Schema.decodeSync(WorkspaceId)("web");
@@ -50,12 +53,21 @@ const readFailure = new IssueTrackerError({ reason: "unavailable", message: "Git
 
 type ReadyToMergeRead = ReadonlyArray<ReadyToMergeItem> | null;
 
-const publisherWithReads = (reads: Ref.Ref<ReadonlyArray<ReadyToMergeRead>>) =>
+const emptyQueue: SchedulerQueue = { queued: [] };
+
+const publisherWithReads = (
+  reads: Ref.Ref<ReadonlyArray<ReadyToMergeRead>>,
+  queues: Ref.Ref<ReadonlyArray<SchedulerQueue>> = Ref.makeUnsafe<ReadonlyArray<SchedulerQueue>>([]),
+) =>
   eventPublisherLayer.pipe(
     Layer.provideMerge(DaemonEventBus.layer),
     Layer.provide([
       Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [workspace], failures: [] })),
       Layer.mock(Scheduler, {}),
+      Layer.mock(TriggerObservation, {
+        catalog: [],
+        queue: Ref.modify(queues, ([next = emptyQueue, ...rest]) => [next, rest]),
+      }),
     ]),
     Layer.provideMerge([
       workflowArtifactsLayer,
@@ -94,5 +106,44 @@ describe("DaemonEventPublisher.publishWorkspaces", () => {
       const events = yield* publishTwice([[ready], null]);
       assert.deepStrictEqual(itemTags(events), ["ItemChanged", "ItemChanged"]);
     }),
+  );
+});
+
+const queueOf = (...workItems: ReadonlyArray<string>): SchedulerQueue => ({
+  queued: workItems.map((workItem, index) => ({
+    place: index + 1,
+    workspace: workspaceId,
+    workItem: Schema.decodeSync(WorkItemId)(workItem),
+    workflow: Schema.decodeSync(WorkflowId)("coding"),
+    operation: "implement",
+  })),
+});
+
+const firstQueue = queueOf("#1", "#2");
+const secondQueue = queueOf("#2");
+
+describe("DaemonEventPublisher.publishQueue", () => {
+  it.effect("publishes the queue picture only when it changed", () =>
+    Effect.gen(function* () {
+      const subscription = yield* (yield* DaemonEventBus.DaemonEventBus).subscribe();
+      const publisher = yield* DaemonEventPublisher;
+      yield* publisher.publishQueue();
+      yield* publisher.publishQueue();
+      yield* publisher.publishQueue();
+
+      const published = (yield* PubSub.takeAll(subscription)).flatMap((event) =>
+        event._tag === "QueueChanged" ? [event.queue] : [],
+      );
+      assert.deepStrictEqual(published, [firstQueue, secondQueue]);
+      assert.deepStrictEqual(yield* publisher.queue, secondQueue);
+    }).pipe(
+      Effect.provide(
+        publisherWithReads(
+          Ref.makeUnsafe<ReadonlyArray<ReadyToMergeRead>>([]),
+          Ref.makeUnsafe<ReadonlyArray<SchedulerQueue>>([firstQueue, firstQueue, secondQueue]),
+        ),
+      ),
+      Effect.scoped,
+    ),
   );
 });

@@ -107,7 +107,9 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
   const stats = yield* scheduler.stats;
   const running = yield* ledger.runningRuns;
   const registry = yield* (yield* WorkspaceRegistry).state;
-  const readyToMerge = yield* (yield* DaemonEventPublisher).readyToMerge;
+  const publisher = yield* DaemonEventPublisher;
+  const readyToMerge = yield* publisher.readyToMerge;
+  const queueEvent = { _tag: "QueueChanged", queue: yield* publisher.queue } as const;
   const workspaces = workspaceStatesOf(registry, readyToMerge).map(
     (workspace) => ({ _tag: "WorkspaceChanged", workspace }) as const,
   );
@@ -153,6 +155,7 @@ const seedEvents = Effect.fn("Daemon.seedEvents")(function* () {
     ...workflowEvents,
     harnessEvent,
     scheduling,
+    queueEvent,
   ].map((event) => ({ ...event, emittedAtMillis }));
 });
 

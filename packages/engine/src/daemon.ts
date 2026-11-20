@@ -47,6 +47,7 @@ const executeTick = Effect.fn("Daemon.executeHeartbeat")(function* () {
   const publisher = yield* DaemonEventPublisher;
   yield* scheduler.tick();
   yield* publisher.publishScheduler();
+  yield* publisher.publishQueue();
 });
 
 const executeHeartbeat = () => executeTick().pipe(Effect.repeat(Schedule.spaced("5 seconds")));
