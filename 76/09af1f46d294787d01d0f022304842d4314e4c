@@ -1,0 +1,23 @@
+packages/engine/src/tools/owned-tools-fixtures.ts
+  s_4a1c6ee7a27e58::t_a4be1b287e6ede 1-127
+packages/engine/src/tools/owned-tools-search.test.ts
+  s_4a1c6ee7a27e58::t_2a4d58a8f01fb9 1-371
+packages/engine/src/tools/owned-tools.test.ts
+  s_4a1c6ee7a27e58::t_8eb944284a1611 14-15,17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7609af1f46d294787d01d0f022304842d4314e4c",
+  "prompts": {},
+  "sessions": {
+    "s_4a1c6ee7a27e58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeaf75bf-a9ed-4a48-b63b-170c596b0298",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
