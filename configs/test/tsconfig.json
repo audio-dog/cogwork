@@ -11,6 +11,6 @@
     "strict": true,
     "target": "ESNext"
   },
-  "include": ["base.ts", "test-count-reporter.ts", "src/**/*.ts"],
+  "include": ["base.ts"],
   "exclude": ["node_modules"]
 }
