@@ -1,0 +1,21 @@
+packages/engine/src/scheduler.ts
+  s_5234a92bb2bce9::t_b33013f7e0d7ad 177-180,226-231,259-277,280-284
+packages/engine/src/workflow-run-admission.test.ts
+  s_5234a92bb2bce9::t_3f534e2ffebd92 95-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "70031546b8e921a6a18e1166568e3cdb8332eaea",
+  "prompts": {},
+  "sessions": {
+    "s_5234a92bb2bce9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02dfc21d-4faf-4b75-9e62-a004ed60926d",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
