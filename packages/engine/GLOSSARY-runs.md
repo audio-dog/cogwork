@@ -31,7 +31,7 @@ A new Run and new native invocation that continue an existing Session. Cogwork s
 _Avoid_: Retry (why the new Run started), replacement Run (one recovery reason), Run takeover (continuation of the same invocation)
 
 **Retry**:
-The control plane starting another Run after a retryable failure. The new Run can resume the failed Run's Session, but retry describes failure policy, not conversation identity.
+The control plane starting another Run after a retryable failure. The new Run can resume the failed Run's Session, but retry describes failure policy, not conversation identity. A retry waits for the retry delay after each failed attempt: one minute after the first failure, two minutes after the second. A new source revision does not wait.
 _Avoid_: Session resume, replacement Run, Run takeover
 
 **Replacement Run**:

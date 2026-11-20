@@ -15,6 +15,7 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -22,6 +23,7 @@ import * as Schema from "effect/Schema";
 export const defaultClaimant = "cogwork";
 export const maxLineageHops = 25;
 const maxConsecutiveFailures = 3;
+const retryDelays = [Duration.minutes(1), Duration.minutes(2)];
 
 export interface CoordinationLedger {
   readonly claim: ClaimType | null;
@@ -39,13 +41,15 @@ export interface CoordinationCounters {
   readonly exhausted: boolean;
   readonly hop: number;
   readonly hopCapped: boolean;
+  readonly retryAtMillis: number | null;
 }
 
 export type CoordinationGate =
   | { readonly _tag: "Open" }
   | { readonly _tag: "Claimed"; readonly claim: ClaimType }
   | { readonly _tag: "Quiet" }
-  | { readonly _tag: "Parked"; readonly reason: ParkReason };
+  | { readonly _tag: "Parked"; readonly reason: ParkReason }
+  | { readonly _tag: "AwaitingRetry"; readonly retryAtMillis: number };
 
 export interface CoordinationView {
   readonly claim: ClaimType | null;
@@ -62,6 +66,12 @@ export interface CoordinationView {
 const sameOperation = (left: OperationKey, right: OperationKey) =>
   left.workflow === right.workflow && left.operation === right.operation;
 
+const retryAtFor = (failures: ReadonlyArray<AttemptRecord>) => {
+  const delay = retryDelays[failures.length - 1];
+  const lastFailure = failures.at(-1);
+  return delay && lastFailure ? lastFailure.atMillis + Duration.toMillis(delay) : null;
+};
+
 const failureStateFor = (
   attempts: ReadonlyArray<AttemptRecord>,
   barrierAtMillis: number,
@@ -72,10 +82,12 @@ const failureStateFor = (
   );
   const lastNonFailure = relevant.findLastIndex((attempt) => attempt.outcome !== "failed");
   const failures = relevant.slice(lastNonFailure + 1);
+  const terminal =
+    failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true);
   return {
     consecutiveFailures: failures.length,
-    terminal:
-      failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true),
+    terminal,
+    retryAtMillis: terminal ? null : retryAtFor(failures),
   };
 };
 
@@ -123,6 +135,7 @@ interface GateInput {
   readonly ledger: CoordinationLedger;
   readonly park: ParkRecord | null;
   readonly counters: CoordinationCounters;
+  readonly nowMillis: number;
 }
 
 const revisionClearedParks = new Set<ParkReason["_tag"]>([
@@ -155,9 +168,17 @@ const gateRules = [
     when: ({ counters }: GateInput) => counters.hopCapped,
     resolve: (): CoordinationGate => ({ _tag: "Parked", reason: { _tag: "HopCap" } }),
   },
+  {
+    when: ({ counters, nowMillis }: GateInput) =>
+      counters.retryAtMillis !== null && nowMillis < counters.retryAtMillis,
+    resolve: ({ counters }: GateInput): CoordinationGate => ({
+      _tag: "AwaitingRetry",
+      retryAtMillis: counters.retryAtMillis as number,
+    }),
+  },
 ] as const;
 
-export const fold = (ledger: CoordinationLedger, claimant: string): CoordinationView => {
+export const fold = (ledger: CoordinationLedger, claimant: string, nowMillis: number): CoordinationView => {
   const handback = newestByTime(ledger.handbacks);
   const barrierAtMillis = handback?.atMillis ?? 0;
   const activeParks = ledger.parks.filter((park) => park.atMillis > barrierAtMillis);
@@ -169,12 +190,17 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
       ledger.claim && ledger.claim.claimedAtMillis > afterMillis ? ledger.claim : null;
     const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > afterMillis);
     const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
-    const { consecutiveFailures, terminal } = failureStateFor(ledger.attempts, afterMillis, key);
+    const { consecutiveFailures, terminal, retryAtMillis } = failureStateFor(
+      ledger.attempts,
+      afterMillis,
+      key,
+    );
     return {
       consecutiveFailures,
       exhausted: terminal,
       hop,
       hopCapped: hop >= maxLineageHops,
+      retryAtMillis,
     };
   };
   const counters = (key: OperationKey) => countersAfter(key, barrierAtMillis);
@@ -199,9 +225,10 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
     );
     const input = {
       ledger,
+      nowMillis,
       park: claimClearsPark(matchingPark, claims) ? null : matchingPark,
       counters: isNewSourceRevision
-        ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false }
+        ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false, retryAtMillis: null }
         : countersAfter(key, barrierAtMillis),
     };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
@@ -299,9 +326,9 @@ export const makeCoordination = (
   } satisfies AuthorityByTag;
   const authority = (ref: WorkItemRef) => authorities[ref._tag];
   const read = (ref: WorkItemRef) =>
-    authority(ref)
-      .read(ref)
-      .pipe(Effect.map((ledger) => fold(ledger, claimant)));
+    Effect.all([authority(ref).read(ref), Clock.currentTimeMillis]).pipe(
+      Effect.map(([ledger, nowMillis]) => fold(ledger, claimant, nowMillis)),
+    );
   const claim = Effect.fn("Coordination.claim")(function* (
     ref: WorkItemRef,
     input: { readonly operation: OperationKey; readonly lineage: Lineage },

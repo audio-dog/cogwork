@@ -71,6 +71,7 @@ const coordinationView = fold(
     revision: { observed: "2", processed: null },
   },
   "cogwork",
+  0,
 );
 const coordinationLayer = Layer.succeed(Coordination, {
   fold,

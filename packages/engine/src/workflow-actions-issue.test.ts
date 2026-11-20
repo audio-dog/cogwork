@@ -122,7 +122,7 @@ const requirements = Layer.mergeAll(
     fold,
     read: () =>
       Effect.succeed({
-        ...fold({ claim: null, attempts: [], handbacks: [], parks: [], revision: null }, "cogwork"),
+        ...fold({ claim: null, attempts: [], handbacks: [], parks: [], revision: null }, "cogwork", 0),
         barrierAtMillis: 0,
       }),
   }),

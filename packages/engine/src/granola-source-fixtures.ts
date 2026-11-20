@@ -64,6 +64,7 @@ const coordinationView = (revision: string | null, parks: ReadonlyArray<ParkReco
       revision: revision === null ? null : { observed: revision, processed: null },
     },
     "cogwork",
+    0,
   );
 
 export const coordinationService = (
