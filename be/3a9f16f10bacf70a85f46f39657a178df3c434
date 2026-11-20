@@ -1,0 +1,21 @@
+apps/cli/src/start-over-command.test.ts
+  s_879522bbf48bef::t_bab05c0b04b98d 1-84
+apps/cli/src/start-over-command.ts
+  s_879522bbf48bef::t_b03fe351690060 1-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be3a9f16f10bacf70a85f46f39657a178df3c434",
+  "prompts": {},
+  "sessions": {
+    "s_879522bbf48bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dc06238-5b4a-45a1-8802-fbb207af229a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
