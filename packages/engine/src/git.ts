@@ -34,8 +34,13 @@ export interface DivergenceHead {
 
 export type GitOperation = "merge" | "rebase" | "cherry-pick";
 
-export interface GitOperationInProgress {
+export interface GitOperationRecord {
   readonly operation: GitOperation;
+  readonly identity: string;
+  readonly head: string;
+}
+
+export interface GitOperationInProgress extends GitOperationRecord {
   readonly unmergedPaths: ReadonlyArray<string>;
 }
 
@@ -71,6 +76,11 @@ export interface GitService {
   readonly operationInProgress: (
     worktreePath: string,
   ) => Effect.Effect<GitOperationInProgress | null, GitError>;
+  readonly recordedOperation: (worktreePath: string) => Effect.Effect<GitOperationRecord | null, GitError>;
+  readonly recordOperation: (
+    worktreePath: string,
+    operation: GitOperationRecord | null,
+  ) => Effect.Effect<void, GitError>;
   readonly rebase: (worktreePath: string, remote: string, branch: string) => Effect.Effect<void, GitError>;
   readonly remoteUrl: (repoPath: string, remote: string) => Effect.Effect<string, GitError>;
   readonly blockPush: (worktreePath: string, remote: string) => Effect.Effect<void, GitError>;
