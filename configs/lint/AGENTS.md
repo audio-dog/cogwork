@@ -5,3 +5,4 @@ After changing a GritQL rule, its fixtures, or the Biome config that registers i
 ```sh
 pnpm --filter @cogwork/lint-config test:rules
 ```
+
