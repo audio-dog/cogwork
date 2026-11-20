@@ -1,0 +1,19 @@
+packages/engine/src/scheduler.ts
+  s_4f1f1ab1060869::t_e7ad26de84c6d7 177,184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fbe96b69e8d811149743bbfd210bfa68bc46eb39",
+  "prompts": {},
+  "sessions": {
+    "s_4f1f1ab1060869": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86e01525-ae8e-49dc-9004-96fa78f862ad",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
