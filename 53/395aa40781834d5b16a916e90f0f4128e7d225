@@ -1,0 +1,29 @@
+biome.json
+  s_99e2a3125afbfa::t_b0179b647af343 13,55
+oxfmt.config.ts
+  s_99e2a3125afbfa::t_06aeb3faa9f078 1-14
+package.json
+  s_99e2a3125afbfa::t_ae7d2407333699 9-11,28
+packages/cursor-acp/scripts/sync-models.ts
+  s_99e2a3125afbfa::t_ca43ee1ea3dcaa 9,64
+pnpm-lock.yaml
+  s_99e2a3125afbfa::t_1e34d597324674 290-292,2140-2261,5076-5091,5622-5625,7138-7194,9671-9694,10265-10266
+scripts/format-edited-files.mjs
+  s_99e2a3125afbfa::t_f3ead127b10928 63,65-66,87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "53395aa40781834d5b16a916e90f0f4128e7d225",
+  "prompts": {},
+  "sessions": {
+    "s_99e2a3125afbfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ce1a55e-228b-445b-bf04-26bce8d702ae",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
