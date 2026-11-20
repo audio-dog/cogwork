@@ -1,0 +1,19 @@
+packages/engine/src/tools/file-diff-feed.ts
+  s_47c0b3dec987fc::t_8e9b49b367046a 49,399,406-408,460,466
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f4e70993f270cd9d576cabbda168688b9c0340fc",
+  "prompts": {},
+  "sessions": {
+    "s_47c0b3dec987fc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d71e340f-ef01-4ae2-a5cd-4931103195aa",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
