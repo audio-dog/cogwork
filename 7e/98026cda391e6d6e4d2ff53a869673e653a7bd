@@ -1,0 +1,19 @@
+configs/lint/AGENTS.md
+  s_70f633f86ff651::t_5dad76dd2f7716 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7e98026cda391e6d6e4d2ff53a869673e653a7bd",
+  "prompts": {},
+  "sessions": {
+    "s_70f633f86ff651": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba4421ab-059f-4e32-aebf-d40caeea514e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
