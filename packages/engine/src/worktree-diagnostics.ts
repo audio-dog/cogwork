@@ -36,15 +36,18 @@ export const unresolvableMessage = (
     "a human needs to decide how to reconcile the branch.",
   ].join(" ");
 
-export const operationMessage = (branch: string, operation: GitOperationInProgress) => {
+export const operationInProgressSummary = (branch: string, operation: GitOperationInProgress) => {
   const conflicts = operation.unmergedPaths.length
     ? `unmerged paths: ${operation.unmergedPaths.join(", ")}`
     : "no unmerged paths remain";
-  return [
-    `branch ${branch} has a ${operation.operation} in progress (${conflicts}).`,
+  return `branch ${branch} has a ${operation.operation} in progress (${conflicts}).`;
+};
+
+export const operationMessage = (branch: string, operation: GitOperationInProgress) =>
+  [
+    operationInProgressSummary(branch, operation),
     "The worktree was left as it was; a human needs to finish or abort the operation.",
   ].join(" ");
-};
 
 export const isSameOperation = (recorded: GitOperationRecord | null, current: GitOperationRecord) =>
   recorded?.operation === current.operation &&
