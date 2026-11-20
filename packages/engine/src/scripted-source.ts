@@ -4,6 +4,7 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import type * as Take from "effect/Take";
+
 import type {
   SourceFailure,
   TriggerEvent,

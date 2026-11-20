@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { GitHubClient, type RawIssue, type RawIssueComment } from "./client";
 import { makeIssueActions, makeIssueReads } from "./host";

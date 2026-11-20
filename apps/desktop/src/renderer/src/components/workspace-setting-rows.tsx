@@ -36,6 +36,7 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import type * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use } from "react";
+
 import { githubPriorityFieldsAtom, issueTrackerPeopleAtom } from "../daemon/atoms";
 import { daemonFailureMessage } from "../features/daemon-failure";
 import type { WorkspaceRecordDraft } from "../features/workspace-record";

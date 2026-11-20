@@ -36,6 +36,7 @@ import {
 } from "@remixicon/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import type { ComponentType } from "react";
+
 import { BoardResult, useBoard } from "../features/activity-session";
 import { type FailedWorkspace, failedWorkspaces, registeredWorkspaceOptions } from "../features/feed";
 
@@ -205,7 +206,7 @@ export function AppSidebar() {
           <Link
             aria-label="cogwork home"
             to="/"
-            className="hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md tracking-tight outline-hidden ring-ring @min-[15.75rem]/sidebar-header:flex focus-visible:ring-2 [-webkit-app-region:no-drag]"
+            className="hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md tracking-tight ring-ring outline-hidden [-webkit-app-region:no-drag] focus-visible:ring-2 @min-[15.75rem]/sidebar-header:flex"
           >
             <span className="truncate text-sm font-semibold">cog</span>
             <span className="truncate text-sm font-medium text-muted-foreground">work</span>

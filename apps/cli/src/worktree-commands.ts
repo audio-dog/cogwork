@@ -6,12 +6,13 @@ import {
   RegistryService,
   Worktree,
 } from "@cogwork/engine";
-import * as Console from "effect/Console";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+
 import { defaultControlStorePath } from "./paths";
 import { gitLayer, worktreeManagerLayer } from "./platform";
 

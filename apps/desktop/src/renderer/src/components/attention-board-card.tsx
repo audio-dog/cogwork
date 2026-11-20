@@ -3,6 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@cogwork/ui
 import { Separator } from "@cogwork/ui/components/separator";
 import { cn } from "@cogwork/ui/lib/utils";
 import type { ReactNode } from "react";
+
 import { relativeTime } from "../features/format";
 import { useNow } from "../features/use-now";
 import type { CatalogIcon } from "../features/workflow-catalog";

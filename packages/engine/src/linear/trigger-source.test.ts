@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
+
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import { makeTrackerTriggerSource } from "../tracker-trigger-source";
 import { matchTriggerEvent } from "../trigger-observation-subscriptions";

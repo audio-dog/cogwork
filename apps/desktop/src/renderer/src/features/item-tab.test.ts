@@ -1,6 +1,7 @@
 import { type BoardItem, RunSummary, WorkItemId, WorkspaceId } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+
 import { describeItemState, itemTabSubject, subTabsFor } from "./item-tab";
 
 const workItem = Schema.decodeSync(WorkItemId)("issue:acme:%237");

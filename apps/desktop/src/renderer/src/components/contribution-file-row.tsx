@@ -1,4 +1,5 @@
 import { ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
+
 import { kindIcons } from "../features/configuration-icons";
 import { type Contribution as ContributionRecord, LoadState } from "../features/configuration-model";
 import { useRightPanelStore } from "../store/right-panel";

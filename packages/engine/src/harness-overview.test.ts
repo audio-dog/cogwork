@@ -1,5 +1,6 @@
 import { HarnessState } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
+
 import type { HarnessReadiness } from "./harness";
 import { harnessStateOf } from "./harness-overview";
 

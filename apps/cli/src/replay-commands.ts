@@ -1,14 +1,15 @@
 import { RunId } from "@cogwork/contracts";
 import { Replay } from "@cogwork/engine";
-import * as Console from "effect/Console";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+
 import { defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 

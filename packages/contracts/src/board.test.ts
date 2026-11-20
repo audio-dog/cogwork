@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { WorkspaceId } from "./base-schemas";
 import { applyDaemonEvent, initialBoard, liveOnly, workspaceFailureState } from "./board";
 import { LocalContribution } from "./contribution";

@@ -22,6 +22,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+
 import { Coordination, type CoordinationError, type CoordinationGate } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { WorkspaceRegistry } from "./registry-service";

@@ -12,9 +12,10 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as RpcClient from "effect/rpc/RpcClient";
 import * as RpcServer from "effect/rpc/RpcServer";
-import * as Stream from "effect/Stream";
 import * as Socket from "effect/socket/Socket";
+import * as Stream from "effect/Stream";
 import { vi } from "vitest";
+
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";
 import {

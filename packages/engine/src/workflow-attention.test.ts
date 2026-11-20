@@ -16,6 +16,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";

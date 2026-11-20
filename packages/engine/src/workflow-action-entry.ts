@@ -11,6 +11,7 @@ import {
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import type { Coordination } from "./coordination";
 import { type IssueTrackerActionService, IssueTrackerError } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";

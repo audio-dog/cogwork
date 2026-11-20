@@ -8,6 +8,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
+
 import type { TriggerEvent } from "../trigger-source";
 import { GitHubClient, type GitHubClientService } from "./client";
 import {

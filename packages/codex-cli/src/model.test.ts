@@ -1,6 +1,7 @@
 import { HarnessManagedCatalog } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { assert, describe, it } from "vitest";
+
 import { codexNativeEffort } from "./model";
 import { codexCatalog, codexModels } from "./models.generated";
 

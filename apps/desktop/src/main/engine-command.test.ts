@@ -1,5 +1,7 @@
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
+
 import { type EngineCommand, resolveEngineCommand, resolveEngineShutdownBudgets } from "./engine-command";
 
 const socketPath = "/home/me/.cogwork/cogwork.sock";

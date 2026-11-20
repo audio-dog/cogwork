@@ -1,6 +1,7 @@
 import { ConnectionFailure } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+
 import type { StoredCredential } from "./credential-store";
 
 export interface SlackLoginService {

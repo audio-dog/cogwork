@@ -1,7 +1,8 @@
 import type { SchedulingState } from "@cogwork/contracts";
-import * as Console from "effect/Console";
 import * as Command from "effect/cli/Command";
+import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+
 import { overSocket, socketFlag } from "./commands";
 import { makeDaemonClient } from "./rpc";
 

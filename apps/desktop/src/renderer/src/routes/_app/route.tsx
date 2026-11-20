@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiCollapseDiagonalLine, RiExpandDiagonalLine, RiLayoutRightLine } from "@remixicon/react";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+
 import { ActivityViewProvider } from "../../components/activity-view";
 import { DaemonConfigurationProvider } from "../../components/configuration-provider";
 import { AppSidebar } from "../../components/nav-sidebar";

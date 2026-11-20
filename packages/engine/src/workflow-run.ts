@@ -21,6 +21,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+
 import { Coordination, maxLineageHops } from "./coordination";
 import { Harness } from "./harness";
 import { acceptOperationResult, harnessStreamFailed } from "./operation-result";

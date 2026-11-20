@@ -22,6 +22,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { type ClaudeCodeRunnerOptions, claudeCodeRunner } from "./harness";
 
 const name = Schema.decodeSync(HarnessName)("claude");

@@ -11,6 +11,7 @@ import * as MutableRef from "effect/MutableRef";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 import * as RunControl from "./run-control";
 

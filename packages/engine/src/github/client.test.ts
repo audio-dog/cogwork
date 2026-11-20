@@ -12,6 +12,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
+
 import type { IssueTrackerError } from "../issue-tracker";
 import { layer as clientLayer, GitHubClient, type GitHubClientService, type GitHubRepoRef } from "./client";
 

@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import { DaemonEventBus } from "./daemon-event-bus";
 import type { RegistryState } from "./projector";
 import { readyToMergeByWorkspace, schedulerStatsOf, workspaceStatesOf } from "./read-model";

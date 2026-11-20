@@ -1,6 +1,7 @@
 import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiTerminalBoxLine } from "@remixicon/react";
+
 import { useRightPanelStore } from "../store/right-panel";
 import { CatalogEntry } from "./catalog-entry";
 import { SurfaceTab } from "./surface-tab";

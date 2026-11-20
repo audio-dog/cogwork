@@ -10,6 +10,7 @@ import {
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import {
   type CreateIssueInput,
   convergeTrackerState,
@@ -161,22 +162,19 @@ export const makeIssueReads = (client: GitHubClientService) => {
   ) {
     const priorities = yield* issuePriorities(client, target, issues);
     return yield* Effect.forEach(issues, (issue) =>
-      Effect.map(
-        itemId(issue.number),
-        (id): ListedTrackerItem => ({
-          id,
-          title: issue.title,
-          url: issue.url,
-          assignees: issue.assignees,
-          openBlockers: issue.openBlockers,
-          priority: priorities.get(issue.number) ?? defaultPriority,
-          states: issue.labels,
-          open: issue.state === "open",
-          labels: issue.labels,
-          createdAtMillis: issue.createdAtMillis,
-          lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,
-        }),
-      ),
+      Effect.map(itemId(issue.number), (id): ListedTrackerItem => ({
+        id,
+        title: issue.title,
+        url: issue.url,
+        assignees: issue.assignees,
+        openBlockers: issue.openBlockers,
+        priority: priorities.get(issue.number) ?? defaultPriority,
+        states: issue.labels,
+        open: issue.state === "open",
+        labels: issue.labels,
+        createdAtMillis: issue.createdAtMillis,
+        lastTouchedAtMillis: issue.updatedAtMillis ?? issue.createdAtMillis,
+      })),
     );
   });
   const listItems = Effect.fn("github.listItems")(function* (
@@ -237,16 +235,14 @@ export const makeIssueReads = (client: GitHubClientService) => {
       const botAllowlist = sourceControlTargetFor(workspace)?.botAllowlist ?? new Map();
       return {
         body: issue.body,
-        comments: comments.map(
-          (comment): TrackerComment => ({
-            id: String(comment.id),
-            author: comment.authorLogin,
-            authorAssociation: comment.authorAssociation,
-            authoredByPerson: authoredByPerson(comment, botAllowlist),
-            body: comment.body,
-            createdAtMillis: comment.createdAtMillis,
-          }),
-        ),
+        comments: comments.map((comment): TrackerComment => ({
+          id: String(comment.id),
+          author: comment.authorLogin,
+          authorAssociation: comment.authorAssociation,
+          authoredByPerson: authoredByPerson(comment, botAllowlist),
+          body: comment.body,
+          createdAtMillis: comment.createdAtMillis,
+        })),
       };
     }),
     labelAppliedAt: Effect.fn("github.labelAppliedAt")(function* (

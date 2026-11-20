@@ -1,6 +1,7 @@
 import { initialBoard, type SchedulerStats } from "@cogwork/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
 import { ActivitySessionContext, initialActivitySession } from "../features/activity-session";
 import { PausedBanner } from "./scheduler-gauges";
 

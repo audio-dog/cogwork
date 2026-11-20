@@ -9,6 +9,7 @@ import {
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import {
@@ -81,9 +82,8 @@ const currentIssueTargetProducer: TargetProducer = (context) =>
 
 const newIssueTargetProducer: TargetProducer = (context) =>
   issueTarget(context).pipe(
-    Effect.map(
-      (target): WorkflowActionTarget =>
-        target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
+    Effect.map((target): WorkflowActionTarget =>
+      target === null ? { _tag: "NoWorkspace" } : { _tag: "NewIssue", ...targetFields(target) },
     ),
   );
 

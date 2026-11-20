@@ -8,11 +8,11 @@ import {
   pluginRequiringConnection,
   type WorkspaceId,
 } from "@cogwork/contracts";
-
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+
 import { publishAfter, publishPluginMutation } from "./commands";
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { ControlStore } from "./control-store";
@@ -34,9 +34,8 @@ const connectionFailure = (operation: string, connectionId: ConnectionId | null,
 const isConnectionFailure = Schema.is(ConnectionFailure);
 
 const mapConnectionFailure = (operation: string, connectionId: ConnectionId | null) =>
-  Effect.mapError(
-    (error): ConnectionFailure =>
-      isConnectionFailure(error) ? error : connectionFailure(operation, connectionId, error),
+  Effect.mapError((error): ConnectionFailure =>
+    isConnectionFailure(error) ? error : connectionFailure(operation, connectionId, error),
   );
 
 const publishConnections = Effect.fn("Daemon.publishConnections")(function* (

@@ -1,6 +1,7 @@
 import { WorkflowNodeId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import { actionPlanCompletion, type RunCompletion, RunCompletionRoute } from "./run-completion";
 import type { WorkflowActionPlanExecution } from "./workflow-action-plan";
 

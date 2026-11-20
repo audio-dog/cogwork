@@ -3,8 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { Effect, Layer, ManagedRuntime, SubscriptionRef } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
+
 import { type EngineStatus, IpcChannel, type WindowPreferences } from "../shared/ipc";
 import { EngineSupervisor, type EngineSupervisorService } from "./engine-supervisor";
 
