@@ -178,11 +178,22 @@ const throwIfInterrupted = (signal) => {
   if (signal.aborted) throw new CampaignInterrupted("campaign interrupted");
 };
 
-const holdWindow = async (manifest, agents, minutes, signal) => {
+const settle = async (agents, settleMinutes, signal) => {
+  if (settleMinutes === 0) return;
+  say(`${agents} agents: settling ${settleMinutes} minutes before the window opens`);
+  const until = Date.now() + settleMinutes * 60_000;
+  while (Date.now() < until) {
+    await scheduler.wait(socketPollMillis);
+    throwIfInterrupted(signal);
+  }
+};
+
+const holdWindow = async (manifest, agents, minutes, settleMinutes, signal) => {
   throwIfInterrupted(signal);
   say(`${agents} agents: setting global and per-workspace limits`);
   setCampaignLimits(agents);
   runCli("scheduling", "resume");
+  await settle(agents, settleMinutes, signal);
   const record = { agents, startedAt: stamp(), endedAt: null, daemonLostAt: null };
   manifest.windows.push(record);
   writeManifest(manifest);
@@ -225,7 +236,7 @@ const restoreDaemonState = (limits) => {
   );
 };
 
-const run = async (minutes) => {
+const run = async (minutes, settleMinutes) => {
   const manifest = readManifest();
   if (!manifest) {
     say("no manifest — run preflight first");
@@ -245,7 +256,7 @@ const run = async (minutes) => {
   process.once("SIGINT", handleInterrupt);
   try {
     for (const agents of windowPlan) {
-      await holdWindow(manifest, agents, minutes, interrupt.signal);
+      await holdWindow(manifest, agents, minutes, settleMinutes, interrupt.signal);
     }
     throwIfInterrupted(interrupt.signal);
   } catch (error) {
@@ -568,29 +579,30 @@ const command = process.argv[2];
 const flags = process.argv.slice(3).filter((argument) => argument.startsWith("--"));
 const positional = process.argv.slice(3).filter((argument) => !argument.startsWith("--"));
 
-const minutesFrom = (argument) => {
-  if (argument === undefined) return 20;
+const minutesFrom = (argument, fallback, floor) => {
+  if (argument === undefined) return fallback;
   const parsed = Number.parseInt(argument, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isFinite(parsed) && parsed >= floor ? parsed : null;
 };
 
 const main = async () => {
   if (command === "preflight") return preflight(flags.includes("--profile"));
   if (command === "readout") return readout();
   if (command !== "run") {
-    say("usage: perf-campaign.mjs preflight [--profile] | run [minutes] | readout");
+    say("usage: perf-campaign.mjs preflight [--profile] | run [minutes] [settleMinutes] | readout");
     process.exitCode = 1;
     return;
   }
-  const minutes = minutesFrom(positional[0]);
+  const minutes = minutesFrom(positional[0], 20, 1);
+  const settleMinutes = minutesFrom(positional[1], 3, 0);
   // A NaN deadline compares false, so an unvalidated argument would close both windows at once and
   // report a complete campaign over two empty windows.
-  if (minutes === null) {
-    say(`not a positive number of minutes: ${positional[0]}`);
+  if (minutes === null || settleMinutes === null) {
+    say(`not a valid number of minutes: ${positional[0]} ${positional[1] ?? ""}`.trim());
     process.exitCode = 1;
     return;
   }
-  return run(minutes);
+  return run(minutes, settleMinutes);
 };
 
 await main();

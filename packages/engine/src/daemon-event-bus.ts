@@ -16,7 +16,7 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 const capacity = 1024;
-const droppedEventsMetric = Metric.counter("cogwork_daemon_event_bus_dropped_events_total", {
+export const droppedEventsMetric = Metric.counter("cogwork_daemon_event_bus_dropped_events_total", {
   description: "Daemon events evicted before every subscriber consumed them.",
 });
 
@@ -85,6 +85,7 @@ export const runActivityStream = <E, R>(events: Stream.Stream<DaemonEvent, E, R>
 
 export const make = Effect.gen(function* () {
   const droppedEvents = yield* Ref.make(0);
+  yield* Metric.update(droppedEventsMetric, 0);
   const pubsub = yield* PubSub.make<DaemonEvent>({
     atomicPubSub: () => PubSub.makeAtomicBounded(capacity),
     strategy: () => new ObservedSlidingStrategy(recordDrop(droppedEvents)),
