@@ -15,6 +15,7 @@ import {
 } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -22,6 +23,7 @@ import * as Schema from "effect/Schema";
 export const defaultClaimant = "cogwork";
 export const maxLineageHops = 25;
 const maxConsecutiveFailures = 3;
+const retryDelays = [Duration.minutes(1), Duration.minutes(2)];
 
 export interface CoordinationLedger {
   readonly claim: ClaimType | null;
@@ -45,7 +47,8 @@ export type CoordinationGate =
   | { readonly _tag: "Open" }
   | { readonly _tag: "Claimed"; readonly claim: ClaimType }
   | { readonly _tag: "Quiet" }
-  | { readonly _tag: "Parked"; readonly reason: ParkReason };
+  | { readonly _tag: "Parked"; readonly reason: ParkReason }
+  | { readonly _tag: "AwaitingRetry"; readonly retryAtMillis: number };
 
 export interface CoordinationView {
   readonly claim: ClaimType | null;
@@ -62,6 +65,12 @@ export interface CoordinationView {
 const sameOperation = (left: OperationKey, right: OperationKey) =>
   left.workflow === right.workflow && left.operation === right.operation;
 
+const retryAtFor = (failures: ReadonlyArray<AttemptRecord>) => {
+  const delay = retryDelays[failures.length - 1];
+  const lastFailure = failures.at(-1);
+  return delay && lastFailure ? lastFailure.atMillis + Duration.toMillis(delay) : null;
+};
+
 const failureStateFor = (
   attempts: ReadonlyArray<AttemptRecord>,
   barrierAtMillis: number,
@@ -76,6 +85,7 @@ const failureStateFor = (
     consecutiveFailures: failures.length,
     terminal:
       failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true),
+    retryAtMillis: retryAtFor(failures),
   };
 };
 
@@ -123,6 +133,8 @@ interface GateInput {
   readonly ledger: CoordinationLedger;
   readonly park: ParkRecord | null;
   readonly counters: CoordinationCounters;
+  readonly retryAtMillis: number | null;
+  readonly nowMillis: number;
 }
 
 const revisionClearedParks = new Set<ParkReason["_tag"]>([
@@ -155,9 +167,16 @@ const gateRules = [
     when: ({ counters }: GateInput) => counters.hopCapped,
     resolve: (): CoordinationGate => ({ _tag: "Parked", reason: { _tag: "HopCap" } }),
   },
+  {
+    when: ({ retryAtMillis, nowMillis }: GateInput) => retryAtMillis !== null && nowMillis < retryAtMillis,
+    resolve: ({ retryAtMillis }: GateInput): CoordinationGate => ({
+      _tag: "AwaitingRetry",
+      retryAtMillis: retryAtMillis as number,
+    }),
+  },
 ] as const;
 
-export const fold = (ledger: CoordinationLedger, claimant: string): CoordinationView => {
+export const fold = (ledger: CoordinationLedger, claimant: string, nowMillis: number): CoordinationView => {
   const handback = newestByTime(ledger.handbacks);
   const barrierAtMillis = handback?.atMillis ?? 0;
   const activeParks = ledger.parks.filter((park) => park.atMillis > barrierAtMillis);
@@ -203,6 +222,8 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
       counters: isNewSourceRevision
         ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false }
         : countersAfter(key, barrierAtMillis),
+      retryAtMillis: failureStateFor(ledger.attempts, barrierAtMillis, key).retryAtMillis,
+      nowMillis,
     };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
   };
@@ -299,9 +320,9 @@ export const makeCoordination = (
   } satisfies AuthorityByTag;
   const authority = (ref: WorkItemRef) => authorities[ref._tag];
   const read = (ref: WorkItemRef) =>
-    authority(ref)
-      .read(ref)
-      .pipe(Effect.map((ledger) => fold(ledger, claimant)));
+    Effect.all([authority(ref).read(ref), Clock.currentTimeMillis]).pipe(
+      Effect.map(([ledger, nowMillis]) => fold(ledger, claimant, nowMillis)),
+    );
   const claim = Effect.fn("Coordination.claim")(function* (
     ref: WorkItemRef,
     input: { readonly operation: OperationKey; readonly lineage: Lineage },

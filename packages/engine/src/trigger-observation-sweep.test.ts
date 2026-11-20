@@ -130,6 +130,7 @@ describe("TriggerObservation", () => {
                   },
                 },
                 "cogwork",
+                0,
               ),
             ),
           ),

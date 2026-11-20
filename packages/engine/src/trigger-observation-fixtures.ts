@@ -261,6 +261,7 @@ export const coordinationService = (
           revision: { observed: observedRevision ?? event.revision, processed: revision },
         },
         "cogwork",
+        0,
       ),
     ),
   claim: () => Effect.die("unused"),
