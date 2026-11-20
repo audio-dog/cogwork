@@ -1,0 +1,36 @@
+packages/engine/src/trigger-observation.ts
+  s_70f633f86ff651::t_47b7e170f8f8f3 394
+  s_70f633f86ff651::t_3e69ce7d63179d 193
+  s_70f633f86ff651::t_ac55c4c2d32436 153-154
+  s_70f633f86ff651::t_1e76295102b5f2 23
+  s_70f633f86ff651::t_508ecfedfdac47 177-178,180-181
+  s_70f633f86ff651::t_2e1b0d4ff63ac3 37
+  s_70f633f86ff651::t_ff741e83026925 76-86
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_70f633f86ff651::t_025ff4dc3a35cf 192-193,195-196
+  s_70f633f86ff651::t_34a70067ba8bf0 163,166,169,175-191,194,197-218,221
+  s_70f633f86ff651::t_d65cfccadf855f 44-88
+  s_70f633f86ff651::t_0726ba40cbf7bc 16
+packages/engine/src/trigger-observation-subscriptions.ts
+  s_70f633f86ff651::t_ab66edbfe597b7 9-12
+  s_70f633f86ff651::t_5bdbe4774d38ae 40
+packages/engine/src/trigger-observation-fixtures.ts
+  s_70f633f86ff651::t_338598645e5965 184
+  s_70f633f86ff651::t_f02de7dca6f2c3 160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e6d143dffa464344dd9e39e7792734ecc65649aa",
+  "prompts": {},
+  "sessions": {
+    "s_70f633f86ff651": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba4421ab-059f-4e32-aebf-d40caeea514e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
