@@ -33,7 +33,6 @@ describe("coordination fold", () => {
         exhausted: true,
         hop: maxLineageHops,
         hopCapped: true,
-        retryAtMillis: null,
       },
     },
     {
@@ -44,31 +43,19 @@ describe("coordination fold", () => {
         attempt("failed", 3),
       ],
       handbacks: [],
-      expected: {
-        consecutiveFailures: 2,
-        exhausted: false,
-        hop: 0,
-        hopCapped: false,
-        retryAtMillis: 120_003,
-      },
+      expected: { consecutiveFailures: 2, exhausted: false, hop: 0, hopCapped: false },
     },
     {
       name: "resets failures after a non-failure in the same Operation",
       attempts: [attempt("failed", 1), attempt("abandoned", 2), attempt("failed", 3)],
       handbacks: [],
-      expected: {
-        consecutiveFailures: 1,
-        exhausted: false,
-        hop: 0,
-        hopCapped: false,
-        retryAtMillis: 60_003,
-      },
+      expected: { consecutiveFailures: 1, exhausted: false, hop: 0, hopCapped: false },
     },
     {
       name: "resets every counter at the handback barrier",
       attempts: [attempt("failed", 1, maxLineageHops)],
       handbacks: [{ by: "person", atMillis: 2, note: null }],
-      expected: { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false, retryAtMillis: null },
+      expected: { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false },
     },
   ] as const;
 
@@ -112,11 +99,11 @@ describe("coordination fold", () => {
     assert.strictEqual(fold(ledger([]), "cogwork", 0).gate(operation)._tag, "Open");
   });
 
-  const exhaustedPark = { reason: { _tag: "Exhausted", reason: "three failures" }, atMillis: 3 } as const;
   const retryDelayCases = [
     {
       name: "waits one minute after the first failure",
       attempts: [attempt("failed", 1)],
+      handbacks: [],
       cases: [
         { nowMillis: 1, gate: { _tag: "AwaitingRetry", retryAtMillis: 60_001 } },
         { nowMillis: 60_000, gate: { _tag: "AwaitingRetry", retryAtMillis: 60_001 } },
@@ -126,20 +113,16 @@ describe("coordination fold", () => {
     {
       name: "waits two minutes after the second failure",
       attempts: [attempt("failed", 1), attempt("failed", 2)],
+      handbacks: [],
       cases: [
         { nowMillis: 60_001, gate: { _tag: "AwaitingRetry", retryAtMillis: 120_002 } },
         { nowMillis: 120_002, gate: { _tag: "Open" } },
       ],
     },
     {
-      name: "parks the third failure without a retry delay",
-      attempts: [attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)],
-      parks: [exhaustedPark],
-      cases: [{ nowMillis: 3, gate: { _tag: "Parked", reason: exhaustedPark.reason } }],
-    },
-    {
       name: "clears the delay after a later success",
       attempts: [attempt("failed", 1), attempt("succeeded", 2)],
+      handbacks: [],
       cases: [{ nowMillis: 2, gate: { _tag: "Open" } }],
     },
     {
@@ -150,26 +133,22 @@ describe("coordination fold", () => {
     },
   ] as const;
 
-  retryDelayCases.forEach(({ name, attempts, cases, ...rest }) => {
+  retryDelayCases.forEach(({ name, attempts, handbacks, cases }) => {
     it(name, () => {
-      const handbacks = "handbacks" in rest ? rest.handbacks : [];
-      const parks = "parks" in rest ? rest.parks : [];
       cases.forEach(({ nowMillis, gate }) => {
-        const view = fold({ ...ledger(attempts, handbacks), parks }, "cogwork", nowMillis);
-        assert.deepStrictEqual(view.gate(operation), gate);
+        assert.deepStrictEqual(fold(ledger(attempts, handbacks), "cogwork", nowMillis).gate(operation), gate);
       });
     });
   });
 
-  it("does not delay a new source revision after a failure", () => {
+  it("delays the failed revision after an earlier revision was processed", () => {
     const view = fold(
       { ...ledger([attempt("failed", 1)]), revision: { observed: "2", processed: "1" } },
       "cogwork",
       1,
     );
 
-    assert.strictEqual(view.gate(operation, "1")._tag, "AwaitingRetry");
-    assert.strictEqual(view.gate(operation, "2")._tag, "Open");
+    assert.deepStrictEqual(view.gate(operation, "2"), { _tag: "AwaitingRetry", retryAtMillis: 60_001 });
   });
 
   const revisionRetryCases = [

@@ -223,7 +223,7 @@ describe("TriggerObservation", () => {
             attempts: [failedAttempt],
             handbacks: [],
             parks: [],
-            revision: { observed: event.revision, processed: null },
+            revision: { observed: event.revision, processed: "earlier-revision" },
           }),
         claim: unused,
         release: unused,

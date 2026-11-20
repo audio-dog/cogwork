@@ -10,7 +10,7 @@ export const verifyCoordinationContract = (coordination: CoordinationService, re
     const operation = { workflow: "workflow", operation: "operate" };
     const siblingOperation = { workflow: "workflow", operation: "verify" };
     const lineage = { root: LineageId.make(keyOf(ref)), parent: null, hop: 0 };
-    const afterRetryDelay = 60_000;
+    const retryDelayMillis = 60_000;
     assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
 
     const claim = yield* coordination.claim(ref, { operation, lineage });
@@ -37,19 +37,22 @@ export const verifyCoordinationContract = (coordination: CoordinationService, re
     yield* coordination.release(ref, siblingClaim);
     assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Parked");
 
-    yield* TestClock.setTime(afterRetryDelay + 4);
+    yield* TestClock.setTime(4);
     const clearingClaim = yield* coordination.claim(ref, { operation, lineage });
     yield* coordination.release(ref, clearingClaim);
-    assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
+    assert.deepStrictEqual((yield* coordination.read(ref)).gate(operation), {
+      _tag: "AwaitingRetry",
+      retryAtMillis: 1 + retryDelayMillis,
+    });
 
-    yield* TestClock.setTime(afterRetryDelay + 5);
+    yield* TestClock.setTime(retryDelayMillis + 5);
     const laterSiblingClaim = yield* coordination.claim(ref, { operation: siblingOperation, lineage });
     yield* coordination.release(ref, laterSiblingClaim);
     assert.strictEqual((yield* coordination.read(ref)).gate(operation)._tag, "Open");
 
-    yield* TestClock.setTime(afterRetryDelay + 6);
+    yield* TestClock.setTime(retryDelayMillis + 6);
     yield* coordination.park(ref, { _tag: "Stuck", summary: "still needs a person" });
-    yield* TestClock.setTime(afterRetryDelay + 7);
+    yield* TestClock.setTime(retryDelayMillis + 7);
     const handedBack = yield* coordination.handBack(ref, { by: "person", note: "try again" });
     assert.strictEqual(handedBack.gate(operation)._tag, "Open");
     assert.strictEqual(handedBack.counters(operation).consecutiveFailures, 0);

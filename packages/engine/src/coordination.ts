@@ -41,7 +41,6 @@ export interface CoordinationCounters {
   readonly exhausted: boolean;
   readonly hop: number;
   readonly hopCapped: boolean;
-  readonly retryAtMillis: number | null;
 }
 
 export type CoordinationGate =
@@ -82,12 +81,11 @@ const failureStateFor = (
   );
   const lastNonFailure = relevant.findLastIndex((attempt) => attempt.outcome !== "failed");
   const failures = relevant.slice(lastNonFailure + 1);
-  const terminal =
-    failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true);
   return {
     consecutiveFailures: failures.length,
-    terminal,
-    retryAtMillis: terminal ? null : retryAtFor(failures),
+    terminal:
+      failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true),
+    retryAtMillis: retryAtFor(failures),
   };
 };
 
@@ -135,6 +133,7 @@ interface GateInput {
   readonly ledger: CoordinationLedger;
   readonly park: ParkRecord | null;
   readonly counters: CoordinationCounters;
+  readonly retryAtMillis: number | null;
   readonly nowMillis: number;
 }
 
@@ -169,11 +168,10 @@ const gateRules = [
     resolve: (): CoordinationGate => ({ _tag: "Parked", reason: { _tag: "HopCap" } }),
   },
   {
-    when: ({ counters, nowMillis }: GateInput) =>
-      counters.retryAtMillis !== null && nowMillis < counters.retryAtMillis,
-    resolve: ({ counters }: GateInput): CoordinationGate => ({
+    when: ({ retryAtMillis, nowMillis }: GateInput) => retryAtMillis !== null && nowMillis < retryAtMillis,
+    resolve: ({ retryAtMillis }: GateInput): CoordinationGate => ({
       _tag: "AwaitingRetry",
-      retryAtMillis: counters.retryAtMillis as number,
+      retryAtMillis: retryAtMillis as number,
     }),
   },
 ] as const;
@@ -190,17 +188,12 @@ export const fold = (ledger: CoordinationLedger, claimant: string, nowMillis: nu
       ledger.claim && ledger.claim.claimedAtMillis > afterMillis ? ledger.claim : null;
     const attemptsAfterBarrier = ledger.attempts.filter((attempt) => attempt.atMillis > afterMillis);
     const hop = claimAfterBarrier?.lineage.hop ?? newestByTime(attemptsAfterBarrier)?.lineage.hop ?? 0;
-    const { consecutiveFailures, terminal, retryAtMillis } = failureStateFor(
-      ledger.attempts,
-      afterMillis,
-      key,
-    );
+    const { consecutiveFailures, terminal } = failureStateFor(ledger.attempts, afterMillis, key);
     return {
       consecutiveFailures,
       exhausted: terminal,
       hop,
       hopCapped: hop >= maxLineageHops,
-      retryAtMillis,
     };
   };
   const counters = (key: OperationKey) => countersAfter(key, barrierAtMillis);
@@ -225,11 +218,12 @@ export const fold = (ledger: CoordinationLedger, claimant: string, nowMillis: nu
     );
     const input = {
       ledger,
-      nowMillis,
       park: claimClearsPark(matchingPark, claims) ? null : matchingPark,
       counters: isNewSourceRevision
-        ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false, retryAtMillis: null }
+        ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false }
         : countersAfter(key, barrierAtMillis),
+      retryAtMillis: failureStateFor(ledger.attempts, barrierAtMillis, key).retryAtMillis,
+      nowMillis,
     };
     return gateRules.find(({ when }) => when(input))?.resolve(input) ?? { _tag: "Open" };
   };
