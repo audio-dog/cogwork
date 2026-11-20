@@ -2,6 +2,7 @@ import {
   type AgUiEvent,
   agUiIsStructuredOutputComplete,
   keyOf,
+  type ParkReason,
   RunId,
   type RunRecord,
   type WorkflowActionPlan,
@@ -30,6 +31,7 @@ import { acceptOperationResult, harnessStreamFailed } from "./operation-result";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry-service";
 import { actionPlanCompletion, RunCompletionRoute } from "./run-completion";
+import { type ManualCancellation, RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import {
   type RunPlanRejection,
@@ -48,7 +50,7 @@ import { itemWorkspaceOf } from "./workflow-action-entry";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { operationKeyOf, parkedAdmission } from "./workflow-run-admission";
-import { ClaimState, makeWorkflowRunAttempts, resendOf } from "./workflow-run-attempts";
+import { type ClaimedWork, ClaimState, makeWorkflowRunAttempts, resendOf } from "./workflow-run-attempts";
 import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
 import { makeWorkflowRunExecutionContext } from "./workflow-run-execution-context";
 import { touchpointFailure } from "./workflow-run-pending-plan";
@@ -79,6 +81,7 @@ export const make = Effect.gen(function* () {
   const registry = yield* WorkspaceRegistry;
   const observationStore = yield* TriggerObservationStore;
   const triggerObservation = yield* TriggerObservation;
+  const runControl = yield* RunControl;
   const { executionContext, pullRequestBuildInput } = yield* makeWorkflowRunExecutionContext();
   const {
     previousRefusals,
@@ -101,12 +104,34 @@ export const make = Effect.gen(function* () {
   const runEngineTools = yield* makeRunEngineTools;
   const touchpointGate = Semaphore.makeUnsafe(1);
 
+  const settleInterrupted = (claimed: Ref.Ref<ClaimState>) =>
+    Effect.flatMap(Ref.get(claimed), (state) =>
+      settleClaimed(claimed, ClaimState.$is("Attempted")(state) ? state.status : "interrupted"),
+    );
+
+  const parkRun = (admission: TriggerAdmission, reason: ParkReason, key: ClaimedWork["key"], run: RunId) =>
+    coordination
+      .park(admission.event.key, reason, key)
+      .pipe(Effect.andThen(observationStore.putAll([parkedAdmission(admission, run)])));
+
+  const parkCancelled =
+    (admission: TriggerAdmission, claimed: Ref.Ref<ClaimState>, run: RunId) =>
+    ({ note }: ManualCancellation) =>
+      Effect.flatMap(Ref.get(claimed), (state) =>
+        ClaimState.$is("Idle")(state)
+          ? Effect.void
+          : parkRun(admission, { _tag: "Cancelled", note }, state.key, run).pipe(
+              Effect.andThen(settleInterrupted(claimed)),
+            ),
+      ).pipe(Effect.catchCause((cause) => Effect.logError("cancelled Run could not be parked", { cause })));
+
   const declineRun = (reason: RunPlanRejection) =>
     Effect.logDebug("Run Plan rejected", { reason }).pipe(Effect.map(() => "waiting" as const));
 
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (
     admission: TriggerAdmission,
     claimed: Ref.Ref<ClaimState>,
+    id: RunId,
   ) {
     const pendingPlan = yield* actionPlans.pending(
       keyOf(admission.event.key),
@@ -190,7 +215,6 @@ export const make = Effect.gen(function* () {
     const claim = pendingClaim ?? (yield* claimItem(admission, claimed, preparing));
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
-    const id = runId(SecureRandom.uuidV4Unsafe());
     const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
     const priorRefusal = yield* takePriorRefusal(keyOf(admission.event.key));
     const prepared = yield* preparation
@@ -284,8 +308,7 @@ export const make = Effect.gen(function* () {
         outcome: "failed",
         reason: decoded.success.summary,
       });
-      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.success.summary }, key);
-      yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
+      yield* parkRun(admission, { _tag: "Stuck", summary: decoded.success.summary }, key, run.id);
       yield* settleClaimed(claimed, "failed");
       return "completed" as const;
     }
@@ -310,17 +333,19 @@ export const make = Effect.gen(function* () {
 
   const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (admission: TriggerAdmission) {
     const claimed = yield* Ref.make<ClaimState>(ClaimState.Idle());
-    return yield* executeRaw(admission, claimed).pipe(
-      Effect.catchCauseIf(
-        (cause) => !Cause.hasInterruptsOnly(cause),
-        (cause) => recoverClaimed(admission, claimed, cause),
-      ),
-      Effect.onInterrupt(() =>
-        Effect.flatMap(Ref.get(claimed), (state) =>
-          settleClaimed(claimed, ClaimState.$is("Attempted")(state) ? state.status : "interrupted"),
+    const id = runId(SecureRandom.uuidV4Unsafe());
+    return yield* runControl
+      .run(
+        id,
+        executeRaw(admission, claimed, id).pipe(
+          Effect.catchCauseIf(
+            (cause) => !Cause.hasInterruptsOnly(cause),
+            (cause) => recoverClaimed(admission, claimed, cause),
+          ),
         ),
-      ),
-    );
+        parkCancelled(admission, claimed, id),
+      )
+      .pipe(Effect.onInterrupt(() => settleInterrupted(claimed)));
   });
 
   const executeAdmission = (admission: TriggerAdmission) =>
