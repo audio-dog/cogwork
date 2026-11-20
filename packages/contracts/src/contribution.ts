@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+
 import { TrimmedNonEmptyString } from "./base-schemas";
 
 export const LocalContributionAuthority = Schema.Literals(["local:user", "local:repo", "local:private"]);

@@ -1,5 +1,6 @@
 import type { RunRecord, WorkflowNodeId } from "@cogwork/contracts";
 import * as Data from "effect/Data";
+
 import type { WorkflowActionPlanExecution } from "./workflow-action-plan";
 
 export type RunCompletionRoute = Data.TaggedEnum<{

@@ -2,6 +2,7 @@ import { type AgUiEvent, DaemonEvent, type RunActivity } from "@cogwork/contract
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Schema from "effect/Schema";
 import { describe, expect, it, vi } from "vitest";
+
 import {
   applyRunPreview,
   applyTranscriptActivities,

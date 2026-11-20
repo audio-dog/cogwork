@@ -25,6 +25,7 @@ import {
 } from "@remixicon/react";
 import type { ComponentType, ReactNode } from "react";
 import { createContext, use, useState } from "react";
+
 import {
   type ActivityKind,
   type ActivityRow,
@@ -123,7 +124,7 @@ function SchedulerStrip({ scheduler }: { scheduler: NonNullable<NowState["schedu
         {scheduler.globalInFlight}/{scheduler.globalLimit}
       </span>
       <span className="ml-1 text-muted-foreground">in flight</span>
-      <span className="ml-auto tabular-nums text-muted-foreground">
+      <span className="ml-auto text-muted-foreground tabular-nums">
         budget {scheduler.dailyBudgetUsed}/{scheduler.dailyBudgetLimit}
       </span>
     </div>
@@ -331,7 +332,7 @@ function RelativeTimestamp({ atMillis }: { atMillis: number }) {
   if (now === null) throw new Error("RelativeTimestamp must render inside TimestampClockProvider.");
   return (
     <time
-      className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+      className="shrink-0 text-[11px] text-muted-foreground tabular-nums"
       title={new Date(atMillis).toLocaleString()}
     >
       {relativeTime(atMillis, now)}

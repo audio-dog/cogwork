@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+
 import { confine } from "./confinement";
 
 describe("confine", () => {

@@ -24,6 +24,7 @@ import { RiAddLine, RiDownloadLine, RiErrorWarningLine, RiNodeTree, RiUploadLine
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Effect, Result } from "effect";
 import { type ChangeEvent, useRef, useState } from "react";
+
 import { newWorkflowOperation } from "../features/workflow-defaults";
 import { useWorkflowSession } from "../features/workflow-session";
 import { exportWorkflow, importWorkflow, workflowExportFileName } from "../features/workflow-transfer";
@@ -77,7 +78,7 @@ function WorkflowRow({ id }: { readonly id: string }) {
         to="/workflows/$workflowId"
         params={{ workflowId: workflow.id }}
         aria-label={workflow.workingCopy.name}
-        className="absolute inset-0 cursor-pointer rounded-xl focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none"
+        className="absolute inset-0 cursor-pointer rounded-xl focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
         onKeyDown={(event) => {
           if (event.key !== " ") return;
           event.preventDefault();

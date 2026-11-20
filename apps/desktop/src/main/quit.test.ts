@@ -15,6 +15,7 @@ const electron = vi.hoisted(() => {
 vi.mock("electron", () => ({ app: electron.app }));
 
 import { app } from "electron";
+
 import { installShutdownBeforeQuit } from "./quit";
 
 const makeApp = () => {

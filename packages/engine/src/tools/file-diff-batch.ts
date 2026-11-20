@@ -1,10 +1,12 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createHash } from "node:crypto";
+
 import type { SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
+
 import { type ToolError, toolError } from "./errors";
 import {
   appendDiffOutput,

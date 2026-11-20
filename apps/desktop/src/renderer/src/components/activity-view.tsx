@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { createContext, use, useState } from "react";
+
 import {
   type ActivityCategory,
   type ActivityRow,

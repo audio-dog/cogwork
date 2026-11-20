@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
+
 import type { WorktreeEntry } from "./git";
 import * as Worktree from "./worktree";
 import {

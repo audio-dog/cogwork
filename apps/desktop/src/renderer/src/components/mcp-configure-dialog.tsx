@@ -10,6 +10,7 @@ import {
 } from "@cogwork/ui/components/dialog";
 import { RiLoopLeftLine, RiServerLine } from "@remixicon/react";
 import type { ReactNode } from "react";
+
 import { scopeIcons } from "../features/configuration-icons";
 import {
   authorityLabel,

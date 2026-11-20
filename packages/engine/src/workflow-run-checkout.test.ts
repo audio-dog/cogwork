@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+
 import { Git, GitError, type GitOperationInProgress, type GitOperationRecord, type GitService } from "./git";
 import { HarnessError } from "./harness";
 import { emptyRegistry } from "./projector";

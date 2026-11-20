@@ -9,6 +9,7 @@ import {
 import { RiAddLine, RiSubtractLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+
 import { SettingRow, SettingsSection, SubSectionCard } from "../../components/settings-parts";
 import { BoardResult, useBoard } from "../../features/activity-session";
 import { daemonFailureMessage } from "../../features/daemon-failure";

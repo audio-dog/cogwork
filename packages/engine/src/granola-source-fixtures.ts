@@ -13,6 +13,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import type { ConnectionStoreService } from "./connection";
 import { CoordinationError, type CoordinationService, fold } from "./coordination";
 import type { Credential } from "./credential-store";

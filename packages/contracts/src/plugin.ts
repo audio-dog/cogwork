@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+
 import { TrimmedNonEmptyString } from "./base-schemas";
 import { ConnectionId, ConnectionSystem } from "./connection";
 import { FileContributionKind, PluginContributionAuthority } from "./contribution";

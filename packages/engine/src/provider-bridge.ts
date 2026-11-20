@@ -3,6 +3,7 @@ import { EventType, type StreamChunk } from "@tanstack/ai";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { HarnessError } from "./harness";
 
 const decodeEvent = Schema.decodeUnknownOption(AgUiEvent);

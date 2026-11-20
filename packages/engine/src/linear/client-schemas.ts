@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+
 import type { RawComment } from "./client-issue-mapping";
 
 export const CommentNode = Schema.Struct({

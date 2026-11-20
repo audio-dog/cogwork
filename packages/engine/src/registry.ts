@@ -8,6 +8,7 @@ import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
+
 import { type ScanAuthoringTreesRequest, scanAuthoringTrees } from "./authoring-tree";
 import { bootControlStoreLayer, ControlStore, readOnlyControlStoreClientLayer } from "./control-store";
 import { Git } from "./git";

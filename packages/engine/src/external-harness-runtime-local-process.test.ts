@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { afterEach, vi } from "vitest";
+
 import { defaultInheritedEnvironment } from "./external-harness-runtime";
 import {
   environmentVariablesToRemove,

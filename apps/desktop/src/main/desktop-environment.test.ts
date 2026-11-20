@@ -13,6 +13,7 @@ import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import { resolveDesktopEnvironment } from "./desktop-environment";
 
 const encode = new TextEncoder();

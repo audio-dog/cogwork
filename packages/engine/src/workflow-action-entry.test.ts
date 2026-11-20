@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+
 import { actionEntryFor, compareActionPhase, registeredActionRows } from "./workflow-action-registry";
 
 describe("Action entry registry", () => {

@@ -1,7 +1,9 @@
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
+
 import type { MainProcessHealthSample } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as MutableRef from "effect/MutableRef";
+
 import { kibibytesToBytes, ratePerSecond } from "../shared/process-health";
 
 interface FrameCounts {

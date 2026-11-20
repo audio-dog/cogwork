@@ -1,10 +1,11 @@
 import { WorkspaceId, WorkspaceRegistration, WorkspaceState, WorkspaceUpdate } from "@cogwork/contracts";
-import * as Console from "effect/Console";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Schema from "effect/Schema";
+
 import { defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 

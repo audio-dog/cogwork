@@ -4,6 +4,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+
 import type { Credential, CredentialAccount, CredentialStoreService } from "../credential-store";
 import { defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 import {

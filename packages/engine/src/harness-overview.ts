@@ -1,4 +1,5 @@
 import { HarnessSignIn, HarnessState } from "@cogwork/contracts";
+
 import type { HarnessReadiness } from "./harness";
 
 const diagnostic = (message: string) => message.trim() || "the harness gave no reason";

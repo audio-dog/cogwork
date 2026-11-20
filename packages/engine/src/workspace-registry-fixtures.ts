@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import { Git, type GitService } from "./git";
 import { layerAt, readOnlyLayerAt } from "./registry";
 

@@ -2,6 +2,7 @@ import { Button } from "@cogwork/ui/components/button";
 import { Switch } from "@cogwork/ui/components/switch";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+
 import type { ProcessProfileCapture } from "../../../../shared/ipc";
 import { SettingRow, SettingsSection, SubSectionCard } from "../../components/settings-parts";
 import { settingEntry } from "../../features/settings-catalog";

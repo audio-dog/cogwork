@@ -5,6 +5,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Layer from "effect/Layer";
 import type * as Redacted from "effect/Redacted";
+
 import { makeIssueClient } from "./client-issues";
 import { makePullClient } from "./client-pulls";
 import { decodeAuthenticatedUser } from "./client-responses";

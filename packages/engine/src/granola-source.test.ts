@@ -6,6 +6,7 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+
 import { type GranolaSourceAdapter, makeGranolaSource } from "./granola-source";
 import {
   adapter,

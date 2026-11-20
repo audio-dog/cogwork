@@ -11,6 +11,7 @@ import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+
 import { ConnectionStore } from "./connection";
 import { bootControlStoreLayer, ControlStore } from "./control-store";
 import { PluginManager, pluginManagerLayer } from "./plugin";

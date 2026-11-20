@@ -1,6 +1,7 @@
 import { NodeSocket } from "@effect/platform-node";
 import { Deferred, Effect, Scope } from "effect";
 import * as Socket from "effect/socket/Socket";
+
 import { type DaemonReachabilityError, waitForDaemonListening } from "./wait-for-socket";
 
 export interface DaemonBridgeSink {

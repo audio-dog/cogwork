@@ -17,6 +17,7 @@ import { useAtomRefresh, useAtomSet, useAtomSubscribe } from "@effect/atom-react
 import * as Data from "effect/Data";
 import type * as Atom from "effect/reactivity/Atom";
 import { createContext, type ReactNode, use, useCallback, useRef, useState } from "react";
+
 import { daemonEventAtom } from "../daemon/atoms";
 import { recordDaemonEventsApplied } from "../daemon/process-health";
 import { type OperationRun, operationNameOf, runTitle } from "./feed";

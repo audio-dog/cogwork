@@ -1,4 +1,5 @@
 import { Session } from "node:inspector/promises";
+
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -6,6 +7,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
+
 import { openSynchronousFileWriter } from "./synchronous-file-writer";
 
 export const ProcessProfileInput = Schema.TaggedUnion({

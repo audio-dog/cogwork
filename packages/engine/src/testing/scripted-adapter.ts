@@ -39,13 +39,11 @@ export const subagentCallTurn = (
   tokens: number,
 ): ReadonlyArray<StreamChunk> => [
   { type: EventType.RUN_STARTED, runId: "scripted", threadId: "scripted" },
-  ...calls.flatMap(
-    ({ id, agent, task }): ReadonlyArray<StreamChunk> => [
-      { type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: agent },
-      { type: EventType.TOOL_CALL_ARGS, toolCallId: id, delta: JSON.stringify({ task }) },
-      { type: EventType.TOOL_CALL_END, toolCallId: id },
-    ],
-  ),
+  ...calls.flatMap(({ id, agent, task }): ReadonlyArray<StreamChunk> => [
+    { type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: agent },
+    { type: EventType.TOOL_CALL_ARGS, toolCallId: id, delta: JSON.stringify({ task }) },
+    { type: EventType.TOOL_CALL_END, toolCallId: id },
+  ]),
   {
     type: EventType.RUN_FINISHED,
     runId: "scripted",

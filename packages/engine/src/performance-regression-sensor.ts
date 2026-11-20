@@ -1,4 +1,5 @@
 import { availableParallelism, freemem, loadavg } from "node:os";
+
 import { issueTrackerErrorIsPermanent } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -10,6 +11,7 @@ import type { PlatformError } from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Semaphore from "effect/Semaphore";
+
 import type { IssueTrackerError } from "./issue-tracker";
 import type { PerformanceHealthSnapshot, ProcessHealthReading } from "./performance-health-source";
 import {

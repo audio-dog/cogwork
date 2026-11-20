@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+
 import { IssueTrackerType, TrimmedNonEmptyString, WorkflowId, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionOverview } from "./connection";
 import { LocalContribution } from "./contribution";

@@ -2,6 +2,7 @@ import { type HarnessCatalogChoice, HarnessName, HarnessOptionCatalog } from "@c
 import * as Schema from "effect/Schema";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+
 import type { AvailableHarnessCatalog, ModelOptionState } from "../features/operation-settings";
 import { TraitsMenu } from "./traits-menu";
 

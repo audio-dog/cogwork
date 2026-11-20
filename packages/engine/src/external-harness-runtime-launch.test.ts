@@ -4,6 +4,7 @@ import { EventType, type StreamChunk } from "@tanstack/ai";
 import { SandboxDurabilityCapability } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
+
 import type { ExternalHarnessDescriptor } from "./external-harness-runtime";
 import {
   ControlledAdapter,
