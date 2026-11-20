@@ -1,4 +1,5 @@
 import type { ControlStore, DaemonStatus, SchedulerStats, WorkspaceInfo } from "@cogwork/contracts";
+
 import { readyToMergeText } from "./read-model-item";
 import { terminalLine } from "./terminal-text";
 

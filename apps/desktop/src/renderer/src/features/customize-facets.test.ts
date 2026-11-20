@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { contributionKinds } from "./configuration-model";
 import { defaultFacet, facetFromSlug, facetLabel, facetSlug, facets } from "./customize-facets";
 

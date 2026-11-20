@@ -14,9 +14,10 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import { RpcClientDefect, RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import { SocketOpenError } from "effect/socket/Socket";
+import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import { daemonOrStore } from "./commands";
 import { contributionSettingsCommand, makeContributionSettingUpdate } from "./contribution-settings-commands";
 import { limitsCommand } from "./limits-commands";

@@ -29,8 +29,8 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import * as SqlError from "effect/sql/SqlError";
+import * as Stream from "effect/Stream";
 
 const { runEvents, runPlans, runs, sessions } = ControlStoreSchema;
 

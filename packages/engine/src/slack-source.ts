@@ -21,6 +21,7 @@ import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import { readJsonEventStream } from "./json-event-stream";
 import {
@@ -388,8 +389,9 @@ function callSlack(
       const statusFailure = (statusFailures as Readonly<Record<number, () => SourceFailure>>)[
         response.status
       ];
-      return yield* statusFailure?.() ??
-        sourceFailure("unavailable", `Slack request failed (${response.status})`);
+      return yield* (
+        statusFailure?.() ?? sourceFailure("unavailable", `Slack request failed (${response.status})`)
+      );
     }
     const body = yield* readJsonEventStream(response, "Slack response", slackResponseByteLimit).pipe(
       Effect.mapError((error) => sourceFailure("decode", error.message)),

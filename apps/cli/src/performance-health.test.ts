@@ -1,10 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
+
 import { PerformanceMetrics } from "@cogwork/engine";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+
 import { readPerformanceHealthSnapshot } from "./performance-health";
 
 const metricNames = PerformanceMetrics.processHealthMetricNames;

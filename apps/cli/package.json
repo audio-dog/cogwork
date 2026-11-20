@@ -2,10 +2,10 @@
   "name": "@cogwork/cli",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
   "bin": {
     "cogwork": "./src/main.ts"
   },
+  "type": "module",
   "scripts": {
     "start": "tsx src/main.ts",
     "typecheck": "tsc --noEmit",

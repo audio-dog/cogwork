@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+
 import { TrimmedNonEmptyString } from "./base-schemas";
 
 export class ContentRevision extends Schema.TaggedClass<ContentRevision>()("ContentRevision", {

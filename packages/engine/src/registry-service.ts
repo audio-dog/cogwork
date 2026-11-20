@@ -1,6 +1,7 @@
 import type { WorkspaceRegistrationError } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+
 import type { RegistryState } from "./projector";
 
 export interface WorkspaceRegistryService {

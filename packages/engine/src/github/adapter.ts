@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+
 import { IssueTracker, type IssueTrackerService } from "../issue-tracker";
 import { GitHubClient, type GitHubClientService } from "./client";
 import { makeIssueActions, makeIssueReads } from "./host";

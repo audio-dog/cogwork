@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+
 import { matchTriggerEvent } from "../trigger-observation-subscriptions";
 import { GitHubClient } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";

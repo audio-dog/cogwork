@@ -8,10 +8,10 @@ import {
   RunWatchItem,
   WorkItemId,
 } from "@cogwork/contracts";
-import * as Console from "effect/Console";
 import * as Argument from "effect/cli/Argument";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -19,8 +19,9 @@ import * as Ref from "effect/Ref";
 import { RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import { SocketErrorReason } from "effect/socket/Socket";
+import * as Stream from "effect/Stream";
+
 import { overSocket, socketFlag } from "./commands";
 import { type DaemonRpcTimeout, makeDaemonClient } from "./rpc";
 import { flushWatch, initialWatchState, renderBoard, stepWatch } from "./watch";

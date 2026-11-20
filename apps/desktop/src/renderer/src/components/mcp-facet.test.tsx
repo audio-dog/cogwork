@@ -1,6 +1,7 @@
 import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
 import { type Contribution, McpReadiness } from "../features/configuration-model";
 import { contributionById, placeholderConfiguration } from "../testing/configuration";
 import { Configuration } from "./configuration-provider";

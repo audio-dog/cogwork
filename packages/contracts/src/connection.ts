@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+
 import { TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
 
 export const ConnectionSystem = Schema.Literals(["github", "linear", "granola", "slack"]);

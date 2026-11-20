@@ -1,6 +1,7 @@
 import { IssueTrackerError } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
 import { describe, expect, it } from "vitest";
+
 import { daemonFailureMessage } from "./daemon-failure";
 
 describe("daemonFailureMessage", () => {

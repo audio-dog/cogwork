@@ -1,5 +1,6 @@
 import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
 import { RiFocus2Line } from "@remixicon/react";
+
 import { useRightPanelStore } from "../store/right-panel";
 import { AttentionList } from "./attention-rail";
 import { CatalogEntry } from "./catalog-entry";

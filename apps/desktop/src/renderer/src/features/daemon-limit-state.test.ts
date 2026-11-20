@@ -1,5 +1,6 @@
 import type { ControlStore } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
+
 import { currentControlStore } from "./daemon-limit-state";
 
 const picture = (revision: number, globalConcurrency: number): ControlStore => ({

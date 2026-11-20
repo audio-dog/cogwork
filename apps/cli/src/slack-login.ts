@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
+
 import { ConnectionFailure } from "@cogwork/contracts";
 import { CredentialStore, Linear, Slack } from "@cogwork/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -16,6 +17,7 @@ import * as Layer from "effect/Layer";
 import type { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+
 import { awaitLoopbackAuthorization, BrowserOpener, browserOpenerLayer } from "./login";
 
 const slackClientId = "663911259169.12446984597813";

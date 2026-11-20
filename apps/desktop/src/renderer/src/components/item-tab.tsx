@@ -11,6 +11,7 @@ import { useAtom } from "@effect/atom-react";
 import { RiArrowRightLine, RiFileList2Line, RiPulseLine, RiStopCircleLine } from "@remixicon/react";
 import type * as AsyncResult from "effect/reactivity/AsyncResult";
 import { createContext, type ReactNode, use, useState } from "react";
+
 import { cancelRunAtom } from "../daemon/atoms";
 import { BoardResult, useBoard, useOperationName } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";

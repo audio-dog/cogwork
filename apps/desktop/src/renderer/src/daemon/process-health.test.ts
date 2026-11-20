@@ -2,6 +2,7 @@ import type { DesktopProcessHealthSample } from "@cogwork/contracts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
+
 import {
   recordDaemonEventsApplied,
   recordProtocolInboxChange,

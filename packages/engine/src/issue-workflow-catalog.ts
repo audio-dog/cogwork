@@ -1,5 +1,6 @@
 import { WorkflowTemplate } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
+
 import { registeredActionRowsFor } from "./workflow-action-registry";
 import type { IssueTrackerApp } from "./workflow-actions-issue";
 import type { WorkflowCatalogContribution } from "./workflow-catalog";

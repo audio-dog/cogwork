@@ -1,5 +1,6 @@
 import * as JsonSchema from "effect/JsonSchema";
 import * as Schema from "effect/Schema";
+
 import { TrimmedNonEmptyString, type WorkspaceId } from "./base-schemas";
 import {
   WorkflowNodeId,

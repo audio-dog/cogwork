@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ComponentType, ReactNode } from "react";
+
 import { type RightPanelState, useRightPanelStore } from "../store/right-panel";
 import { ActivitySurfaceBody, ActivitySurfaceTab } from "./activity-surface";
 import { AttentionSurfaceBody, AttentionSurfaceTab } from "./attention-surface";

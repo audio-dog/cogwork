@@ -12,11 +12,12 @@ import * as Redacted from "effect/Redacted";
 import * as RpcClient from "effect/rpc/RpcClient";
 import * as RpcServer from "effect/rpc/RpcServer";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import * as Socket from "effect/socket/Socket";
 import * as SocketServer from "effect/socket/SocketServer";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
+
 import * as ContextAssembler from "./context-assembler";
 import * as CredentialStore from "./credential-store";
 import * as Daemon from "./daemon";

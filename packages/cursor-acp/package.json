@@ -2,8 +2,8 @@
   "name": "@cogwork/cursor-acp",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "Cursor `agent acp` harness runner for cogwork, built on TanStack AI acpCompatible + localProcessSandbox",
+  "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },

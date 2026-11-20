@@ -1,5 +1,6 @@
 import { DropdownMenuItem } from "@cogwork/ui/components/dropdown-menu";
 import { RiPulseLine } from "@remixicon/react";
+
 import { useRightPanelStore } from "../store/right-panel";
 import { ActivityTranscript } from "./activity-transcript";
 import { CatalogEntry } from "./catalog-entry";

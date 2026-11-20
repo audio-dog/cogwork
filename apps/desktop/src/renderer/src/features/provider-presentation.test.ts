@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { providerGlyph, providerLabel } from "./provider-presentation";
 
 describe("provider presentation", () => {

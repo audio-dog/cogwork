@@ -1,4 +1,5 @@
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
+
 import { RouteError } from "./components/route-error";
 import { reportRendererError } from "./features/report-error";
 import { routeTree } from "./routeTree.gen";

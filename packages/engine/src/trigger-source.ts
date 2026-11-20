@@ -17,6 +17,7 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import type { SystemOptions } from "./workflow-options";
 
 export const TriggerSourceId = Schema.Literals(["github", "linear", "granola", "slack", "clock"]);

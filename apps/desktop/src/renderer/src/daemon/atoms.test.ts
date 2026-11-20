@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import { describe, expect, it } from "vitest";
+
 import { boundPullChunks, pullChunkSize } from "./atoms";
 
 const chunksOf = <A>(stream: Stream.Stream<A>) =>
