@@ -2,8 +2,8 @@
   "name": "@cogwork/desktop",
   "version": "0.0.0",
   "description": "An Electron application with React and TypeScript",
-  "main": "./out/main/index.js",
   "author": "Taylor Steele",
+  "main": "./out/main/index.js",
   "imports": {
     "#components/*": "./src/components/*.tsx",
     "#hooks/*": "./src/hooks/*.ts",

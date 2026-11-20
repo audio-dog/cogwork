@@ -8,6 +8,7 @@ import {
   type RunSummary,
   type SchedulerStats,
 } from "@cogwork/contracts";
+
 import { formatReadModelItem } from "./read-model-item";
 import { formatScheduler } from "./status";
 import { sanitizeTerminalText, terminalLine } from "./terminal-text";

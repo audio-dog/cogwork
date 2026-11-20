@@ -60,10 +60,10 @@ const readPayload = async () => {
   }
 };
 
-const checkFiles = (checkout, files) => {
+const formatFiles = (checkout, files) => {
   const result = spawnSync(
-    join(checkout, "node_modules", ".bin", "biome"),
-    ["check", "--write", "--no-errors-on-unmatched", "--files-ignore-unknown=true", ...files],
+    join(checkout, "node_modules", ".bin", "oxfmt"),
+    ["--write", "--disable-nested-config", "--no-error-on-unmatched-pattern", ...files],
     { cwd: checkout, stdio: "inherit" },
   );
   if (result.error) {
@@ -84,7 +84,7 @@ const run = async () => {
   const workingDirectory = typeof payload.cwd === "string" ? payload.cwd : process.cwd();
   const files = await eligibleFiles(paths, checkout, workingDirectory);
   if (files.length === 0) return;
-  process.exitCode = checkFiles(checkout, files);
+  process.exitCode = formatFiles(checkout, files);
 };
 
 if (import.meta.main) await run();

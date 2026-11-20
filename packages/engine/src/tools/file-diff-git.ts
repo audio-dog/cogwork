@@ -1,10 +1,12 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createHash, type Hash } from "node:crypto";
+
 import { DEFAULT_WORKSPACE_ROOT, type ExecResult, type SandboxFileEvent } from "@tanstack/ai-sandbox";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
+
 import { type ToolError, toolError } from "./errors";
 import type { WorktreeSandbox } from "./sandbox";
 

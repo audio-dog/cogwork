@@ -7,6 +7,7 @@ import * as Metric from "effect/Metric";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import { FILE_DIFF_EVENT, toFileDiffEvent, watchWorktreeDiffs } from "./file-diff-feed";
 import {
   decodeDiffValue,

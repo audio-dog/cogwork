@@ -1,5 +1,6 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
+
 import { makeLiveProcessProfiler, type ProcessProfileInput } from "@cogwork/process-diagnostics";
 import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
@@ -8,6 +9,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Stream, SubscriptionRef } from "effect";
 import { app, BrowserWindow, crashReporter, dialog, Notification, powerMonitor, shell } from "electron";
+
 import appIdentity from "../../app-identity.json";
 import { defaultSocketPath } from "./daemon-paths";
 import { resolveDesktopEnvironment } from "./desktop-environment";

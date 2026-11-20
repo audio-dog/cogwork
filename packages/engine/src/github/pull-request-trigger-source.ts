@@ -2,6 +2,7 @@ import { WorkflowCatalogKey, type WorkItemRef } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import { type CheckRun, isFailing } from "../ci";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import {

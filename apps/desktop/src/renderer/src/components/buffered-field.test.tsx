@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { BufferedInput } from "./buffered-field";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);

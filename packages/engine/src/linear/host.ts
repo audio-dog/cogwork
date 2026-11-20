@@ -7,6 +7,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+
 import {
   type CreateIssueInput,
   convergeTrackerState,
@@ -123,22 +124,19 @@ const targetForIssue = Effect.fn("linear.issueTarget")(function* (
 });
 
 const listedItem = (issue: RawIssue) =>
-  Effect.map(
-    itemId(issue.identifier),
-    (id): ListedTrackerItem => ({
-      id,
-      title: issue.title,
-      url: issue.url,
-      assignees: issue.assignees,
-      openBlockers: issue.openBlockers,
-      priority: issue.priority,
-      states: [...issue.labels, issue.stateName],
-      open: !isResolvedState(issue.stateType),
-      labels: issue.labels,
-      createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
-      lastTouchedAtMillis: issue.updatedAtMillis,
-    }),
-  );
+  Effect.map(itemId(issue.identifier), (id): ListedTrackerItem => ({
+    id,
+    title: issue.title,
+    url: issue.url,
+    assignees: issue.assignees,
+    openBlockers: issue.openBlockers,
+    priority: issue.priority,
+    states: [...issue.labels, issue.stateName],
+    open: !isResolvedState(issue.stateType),
+    labels: issue.labels,
+    createdAtMillis: issue.createdAtMillis ?? issue.updatedAtMillis,
+    lastTouchedAtMillis: issue.updatedAtMillis,
+  }));
 
 const listItems = Effect.fn("linear.listItems")(function* (
   workspace: WorkspaceIssueTrackerBinding,
@@ -193,16 +191,14 @@ export const makeIssueReads = (client: LinearClientService) => {
       const { body, comments } = yield* client.readTriggerProse(target, id);
       return {
         body,
-        comments: comments.map(
-          (comment): TrackerComment => ({
-            id: comment.id,
-            author: comment.authorId,
-            authorAssociation: comment.authorAssociation,
-            authoredByPerson: comment.authorAssociation !== "NONE" && !hasCogworkMarker(comment.body),
-            body: comment.body,
-            createdAtMillis: comment.createdAtMillis,
-          }),
-        ),
+        comments: comments.map((comment): TrackerComment => ({
+          id: comment.id,
+          author: comment.authorId,
+          authorAssociation: comment.authorAssociation,
+          authoredByPerson: comment.authorAssociation !== "NONE" && !hasCogworkMarker(comment.body),
+          body: comment.body,
+          createdAtMillis: comment.createdAtMillis,
+        })),
       };
     }),
     labelAppliedAt: Effect.fn("linear.labelAppliedAt")(function* (

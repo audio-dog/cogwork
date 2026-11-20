@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+
 import type { WindowPreferences } from "../../../shared/ipc";
 
 const cache: { current: WindowPreferences | null } = { current: null };

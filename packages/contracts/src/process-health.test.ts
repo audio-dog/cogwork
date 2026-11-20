@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import { DesktopProcessHealthSample, ProcessHealthSample } from "./daemon";
 
 const decode = Schema.decodeUnknownSync(ProcessHealthSample);

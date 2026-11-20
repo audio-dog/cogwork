@@ -11,6 +11,7 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as AtomRegistry from "effect/reactivity/AtomRegistry";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { DaemonAtomRpc, daemonEventAtom, workflowsAtom } from "./atoms";
 
 export class WorkingCopyDaemonError extends Schema.TaggedError<WorkingCopyDaemonError>()(

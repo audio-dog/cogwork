@@ -1,4 +1,5 @@
 import { createContext, type ReactNode, use, useState } from "react";
+
 import { toggle } from "../features/customize-places";
 import { useConfiguration } from "./configuration-provider";
 

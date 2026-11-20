@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+
 import { decodeSubagentFile } from "./subagent-file";
 
 const file = (frontmatter: string, body = "Grill the plan.") => `---\n${frontmatter}\n---\n\n${body}\n`;

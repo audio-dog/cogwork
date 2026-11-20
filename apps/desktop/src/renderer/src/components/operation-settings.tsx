@@ -19,6 +19,7 @@ import { Separator } from "@cogwork/ui/components/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiArrowGoBackLine } from "@remixicon/react";
 import { createContext, type ReactNode, use } from "react";
+
 import {
   type AvailableHarnessCatalog,
   catalogFor,

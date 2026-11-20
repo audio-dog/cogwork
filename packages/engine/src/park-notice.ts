@@ -3,6 +3,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FiberSet from "effect/FiberSet";
+
 import type { CoordinationService } from "./coordination";
 import { IssueTracker } from "./issue-tracker";
 import { findWorkspace } from "./registry-lookup";

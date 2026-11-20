@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { Configuration } from "../components/configuration-provider";
 import {
   createWorkflowAtom,

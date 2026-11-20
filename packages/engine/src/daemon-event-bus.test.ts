@@ -7,6 +7,7 @@ import * as Metric from "effect/Metric";
 import * as MutableRef from "effect/MutableRef";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import * as DaemonEventBus from "./daemon-event-bus";
 
 const stats = Schema.decodeSync(SchedulerStats);

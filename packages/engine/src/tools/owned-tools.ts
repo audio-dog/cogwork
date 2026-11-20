@@ -8,6 +8,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import createIgnore, { type Ignore } from "ignore";
+
 import { confine } from "./confinement";
 import { type ToolError, toolError } from "./errors";
 import {
@@ -662,11 +663,10 @@ const bindServer =
       runPromise(
         decode(args).pipe(
           Effect.mapError((issue) => toolError("invalid-args", String(issue))),
-          Effect.flatMap(
-            (decoded): Effect.Effect<A | PolicyDenied, ToolError, HttpClient.HttpClient> =>
-              gateDecision(profile, tool, extractCommand?.(decoded)) === "deny"
-                ? Effect.succeed(policyDenied(tool, denyReason(tool)))
-                : handler(sandbox, decoded),
+          Effect.flatMap((decoded): Effect.Effect<A | PolicyDenied, ToolError, HttpClient.HttpClient> =>
+            gateDecision(profile, tool, extractCommand?.(decoded)) === "deny"
+              ? Effect.succeed(policyDenied(tool, denyReason(tool)))
+              : handler(sandbox, decoded),
           ),
         ),
       );

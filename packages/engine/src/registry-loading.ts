@@ -9,6 +9,7 @@ import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
 import type * as SqlClient from "effect/sql/SqlClient";
+
 import type { ScanAuthoringTreesRequest, scanAuthoringTrees } from "./authoring-tree";
 import type { GitError } from "./git";
 import type { RegisteredWorkspace, RegisteredWorkspaceFailure, RegistryState } from "./projector";

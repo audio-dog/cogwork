@@ -7,6 +7,7 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import { TestClock } from "effect/testing";
+
 import { toolError } from "./errors";
 import { openWorktreeSandbox, resolveBaseSha, type WorktreeSandbox } from "./sandbox";
 

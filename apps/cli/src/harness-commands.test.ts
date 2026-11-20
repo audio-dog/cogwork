@@ -7,6 +7,7 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import { formatHarnesses, formatOfflineHarnesses } from "./harness-commands";
 
 const harness = Schema.decodeSync(HarnessName);

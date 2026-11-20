@@ -21,6 +21,7 @@ import {
   RiTimeLine,
 } from "@remixicon/react";
 import type { ReactNode } from "react";
+
 import { relativeTime } from "../features/format";
 import { PrChecksBadge, PrDivergenceBadge, PrReviewBadge } from "./badges";
 

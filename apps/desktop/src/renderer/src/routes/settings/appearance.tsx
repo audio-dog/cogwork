@@ -3,6 +3,7 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { RiComputerLine, RiMoonLine, RiSunLine } from "@remixicon/react";
 import { createFileRoute } from "@tanstack/react-router";
 import type { ComponentType } from "react";
+
 import { SettingsSection, useFocusFlash } from "../../components/settings-parts";
 import { type Theme, useTheme } from "../../components/theme-provider";
 import { settingEntry } from "../../features/settings-catalog";

@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import { TestClock } from "effect/testing";
+
 import { stopSignalTracker } from "./stop-signal";
 
 const settled = (abort: Effect.Effect<void>) =>

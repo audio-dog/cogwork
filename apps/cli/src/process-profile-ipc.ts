@@ -15,6 +15,7 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { profileFdStreams } from "./profile-fd-streams";
 
 const decodeRequest = Schema.decodeUnknownOption(ProcessProfileRequest);

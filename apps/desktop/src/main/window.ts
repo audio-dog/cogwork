@@ -1,7 +1,9 @@
 import { join } from "node:path";
+
 import { is } from "@electron-toolkit/utils";
 import { BrowserWindow, shell } from "electron";
 import windowStateKeeper from "electron-window-state";
+
 import icon from "../../resources/icon.png?asset";
 import { mainLogger } from "./logger";
 

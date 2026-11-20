@@ -1,4 +1,5 @@
 import * as net from "node:net";
+
 import { Effect } from "effect";
 
 export const isDaemonListening = (socketPath: string) =>

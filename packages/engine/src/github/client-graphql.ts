@@ -1,5 +1,6 @@
 import { GitHubIssueFieldId, TrimmedNonEmptyString } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
+
 import type { GitHubRepoRef, RawIssuePullReference } from "./client";
 
 const GraphQlResponse = Schema.Struct({

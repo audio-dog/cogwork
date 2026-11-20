@@ -1,6 +1,7 @@
 import { assert } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Effect from "effect/Effect";
+
 import type { WorktreeSandbox } from "./sandbox";
 
 const gitFixtureEnvironment = {

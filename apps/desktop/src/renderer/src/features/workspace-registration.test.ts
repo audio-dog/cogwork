@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { absoluteCheckoutPathFrom, workspaceRegistrationFrom } from "./workspace-registration";
 
 const githubDraft = {

@@ -10,9 +10,7 @@
     "includes": ["**", "!**/*.gen.ts", "!**/.tanstack-output-schema-codex-*.json"]
   },
   "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "lineWidth": 110
+    "enabled": false
   },
   "linter": {
     "enabled": true,
@@ -48,23 +46,13 @@
     "./configs/lint/no-flatmap-ladder.grit",
     "./configs/lint/no-side-effect-in-state-updater.grit"
   ],
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "double"
-    }
-  },
   "css": {
     "parser": {
       "tailwindDirectives": true
     }
   },
   "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
+    "enabled": false
   },
   "overrides": [
     {

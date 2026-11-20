@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
+
 import {
   baseCatalog,
   catalogWith,

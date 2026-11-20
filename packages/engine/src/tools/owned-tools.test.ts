@@ -11,8 +11,9 @@ import * as Latch from "effect/Latch";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as Tracer from "effect/Tracer";
 import { TestClock } from "effect/testing";
+import * as Tracer from "effect/Tracer";
+
 import * as RunControl from "../run-control";
 import { editFile, makeOwnedToolSet, readFile, runBash, webFetch, writeFile } from "./owned-tools";
 import { openSandbox } from "./owned-tools-fixtures";

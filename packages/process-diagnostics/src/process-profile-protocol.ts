@@ -1,5 +1,6 @@
 import { makeBrand } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
+
 import { ProcessProfileInput } from "./process-profiler";
 
 export const ProcessProfileRequestId = makeBrand("ProcessProfileRequestId");
