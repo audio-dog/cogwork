@@ -1,0 +1,47 @@
+apps/cli/tsconfig.json
+  s_6abbfd67ca418f::t_5bc5c9c1a65e4a 2,7,9
+apps/desktop/tsconfig.node.json
+  s_6abbfd67ca418f::t_5b4b3e39446958 2-9,12-13
+apps/desktop/tsconfig.web.json
+  s_6abbfd67ca418f::t_fe5d50b4483cba 2,12-13
+configs/sensor/tsconfig.json
+  s_6abbfd67ca418f::t_42da1f07b132d1 2,4
+configs/test/tsconfig.json
+  s_6abbfd67ca418f::t_1bc26b8a4c3062 2,4
+packages/claude-code/scripts/sync-models.ts
+  s_6abbfd67ca418f::t_2d9880d0883ff7 3-12,15,109-129,131-162
+packages/claude-code/tsconfig.json
+  s_6abbfd67ca418f::t_a89821d89891da 2,4,6
+packages/codex-cli/tsconfig.json
+  s_6abbfd67ca418f::t_7f5b4782e3398d 2-3
+packages/contracts/tsconfig.json
+  s_6abbfd67ca418f::t_1c1a0269edd8af 2-3
+packages/cursor-acp/scripts/sync-models.ts
+  s_6abbfd67ca418f::t_8aea038a77b63a 4-12,14,19,21-52,103-109,112-118,120-122,124-125,127-132,134-138,140-144
+packages/cursor-acp/tsconfig.json
+  s_6abbfd67ca418f::t_6289e1bf2a7ae8 2-3
+packages/engine/tsconfig.json
+  s_6abbfd67ca418f::t_1410ed4ec2b90d 2-3
+packages/process-diagnostics/tsconfig.json
+  s_6abbfd67ca418f::t_6ba81fca9b7a04 2,7
+packages/ui/tsconfig.json
+  s_6abbfd67ca418f::t_ac12ed52d059da 2,4-5
+tsconfig.json
+  s_6abbfd67ca418f::t_9748b6d13e5d00 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2efd0f476976b9de2224ca9a321a68dd1a353ff0",
+  "prompts": {},
+  "sessions": {
+    "s_6abbfd67ca418f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-abc87de3d2feb0fc2",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
