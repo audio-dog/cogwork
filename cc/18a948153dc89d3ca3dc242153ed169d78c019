@@ -1,0 +1,79 @@
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_3dba1bcd03afaf::t_bb5a970eba8067 4,8,39,62,67,99-113
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_3dba1bcd03afaf::t_5bfaecf6de2a93 1-7,10-21,37,39,146,149-171,318-320,331,428-535,539
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_3dba1bcd03afaf::t_910d18e9e5de15 115-123
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_3dba1bcd03afaf::t_9a4629cc95e085 179,193
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_3dba1bcd03afaf::t_a98a6df30d6240 12,36,74,160
+packages/contracts/GLOSSARY-work.md
+  s_3dba1bcd03afaf::t_269c191907373e 25
+packages/contracts/src/daemon-event.ts
+  s_3dba1bcd03afaf::t_50cbbe9138c1ae 10,23
+packages/contracts/src/daemon.ts
+  s_3dba1bcd03afaf::t_1551d21d3da1c7 9,97
+packages/contracts/src/rpc.ts
+  s_3dba1bcd03afaf::t_27ec854444b14f 55,96-101,176
+packages/contracts/src/workspace.test.ts
+  s_3dba1bcd03afaf::t_5e21d1a2baeeac 2,4-5,86-129
+packages/contracts/src/workspace.ts
+  s_3dba1bcd03afaf::t_ae939b44f57445 28-33,92-118,122,126-128
+packages/engine/src/commands.test.ts
+  s_3dba1bcd03afaf::t_c05e0deecacf1f 1-94
+packages/engine/src/commands.ts
+  s_3dba1bcd03afaf::t_36d8a00c7c5eb3 12,17,39,46-47,49,64,67-131,134,137-142
+packages/engine/src/daemon-engine.ts
+  s_3dba1bcd03afaf::t_3add06a763392f 130,133,271
+packages/engine/src/daemon-handlers.ts
+  s_3dba1bcd03afaf::t_7ade19d9ba8264 13,116
+packages/engine/src/github/client-responses.ts
+  s_99f1d8dca23ac2::t_6129155b700aed 86
+packages/engine/src/github/client.test.ts
+  s_3dba1bcd03afaf::t_278fd99d30be76 1130-1134,1136-1140,1144-1146
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_3dba1bcd03afaf::t_fde0a49fd27b33 384
+packages/engine/src/linear/client-queries.ts
+  s_3dba1bcd03afaf::t_4f8b622011471a 160-179
+packages/engine/src/linear/client.test.ts
+  s_3dba1bcd03afaf::t_2257b583fcfd0d 10,18-19,21,24-29,40,45-73,75,77,87
+packages/engine/src/linear/client.ts
+  s_3dba1bcd03afaf::t_056a8aa1598aec 29,32,36,109-121,331
+packages/engine/src/linear/host.ts
+  s_3dba1bcd03afaf::t_ce64cf5b224da4 1-6,39-46
+packages/engine/src/projector.ts
+  s_3dba1bcd03afaf::t_7faf95e0d39fff 7,18
+packages/engine/src/registry-loading.ts
+  s_3dba1bcd03afaf::t_11ab4a1feb5bc7 26,174
+packages/engine/src/registry-rows.ts
+  s_3dba1bcd03afaf::t_c80b489aec7b75 8-9,65
+packages/engine/src/workspace-registry-registration.test.ts
+  s_3dba1bcd03afaf::t_be1db785de528b 12,29-30,91-125
+packages/ui/src/components/combobox.tsx
+  s_3dba1bcd03afaf::t_49f697902f02e6 1-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cc18a948153dc89d3ca3dc242153ed169d78c019",
+  "prompts": {},
+  "sessions": {
+    "s_3dba1bcd03afaf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bd39aaf-cf6f-4c41-beb3-cc8d2525d818",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_99f1d8dca23ac2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f7d14b0e-cd97-4069-a7f8-a9bbf9e567e7",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
