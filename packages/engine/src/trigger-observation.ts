@@ -20,7 +20,7 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { Coordination } from "./coordination";
+import { Coordination, type CoordinationGate } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { WorkspaceRegistry } from "./registry-service";
 import {
@@ -34,10 +34,10 @@ import {
 import { makeAssigneeGate } from "./trigger-observation-assignees";
 import { TriggerObservationStore } from "./trigger-observation-store";
 import {
+  addressedSubscriptions,
   fingerprintOf,
   matchTriggerEvent,
   passesTriggerFilters,
-  routeTriggerEvent,
   sourceSubscriptions,
   startsSamePublishedTrigger,
   subscriptionIdentity,
@@ -72,6 +72,17 @@ const admissionsOf = (subscriptions: ReadonlyArray<TriggerSubscription>, event: 
   subscriptions.map(
     (subscription) => ({ event, subscription, lineage: lineageOf(event) }) satisfies TriggerAdmission,
   );
+
+interface AdmissionState {
+  readonly admission: TriggerAdmission;
+  readonly gate: CoordinationGate;
+  readonly isUnprocessedRevision: boolean;
+}
+
+const isOfferable = ({ admission, gate, isUnprocessedRevision }: AdmissionState) => {
+  const passesFilters = passesTriggerFilters(admission.subscription, admission.event);
+  return isUnprocessedRevision && gate._tag === "Open" && passesFilters;
+};
 
 const planRejectionOf = (event: TriggerEvent) =>
   event.payload?._tag === "GranolaNoteRejected"
@@ -139,16 +150,8 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  // A redelivery that fails a filter replaces its pending admission, so `eligible` sees the item's
-  // current filter state instead of the state at admission.
-  const refreshFilteredOut = (
-    redelivered: boolean,
-    subscriptions: ReadonlyArray<TriggerSubscription>,
-    event: TriggerEvent,
-  ) =>
-    redelivered
-      ? store.refreshPending(admissionsOf(routeTriggerEvent(subscriptions, event), event))
-      : Effect.void;
+  const conditionsAddressedBy = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) =>
+    addressedSubscriptions(subscriptions, event).filter(({ entry }) => conditionEntries.has(entry));
 
   const admit = Effect.fn("TriggerObservation.admit")(function* (
     source: TriggerSource,
@@ -171,9 +174,11 @@ export const make = Effect.gen(function* () {
     const active = subscriptions.filter((subscription) => current.has(subscriptionIdentity(subscription)));
     if (active.length === 0) return;
     const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
+    const redelivered = outcome === "redelivered";
+    if (redelivered) yield* store.refreshPending(admissionsOf(conditionsAddressedBy(active, event), event));
     const matched = matchTriggerEvent(active, event);
-    if (matched.length === 0) return yield* refreshFilteredOut(outcome === "redelivered", active, event);
-    const redeliveryView = outcome === "redelivered" ? yield* coordination.read(event.key) : null;
+    if (matched.length === 0) return;
+    const redeliveryView = redelivered ? yield* coordination.read(event.key) : null;
     const redeliveryIsClosed =
       redeliveryView !== null &&
       (redeliveryView.revision?.observed !== event.revision ||
@@ -185,7 +190,7 @@ export const make = Effect.gen(function* () {
     if (rejection !== null && !isAlreadyParked) yield* coordination.park(event.key, rejection);
     yield* store.putAll(admissions);
     yield* source.acknowledge?.(event, matched) ?? Effect.void;
-    if (outcome === "redelivered") return;
+    if (redelivered) return;
     yield* Effect.forEach(admissions, (admission) => PubSub.publish(changes, admission), {
       discard: true,
     });
@@ -386,12 +391,7 @@ export const make = Effect.gen(function* () {
       }),
       Effect.map((states) =>
         states
-          .filter(
-            ({ admission, gate, isUnprocessedRevision }) =>
-              isUnprocessedRevision &&
-              gate._tag === "Open" &&
-              passesTriggerFilters(admission.subscription, admission.event),
-          )
+          .filter(isOfferable)
           .toSorted(waitingAdmissionOrder)
           .map(({ admission }) => admission),
       ),

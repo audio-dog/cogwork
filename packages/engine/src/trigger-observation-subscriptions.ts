@@ -6,7 +6,10 @@ import type { TriggerEvent, TriggerSource, TriggerSubscription } from "./trigger
 export const passesTriggerFilters = (subscription: TriggerSubscription, event: TriggerEvent) =>
   subscription.filters.every((filter) => event.passes?.includes(filter));
 
-export const routeTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) => {
+export const addressedSubscriptions = (
+  subscriptions: ReadonlyArray<TriggerSubscription>,
+  event: TriggerEvent,
+) => {
   const observed = new Map((event.parameters ?? []).map(({ id, value }) => [id, value]));
   return subscriptions.filter((subscription) => {
     const sameScheduleWorkflow =
@@ -34,7 +37,7 @@ export const routeTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
 };
 
 export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) => {
-  const matched = routeTriggerEvent(subscriptions, event).filter((subscription) =>
+  const matched = addressedSubscriptions(subscriptions, event).filter((subscription) =>
     passesTriggerFilters(subscription, event),
   );
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
