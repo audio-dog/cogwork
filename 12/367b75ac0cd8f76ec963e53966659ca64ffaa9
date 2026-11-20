@@ -1,0 +1,21 @@
+packages/contracts/src/coordination.test.ts
+  s_879522bbf48bef::t_ec9a716b3a559f 2,5,37-65
+packages/contracts/src/coordination.ts
+  s_879522bbf48bef::t_81549f5b53dbbd 2,89-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "12367b75ac0cd8f76ec963e53966659ca64ffaa9",
+  "prompts": {},
+  "sessions": {
+    "s_879522bbf48bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dc06238-5b4a-45a1-8802-fbb207af229a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
