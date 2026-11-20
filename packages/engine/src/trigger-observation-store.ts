@@ -219,28 +219,27 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
     controlStore
       .withWrite(sql.withTransaction(putStatements(admissions)))
       .pipe(Effect.asVoid, Effect.mapError(storeError));
+  const admissionRow = (admission: TriggerAdmission) =>
+    sql.and([
+      sql`work_item = ${keyOf(admission.event.key)}`,
+      sql`revision = ${admission.event.revision}`,
+      sql`workflow = ${admission.subscription.workflow}`,
+      sql`trigger = ${admission.subscription.trigger}`,
+    ]);
   const finishStatement = (admission: TriggerAdmission) =>
-    sql`
-        UPDATE trigger_admissions SET processed = 1
-        WHERE work_item = ${keyOf(admission.event.key)}
-          AND revision = ${admission.event.revision}
-          AND workflow = ${admission.subscription.workflow}
-          AND trigger = ${admission.subscription.trigger}
-      `.pipe(Effect.asVoid);
+    sql`UPDATE trigger_admissions SET processed = 1 WHERE ${admissionRow(admission)}`.pipe(Effect.asVoid);
   const refreshPending = (admissions: ReadonlyArray<TriggerAdmission>) =>
     controlStore
       .withWrite(
-        Effect.forEach(
-          admissions,
-          (admission) => sql`
-            UPDATE trigger_admissions SET payload = ${encodeAdmission(admission)}
-            WHERE work_item = ${keyOf(admission.event.key)}
-              AND revision = ${admission.event.revision}
-              AND workflow = ${admission.subscription.workflow}
-              AND trigger = ${admission.subscription.trigger}
-              AND processed = 0
-          `,
-          { discard: true },
+        sql.withTransaction(
+          Effect.forEach(
+            admissions,
+            (admission) => sql`
+              UPDATE trigger_admissions SET payload = ${encodeAdmission(admission)}
+              WHERE ${admissionRow(admission)} AND processed = 0
+            `,
+            { discard: true },
+          ),
         ),
       )
       .pipe(Effect.mapError(storeError));
