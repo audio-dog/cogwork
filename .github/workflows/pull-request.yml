@@ -104,6 +104,23 @@ jobs:
       - name: Format and lint
         run: pnpm format-and-lint
 
+  lint-rule-fixtures:
+    needs: install
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@v2
+        with:
+          cache: true
+
+      - name: Run lint rule fixtures
+        run: pnpm --filter @cogwork/lint-config test:rules
+
   typecheck:
     needs: install
     runs-on: ubuntu-latest
