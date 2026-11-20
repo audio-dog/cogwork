@@ -1,0 +1,27 @@
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_4203c8d9e01e12::t_2651f0f6662865 92
+apps/desktop/src/renderer/src/components/import-review.tsx
+  s_4203c8d9e01e12::t_b057ed7d44f77f 48-56
+apps/desktop/src/renderer/src/components/settings-sidebar.tsx
+  s_4203c8d9e01e12::t_bbebbc96e873d7 57-63
+configs/lint/AGENTS.md
+  s_4203c8d9e01e12::t_1ba7ccd021b046 8-22
+packages/ui/src/components/spinner.tsx
+  s_4203c8d9e01e12::t_9a54c9e0d4f6b7 8-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3f73474c3d729fddfd020a16f534119be960946b",
+  "prompts": {},
+  "sessions": {
+    "s_4203c8d9e01e12": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f8d8f0f9-cfc5-484f-b3fb-d44df9c47a62",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
