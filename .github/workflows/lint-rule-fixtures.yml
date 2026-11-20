@@ -1,0 +1,29 @@
+name: Lint Rule Fixtures
+
+on:
+  pull_request:
+    branches: ['main']
+    paths: ['biome.json', 'configs/lint/**']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-rule-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm and Node.js
+        uses: pnpm/setup@v2
+        with:
+          cache: true
+
+      - name: Run lint rule fixtures
+        run: pnpm --filter @cogwork/lint-config test:rules

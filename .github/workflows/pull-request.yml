@@ -18,23 +18,9 @@ jobs:
   install:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
-      lint-rules-changed: ${{ steps.lint-rules.outputs.changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Detect lint rule changes
-        id: lint-rules
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          if git diff --quiet "$BASE_SHA" HEAD -- biome.json configs/lint/; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Set up pnpm and Node.js
         uses: pnpm/setup@v2
@@ -117,24 +103,6 @@ jobs:
 
       - name: Format and lint
         run: pnpm format-and-lint
-
-  lint-rule-fixtures:
-    needs: install
-    if: needs.install.outputs.lint-rules-changed == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up pnpm and Node.js
-        uses: pnpm/setup@v2
-        with:
-          cache: true
-
-      - name: Run lint rule fixtures
-        run: pnpm --filter @cogwork/lint-config test:rules
 
   typecheck:
     needs: install
