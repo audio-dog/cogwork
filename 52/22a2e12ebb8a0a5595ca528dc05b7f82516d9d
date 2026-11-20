@@ -1,0 +1,39 @@
+.agents/skills/test-audit/SKILL.md
+  s_7cae705f91c4b8::t_664d2d51943d28 12
+configs/sensor/GLOSSARY.md
+  s_7cae705f91c4b8::t_4b24781a46b7d7 3-5,22
+configs/sensor/package.json
+  s_7cae705f91c4b8::t_3494b058f3801c 12
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  s_7cae705f91c4b8::t_63c5055fc8f917 5-6
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  s_7cae705f91c4b8::t_bf39e553942b83 5-7
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  s_7cae705f91c4b8::t_9114be27369a3b 101-102
+docs/adr/0038-oxlint-and-oxfmt-replace-biome-and-official-rules-win.md
+  s_7cae705f91c4b8::t_baf5770a537c05 111-113
+docs/adr/0040-the-test-suite-cost-sensor-is-removed.md
+  s_7cae705f91c4b8::t_ee134a2a45fc6d 33-35
+docs/spec/performance-observability.md
+  s_7cae705f91c4b8::t_a07980acf67cb6 135-137
+packages/engine/package.json
+  s_7cae705f91c4b8::t_e7f0cbe13334d1 6
+pnpm-lock.yaml
+  s_7cae705f91c4b8::t_8a6430cca600ea 543-545
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5222a2e12ebb8a0a5595ca528dc05b7f82516d9d",
+  "prompts": {},
+  "sessions": {
+    "s_7cae705f91c4b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e91baaa-e8f2-424b-89b2-85e8d656b270",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
