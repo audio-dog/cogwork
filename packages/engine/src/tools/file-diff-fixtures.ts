@@ -71,6 +71,12 @@ class ExecCalls extends Context.Service<ExecCalls, Queue.Queue<string>>()(
   static readonly layer = Layer.effect(ExecCalls, Queue.unbounded<string>());
 }
 
+class HeldListCalls extends Context.Service<HeldListCalls, Queue.Queue<() => void>>()(
+  "@cogwork/engine/tools/file-diff-fixtures/HeldListCalls",
+) {
+  static readonly layer = Layer.effect(HeldListCalls, Queue.unbounded<() => void>());
+}
+
 const openSandbox = Effect.fn("file-diff-feed.test.openSandbox")(function* () {
   const handle = yield* Effect.acquireRelease(
     Effect.promise(() => localProcessSandbox({}).create({})),
@@ -115,6 +121,18 @@ const withExecProbe = Effect.fn("file-diff-feed.test.withExecProbe")(function* (
       },
     },
   };
+});
+
+const withHeldListCalls = Effect.fn("file-diff-feed.test.withHeldListCalls")(function* (
+  sandbox: WorktreeSandbox,
+) {
+  const held = yield* HeldListCalls;
+  const list: WorktreeSandbox["handle"]["fs"]["list"] = (path, options) => {
+    const release = Promise.withResolvers<void>();
+    Queue.offerUnsafe(held, release.resolve);
+    return release.promise.then(() => sandbox.handle.fs.list(path, options));
+  };
+  return { ...sandbox, handle: { ...sandbox.handle, fs: { ...sandbox.handle.fs, list } } };
 });
 
 const settleDiff = Effect.fn("file-diff-feed.test.settleDiff")(function* (calls: Queue.Queue<string>) {
@@ -210,6 +228,7 @@ export {
   gitCommand,
   gitDiffCommand,
   gitFixtureEnvironment,
+  HeldListCalls,
   isBatchDiffCommand,
   isExternalDiffProbe,
   isGitDiffCommand,
@@ -222,5 +241,6 @@ export {
   takeAllCalls,
   testProcessSignal,
   withExecProbe,
+  withHeldListCalls,
   yieldToHost,
 };
