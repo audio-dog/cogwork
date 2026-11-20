@@ -36,6 +36,8 @@ import { TriggerObservationStore } from "./trigger-observation-store";
 import {
   fingerprintOf,
   matchTriggerEvent,
+  passesTriggerFilters,
+  routeTriggerEvent,
   sourceSubscriptions,
   startsSamePublishedTrigger,
   subscriptionIdentity,
@@ -65,6 +67,11 @@ const lineageOf = (event: TriggerEvent): Lineage => {
     hop: event.cause.lineage.hop + 1,
   };
 };
+
+const admissionsOf = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) =>
+  subscriptions.map(
+    (subscription) => ({ event, subscription, lineage: lineageOf(event) }) satisfies TriggerAdmission,
+  );
 
 const planRejectionOf = (event: TriggerEvent) =>
   event.payload?._tag === "GranolaNoteRejected"
@@ -132,6 +139,17 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  // A redelivery that fails a filter replaces its pending admission, so `eligible` sees the item's
+  // current filter state instead of the state at admission.
+  const refreshFilteredOut = (
+    redelivered: boolean,
+    subscriptions: ReadonlyArray<TriggerSubscription>,
+    event: TriggerEvent,
+  ) =>
+    redelivered
+      ? store.refreshPending(admissionsOf(routeTriggerEvent(subscriptions, event), event))
+      : Effect.void;
+
   const admit = Effect.fn("TriggerObservation.admit")(function* (
     source: TriggerSource,
     subscriptions: ReadonlyArray<TriggerSubscription>,
@@ -154,16 +172,14 @@ export const make = Effect.gen(function* () {
     if (active.length === 0) return;
     const outcome = yield* coordination.observe(event.key, event.revision, event.cause);
     const matched = matchTriggerEvent(active, event);
-    if (matched.length === 0) return;
+    if (matched.length === 0) return yield* refreshFilteredOut(outcome === "redelivered", active, event);
     const redeliveryView = outcome === "redelivered" ? yield* coordination.read(event.key) : null;
     const redeliveryIsClosed =
       redeliveryView !== null &&
       (redeliveryView.revision?.observed !== event.revision ||
         redeliveryView.revision.processed === event.revision);
     if (redeliveryIsClosed) return;
-    const admissions = matched.map(
-      (subscription) => ({ event, subscription, lineage: lineageOf(event) }) satisfies TriggerAdmission,
-    );
+    const admissions = admissionsOf(matched, event);
     const rejection = planRejectionOf(event);
     const isAlreadyParked = samePlanRejection(redeliveryView?.park?.reason, rejection);
     if (rejection !== null && !isAlreadyParked) yield* coordination.park(event.key, rejection);
@@ -370,7 +386,12 @@ export const make = Effect.gen(function* () {
       }),
       Effect.map((states) =>
         states
-          .filter(({ gate, isUnprocessedRevision }) => isUnprocessedRevision && gate._tag === "Open")
+          .filter(
+            ({ admission, gate, isUnprocessedRevision }) =>
+              isUnprocessedRevision &&
+              gate._tag === "Open" &&
+              passesTriggerFilters(admission.subscription, admission.event),
+          )
           .toSorted(waitingAdmissionOrder)
           .map(({ admission }) => admission),
       ),

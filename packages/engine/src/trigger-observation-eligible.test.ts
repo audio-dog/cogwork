@@ -1,22 +1,39 @@
-import { AttemptRecord, keyOf, LineageId, ParkRecord, type WorkItemRef } from "@cogwork/contracts";
+import {
+  AttemptRecord,
+  keyOf,
+  LineageId,
+  ParkRecord,
+  WorkflowCatalogKey,
+  WorkflowDocument,
+  type WorkItemRef,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";
 import { emptyRegistry } from "./projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
+import { trackerTriggerEntries } from "./tracker-trigger-source";
 import { make } from "./trigger-observation";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import {
   coordinationService,
   event,
+  issueHasLabelKey,
   lineage,
+  makeWorkspaceObservation,
   otherWorkflowId,
   record,
+  selectedDocument,
+  selectedEvent,
   subscription,
+  triggerId,
   workflowId,
   workflowService,
 } from "./trigger-observation-fixtures";
@@ -92,6 +109,62 @@ describe("TriggerObservation", () => {
       assert.deepStrictEqual(
         (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
         ["acted", "old-urgent", "new-urgent", "old-low"],
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("offers an admitted issue only while a redelivery still passes its Trigger's filters", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(1_000);
+      const notBlocked = yield* Schema.decodeEffect(WorkflowCatalogKey)("github.issue-not-blocked");
+      const labelParameters = [{ id: "label", value: "ready-for-agent" }];
+      const filteredDocument = yield* Schema.decodeEffect(WorkflowDocument)({
+        ...selectedDocument,
+        triggers: [
+          {
+            id: triggerId,
+            entry: issueHasLabelKey,
+            parameters: labelParameters,
+            filters: [{ entry: notBlocked }],
+            start: subscription.operation,
+          },
+        ],
+      });
+      const { observation, scripted } = yield* makeWorkspaceObservation({
+        document: filteredDocument,
+        source: { id: "github", entries: trackerTriggerEntries("github") },
+      });
+      const labelled = {
+        ...selectedEvent,
+        entry: issueHasLabelKey,
+        revision: "label:ready-for-agent:999",
+        atMillis: 999,
+        parameters: labelParameters,
+      };
+      const observe = (passes: ReadonlyArray<WorkflowCatalogKey>) =>
+        scripted.emit({ ...labelled, passes }).pipe(Effect.andThen(TestClock.adjust("1 second")));
+      const admitted = yield* observation.changes.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* scripted.emit({ ...labelled, passes: [notBlocked] });
+      yield* Fiber.join(admitted);
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [labelled.revision],
+      );
+
+      yield* observe([]);
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [],
+      );
+
+      yield* observe([notBlocked]);
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [labelled.revision],
       );
     }).pipe(Effect.scoped),
   );
