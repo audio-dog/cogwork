@@ -1,0 +1,23 @@
+apps/cli/src/cli.test.ts
+  s_879522bbf48bef::t_a995d823cdb489 54-61
+apps/cli/src/start-over-command.test.ts
+  s_879522bbf48bef::t_4a48eb80eeca5b 22,30-33,36,39-41,44
+apps/cli/src/start-over-command.ts
+  s_879522bbf48bef::t_a33818c453e5d3 20,34,38,43,45,51,53-54,56,58,71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76c65d0221cda2c5b8f8ce598022f125f9bd31b7",
+  "prompts": {},
+  "sessions": {
+    "s_879522bbf48bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dc06238-5b4a-45a1-8802-fbb207af229a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
