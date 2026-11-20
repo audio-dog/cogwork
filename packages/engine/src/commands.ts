@@ -359,7 +359,8 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const store = yield* ControlStore;
-  const displayName = registeredDisplayName(yield* (yield* WorkspaceRegistry).state, payload.workspace);
+  const registry = yield* WorkspaceRegistry;
+  const displayName = registeredDisplayName(yield* registry.state, payload.workspace);
   return yield* publishAfter(management.deregister(payload.workspace), (workspace) =>
     Effect.gen(function* () {
       yield* publisher.publishWorkspaceRemoved(workspace, displayName);

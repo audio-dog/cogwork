@@ -17,7 +17,7 @@ import { ControlStore } from "./control-store";
 import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { LinearClient } from "./linear/client";
-import type { RegisteredWorkspace } from "./projector";
+import { emptyRegistry, type RegisteredWorkspace, type RegistryState } from "./projector";
 import { WorkspaceManagement } from "./registry-management";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 
@@ -107,12 +107,15 @@ describe("deregisterWorkspace", () => {
   it.effect("names the removed workspace by the display name it had before deregistering", () =>
     Effect.gen(function* () {
       const named = { ...github, config: { ...github.config, displayName: "Acme web" } };
+      const registry = yield* Ref.make<RegistryState>({ workspaces: [named], failures: [] });
       const removed = yield* Ref.make<ReadonlyArray<readonly [string, string | undefined]>>([]);
       yield* deregisterWorkspace({ workspace: named.config.id }).pipe(
         Effect.provide(
           Layer.mergeAll(
-            Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [named], failures: [] })),
-            Layer.mock(WorkspaceManagement, { deregister: (workspace) => Effect.succeed(workspace) }),
+            Layer.mock(WorkspaceRegistry, { state: Ref.get(registry) }),
+            Layer.mock(WorkspaceManagement, {
+              deregister: (workspace) => Ref.set(registry, emptyRegistry).pipe(Effect.map(() => workspace)),
+            }),
             Layer.mock(ControlStore, {
               health: "available",
               seed: defaultControlStore,

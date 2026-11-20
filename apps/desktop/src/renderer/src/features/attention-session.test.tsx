@@ -439,15 +439,20 @@ describe("AttentionClientProvider", () => {
     await act(async () => root.unmount());
   });
 
+  const parentRunId = "8a30130e-a15e-411b-87c3-6b23cc581c24";
   it.each([
-    { parentRun: { operation: "review", startedAtMillis: 0 }, label: /^Review · started / },
-    { parentRun: null, label: /^Earlier Run$/ },
-  ])("labels the parent Run in the lineage without its Run id ($label)", async ({ parentRun, label }) => {
-    const parentRunId = "8a30130e-a15e-411b-87c3-6b23cc581c24";
+    {
+      parent: parentRunId,
+      parentRun: { operation: "review", startedAtMillis: 0 },
+      label: /^Review · started /,
+    },
+    { parent: parentRunId, parentRun: null, label: /^Earlier Run$/ },
+    { parent: "issue:acme:%2353", parentRun: null, label: /^#53$/ },
+  ])("labels the lineage parent without its raw id ($label)", async ({ parent, parentRun, label }) => {
     const { container, root } = await renderAttention({
       snapshot: snapshot(
         attentionWith({ _tag: "Stuck", summary: "Need a person" }, ["hand-back"], null, "Need a person", {
-          lineage: { ...lineage, parent: parentRunId, hop: 1 },
+          lineage: { ...lineage, parent, hop: 1 },
           parentRun,
         }),
       ),
@@ -464,7 +469,7 @@ describe("AttentionClientProvider", () => {
       (node) => node.textContent,
     );
     expect(titles.some((title) => label.test(title ?? ""))).toBe(true);
-    expect(container.textContent).not.toContain(parentRunId);
+    expect(container.textContent).not.toContain(parent);
     await act(async () => root.unmount());
   });
 

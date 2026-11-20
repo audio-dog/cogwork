@@ -23,7 +23,7 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     workspace.readyToMerge.map((item) => terminalLine(readyToMergeText(item))),
   );
   return [
-    `  - ${labelWithId(workspace)} [${workspace.issueTracker}] ${workspace.checkoutPath}`,
+    `  - ${terminalLine(labelWithId(workspace))} [${workspace.issueTracker}] ${workspace.checkoutPath}`,
     ...readyToMerge,
   ].join("\n");
 };
@@ -33,13 +33,13 @@ const formatFailure = (failure: DaemonStatus["failures"][number]) => {
     failure.id === undefined
       ? failure.displayName
       : labelWithId({ id: failure.id, displayName: failure.displayName });
-  const workspace = label === undefined ? "" : `${label} · `;
+  const workspace = label === undefined ? "" : `${terminalLine(label)} · `;
   return `  ! ${workspace}${failure.source}: ${failure.message}`;
 };
 
 export const formatScheduler = (scheduler: SchedulerStats) => {
   const loads = scheduler.perWorkspace
-    .map((load) => `${workspaceLabel(load)}=${load.inFlight}/${load.limit}`)
+    .map((load) => `${terminalLine(workspaceLabel(load))}=${load.inFlight}/${load.limit}`)
     .join(" ");
   const suffix = loads.length === 0 ? "" : ` (${loads})`;
   const paused = scheduler.scheduling === "paused" ? " · paused" : "";
