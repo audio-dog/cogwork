@@ -75,6 +75,13 @@ export const refusalForAgent = RefusedResult.$match({
     "Your previous Run stopped before it returned a result. Return the result before the Run ends.",
 });
 
+export const refusalResumesSession = RefusedResult.$match({
+  SchemaMismatch: () => true,
+  ActionPlanRefused: () => false,
+  PullRequestDeclined: () => false,
+  HarnessStreamFailed: () => false,
+});
+
 export const refusalForPerson = RefusedResult.$match({
   SchemaMismatch: ({ issues }) =>
     `The agent's result did not match the Operation's result schema (${issues.map(issueText).join("; ")}).`,

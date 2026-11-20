@@ -178,6 +178,7 @@ export const requirements = Layer.mergeAll(
 );
 
 export interface HarnessBehavior {
+  readonly sessionKind?: HarnessRunner["sessionKind"];
   readonly projectedMembers?: HarnessRunner["projectedMembers"];
   readonly preflight?: HarnessRunner["preflight"];
   readonly run?: HarnessRunner["run"];
@@ -216,7 +217,7 @@ export const testProgram = (
     const harness = makeHarness([
       {
         name: harnessName,
-        sessionKind: "owned-transcript",
+        sessionKind: behavior.sessionKind ?? "owned-transcript",
         projectedMembers: behavior.projectedMembers ?? ["Tools"],
         planMiddleware: ["sandbox", "persistence", "instruction-context"],
         execution: fullHarnessExecution,
@@ -284,4 +285,14 @@ export const previousResultIssues = Effect.fn("WorkflowRunTest.previousResultIss
     .flatMap((plan) => plan?.operatingInstructions.resources ?? [])
     .filter(({ source }) => source === "previous-result-issues")
     .map(({ content }) => content);
+});
+
+export const runSessions = Effect.fn("WorkflowRunTest.runSessions")(function* () {
+  const ledger = yield* RunLedger;
+  const runs = yield* ledger.listRuns(10);
+  const plans = yield* Effect.forEach(runs, ({ id }) => ledger.getRunPlan(id));
+  return {
+    sessions: new Set(runs.map(({ session }) => session)).size,
+    requests: plans.map((plan) => plan?.messages[0]?.content ?? "").sort(),
+  };
 });

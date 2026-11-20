@@ -255,6 +255,31 @@ describe("GitHub Trigger sources", () => {
     );
   });
 
+  it.effect("carries the pull request's ownership on condition and occurrence events", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
+      const events = yield* source
+        .observe([
+          subscription("github.pull-request-checks-failed", "checks"),
+          subscription("github.pull-request-conflicts-with-base", "conflicts"),
+          subscription("github.new-review-comment-from-person", "review"),
+        ])
+        .pipe(Stream.take(3), Stream.runCollect);
+
+      const ownership = { author: "maintainer", headRef: "7-work", closingIssueNumbers: [7] };
+      assert.deepStrictEqual([...events].map(({ entry }) => entry).toSorted(), [
+        "github.new-review-comment-from-person",
+        "github.pull-request-checks-failed",
+        "github.pull-request-conflicts-with-base",
+      ]);
+      assert.deepStrictEqual(
+        [...events].map(({ pullRequest }) => pullRequest),
+        [ownership, ownership, ownership],
+      );
+    }).pipe(Effect.provide(pullClientLayer())),
+  );
+
   it.effect("carries review bodies in occurrence prose", () =>
     Effect.gen(function* () {
       const client = yield* GitHubClient;

@@ -139,7 +139,12 @@ const testLayer = (handbacks: ReadonlyArray<HandbackRecord>) =>
         return Layer.mock(WorktreeManager, {
           ensure: (_workspace, _item, options) =>
             Ref.update(ensured, (calls) => [...calls, options?.resume ?? false]).pipe(
-              Effect.map(() => ({ branch: BranchName.make("42"), path: "/worktrees/42", created: false })),
+              Effect.map(() => ({
+                branch: BranchName.make("42"),
+                path: "/worktrees/42",
+                created: false,
+                operationInProgress: null,
+              })),
             ),
         });
       }),
@@ -220,6 +225,7 @@ const input = (pendingPlanAttempt: RunId | null): RunPreparationInput => ({
   harness: harnessName,
   run: { id: Schema.decodeSync(RunId)("run-next"), workspace: runWorkspace, startedAtMillis: 6_000 },
   pendingPlanAttempt,
+  resend: null,
 });
 
 const handback: HandbackRecord = { by: "taylor", atMillis: 7_000, note: "Use the smaller fix." };

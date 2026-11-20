@@ -84,14 +84,34 @@ const parseRefObjects = (output: string) =>
 const gitCommandDeadline = "5 minutes";
 
 interface GitOperationState {
-  readonly statePaths: readonly [string, ...ReadonlyArray<string>];
+  readonly marker: string;
+  readonly identityPaths: readonly [string, ...ReadonlyArray<string>];
 }
 
 const gitOperationStates = {
-  merge: { statePaths: ["MERGE_HEAD"] },
-  rebase: { statePaths: ["rebase-merge", "rebase-apply/rebasing"] },
-  "cherry-pick": { statePaths: ["CHERRY_PICK_HEAD"] },
-} satisfies { readonly [Operation in Git.GitOperation]: GitOperationState };
+  merge: [{ marker: "MERGE_HEAD", identityPaths: ["MERGE_HEAD"] }],
+  rebase: [
+    { marker: "rebase-merge", identityPaths: ["rebase-merge/onto", "rebase-merge/orig-head"] },
+    { marker: "rebase-apply/rebasing", identityPaths: ["rebase-apply/onto", "rebase-apply/orig-head"] },
+  ],
+  "cherry-pick": [{ marker: "CHERRY_PICK_HEAD", identityPaths: ["CHERRY_PICK_HEAD"] }],
+} satisfies { readonly [Operation in Git.GitOperation]: ReadonlyArray<GitOperationState> };
+
+const gitOperationMarkers = Record.toEntries(gitOperationStates).flatMap(([operation, states]) =>
+  states.map((state) => ({ operation, ...state })),
+);
+
+const operationRecordKey = "cogwork.operation";
+
+const encodeOperationRecord = ({ operation, identity, head }: Git.GitOperationRecord) =>
+  `${operation} ${identity} ${head}`;
+
+const decodeOperationRecord = (value: string) => {
+  const [recordedOperation, identity, head, ...rest] = value.trim().split(" ");
+  const operation = Record.keys(gitOperationStates).find((candidate) => candidate === recordedOperation);
+  const complete = operation && identity && head && rest.length === 0;
+  return complete ? ({ operation, identity, head } satisfies Git.GitOperationRecord) : null;
+};
 
 export const gitLayer = Layer.effect(
   Git.Git,
@@ -128,39 +148,87 @@ export const gitLayer = Layer.effect(
       );
     };
 
-    const operationStatePathExists = Effect.fn("Git.operationStatePathExists")(function* (
+    const gitPath = (worktreePath: string, statePath: string) =>
+      runGit(worktreePath, ["rev-parse", "--git-path", statePath]).pipe(
+        Effect.map((value) => path.resolve(worktreePath, value.trim())),
+      );
+
+    const gitPathFailure = (statePath: string) => (cause: PlatformError.PlatformError) =>
+      new Git.GitError({
+        command: `git rev-parse --git-path ${statePath}`,
+        message: describe(cause),
+        retryable: true,
+      });
+
+    const readGitPathWith = <A>(
       worktreePath: string,
       statePath: string,
-    ) {
-      const value = yield* runGit(worktreePath, ["rev-parse", "--git-path", statePath]);
-      const resolvedStatePath = path.resolve(worktreePath, value.trim());
-      return yield* fs.exists(resolvedStatePath).pipe(
-        Effect.catch(
-          recoverNotFound(
-            false,
-            (cause) =>
-              new Git.GitError({
-                command: `git rev-parse --git-path ${statePath}`,
-                message: describe(cause),
-                retryable: true,
-              }),
-          ),
+      read: (resolved: string) => Effect.Effect<A, PlatformError.PlatformError>,
+      missing: A,
+    ) =>
+      gitPath(worktreePath, statePath).pipe(
+        Effect.flatMap((resolved) =>
+          read(resolved).pipe(Effect.catch(recoverNotFound(missing, gitPathFailure(statePath)))),
         ),
       );
-    });
+
+    const gitPathExists = (worktreePath: string, statePath: string) =>
+      readGitPathWith(worktreePath, statePath, (resolved) => fs.exists(resolved), false);
+
+    const readGitPath = (worktreePath: string, statePath: string) =>
+      readGitPathWith(worktreePath, statePath, (resolved) => fs.readFileString(resolved), "");
+
+    const operationIdentity = (worktreePath: string, identityPaths: ReadonlyArray<string>) =>
+      Effect.forEach(identityPaths, (identityPath) => readGitPath(worktreePath, identityPath)).pipe(
+        Effect.map((contents) =>
+          contents.flatMap((content) => content.split(/\s+/).filter(Boolean)).join(","),
+        ),
+      );
 
     const operationInProgress = Effect.fn("Git.operationInProgress")(function* (worktreePath: string) {
-      const found = yield* Effect.findFirst(Record.toEntries(gitOperationStates), ([, state]) =>
-        Effect.findFirst(state.statePaths, (statePath) =>
-          operationStatePathExists(worktreePath, statePath),
-        ).pipe(Effect.map(Option.isSome)),
+      const found = yield* Effect.findFirst(gitOperationMarkers, ({ marker }) =>
+        gitPathExists(worktreePath, marker),
       );
       if (Option.isNone(found)) return null;
+      const { operation, identityPaths } = found.value;
+      const identity = yield* operationIdentity(worktreePath, identityPaths);
+      const head = yield* runGit(worktreePath, ["rev-parse", "--verify", "HEAD"]).pipe(
+        Effect.map((stdout) => stdout.trim()),
+      );
       const unmergedPaths = yield* runGit(worktreePath, ["diff", "--name-only", "--diff-filter=U"]).pipe(
         Effect.map((stdout) => stdout.split("\n").filter(Boolean)),
       );
-      return { operation: found.value[0], unmergedPaths } satisfies Git.GitOperationInProgress;
+      return { operation, identity, head, unmergedPaths } satisfies Git.GitOperationInProgress;
     });
+
+    const operationRecordFile = (worktreePath: string) =>
+      runGit(worktreePath, ["rev-parse", "--git-path", "config.worktree"]).pipe(
+        Effect.map((stdout) => stdout.trim()),
+      );
+
+    const recordedOperation = (worktreePath: string) =>
+      operationRecordFile(worktreePath).pipe(
+        Effect.flatMap((file) =>
+          runGit(worktreePath, ["config", "--file", file, "--get", operationRecordKey], [0, 1]),
+        ),
+        Effect.map(decodeOperationRecord),
+      );
+
+    const recordOperation = (worktreePath: string, operation: Git.GitOperationRecord | null) =>
+      operationRecordFile(worktreePath).pipe(
+        Effect.flatMap((file) =>
+          operation === null
+            ? runGit(worktreePath, ["config", "--file", file, "--unset-all", operationRecordKey], [0, 5])
+            : runGit(worktreePath, [
+                "config",
+                "--file",
+                file,
+                operationRecordKey,
+                encodeOperationRecord(operation),
+              ]),
+        ),
+        Effect.asVoid,
+      );
 
     const reconcileConfirmedMissingBranches = Effect.fn("Git.reconcileConfirmedMissingBranches")(function* (
       repoPath: string,
@@ -263,6 +331,8 @@ export const gitLayer = Layer.effect(
         );
       },
       operationInProgress,
+      recordedOperation,
+      recordOperation,
       rebase: (worktreePath, remote, branch) =>
         runGit(worktreePath, ["rebase", `${remote}/${branch}`, branch]).pipe(
           Effect.onExit((exit) =>

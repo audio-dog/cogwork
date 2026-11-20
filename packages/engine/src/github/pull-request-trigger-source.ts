@@ -326,7 +326,12 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   if (events.length === 0) return events;
   const files = yield* changedFilesOf(client, target, pull);
   const workContext = proseOf({ detail, checks, reviews, files }, feedback);
-  return events.map((event) => ({ ...event, workContext }));
+  const pullRequest = {
+    author: pull.authorLogin,
+    headRef: pull.headRef,
+    closingIssueNumbers: pull.closingIssueNumbers,
+  };
+  return events.map((event) => ({ ...event, workContext, pullRequest }));
 });
 
 const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(function* (

@@ -181,23 +181,23 @@ export const makeIssueReads = (client: GitHubClientService) => {
   });
   const listItems = Effect.fn("github.listItems")(function* (
     workspace: WorkspaceIssueTrackerBinding,
-    query: { readonly state: "open" | "all"; readonly since?: number; readonly label?: string },
+    query: { readonly since?: number; readonly label?: string },
   ) {
     const target = targetFor(workspace);
     if (!target) return [];
-    const issues = yield* client.listIssues(target, query);
+    const issues = yield* client.listIssues(target, { state: "open", ...query });
     return yield* listedItems(
       target,
       issues.filter((issue) => !issue.isPullRequest),
     );
   });
   return {
-    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, { state: "open" }),
+    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, {}),
     // GitHub answers `since=1970-01-01T00:00:00.000Z` with an empty issue list.
-    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
-      listItems(workspace, sinceMillis > 0 ? { state: "all", since: sinceMillis } : { state: "all" }),
+    openItemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      listItems(workspace, sinceMillis > 0 ? { since: sinceMillis } : {}),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
-      listItems(workspace, { state: "open", label }),
+      listItems(workspace, { label }),
     readItem: Effect.fn("github.readItem")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
