@@ -8,6 +8,7 @@ import {
   agUiIsFileDiffUnavailableEvent,
   agUiIsSessionHandleEvent,
   agUiIsStructuredOutputComplete,
+  agUiIsSubagentEvent,
   agUiIsTerminal,
   agUiTextDelta,
   agUiUsage,
@@ -43,6 +44,9 @@ describe("AgUiEvent", () => {
         STEP_FINISHED: () => "step-finished",
         RUN_FINISHED: () => "finished",
         RUN_ERROR: () => "error",
+        SUBAGENT_STARTED: () => "subagent-started",
+        SUBAGENT_FINISHED: () => "subagent-finished",
+        SUBAGENT_ERROR: () => "subagent-error",
       }),
       "shell",
     );
@@ -54,6 +58,61 @@ describe("AgUiEvent", () => {
 
     assert.isTrue(AgUiEvent.guards.TEXT_MESSAGE_START(started));
     assert.isTrue(AgUiEvent.guards.TEXT_MESSAGE_END(finished));
+  });
+
+  it("decodes a recorded Run with Subagent events, and a recorded Run from before them", () => {
+    const withSubagent = [
+      { type: "RUN_STARTED", threadId: "s", runId: "r" },
+      {
+        type: "SUBAGENT_STARTED",
+        subagentRunId: "sub-1",
+        name: "reviewer",
+        description: "Reviews one change",
+        parentToolCallId: "call-1",
+        timestamp: 1,
+      },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "child text", subagentRunId: "sub-1" },
+      { type: "SUBAGENT_FINISHED", subagentRunId: "sub-1", result: "review passed", timestamp: 2 },
+      { type: "SUBAGENT_ERROR", subagentRunId: "sub-2", message: "model overloaded", timestamp: 3 },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "parent text" },
+      { type: "RUN_FINISHED", threadId: "s", runId: "r" },
+    ].map((event) => decodeEvent(event));
+    const beforeSubagents = [
+      { type: "RUN_STARTED", threadId: "s", runId: "r" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "parent text" },
+      { type: "RUN_FINISHED", threadId: "s", runId: "r" },
+    ].map((event) => decodeEvent(event));
+
+    const lifecycle = withSubagent.map((event) =>
+      AgUiEvent.matchOrElse(
+        event,
+        {
+          SUBAGENT_STARTED: ({ subagentRunId }) => `${subagentRunId} started`,
+          SUBAGENT_FINISHED: ({ subagentRunId }) => `${subagentRunId} finished`,
+          SUBAGENT_ERROR: ({ subagentRunId }) => `${subagentRunId} failed`,
+        },
+        () => null,
+      ),
+    );
+    assert.deepStrictEqual(lifecycle, [
+      null,
+      "sub-1 started",
+      null,
+      "sub-1 finished",
+      "sub-2 failed",
+      null,
+      null,
+    ]);
+    assert.deepStrictEqual(withSubagent.map(agUiIsSubagentEvent), [
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+    ]);
+    assert.deepStrictEqual(beforeSubagents.map(agUiIsSubagentEvent), [false, false, false]);
   });
 
   it("decodes unnamed event types without dropping keys", () => {

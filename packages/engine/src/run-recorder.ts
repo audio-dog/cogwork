@@ -1,5 +1,5 @@
 import type { RunActivity, RunEvent, RunId, SessionId } from "@cogwork/contracts";
-import { AgUiEvent, agUiIsSessionHandleEvent, type RunRecord } from "@cogwork/contracts";
+import { AgUiEvent, agUiIsSessionHandleEvent, agUiIsSubagentEvent, type RunRecord } from "@cogwork/contracts";
 import * as Arr from "effect/Array";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -18,7 +18,8 @@ const cleanHandle = (raw: string | null) => (raw && !/[\s`]/.test(raw) ? raw : n
 
 const optionalString = (value: unknown) => (typeof value === "string" ? value : null);
 
-const sessionHandle = (event: AgUiEvent) => (agUiIsSessionHandleEvent(event) ? event.value.sessionId : null);
+const sessionHandle = (event: AgUiEvent) =>
+  agUiIsSessionHandleEvent(event) && !agUiIsSubagentEvent(event) ? event.value.sessionId : null;
 
 const displayName = (event: AgUiEvent) =>
   AgUiEvent.matchOrElse(

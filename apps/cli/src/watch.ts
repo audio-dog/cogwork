@@ -1,6 +1,7 @@
 import {
   AgUiEvent,
   agUiIsSessionHandleEvent,
+  agUiIsSubagentEvent,
   type Board,
   type BoardItem,
   type RunActivity,
@@ -158,6 +159,7 @@ export const stepWatch = (
   activity: RunActivity,
 ): readonly [WatchState, ReadonlyArray<string>] => {
   const { runId, event } = activity;
+  if (agUiIsSubagentEvent(event)) return [state, []];
   const label = sanitizeTerminalText(`${activity.operation} ${activity.workItem}`);
   if (AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event)) {
     const text = (state.text.get(runId)?.text ?? "") + (event.delta ?? "");

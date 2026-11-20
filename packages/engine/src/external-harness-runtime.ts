@@ -65,7 +65,10 @@ import { runPlanSkillsMiddleware } from "./run-plan-skill-source";
 import {
   type AvailableSubagent,
   type ModelLevels,
+  makeSubagentFeed,
+  mergeSubagentFeed,
   modelLevelRunner,
+  type SubagentFeed,
   subagentProjection,
 } from "./subagent-runner";
 import { policyForProfile } from "./tools/policy";
@@ -279,6 +282,7 @@ const openChat = <Adapter extends AnyTextAdapter>(
   workspaceDefinition: WorkspaceDefinition,
   secretValues: ReadonlyArray<string>,
   skills: ReadonlyArray<ChatMiddleware>,
+  feed: SubagentFeed,
 ) => {
   const model = descriptor.projectModel(request);
   const adapter = descriptor.makeAdapter({ model, nativeAuthentication: "host", request });
@@ -311,6 +315,7 @@ const openChat = <Adapter extends AnyTextAdapter>(
     { runId: request.identity.run, threadId: request.identity.session, tools: request.tools },
     runner,
     { tools: [], middleware: sandboxed([]) },
+    feed,
   );
   const stream = makeChatStream(
     descriptor,
@@ -351,11 +356,15 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
       Stream.unwrap(
         resolveExternalLaunch(descriptor, inputs, request).pipe(
           Effect.flatMap((launch) =>
-            Effect.map(runPlanSkillsMiddleware(request.plan.skills), (skills) => ({ ...launch, skills })),
+            Effect.map(
+              Effect.all({ skills: runPlanSkillsMiddleware(request.plan.skills), feed: makeSubagentFeed }),
+              (projected) => ({ ...launch, ...projected }),
+            ),
           ),
-          Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues, skills }) =>
+          Effect.flatMap(({ resolved, provider, workspaceDefinition, secretValues, skills, feed }) =>
             Effect.try({
-              try: () => openChat(descriptor, resolved, provider, workspaceDefinition, secretValues, skills),
+              try: () =>
+                openChat(descriptor, resolved, provider, workspaceDefinition, secretValues, skills, feed),
               catch: descriptor.diagnostics,
             }).pipe(
               Effect.mapError((error) => scrubHarnessError(error, secretValues)),
@@ -363,10 +372,13 @@ export const externalHarnessRunner = <Adapter extends AnyTextAdapter>(
                 const harnessEvents = withUsage(
                   resolved,
                   descriptor.estimateUsage ?? preserveUsage,
-                  bridgeChat(
-                    abortOnReturn(opened.stream, opened.abortController),
-                    descriptor.turnDiagnostics ?? descriptor.diagnostics,
-                    descriptor.turnDiagnostics ?? descriptor.diagnostics,
+                  mergeSubagentFeed(
+                    bridgeChat(
+                      abortOnReturn(opened.stream, opened.abortController),
+                      descriptor.turnDiagnostics ?? descriptor.diagnostics,
+                      descriptor.turnDiagnostics ?? descriptor.diagnostics,
+                    ),
+                    feed,
                   ).pipe(
                     Stream.map((event) => normalizeFileEvent(event, resolved.checkout.path)),
                     Stream.filter(publicFileEvent),

@@ -7,15 +7,7 @@ import * as Metric from "effect/Metric";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
-import {
-  boundedDiff,
-  computeDiff,
-  FILE_DIFF_EVENT,
-  fileDiffExecDuration,
-  fileDiffGitChildren,
-  toFileDiffEvent,
-  watchWorktreeDiffs,
-} from "./file-diff-feed";
+import { FILE_DIFF_EVENT, toFileDiffEvent, watchWorktreeDiffs } from "./file-diff-feed";
 import {
   decodeDiffValue,
   ExecCalls,
@@ -29,6 +21,7 @@ import {
   withExecProbe,
   yieldToHost,
 } from "./file-diff-fixtures";
+import { boundedDiff, computeDiff, fileDiffExecDuration, fileDiffGitChildren } from "./file-diff-git";
 import { writeFile } from "./owned-tools";
 import { resolveBaseSha, type WorktreeSandbox } from "./sandbox";
 

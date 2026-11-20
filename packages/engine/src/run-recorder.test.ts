@@ -194,6 +194,25 @@ describe("RunRecorder", () => {
       }),
     );
 
+    it.effect("keeps the parent's handle when a Subagent child reports its own session id", () =>
+      Effect.gen(function* () {
+        const session = sessionId("sess-child-handle");
+        const record = run("run-child-handle", { session });
+        const ledger = yield* RunLedger.RunLedger;
+        yield* ledger.insertSession(opaqueSession(session));
+
+        const recorder = yield* RunRecorder;
+        yield* recorder.record(record, sessionEvent("parent-native", "claude-code"));
+        const carried = yield* recorder.record(record, {
+          ...sessionEvent("child-native", "claude-code"),
+          subagentRunId: "child-1",
+        });
+
+        assert.strictEqual(carried, "parent-native");
+        assert.strictEqual(sessionHandle(yield* ledger.getSession(session)), "parent-native");
+      }),
+    );
+
     it.effect("refuses a handle carrying whitespace or a backtick", () =>
       Effect.gen(function* () {
         const session = sessionId("sess-sanitize");

@@ -1,4 +1,4 @@
-import { type ModelLevel, RunPlanSubagent, TrimmedNonEmptyString } from "@cogwork/contracts";
+import { type AgUiEvent, type ModelLevel, RunPlanSubagent, TrimmedNonEmptyString } from "@cogwork/contracts";
 import {
   type AgentLoopStrategy,
   type AnyTool,
@@ -17,10 +17,15 @@ import {
   toolDefinition,
 } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai/adapters";
+import type * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
+import { toEvent } from "./provider-bridge";
+import { mergeBeforeRunFinished } from "./tools/merge-before-run-finished";
 
 class SubagentFailure extends Data.TaggedError("SubagentFailure")<{ readonly message: string }> {}
 
@@ -51,6 +56,17 @@ export interface SubagentChild {
   readonly middleware: ReadonlyArray<ChatMiddleware>;
   readonly agentLoopStrategy?: AgentLoopStrategy;
 }
+
+export type SubagentFeed = Queue.Queue<AgUiEvent, Cause.Done>;
+
+export const makeSubagentFeed = Queue.unbounded<AgUiEvent, Cause.Done>();
+
+export const mergeSubagentFeed = <E>(harnessEvents: Stream.Stream<AgUiEvent, E>, feed: SubagentFeed) =>
+  Stream.unwrap(
+    mergeBeforeRunFinished(harnessEvents.pipe(Stream.ensuring(Queue.end(feed))), () =>
+      Stream.fromQueue(feed),
+    ),
+  );
 
 export const childTimeout = Duration.minutes(10);
 
@@ -112,6 +128,7 @@ export const subagentProjection = (
   parent: SubagentParent,
   runner: SubagentRunner,
   child: SubagentChild,
+  feed: Queue.Enqueue<AgUiEvent, Cause.Done>,
 ) => {
   const budget = SubagentBudget.root(subagentLimits);
   const running = new Set<object>();
@@ -133,6 +150,10 @@ export const subagentProjection = (
           stream: true,
         }),
     });
+  const forward = (chunk: StreamChunk) => {
+    Queue.offerUnsafe(feed, toEvent(chunk));
+    return chunk;
+  };
   const childChunks = (
     agent: DefinedAgent,
     task: string,
@@ -155,6 +176,7 @@ export const subagentProjection = (
         sink,
         toolCallId,
       ),
+      forward,
     );
   };
   const runChild = Effect.fn("SubagentRunner.runChild")(function* (

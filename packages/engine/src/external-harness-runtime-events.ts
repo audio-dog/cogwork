@@ -1,4 +1,4 @@
-import { AgUiEvent, agUiIsFileDiffEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
+import { AgUiEvent, agUiIsFileDiffEvent, agUiIsSubagentEvent, FILE_DIFF_EVENT } from "@cogwork/contracts";
 import { DEFAULT_WORKSPACE_ROOT } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
@@ -8,13 +8,17 @@ import type {
 } from "./external-harness-runtime";
 import { scrubEvent } from "./external-harness-runtime-workspace";
 import type { HarnessError } from "./harness";
-import { boundedDiff, ignored, mergeFileDiffFeed, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { ignored, watchWorktreeDiffs } from "./tools/file-diff-feed";
+import { mergeFileDiffFeed } from "./tools/file-diff-feed-merge";
+import { boundedDiff } from "./tools/file-diff-git";
 import { openWorktreeSandbox, resolveBaseSha } from "./tools/sandbox";
 
-const outputCharacters = (event: AgUiEvent) =>
-  AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
+const outputCharacters = (event: AgUiEvent) => {
+  if (agUiIsSubagentEvent(event)) return 0;
+  return AgUiEvent.guards.TEXT_MESSAGE_CONTENT(event) || AgUiEvent.guards.REASONING_MESSAGE_CONTENT(event)
     ? (event.delta?.length ?? 0)
     : 0;
+};
 
 const relativeToRoot = (path: string, root: string) => {
   const normalizedPath = path.replace(/^\/+/, "");
@@ -85,8 +89,6 @@ export const checkoutFileDiffs = (
     }),
   ).pipe(Stream.map((event) => scrubEvent(event, secretValues)));
 
-// A client stops reading at the terminal event, so the feed must drain first.
-// `RUN_ERROR` is not held: the stream fails right behind it.
 export const mergeCheckoutFileDiffs = Effect.fn("ExternalHarnessRuntime.mergeCheckoutFileDiffs")(function* <
   E,
   R,
