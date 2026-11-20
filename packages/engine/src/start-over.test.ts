@@ -1,8 +1,6 @@
 import {
-  HarnessName,
   keyOf,
   LineageId,
-  RunId,
   WorkflowActionPlan,
   WorkItemId,
   type WorkItemRef,
@@ -10,12 +8,9 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 import { makeControlStoreCoordination } from "./coordination-control-store";
-import * as DaemonEventBus from "./daemon-event-bus";
-import { layerMemory as memoryRunLedgerLayer, RunLedger } from "./run-ledger";
 import { startOver } from "./start-over";
 import { temporaryControlStoreLayer } from "./testing/temporary-control-store";
 import { plan } from "./workflow-action-plan-fixtures";
@@ -47,17 +42,16 @@ const coordinationTables = [
 ];
 const itemTables = [...coordinationTables, "workflow_action_plans"];
 
-const testLayer = Layer.mergeAll(
-  actionPlanStoreLayer,
-  memoryRunLedgerLayer.pipe(Layer.provide(DaemonEventBus.layer)),
-).pipe(Layer.provideMerge(temporaryControlStoreLayer));
+const testLayer = actionPlanStoreLayer.pipe(Layer.provideMerge(temporaryControlStoreLayer));
+
+const lineageOf = (ref: WorkItemRef) => ({ root: LineageId.make(keyOf(ref)), parent: null, hop: 0 });
 
 const seed = Effect.fn("test.seed")(function* (ref: WorkItemRef) {
   const sql = yield* SqlClient.SqlClient;
   const coordination = yield* makeControlStoreCoordination;
   const plans = yield* WorkflowActionPlanStore;
   const key = keyOf(ref);
-  const lineage = { root: LineageId.make(key), parent: null, hop: 0 };
+  const lineage = lineageOf(ref);
   yield* coordination.observe(ref, "revision-1", { _tag: "Unknown" });
   const claim = yield* coordination.claim(ref, { operation, lineage });
   yield* coordination.recordAttempt(ref, { operation, outcome: "failed", lineage });
@@ -103,28 +97,21 @@ const refusalOf = (item: WorkItemRef) =>
 const emptyCounts = Object.fromEntries(itemTables.map((table) => [table, 0]));
 
 describe("startOver", () => {
-  it.effect("deletes the item's coordination records and action plans and keeps other items", () =>
-    Effect.gen(function* () {
-      yield* seed(issue);
-      yield* seed(otherIssue);
+  it.effect.each([issue, pullRequest])(
+    "deletes the $_tag's coordination records and action plans and keeps other items",
+    (item) =>
+      Effect.gen(function* () {
+        yield* seed(item);
+        yield* seed(otherIssue);
 
-      yield* startOver({ item: issue });
+        yield* startOver({ item });
 
-      assert.deepStrictEqual(yield* rowCounts(issue), emptyCounts);
-      assert.deepStrictEqual(yield* rowCounts(otherIssue), seededCounts);
-      const coordination = yield* makeControlStoreCoordination;
-      assert.strictEqual(yield* coordination.observe(issue, "revision-1", { _tag: "Unknown" }), "moved");
-      assert.strictEqual((yield* coordination.read(issue)).gate(operation)._tag, "Open");
-    }).pipe(Effect.provide(testLayer)),
-  );
-
-  it.effect("starts over a pull request", () =>
-    Effect.gen(function* () {
-      yield* seed(pullRequest);
-
-      assert.isTrue(Exit.isSuccess(yield* Effect.exit(startOver({ item: pullRequest }))));
-      assert.deepStrictEqual(yield* rowCounts(pullRequest), emptyCounts);
-    }).pipe(Effect.provide(testLayer)),
+        assert.deepStrictEqual(yield* rowCounts(item), emptyCounts);
+        assert.deepStrictEqual(yield* rowCounts(otherIssue), seededCounts);
+        const coordination = yield* makeControlStoreCoordination;
+        assert.strictEqual(yield* coordination.observe(item, "revision-1", { _tag: "Unknown" }), "moved");
+        assert.strictEqual((yield* coordination.read(item)).gate(operation)._tag, "Open");
+      }).pipe(Effect.provide(testLayer)),
   );
 
   it.effect("refuses an item that is not a tracker issue or pull request and deletes nothing", () =>
@@ -138,27 +125,16 @@ describe("startOver", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
-  it.effect("refuses while a Run of the item is active and deletes nothing", () =>
+  it.effect("refuses while a Run holds the item's claim and deletes nothing", () =>
     Effect.gen(function* () {
       yield* seed(issue);
-      yield* (yield* RunLedger).insertRun({
-        id: RunId.make("run-1"),
-        workspace,
-        workItem: WorkItemId.make(keyOf(issue)),
-        operation: "implement",
-        harness: HarnessName.make("claude"),
-        branch: null,
-        session: null,
-        usage: null,
-        status: "running",
-        startedAtMillis: 1,
-        endedAtMillis: null,
-      });
+      const coordination = yield* makeControlStoreCoordination;
+      yield* coordination.claim(issue, { operation, lineage: lineageOf(issue) });
 
       const error = yield* refusalOf(issue);
 
       assert.strictEqual(error?._tag === "StartOverRefused" && error.reason, "run-active");
-      assert.deepStrictEqual(yield* rowCounts(issue), seededCounts);
+      assert.deepStrictEqual(yield* rowCounts(issue), { ...seededCounts, coordination_claim_events: 3 });
     }).pipe(Effect.provide(testLayer)),
   );
 
