@@ -12,6 +12,7 @@ import { pluginCommand } from "./plugin-commands";
 import { replayCommand } from "./replay-commands";
 import { metricsCommand, runEventsCommand, runsCommand } from "./run-commands";
 import { schedulingCommand } from "./scheduling-commands";
+import { startOverCommand } from "./start-over-command";
 import { statusCommand } from "./status-commands";
 import { watchCommand } from "./watch-commands";
 import { workflowCommand } from "./workflow-commands";
@@ -31,6 +32,7 @@ export const cli = Command.make("cogwork").pipe(
     runEventsCommand,
     watchCommand,
     handBackCommand,
+    startOverCommand,
     worktreeCommand,
     workspaceCommand,
     loginCommand,

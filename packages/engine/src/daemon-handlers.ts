@@ -43,6 +43,7 @@ import { schedulerStatsOf, workspaceInfoOf } from "./read-model";
 import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { Scheduler } from "./scheduler";
+import { startOver } from "./start-over";
 import { TriggerObservation } from "./trigger-observation";
 import { Workflows } from "./workflow";
 import { WorkflowAttention } from "./workflow-attention";
@@ -145,6 +146,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   DismissWorkflowNotification: (payload) =>
     Effect.flatMap(WorkflowNotifications, ({ dismiss }) => dismiss(payload.id)).pipe(Effect.orDie),
   HandBack: handBack,
+  StartOver: startOver,
   SetScheduling: setScheduling,
   ReportProcessHealth: Effect.fn("Daemon.ReportProcessHealth")(function* ({ samples }) {
     yield* Effect.forEach(samples, recordProcessHealth, { discard: true });
