@@ -1,0 +1,19 @@
+.git-blame-ignore-revs
+  s_99e2a3125afbfa::t_05ff5d973eb086 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b47dbaa5ab98dae31e8df89aba594f64dfbcd642",
+  "prompts": {},
+  "sessions": {
+    "s_99e2a3125afbfa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ce1a55e-228b-445b-bf04-26bce8d702ae",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
