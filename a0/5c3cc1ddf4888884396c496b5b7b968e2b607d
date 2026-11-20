@@ -1,0 +1,21 @@
+packages/claude-code/scripts/sync-models.ts
+  s_92f7ef2ffe55a8::t_b34a21a83337d2 7,17-18,112-114,118,120,127,131,134-139,163-165
+packages/cursor-acp/scripts/sync-models.ts
+  s_92f7ef2ffe55a8::t_f2459cbbca2b2b 8,22-23,51,143-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a05c3cc1ddf4888884396c496b5b7b968e2b607d",
+  "prompts": {},
+  "sessions": {
+    "s_92f7ef2ffe55a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "86ec9eb9-9b42-4ec3-8d90-092a6c713862",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
