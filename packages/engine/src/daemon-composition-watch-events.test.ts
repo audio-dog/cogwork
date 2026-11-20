@@ -66,7 +66,7 @@ const actionPlanEvent = {
 } as const;
 
 describe("daemon composition WatchEvents", () => {
-  it.effect("seeds a subscriber with the current queue picture", () =>
+  it.effect("includes the queue picture in the WatchEvents seed", () =>
     Effect.gen(function* () {
       const rpc = yield* RpcClient.make(DaemonRpcs);
       const seed = yield* rpc

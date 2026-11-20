@@ -86,12 +86,9 @@ const observeFilteredTrigger = Effect.fn("TriggerObservationTest.observeFiltered
   return { observation, first, redeliver };
 });
 
-const scheduledAt = (instantMillis: number) =>
-  ({ _tag: "ScheduleInstant", workflow: workflowId, instantMillis }) as const;
-
 const observeWaitingOrder = Effect.fn("TriggerObservationTest.observeWaitingOrder")(function* () {
   const waiting = (revision: string, priority: TriggerEvent["priority"], atMillis: number) => {
-    const key = scheduledAt(atMillis);
+    const key = { _tag: "ScheduleInstant", workflow: workflowId, instantMillis: atMillis } as const;
     return {
       event: { ...event, key, revision, priority, atMillis },
       subscription,
@@ -189,26 +186,16 @@ describe("TriggerObservation", () => {
   it.effect("orders waiting work by prior Workflow action, priority, then oldest revision", () =>
     Effect.gen(function* () {
       const observation = yield* observeWaitingOrder();
+      const queued = (yield* observation.queue).queued;
+      const eligible = yield* observation.eligible;
 
       assert.deepStrictEqual(
-        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        eligible.map(({ event: candidate }) => candidate.revision),
         ["acted", "old-urgent", "new-urgent", "old-low"],
       );
-    }).pipe(Effect.scoped),
-  );
-
-  it.effect("queues the offerable admissions in scheduler order, placed from 1", () =>
-    Effect.gen(function* () {
-      const observation = yield* observeWaitingOrder();
-
       assert.deepStrictEqual(
-        (yield* observation.queue).queued.map(({ place, workItem }) => [place, String(workItem)]),
-        [
-          [1, keyOf(scheduledAt(4))],
-          [2, keyOf(scheduledAt(2))],
-          [3, keyOf(scheduledAt(3))],
-          [4, keyOf(scheduledAt(1))],
-        ],
+        queued.map(({ place, workItem }) => [place, String(workItem)]),
+        eligible.map(({ event: candidate }, index) => [index + 1, keyOf(candidate.key)]),
       );
     }).pipe(Effect.scoped),
   );

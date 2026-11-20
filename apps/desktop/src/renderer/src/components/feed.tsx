@@ -216,10 +216,7 @@ function QueuedSection() {
             </TableHeader>
             <TableBody>
               {queued.map((entry) => (
-                <QueuedRow
-                  key={`q:${entry.item.workspace}:${entry.item.workItem}:${entry.item.workflow}`}
-                  entry={entry}
-                />
+                <QueuedRow key={entry.item.place} entry={entry} />
               ))}
             </TableBody>
           </Table>

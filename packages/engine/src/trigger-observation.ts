@@ -9,8 +9,6 @@ import {
   type SchedulerQueue,
   type TriggerSourceHealth,
   type WorkflowCatalog,
-  WorkItemId,
-  WorkspaceId,
 } from "@cogwork/contracts";
 import * as EffectCause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -24,19 +22,21 @@ import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
-import { Coordination, type CoordinationGate } from "./coordination";
+import { Coordination, type CoordinationError, type CoordinationGate } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { WorkspaceRegistry } from "./registry-service";
 import {
   admissionIsOlder,
   oldestRevisionAdmissions,
   revisionAdvancedParks,
+  runWorkItemOf,
+  runWorkspaceOf,
   sameSubscription,
   type TriggerAdmission,
   waitingAdmissionOrder,
 } from "./trigger-observation-admission";
 import { makeAssigneeGate } from "./trigger-observation-assignees";
-import { TriggerObservationStore } from "./trigger-observation-store";
+import { TriggerObservationStore, type TriggerObservationStoreError } from "./trigger-observation-store";
 import {
   addressedSubscriptions,
   fingerprintOf,
@@ -99,16 +99,11 @@ const samePlanRejection = (left: ParkReason | undefined, right: ParkReason | nul
   left.reason === right.reason &&
   left.entry === right.entry;
 
-const emptyQueue: SchedulerQueue = { queued: [] };
-
-const decodeWorkspaceId = Schema.decodeSync(WorkspaceId);
-const decodeWorkItemId = Schema.decodeSync(WorkItemId);
-
 const queuedItemOf = (admission: TriggerAdmission, index: number) =>
   ({
     place: index + 1,
-    workspace: admission.event.workspace ?? decodeWorkspaceId(admission.subscription.workflow),
-    workItem: decodeWorkItemId(keyOf(admission.event.key)),
+    workspace: runWorkspaceOf(admission),
+    workItem: runWorkItemOf(admission),
     ...(admission.event.subject ? { subject: admission.event.subject } : {}),
     workflow: admission.subscription.workflow,
     operation: admission.subscription.operation,
@@ -124,7 +119,10 @@ const waitForRetry = (failure: SourceFailure) => {
 
 export interface TriggerObservationService {
   readonly eligible: Effect.Effect<ReadonlyArray<TriggerAdmission>>;
-  readonly queue: Effect.Effect<SchedulerQueue>;
+  readonly queue: Effect.Effect<
+    SchedulerQueue,
+    ControlStoreFailure | TriggerObservationStoreError | CoordinationError
+  >;
   readonly recheck: (admission: TriggerAdmission) => Effect.Effect<Recheck, ControlStoreFailure>;
   readonly changes: Stream.Stream<TriggerAdmission>;
   readonly health: Effect.Effect<ReadonlyArray<TriggerSourceHealth>>;
@@ -437,7 +435,6 @@ export const make = Effect.gen(function* () {
     queue: candidates().pipe(
       Effect.flatMap(({ active }) => offerable(active)),
       Effect.map((queued) => ({ queued: queued.map(queuedItemOf) })),
-      Effect.catchCause(() => Effect.succeed(emptyQueue)),
     ),
     recheck,
     changes: Stream.fromPubSub(changes),
@@ -449,7 +446,7 @@ export const make = Effect.gen(function* () {
 
 const unavailableObservation: TriggerObservationService = {
   eligible: Effect.succeed([]),
-  queue: Effect.succeed(emptyQueue),
+  queue: Effect.succeed({ queued: [] }),
   recheck: () => Effect.succeed(Recheck.Matches()),
   changes: Stream.empty,
   health: Effect.succeed([]),

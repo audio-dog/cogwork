@@ -137,12 +137,17 @@ export const make = Effect.gen(function* () {
     return stats;
   });
 
-  const publishQueue = Effect.fn("DaemonEventPublisher.publishQueue")(function* () {
-    const queue = yield* triggerObservation.queue;
-    const previous = yield* Ref.getAndSet(queueView, queue);
-    if (sameQueue(previous, queue)) return;
-    yield* bus.publish({ _tag: "QueueChanged", queue });
-  });
+  const publishQueue = Effect.fn("DaemonEventPublisher.publishQueue")(
+    function* () {
+      const queue = yield* triggerObservation.queue;
+      const previous = yield* Ref.getAndSet(queueView, queue);
+      if (sameQueue(previous, queue)) return;
+      yield* bus.publish({ _tag: "QueueChanged", queue });
+    },
+    Effect.catch((error) =>
+      Effect.logWarning("queue picture read failed; keeping the last picture", { error }),
+    ),
+  );
 
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     controlStore: ControlStorePicture,
