@@ -1,4 +1,9 @@
-import { linearTeams, WorkflowActionArtifact, WorkItemId } from "@cogwork/contracts";
+import {
+  type ConnectionBindingId,
+  linearTeams,
+  WorkflowActionArtifact,
+  WorkItemId,
+} from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -29,6 +34,14 @@ const targetsFor = (workspace: WorkspaceIssueTrackerBinding): ReadonlyArray<Line
   if (account === null) return [];
   const base = { account };
   return linearTeams(source).map((team) => ({ team, ...base }) satisfies LinearTarget);
+};
+
+export const accountTargetFor = (
+  workspace: WorkspaceIssueTrackerBinding,
+  connectionId: ConnectionBindingId,
+) => {
+  const issueTracker = { ...workspace.config.issueTracker, connectionId };
+  return targetsFor({ config: { ...workspace.config, issueTracker } }).at(0) ?? null;
 };
 
 // A Linear identifier is `<TEAM-KEY>-<number>` (e.g. `BIL-42`), and team keys never contain a dash,

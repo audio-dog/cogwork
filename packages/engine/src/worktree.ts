@@ -514,6 +514,7 @@ export const make = Effect.gen(function* () {
   return {
     ensure,
     setup,
+    operationInProgress: git.operationInProgress,
     pullRequestReadiness,
     pushBranch,
     pushBranchIfAhead,

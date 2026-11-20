@@ -82,6 +82,7 @@ export const worktreeLayer = Layer.succeed(WorktreeManager, {
   tryWithMaintenanceLock: Effect.asSome,
   ensure: () => Effect.die("unused"),
   setup: () => Effect.die("unused"),
+  operationInProgress: () => Effect.die("unused"),
   pullRequestReadiness: () => Effect.die("unused"),
   pushBranch: () => Effect.die("unused"),
   pushBranchIfAhead: () => Effect.die("unused"),

@@ -22,7 +22,6 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { Coordination } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
-import { IssueTracker } from "./issue-tracker";
 import { WorkspaceRegistry } from "./registry-service";
 import {
   admissionIsOlder,
@@ -32,6 +31,7 @@ import {
   type TriggerAdmission,
   waitingAdmissionOrder,
 } from "./trigger-observation-admission";
+import { makeAssigneeGate } from "./trigger-observation-assignees";
 import { TriggerObservationStore } from "./trigger-observation-store";
 import {
   fingerprintOf,
@@ -105,7 +105,6 @@ export const make = Effect.gen(function* () {
       entries.filter(({ triggerKind }) => triggerKind === "condition").map(({ key }) => key),
     ),
   );
-  const tracker = yield* IssueTracker;
   const registry = yield* WorkspaceRegistry;
   const fibers = yield* FiberMap.make<TriggerSource["id"]>();
   const fingerprints = yield* Ref.make<ReadonlyMap<TriggerSource["id"], string>>(new Map());
@@ -116,26 +115,13 @@ export const make = Effect.gen(function* () {
   const refreshGate = Semaphore.makeUnsafe(1);
 
   const sweepReadPort = yield* makeSweepReadPort;
+  const passesAssigneeGate = yield* makeAssigneeGate;
 
   const setHealth = (
     source: TriggerSource["id"],
     status: TriggerSourceHealth["status"],
     message: string | null,
   ) => Ref.update(health, (current) => new Map(current).set(source, { source, status, message }));
-
-  const passesAssigneeGate = Effect.fn("TriggerObservation.passesAssigneeGate")(function* (
-    event: TriggerEvent,
-  ) {
-    if (event.workspace === null) return true;
-    const state = yield* registry.state;
-    const workspace = state.workspaces.find(({ config }) => config.id === event.workspace);
-    if (workspace === undefined) return false;
-    const allowlist = workspace.config.issueTracker.assigneeAllowlist;
-    if (allowlist === undefined) return true;
-    if (event.key._tag !== "Issue") return true;
-    const assignees = yield* tracker.assignees(workspace, event.key.id);
-    return assignees.some((assignee) => allowlist.includes(assignee));
-  });
 
   const publishedSubscriptions = Effect.fn("TriggerObservation.publishedSubscriptions")(function* () {
     const [listed, registryState] = yield* Effect.all([workflows.list, registry.state]);

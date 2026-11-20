@@ -24,7 +24,8 @@ import {
 } from "../source-control";
 import { sourceControlActionEntries } from "../workflow-actions-source-control";
 import type { WorkflowCatalogContribution } from "../workflow-catalog";
-import { branchBelongsToTicketSlug, branchName, ticketSlug } from "../worktree";
+import { branchName } from "../worktree";
+import { pullClosesWorkItem, pullMatchesLinkKey } from "../worktree-link-key";
 import {
   GitHubClient,
   type GitHubClientService,
@@ -58,8 +59,6 @@ const sourceControlTarget = (workspace: RegisteredWorkspace) => {
   return target ? Effect.succeed(target) : Effect.fail(missingSourceControlTarget());
 };
 
-export const branchBelongsToSlug = branchBelongsToTicketSlug;
-
 export const prReview = (pull: RawPull, decision: ReviewDecision): PrReviewStatus => {
   if (pull.draft) return "pending";
   if (decision === "changes-requested") return "changes-requested";
@@ -82,8 +81,6 @@ export const isReadyToMerge = (signals: PrSignals) =>
   signals.checks === "passing" &&
   signals.baseDivergence !== "conflict" &&
   signals.review === "ready";
-
-const numericIssue = /^#(\d+)$/;
 
 const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
@@ -123,21 +120,16 @@ const make = (
   const daemonPull = (target: GitHubTarget, pull: RawPull) =>
     pull.authorLogin === target.actorLogin || writeAccess.has(pull.authorAssociation);
 
-  // The final key is the PR number: the higher number is the newer PR, since GitHub numbers them in
-  // creation order.
-  const closesItem = (item: WorkItem, pull: RawPull) => {
-    const match = numericIssue.exec(item.id);
-    return match ? pull.closingIssueNumbers.includes(Number(match[1])) : false;
-  };
-
   const sameRepositoryHead = (target: GitHubRepoRef, pull: RawPull) =>
     pull.headRepository?.toLowerCase() === `${target.owner}/${target.name}`.toLowerCase();
 
+  // The final key is the PR number: the higher number is the newer PR, since GitHub numbers them in
+  // creation order.
   const rank = (target: GitHubTarget, item: WorkItem, branch: string, pull: RawPull) =>
     [
       sameRepositoryHead(target, pull) ? 1 : 0,
       pull.draft ? 0 : 1,
-      closesItem(item, pull) ? 1 : 0,
+      pullClosesWorkItem(item.id, pull) ? 1 : 0,
       pull.headRef === branch ? 1 : 0,
       pull.authorLogin === target.actorLogin ? 1 : 0,
       pull.number,
@@ -155,10 +147,9 @@ const make = (
   };
 
   const linkedPull = (target: GitHubTarget, item: WorkItem, trusted: ReadonlyArray<RawPull>) => {
-    const slug = ticketSlug(item.id);
     const branch = branchName(item);
     const better = (best: RawPull | null, pull: RawPull) => {
-      if (!closesItem(item, pull) && !branchBelongsToSlug(pull.headRef, slug)) return best;
+      if (!pullMatchesLinkKey(item.id, pull)) return best;
       if (best === null) return pull;
       return outranks(target, item, branch, pull, best) ? pull : best;
     };

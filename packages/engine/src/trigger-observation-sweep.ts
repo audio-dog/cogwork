@@ -148,6 +148,7 @@ export const makeSweepReadPort = Effect.gen(function* () {
               sweptAt.get(keyOf(admission.event.key)) ?? 0,
             ),
             loadWorkContext: Effect.succeed(admission.event.workContext),
+            pullRequest: admission.event.pullRequest,
           };
         }),
       ),

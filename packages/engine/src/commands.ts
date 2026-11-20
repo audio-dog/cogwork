@@ -9,10 +9,12 @@ import {
   ContributionSettingUpdate,
   type ControlStoreFailure,
   type ControlStore as ControlStorePicture,
+  connectionSystemOf,
   type DaemonLimitUpdate,
   type HarnessName,
   HarnessNotRegistered,
   IssueTrackerError,
+  IssueTrackerPerson,
   type OperationSettingBatch,
   type PluginFailure,
   type PluginId,
@@ -34,14 +36,17 @@ import {
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { ConnectionStore } from "./connection";
 import { ControlStore, type ControlStoreService } from "./control-store";
 import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { repoTargetFor as githubRepoTargetFor } from "./github/host";
 import { Harness } from "./harness";
+import { LinearClient } from "./linear/client";
+import { accountTargetFor as linearAccountTargetFor } from "./linear/host";
 import { PluginManager } from "./plugin";
-import type { RegistryState } from "./projector";
+import type { RegisteredWorkspace, RegistryState } from "./projector";
 import { workspaceInfoOf } from "./read-model";
 import { WorkspaceManagement, type WorkspaceRegistrationChange } from "./registry-management";
 import { WorkspaceRegistry } from "./registry-service";
@@ -56,27 +61,85 @@ const workspaceById = (registry: RegistryState, id: WorkspaceId) =>
 const workspaceIsRegistered = (registry: RegistryState, id: WorkspaceId) =>
   workspaceById(registry, id) !== null || registry.failures.some((failure) => failure.id === id);
 
-export const getGitHubPriorityFields = Effect.fn("Daemon.GetGitHubPriorityFields")(function* (payload: {
+interface IssueTrackerReadRequest {
   readonly workspace: WorkspaceId;
   readonly connection: ConnectionBindingId;
-}) {
-  const registry = yield* (yield* WorkspaceRegistry).state;
-  const workspace = workspaceById(registry, payload.workspace);
-  if (!workspace) {
-    return yield* new WorkspaceRegistryError({
-      reason: "not-found",
-      workspace: payload.workspace,
-      message: `Workspace ${payload.workspace} is not registered`,
-    });
-  }
-  const target = githubRepoTargetFor(workspace, payload.connection);
-  if (!target) {
+}
+
+const registeredWorkspace = Effect.fn("Daemon.registeredWorkspace")(function* (id: WorkspaceId) {
+  const workspace = workspaceById(yield* (yield* WorkspaceRegistry).state, id);
+  if (workspace) return workspace;
+  return yield* new WorkspaceRegistryError({
+    reason: "not-found",
+    workspace: id,
+    message: `Workspace ${id} is not registered`,
+  });
+});
+
+const orUnavailable = <A>(target: A | null, message: string) =>
+  target === null
+    ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message }))
+    : Effect.succeed(target);
+
+const githubRepoTarget = (workspace: RegisteredWorkspace, connection: ConnectionBindingId) =>
+  orUnavailable(
+    githubRepoTargetFor(workspace, connection),
+    `Workspace ${workspace.config.id} has no GitHub repository`,
+  );
+
+export const getGitHubPriorityFields = Effect.fn("Daemon.GetGitHubPriorityFields")(function* (
+  payload: IssueTrackerReadRequest,
+) {
+  const workspace = yield* registeredWorkspace(payload.workspace);
+  const target = yield* githubRepoTarget(workspace, payload.connection);
+  return yield* (yield* GitHubClient).listPriorityFields(target);
+});
+
+const githubPeople = Effect.fn("Daemon.githubPeople")(function* (
+  workspace: RegisteredWorkspace,
+  connection: ConnectionBindingId,
+) {
+  const target = yield* githubRepoTarget(workspace, connection);
+  const logins = yield* (yield* GitHubClient).listAssignees(target);
+  return logins.map((login) => ({ identity: login, label: login }));
+});
+
+const linearPeople = Effect.fn("Daemon.linearPeople")(function* (
+  workspace: RegisteredWorkspace,
+  connection: ConnectionBindingId,
+) {
+  const target = yield* orUnavailable(
+    linearAccountTargetFor(workspace, connection),
+    `Workspace ${workspace.config.id} has no Linear team`,
+  );
+  const users = yield* (yield* LinearClient).listActiveUsers(target);
+  return users.map((user) => ({ identity: user.id, label: user.displayName.trim() || user.name }));
+});
+
+const issueTrackerPeople = new Map<string, typeof githubPeople | typeof linearPeople>([
+  ["github", githubPeople],
+  ["linear", linearPeople],
+]);
+
+const decodePerson = Schema.decodeUnknownOption(IssueTrackerPerson);
+
+export const getIssueTrackerPeople = Effect.fn("Daemon.GetIssueTrackerPeople")(function* (
+  payload: IssueTrackerReadRequest,
+) {
+  const workspace = yield* registeredWorkspace(payload.workspace);
+  const tracker = workspace.config.issueTracker.type;
+  if (connectionSystemOf(payload.connection) !== tracker) {
     return yield* new IssueTrackerError({
       reason: "unavailable",
-      message: `Workspace ${payload.workspace} has no GitHub repository`,
+      message: `Connection ${payload.connection} is not a ${tracker} Connection`,
     });
   }
-  return yield* (yield* GitHubClient).listPriorityFields(target);
+  const people = yield* orUnavailable(
+    issueTrackerPeople.get(tracker) ?? null,
+    `Issue tracker ${tracker} has no people list`,
+  );
+  const listed = yield* people(workspace, payload.connection);
+  return listed.flatMap((person) => Option.toArray(decodePerson(person)));
 });
 
 const pluginMembership = (overview: PluginOverview) =>
