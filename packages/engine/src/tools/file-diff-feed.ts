@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
+import * as Predicate from "effect/Predicate";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schedule from "effect/Schedule";
@@ -394,6 +395,28 @@ const computeSourcedFileDiffBatch = Effect.fn("Tools.computeSourcedFileDiffBatch
   );
 });
 
+const classifySourcedEvents = Effect.fn("Tools.classifySourcedFileDiffEvents")(
+  (sandbox: WorktreeSandbox, events: ReadonlyArray<SourcedWatchEvent>) =>
+    Effect.forEach(
+      events,
+      (event) =>
+        classifySourcedEvent(sandbox, event).pipe((effect) => pollingContext(sandbox, event.source, effect)),
+      { concurrency: "unbounded" },
+    ).pipe(Effect.map(Arr.filter(Predicate.isNotNull))),
+);
+
+const computeSettledFileDiffBatch = Effect.fn("Tools.computeSettledFileDiffBatch")(function* (
+  sandbox: WorktreeSandbox,
+  baseSha: string,
+  externalDiff: Effect.Effect<ExternalDiffScope, ToolError>,
+  fallbackStarted: Deferred.Deferred<void>,
+  events: ReadonlyArray<SourcedWatchEvent>,
+) {
+  const classified = yield* classifySourcedEvents(sandbox, events);
+  if (classified.length === 0) return [];
+  return yield* computeSourcedFileDiffBatch(sandbox, baseSha, externalDiff, fallbackStarted, classified);
+});
+
 const dedupeWithFingerprints = Effect.fn("Tools.dedupeFileDiffWithFingerprints")(
   (state: Ref.Ref<FingerprintState>, current: SourcedFileDiff) =>
     Ref.modify(state, (previous) => {
@@ -439,15 +462,9 @@ export const watchWorktreeDiffs = (
         Stream.mapEffect((events) => filterConfiguredEvents(sandbox, baseSha, fallbackStarted, events)),
         Stream.flatMap(Stream.fromIterable),
         debounceByPath,
-        Stream.mapEffect((event) =>
-          classifySourcedEvent(sandbox, event).pipe((effect) =>
-            pollingContext(sandbox, event.source, effect),
-          ),
-        ),
-        Stream.filter((event) => event !== null),
         Stream.groupedWithin(diffBatchSize, diffBatchWindow),
         Stream.mapEffect((events) =>
-          computeSourcedFileDiffBatch(
+          computeSettledFileDiffBatch(
             sandbox,
             baseSha,
             cachedExternalDiff.pipe(Effect.tapError(() => invalidateExternalDiff)),

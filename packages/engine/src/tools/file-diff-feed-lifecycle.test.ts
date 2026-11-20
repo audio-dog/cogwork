@@ -4,6 +4,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
@@ -17,9 +18,11 @@ import {
   fileDiffMaxBytes,
   gitDiffCommand,
   gitFixtureEnvironment,
+  HeldListCalls,
   isBatchDiffCommand,
   isExternalDiffProbe,
   isGitDiffCommand,
+  isGitIgnoreCommand,
   openSandbox,
   settleDiff,
   settleWhileAdvancingClock,
@@ -27,6 +30,7 @@ import {
   takeAllCalls,
   testProcessSignal,
   withExecProbe,
+  withHeldListCalls,
   yieldToHost,
 } from "./file-diff-fixtures";
 import { computeDiff, fileDiffExecDuration } from "./file-diff-git";
@@ -157,6 +161,46 @@ describe("file diff lifecycle", { timeout: 30_000 }, () => {
       assert.lengthOf(commands.filter(isExternalDiffProbe), 1);
       assert.isAtLeast(commands.filter(isBatchDiffCommand).length, 2);
     }).pipe(Effect.provide(ExecCalls.layer)),
+  );
+
+  it.effect("batches a burst whose classification outlasts the batch window", () =>
+    Effect.gen(function* () {
+      const original = yield* openSandbox();
+      const baseSha = yield* resolveBaseSha(original);
+      const paths = ["seed.txt", "other.txt", "third.txt"];
+      yield* Effect.forEach(paths, (path) => writeFile(original, { path, content: `${path} changed\n` }));
+      const calls = yield* ExecCalls;
+      const held = yield* HeldListCalls;
+      const sandbox = yield* withHeldListCalls(yield* withExecProbe(original));
+      const events = yield* Queue.make<FileSystem.WatchEvent>();
+      const fiber = yield* watchWorktreeDiffs(sandbox, baseSha).pipe(
+        Stream.take(paths.length),
+        Stream.runCollect,
+        Effect.provide(FileSystem.layerNoop({ watch: () => Stream.fromQueue(events) })),
+        Effect.forkChild,
+      );
+      yield* yieldToHost();
+      yield* Queue.offerAll(
+        events,
+        paths.map((path) => ({ _tag: "Update", path }) as const),
+      );
+      yield* yieldToHost();
+      // Holding the clock at 50ms while `check-ignore` runs keeps the debounce off a batch-window tick.
+      yield* TestClock.adjust("50 millis");
+      yield* Stream.fromQueue(calls).pipe(Stream.filter(isGitIgnoreCommand), Stream.runHead);
+      yield* yieldToHost();
+      yield* settleWhileAdvancingClock(Queue.take(held)).pipe(
+        Effect.tap(() => TestClock.adjust("300 millis")),
+        Effect.flatMap((release) => Effect.sync(release)),
+        Effect.repeat({ times: paths.length - 1 }),
+      );
+      assert.lengthOf(yield* settleWhileAdvancingClock(Fiber.join(fiber)), paths.length);
+      const batchCommands = (yield* takeAllCalls(calls)).filter(isBatchDiffCommand);
+      assert.lengthOf(batchCommands, 1);
+      paths.forEach((path) => {
+        assert.include(batchCommands[0], `'${path}'`);
+      });
+    }).pipe(Effect.provide(Layer.merge(ExecCalls.layer, HeldListCalls.layer))),
   );
 
   it.effect("collapses a per-file event burst into one diff subprocess", () =>
