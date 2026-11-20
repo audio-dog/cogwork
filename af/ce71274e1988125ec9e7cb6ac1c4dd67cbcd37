@@ -1,0 +1,37 @@
+.github/workflows/test-suite-seed.yml
+  s_4a1c6ee7a27e58::t_0c85a2f46d7000 27-28
+configs/lint/package.json
+  s_7cae705f91c4b8::t_6d67fd7b9ea5fd 7
+configs/sensor/package.json
+  s_7cae705f91c4b8::t_81add8e5635e4f 18
+configs/test/tsconfig.json
+  s_4a1c6ee7a27e58::t_a3b703a47a0f35 14
+docs/adr/0040-the-test-suite-cost-sensor-is-removed.md
+  s_7cae705f91c4b8::t_4c1846e1fbb822 1-80
+packages/engine/src/performance-issue-filer.ts
+  s_4a1c6ee7a27e58::t_28cd553e35079c 45,126,134,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "afce71274e1988125ec9e7cb6ac1c4dd67cbcd37",
+  "prompts": {},
+  "sessions": {
+    "s_4a1c6ee7a27e58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeaf75bf-a9ed-4a48-b63b-170c596b0298",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7cae705f91c4b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e91baaa-e8f2-424b-89b2-85e8d656b270",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
