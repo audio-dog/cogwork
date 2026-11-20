@@ -152,6 +152,7 @@ export const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWo
   function* (
     options: {
       readonly assignees?: (itemId: WorkItemId) => Effect.Effect<ReadonlyArray<string>, IssueTrackerError>;
+      readonly observedItems?: ReadonlyArray<TrackerItem>;
       readonly workspace?: RegisteredWorkspace;
       readonly store?: TriggerObservationStoreService;
       readonly document?: WorkflowDocument;
@@ -172,7 +173,10 @@ export const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWo
     const readAssignees = options.assignees ?? (() => Effect.succeed(["owner"]));
     const tracker = {
       ...(yield* makeEmptyIssueTracker),
-      observe: () => Effect.die("the assignee gate read the whole Workspace"),
+      observe: () =>
+        options.observedItems === undefined
+          ? Effect.die("the assignee gate read the whole Workspace")
+          : Effect.succeed(options.observedItems),
       assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
         Ref.update(assigneeReads, (reads) => [...reads, itemId]).pipe(Effect.andThen(readAssignees(itemId))),
     };
