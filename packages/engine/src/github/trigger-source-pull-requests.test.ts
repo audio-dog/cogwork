@@ -11,6 +11,7 @@ import { GitHubClient } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
   pullClientLayer,
+  pullDetail,
   registryState,
   reviewTrigger,
   subscription,
@@ -44,6 +45,116 @@ describe("GitHub Trigger sources", () => {
     }).pipe(Effect.provide(pullClientLayer())),
   );
 
+  it.effect(
+    "freezes the failed check, mergeability, refs and changed files in pull request Work Context",
+    () =>
+      Effect.gen(function* () {
+        const client = yield* GitHubClient;
+        const source = makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState));
+        const events = yield* source
+          .observe([subscription("github.pull-request-checks-failed", "checks")])
+          .pipe(Stream.take(1), Stream.runCollect);
+        const body = events[0]?.workContext?.body ?? "";
+
+        assert.include(
+          body,
+          "- test: completed, failure, https://github.com/acme/example/actions/runs/1\n  - Title: 1 test failed\n  - Summary:\n    expected 1 to equal 2",
+        );
+        assert.include(body, "## Description\n    Pull request description");
+        assert.include(body, "## Mergeability\ndirty, conflicts with base");
+        assert.include(body, "- Head: 7-work@head-sha\n- Base: main@base-sha");
+        assert.include(body, "## Changed files\n- src/index.ts (modified, +3 -1)");
+        assert.notInclude(body, "secret patch");
+      }).pipe(Effect.provide(pullClientLayer())),
+  );
+
+  it.effect(
+    "reads changed files only for a pull that emits an event and reads each pull once per poll",
+    () => {
+      const quietPull = { ...trustedPull, number: 12, headSha: "quiet-sha" };
+      const getPull = vi.fn((_target: unknown, number: number) =>
+        Effect.succeed(pullDetail(number, "clean")),
+      );
+      const listPullFiles = vi.fn((_target: unknown, _baseSha: string, _headSha: string) =>
+        Effect.succeed([]),
+      );
+
+      return Effect.gen(function* () {
+        const client = yield* GitHubClient;
+        yield* makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState))
+          .observe([
+            subscription("github.pull-request-checks-failed", "checks"),
+            subscription("github.pull-request-conflicts-with-base", "conflicts"),
+          ])
+          .pipe(Stream.take(1), Stream.runCollect);
+
+        assert.deepStrictEqual(getPull.mock.calls.map(([, number]) => number).toSorted(), [10, 12]);
+        assert.deepStrictEqual(
+          listPullFiles.mock.calls.map(([, baseSha, headSha]) => [baseSha, headSha]),
+          [["base-sha", "head-sha"]],
+        );
+      }).pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+            listPulls: () => Effect.succeed([quietPull, trustedPull]),
+            listCheckRuns: (_target, sha) =>
+              Effect.succeed([
+                {
+                  name: "test",
+                  status: "completed",
+                  conclusion: sha === "quiet-sha" ? "success" : "failure",
+                  startedAtMillis: 2_500,
+                },
+              ]),
+            getPull,
+            listPullFiles,
+            listTriggerComments: () => Effect.succeed([]),
+            listReviewComments: () => Effect.succeed([]),
+            listReviews: () => Effect.succeed([]),
+          }),
+        ),
+      );
+    },
+  );
+
+  it.effect("keeps a checks-failed event when the changed files read fails", () =>
+    Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const observed = yield* makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState))
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.timeoutOption("1 second"),
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("1 second");
+      const events = Option.getOrElse(yield* Fiber.join(observed), () => []);
+
+      assert.strictEqual(events[0]?.revision, "checks:head-sha:test:failure");
+      assert.include(events[0]?.workContext?.body ?? "", "## Changed files\nunavailable");
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+          listPulls: () => Effect.succeed([trustedPull]),
+          listCheckRuns: () =>
+            Effect.succeed([
+              { name: "test", status: "completed", conclusion: "failure", startedAtMillis: 2_500 },
+            ]),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () =>
+            Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "compare timed out" })),
+          listTriggerComments: () => Effect.succeed([]),
+          listReviewComments: () => Effect.succeed([]),
+          listReviews: () => Effect.succeed([]),
+        }),
+      ),
+    ),
+  );
+
   it.effect("skips a failed GitHub pull request read", () => {
     const failedPull = { ...trustedPull, number: 12, headSha: "failed-sha", closingIssueNumbers: [12] };
     const healthyPull = { ...trustedPull, number: 13, headSha: "healthy-sha", closingIssueNumbers: [13] };
@@ -75,7 +186,8 @@ describe("GitHub Trigger sources", () => {
                     startedAtMillis: 2_500,
                   },
                 ]),
-          pullMergeableState: () => Effect.succeed("clean"),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () => Effect.succeed([]),
           listTriggerComments: () => Effect.succeed([]),
           listReviewComments: () => Effect.succeed([]),
           listReviews: () => Effect.succeed([]),
@@ -133,7 +245,8 @@ describe("GitHub Trigger sources", () => {
               },
             ]),
           listCheckRuns,
-          pullMergeableState: () => Effect.succeed("clean"),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () => Effect.succeed([]),
           listTriggerComments: () => Effect.succeed([]),
           listReviewComments: () => Effect.succeed([]),
           listReviews: () => Effect.succeed([]),

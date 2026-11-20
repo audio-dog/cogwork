@@ -32,7 +32,8 @@ import {
   type GitHubRepoRef,
   type RawPull,
   type ReviewDecision,
-  reviewDecisionOf,
+  writeAccess,
+  writeAccessReviewDecision,
 } from "./client";
 import { wireCodec } from "./markers";
 import { slackReviewTemplate } from "./provider-slack-review-template";
@@ -82,8 +83,6 @@ export const isReadyToMerge = (signals: PrSignals) =>
   signals.baseDivergence !== "conflict" &&
   signals.review === "ready";
 
-const writeAccess = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
-
 const make = (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
@@ -101,11 +100,7 @@ const make = (
       client.listReviews(target, pull.number),
       client.pullMergeableState(target, pull.number),
     ]);
-    const decision = reviewDecisionOf(
-      reviews
-        .filter((review) => writeAccess.has(review.authorAssociation))
-        .map((review) => ({ login: review.authorLogin, state: review.state })),
-    );
+    const decision = writeAccessReviewDecision(reviews);
     return {
       number: pull.number,
       url: pull.url,

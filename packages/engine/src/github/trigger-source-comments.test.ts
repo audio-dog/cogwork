@@ -13,6 +13,7 @@ import {
   githubTrackerInstance,
   issue,
   issueReads,
+  pullDetail,
   registryState,
   subscription,
   trustedPull,
@@ -163,7 +164,8 @@ describe("GitHub Trigger sources", () => {
           authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
           listPulls: () => Effect.succeed([trustedPull]),
           listCheckRuns: () => Effect.succeed([]),
-          pullMergeableState: () => Effect.succeed("clean"),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () => Effect.succeed([]),
           listReviewComments: () => Effect.succeed([]),
           listReviews: () =>
             Effect.succeed([
