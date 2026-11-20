@@ -11,16 +11,16 @@ Deterministic engine code that watches the telemetry store's health signals and,
 _Avoid_: Performance sensor (ambiguous once budgets also file), detector, watchdog, monitor (a Datadog-style alert rule), triage (the stage that verifies what the sensor files)
 
 **Performance verdict**:
-One sensor's decision that a performance claim holds, handed to the Performance issue filer as data: the kind (health signal, suite comparison, suite budget, test-file budget), the signal, subsystem, and direction, the numbers, and the evidence. The filer renders the ticket from it; a sensor never writes ticket text or a Fingerprint string itself.
-_Avoid_: Alarm (the state a health signal is in), finding, report (the comparison tool's JSON, which a verdict is decoded from)
+One sensor's decision that a performance claim holds, handed to the Performance issue filer as data: the kind (health signal), the signal, subsystem, and direction, the numbers, and the evidence. The filer renders the ticket from it; a sensor never writes ticket text or a Fingerprint string itself.
+_Avoid_: Alarm (the state a health signal is in), finding, report
 
 **Performance issue filer**:
-The one engine module that turns a Performance verdict into tracker action: dedup by Fingerprint against the tracker, the shared daily cap, file or comment, re-file and never reopen (ADR 0021). Three sensors call it — the regression sensor in the daemon, the suite comparison and the budget check in CI — and one GitHub adapter sits behind it, reached through the GitHub client alone. A capped verdict in CI fails the job rather than vanishing.
+The one engine module that turns a Performance verdict into tracker action: dedup by Fingerprint against the tracker, the shared daily cap, file or comment, re-file and never reopen (ADR 0021). One sensor calls it, the Performance regression sensor in the daemon, and one GitHub adapter sits behind it, reached through the GitHub client alone.
 Its home is `src/performance-issue-filer.ts`.
 _Avoid_: Sensor (the caller that decides), issue tracker adapter (the coordination port, which the filer does not use), script filer (deleted)
 
 **Performance budget sensor**:
-A scheduled job that measures a performance budget and files a ticket while the budget is unmet (ADR 0023). It fires on a standing condition rather than a transition, so it files about work the app has never done; it never gates a merge, and it hands a `budget` Performance verdict to the Performance issue filer, sharing its label, Fingerprint, and cap.
+A scheduled job that measures a performance budget and files a ticket while the budget is unmet (ADR 0023). It fires on a standing condition rather than a transition, so it files about work the app has never done; it never gates a merge, and when it is built it adds a `budget` kind to the Performance verdict, sharing the filer's label, Fingerprint, and cap.
 _Avoid_: Performance regression sensor (fires on change, not on level), budget gate (nothing here blocks a merge), optimizer (it proposes work, it does not do it)
 
 **Performance budget**:

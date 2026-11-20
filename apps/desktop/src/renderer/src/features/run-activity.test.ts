@@ -163,11 +163,79 @@ describe("applyRunPreview", () => {
   });
 });
 
+const card = (subagentRunId: string, name: string) => ({
+  kind: "subagent",
+  key: `subagent:${subagentRunId}`,
+  name,
+  message: null,
+});
+
 describe("foldTranscript", () => {
-  it("renders a Run with Subagents as it renders the same Run without them", () => {
-    expect(
-      foldTranscript(runActivities([parentText, parentToolStart, ...childEvents, parentToolResult])),
-    ).toEqual(foldTranscript(runActivities([parentText, parentToolStart, parentToolResult])));
+  it("folds a child's events into one card and keeps child text out of parent text", () => {
+    const entries = foldTranscript(runActivities([parentText, ...childEvents]));
+
+    expect(entries).toEqual([
+      { kind: "text", key: "text:m1", text: "parent text" },
+      { ...card("child-1", "reviewer"), status: "finished", text: "child text" },
+    ]);
+  });
+
+  it("gives parallel children one card each, with only their own text and status", () => {
+    const entries = foldTranscript(
+      runActivities([
+        { type: "SUBAGENT_STARTED", subagentRunId: "a", name: "reviewer" },
+        { type: "SUBAGENT_STARTED", subagentRunId: "b", name: "tester" },
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "ma", delta: "review ", subagentRunId: "a" },
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "mb", delta: "tests ", subagentRunId: "b" },
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "ma", delta: "passed", subagentRunId: "a" },
+        { type: "SUBAGENT_ERROR", subagentRunId: "b", message: "model overloaded" },
+      ]),
+    );
+
+    expect(entries).toEqual([
+      { ...card("a", "reviewer"), status: "running", text: "review passed" },
+      { ...card("b", "tester"), status: "error", text: "tests ", message: "model overloaded" },
+    ]);
+  });
+
+  it("separates a child's messages with a blank line", () => {
+    const entries = foldTranscript(
+      runActivities([
+        { type: "SUBAGENT_STARTED", subagentRunId: "a", name: "reviewer" },
+        { type: "TEXT_MESSAGE_START", messageId: "m1", subagentRunId: "a" },
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "Reading.", subagentRunId: "a" },
+        { type: "TEXT_MESSAGE_START", messageId: "m2", subagentRunId: "a" },
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "Done.", subagentRunId: "a" },
+      ]),
+    );
+
+    expect(entries).toMatchObject([{ key: "subagent:a", text: "Reading.\n\nDone." }]);
+  });
+
+  it.each([
+    {
+      name: "takes the place of its parent tool call",
+      parentToolCallId: "t1",
+      keys: ["text:m1", "subagent:child-1", "text:m3"],
+    },
+    {
+      name: "takes its place from the order of arrival without a parent tool call id",
+      parentToolCallId: undefined,
+      keys: ["text:m1", "tool:t1", "subagent:child-1", "text:m3"],
+    },
+  ])("a card $name", ({ parentToolCallId, keys }) => {
+    const entries = foldTranscript(
+      runActivities([
+        parentText,
+        parentToolStart,
+        { type: "SUBAGENT_STARTED", subagentRunId: "child-1", name: "reviewer", parentToolCallId },
+        { type: "SUBAGENT_FINISHED", subagentRunId: "child-1" },
+        parentToolResult,
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "m3", delta: "after" },
+      ]),
+    );
+
+    expect(entries.map((entry) => entry.key)).toEqual(keys);
   });
 
   it("pulls each published transcript snapshot once across subscribers", () => {

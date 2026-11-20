@@ -4,9 +4,15 @@ import { matchesScheduledInstant } from "./clock-source";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import type { TriggerEvent, TriggerSource, TriggerSubscription } from "./trigger-source";
 
-export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) => {
+export const passesTriggerFilters = (subscription: TriggerSubscription, event: TriggerEvent) =>
+  subscription.filters.every((filter) => event.passes?.includes(filter));
+
+export const addressedSubscriptions = (
+  subscriptions: ReadonlyArray<TriggerSubscription>,
+  event: TriggerEvent,
+) => {
   const observed = new Map((event.parameters ?? []).map(({ id, value }) => [id, value]));
-  const matched = subscriptions.filter((subscription) => {
+  return subscriptions.filter((subscription) => {
     const sameScheduleWorkflow =
       event.key._tag !== "ScheduleInstant" || event.key.workflow === subscription.workflow;
     const sameWorkspace = event.workspace === null || subscription.workspaces.includes(event.workspace);
@@ -19,7 +25,6 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
       subscription.parameters.some((parameter) => parameter.id === id && parameter.value === value),
     );
     const afterCatchUp = subscription.catchUp === null || event.atMillis >= subscription.catchUp.since;
-    const passesFilters = subscription.filters.every((filter) => event.passes?.includes(filter));
     return (
       subscription.entry === event.entry &&
       sameScheduleWorkflow &&
@@ -27,10 +32,15 @@ export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscripti
       sameSchedule &&
       sameTarget &&
       sameParameters &&
-      afterCatchUp &&
-      passesFilters
+      afterCatchUp
     );
   });
+};
+
+export const matchTriggerEvent = (subscriptions: ReadonlyArray<TriggerSubscription>, event: TriggerEvent) => {
+  const matched = addressedSubscriptions(subscriptions, event).filter((subscription) =>
+    passesTriggerFilters(subscription, event),
+  );
   return event.key._tag === "ScheduleInstant" ? matched.slice(0, 1) : matched;
 };
 
