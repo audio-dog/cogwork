@@ -20,7 +20,7 @@ in `AGENTS.md`. That pointer does not reach the Runs that write the tests, for t
   can fail, so a test that guards nothing passes the gate by construction.
 
 A test that guards nothing is expensive to remove later. ADR
-[0026](./0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md) rejects deleting tests by
+[0040](./0040-the-test-suite-cost-sensor-is-removed.md) keeps the rule that suites are never cut by
 category, so removal takes a per-test audit with evidence — the `/test-audit` skill. Prevention at
 write time is the cheap end of that cost.
 
@@ -97,9 +97,9 @@ already fails a test with no assertion, because such a test cannot fail on one.
 Coverage is a structural diagnostic, not a target (technical disposition): a test at full coverage
 can guard nothing, and coverage cannot tell a sole guard from a duplicate.
 
-**A mutation-testing tool in CI.** Mutates everything, not the contract a test names, and spends the
-suite budget ADR 0026 caps at 30 ms per test. The named mutation buys the same evidence for the one
-contract under change.
+**A mutation-testing tool in CI.** Mutates everything, not the contract a test names, and multiplies
+a suite cost that ADR 0040 traces to subprocess starvation on the runner. The named mutation buys
+the same evidence for the one contract under change.
 
 **The engine verifies the proof now.** The engine does not know a Workspace's test commands; the
 Run discovers them. Deferred: the engine can first check that the "Test proof" section names every

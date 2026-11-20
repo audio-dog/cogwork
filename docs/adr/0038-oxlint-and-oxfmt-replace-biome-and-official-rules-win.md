@@ -109,5 +109,5 @@ now ships an official rule set, `@effect/tsgo`, that runs inside Oxlint.
 - ADR [0022](./0022-a-sensor-lives-where-its-signal-is-produced.md) rejected a rule that caps tests
   per file because GritQL could not count. A JS plugin rule can count, so that option is open again.
 - The rule fixtures still run the real linter, as ADR
-  [0026](./0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md) requires, but in one
+  [0040](./0040-the-test-suite-cost-sensor-is-removed.md) keeps, but in one
   run over all fixtures, not one process for each fixture.

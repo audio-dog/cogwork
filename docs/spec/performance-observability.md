@@ -132,8 +132,8 @@ worse on a working laptop than on a CI runner. Nothing here gates a merge — a 
 declares today's count acceptable, and a gate at the target fails every pull request.
 
 Placement follows ADR 0022: the count is produced by running the engine under a swapped `Git`
-service layer, so it is measured in CI. Phase 6 extends the fortnightly workflow of #500 rather
-than adding a second one, and hands its verdict to the filer of #499 — one filer, one cap, one
+service layer, so it is measured in CI. Phase 6 adds its own scheduled workflow (#570; the
+fortnightly workflow of #500 was never built, ADR 0040), and hands its verdict to the filer of #499 — one filer, one cap, one
 fingerprint contract, at `needs-triage` with `origin:selfperf`. The existing pipeline carries the
 ticket from there, which is the loop closing on the app's own speed.
 

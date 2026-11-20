@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-08
-- **Amended by:** [0026](./0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md) — a budget may be a duration when it is per-test-normalized and aggregated over ~20 same-fleet uncached seed runs; counts remain the rule everywhere else.
+- **Amended by:** [0040](./0040-the-test-suite-cost-sensor-is-removed.md), which replaces the amendment from superseded ADR 0026 — a budget is a count, never a duration, with no exception. The fortnightly workflow of #500 is not built, so the Performance budget sensor adds its own scheduled workflow and its own `budget` verdict kind.
 
 ## Context
 

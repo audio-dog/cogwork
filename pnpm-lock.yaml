@@ -540,9 +540,6 @@ importers:
       '@cogwork/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@cogwork/engine':
-        specifier: workspace:*
-        version: link:../../packages/engine
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -550,27 +547,15 @@ importers:
         specifier: catalog:effect
         version: 4.1.4
     devDependencies:
-      '@cogwork/test-config':
-        specifier: workspace:*
-        version: link:../test
-      '@effect/vitest':
-        specifier: catalog:effect
-        version: 4.1.4(effect@4.1.4)(vitest@5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6
       tsx:
         specifier: 'catalog:'
         version: 4.23.13
-      turbo:
-        specifier: 'catalog:'
-        version: 2.10.12
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
-      vitest:
-        specifier: 'catalog:'
-        version: 5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
 
   configs/test:
     dependencies:

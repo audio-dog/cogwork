@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-03
-- **Amended by:** [0026](./0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md) — the fortnightly schedule is replaced by a weekly read over per-merge seed runs; the comparison tool is re-scoped to on-demand bisection.
+- **Amended by:** [0040](./0040-the-test-suite-cost-sensor-is-removed.md), which replaces the amendment from superseded ADR 0026 — the test-suite cost sensor is removed: no scheduled comparison, no comparison tool, and no test count or duration reporting in CI. "A sensor lives where its signal is produced" stays.
 
 ## Context
 
