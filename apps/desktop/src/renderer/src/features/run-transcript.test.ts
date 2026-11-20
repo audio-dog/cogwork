@@ -35,6 +35,15 @@ const tool = (overrides: Partial<Extract<TranscriptEntry, { kind: "tool" }>> = {
     ...overrides,
   }) satisfies TranscriptEntry;
 
+const reviewerCard = {
+  kind: "subagent",
+  key: "subagent:a",
+  name: "reviewer",
+  status: "running",
+  text: "Reading the diff.",
+  message: null,
+} satisfies TranscriptEntry;
+
 const shell = (command: string, args = JSON.stringify({ command })) => tool({ args });
 
 const shellOutput = (output: string, exitCode = 0) =>
@@ -168,6 +177,16 @@ describe("transcriptRows", () => {
     expect(rows[1].steps).toHaveLength(2);
   });
 
+  it("keeps a Subagent card in place between work rows", () => {
+    const rows = transcriptRows(
+      [shell("gh issue view 1"), reviewerCard, { ...shell("git status"), key: "tool:2" }],
+      false,
+    );
+
+    expect(rows.map((row) => row.kind)).toEqual(["work", "subagent", "work"]);
+    expect(rows[1]).toEqual(reviewerCard);
+  });
+
   it("clips an output too large to draw and says so", () => {
     const [row] = transcriptRows([{ ...shell("cat big"), result: shellOutput("x".repeat(9000)) }], true);
 
@@ -296,6 +315,10 @@ describe("runLine over notes and errors", () => {
     );
 
     expect(runLine(rows, "running")).toBe("Merged main.");
+  });
+
+  it("reports the newest Subagent card by name and status", () => {
+    expect(runLine(transcriptRows([reviewerCard], false), "running")).toBe("reviewer running");
   });
 
   it("reports a run error", () => {

@@ -214,6 +214,11 @@ const stepView = (entry: StepEntry, runComplete: boolean): StepView => {
 export const stepBody = (view: StepView) =>
   [view.target, view.detail].filter((block) => block.trim().length > 0).join("\n\n");
 
+type OwnRowEntry = Extract<TranscriptEntry, { kind: "warning" | "error" | "subagent" }>;
+
+const isOwnRow = (entry: TranscriptEntry): entry is OwnRowEntry =>
+  entry.kind === "warning" || entry.kind === "error" || entry.kind === "subagent";
+
 export type TranscriptRow =
   | {
       readonly kind: "work";
@@ -222,8 +227,11 @@ export type TranscriptRow =
       readonly foldNoun: "tool call" | "step";
     }
   | { readonly kind: "note"; readonly key: string; readonly text: string }
-  | { readonly kind: "warning"; readonly key: string; readonly message: string }
-  | { readonly kind: "error"; readonly key: string; readonly message: string };
+  | OwnRowEntry;
+
+export type TranscriptRowKind = TranscriptRow["kind"];
+
+export type TranscriptRowOf<Kind extends TranscriptRowKind> = Extract<TranscriptRow, { kind: Kind }>;
 
 const groupEntries = (entries: Iterable<TranscriptEntry>) =>
   Array.from(entries).reduce<TranscriptEntry[][]>((groups, entry) => {
@@ -243,8 +251,7 @@ const noteRow = (entry: Extract<TranscriptEntry, { kind: "text" }>): TranscriptR
 const toRow = (group: readonly TranscriptEntry[], runComplete: boolean): TranscriptRow | null => {
   const [first] = group;
   if (!first) return null;
-  if (first.kind === "error") return { kind: "error", key: first.key, message: first.message };
-  if (first.kind === "warning") return { kind: "warning", key: first.key, message: first.message };
+  if (isOwnRow(first)) return first;
   if (first.kind === "text") return noteRow(first);
   const steps = group.filter(isStep);
   return {
@@ -280,14 +287,22 @@ const workLine = (steps: readonly StepView[]) => {
     : `Ran ${clipTarget(latest.target)}`;
 };
 
+const rowLine: { readonly [Kind in TranscriptRowKind]: (row: TranscriptRowOf<Kind>) => string } = {
+  work: (row) => workLine(row.steps),
+  note: (row) => firstLine(row.text),
+  warning: (row) => row.message,
+  error: (row) => row.message,
+  subagent: (row) => `${row.name} ${row.status}`,
+};
+
+const lineOf = <Kind extends TranscriptRowKind>(kind: Kind, row: TranscriptRowOf<Kind>) => rowLine[kind](row);
+
 export const runLine = (rows: readonly TranscriptRow[], status: RunStatus) => {
   const terminal = terminalLine[status];
   if (terminal) return terminal;
   const last = rows.at(-1);
   if (!last) return "Starting…";
-  if (last.kind === "note") return firstLine(last.text);
-  if (last.kind === "error" || last.kind === "warning") return last.message;
-  return workLine(last.steps);
+  return lineOf(last.kind, last);
 };
 
 export const headingLine = (rows: readonly TranscriptRow[], status: RunStatus, replaying: boolean) =>
