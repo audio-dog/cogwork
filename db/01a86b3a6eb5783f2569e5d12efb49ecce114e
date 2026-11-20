@@ -1,0 +1,21 @@
+.github/workflows/pull-request.yml
+  s_70f633f86ff651::t_967e01d068d25c 21-22,27-37
+  s_70f633f86ff651::t_3e459af4e39506 123
+  s_70f633f86ff651::t_8a8a69fb5af338 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "db01a86b3a6eb5783f2569e5d12efb49ecce114e",
+  "prompts": {},
+  "sessions": {
+    "s_70f633f86ff651": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba4421ab-059f-4e32-aebf-d40caeea514e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
