@@ -1,6 +1,7 @@
 import { type ContributionSettingUpdate, type ControlStore, initialBoard } from "@cogwork/contracts";
 import * as AsyncResult from "effect/reactivity/AsyncResult";
 import { describe, expect, it } from "vitest";
+
 import { BoardResult } from "../features/activity-session";
 import { contributionSettingState, retainConfigurationBoard } from "./configuration-provider";
 

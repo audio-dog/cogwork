@@ -1,5 +1,6 @@
 import * as Redacted from "effect/Redacted";
 import { describe, expect, it } from "vitest";
+
 import {
   type EstablishmentFields,
   EstablishmentFieldsValidator,

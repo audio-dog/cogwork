@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+
 import { GitHubClient, type RawIssue } from "./github/client";
 import { IssueTracker } from "./issue-tracker";
 import { routedLayer } from "./issue-tracker-router";

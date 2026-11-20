@@ -3,6 +3,7 @@ import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+
 import { CredentialStore, make, type StoredProviderKey } from "./credential-store";
 import { accountFor, configuredProviders, findProvider, supportedProviders } from "./providers";
 

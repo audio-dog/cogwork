@@ -1,8 +1,9 @@
-import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import { ANTHROPIC_MODELS, createAnthropicChat } from "@tanstack/ai-anthropic";
 import { createGeminiChat, GEMINI_MODELS } from "@tanstack/ai-gemini";
 import { createOpenaiChat, OPENAI_CHAT_MODELS } from "@tanstack/ai-openai";
+import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import * as Redacted from "effect/Redacted";
+
 import type { ModelLevels } from "./subagent-runner";
 
 // Only providers whose model lists ship as literal-union constants are wired here,

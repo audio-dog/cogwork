@@ -8,6 +8,7 @@ import {
 import * as Schema from "effect/Schema";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+
 import { emptyDraft } from "../features/workspace-record";
 import { priorityFieldItems, WorkspaceRecord } from "./workspace-setting-rows";
 

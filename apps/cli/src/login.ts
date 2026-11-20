@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
+
 import { CredentialStore, Linear, Providers } from "@cogwork/engine";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as Clock from "effect/Clock";
@@ -59,28 +60,25 @@ const authorizationUrl = (value: string) =>
 
 export const browserOpenerLayer = Layer.effect(
   BrowserOpener,
-  Effect.map(
-    ChildProcessSpawner,
-    (spawner): BrowserOpenerService => ({
-      open: (url) =>
-        authorizationUrl(url).pipe(
-          Effect.flatMap((safeUrl) => spawner.exitCode(openCommand(safeUrl.href))),
-          Effect.asVoid,
-          Effect.mapError(
-            (cause) =>
-              new LinearOAuthError({ message: `could not open a browser for ${url}: ${cause.message}` }),
-          ),
-          Effect.timeout(browserOpenDeadline),
-          Effect.catchTag(
-            "TimeoutError",
-            () =>
-              new LinearOAuthError({
-                message: `Opening the browser timed out after ${browserOpenDeadline}; retry the login.`,
-              }),
-          ),
+  Effect.map(ChildProcessSpawner, (spawner): BrowserOpenerService => ({
+    open: (url) =>
+      authorizationUrl(url).pipe(
+        Effect.flatMap((safeUrl) => spawner.exitCode(openCommand(safeUrl.href))),
+        Effect.asVoid,
+        Effect.mapError(
+          (cause) =>
+            new LinearOAuthError({ message: `could not open a browser for ${url}: ${cause.message}` }),
         ),
-    }),
-  ),
+        Effect.timeout(browserOpenDeadline),
+        Effect.catchTag(
+          "TimeoutError",
+          () =>
+            new LinearOAuthError({
+              message: `Opening the browser timed out after ${browserOpenDeadline}; retry the login.`,
+            }),
+        ),
+      ),
+  })),
 );
 
 interface CallbackParams {

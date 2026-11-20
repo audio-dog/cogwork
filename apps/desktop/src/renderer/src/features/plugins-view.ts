@@ -1,4 +1,5 @@
 import * as Data from "effect/Data";
+
 import type { ConfigurationPicture, Contribution, InstalledPlugin } from "./configuration-model";
 import { LoadState } from "./configuration-model";
 

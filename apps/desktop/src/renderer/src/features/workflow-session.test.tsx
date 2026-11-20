@@ -15,6 +15,7 @@ import * as Schema from "effect/Schema";
 import { act, type KeyboardEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { WorkflowEditor } from "../components/workflow-editor";
 import { WorkflowsList } from "../components/workflows-list";
 import { openTestWorkingCopies } from "../testing/working-copies";

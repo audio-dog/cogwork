@@ -1,5 +1,6 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
+
 import { type CogworkBridge, IpcChannel } from "../shared/ipc";
 import { kibibytesToBytes } from "../shared/process-health";
 

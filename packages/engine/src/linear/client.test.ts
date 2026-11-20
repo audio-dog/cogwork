@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { afterEach, vi } from "vitest";
+
 import { type CredentialAccount, CredentialStore } from "../credential-store";
 import { LinearClient, layer } from "./client";
 

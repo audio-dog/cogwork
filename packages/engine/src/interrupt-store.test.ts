@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { TestClock } from "effect/testing";
+
 import { InterruptStore, layer, make } from "./interrupt-store";
 
 const record = (

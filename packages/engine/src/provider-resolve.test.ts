@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
+
 import { CredentialError, type CredentialStoreService } from "./credential-store";
 import { defaultModelAdapterFactory, type ModelAdapterFactory } from "./provider-adapter";
 import { ProviderResolutionError, resolveModelAdapter } from "./provider-resolve";

@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/
 import { cn } from "@cogwork/ui/lib/utils";
 import { RiArrowDownSLine, RiArrowRightSLine, RiCheckDoubleLine } from "@remixicon/react";
 import { type ComponentProps, type ReactNode, useState } from "react";
+
 import { scopeIcons } from "../features/configuration-icons";
 import {
   type ContributionKind,

@@ -14,6 +14,7 @@ import * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { type BrowserWindow, ipcMain, type WebContents } from "electron";
+
 import {
   type DesktopNotificationRequest,
   type DesktopNotificationStatus,

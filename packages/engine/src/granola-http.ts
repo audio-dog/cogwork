@@ -4,6 +4,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import type * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+
 import type { Credential } from "./credential-store";
 import { readJsonEventStream } from "./json-event-stream";
 

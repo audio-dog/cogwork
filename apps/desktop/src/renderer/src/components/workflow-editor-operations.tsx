@@ -24,6 +24,7 @@ import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { Separator } from "@cogwork/ui/components/separator";
 import { RiAddLine, RiCloseLine, RiPlugLine, RiRobot2Line, RiToolsLine } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use, useState } from "react";
+
 import { kindIcons } from "../features/configuration-icons";
 import { kindLabelsPlural } from "../features/configuration-model";
 import {

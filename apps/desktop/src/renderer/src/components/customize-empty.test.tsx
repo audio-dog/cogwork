@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { McpReadiness } from "../features/configuration-model";
 import { contributionById } from "../testing/configuration";
 import { emptyReason, searchEmptyReason } from "./customize-empty";

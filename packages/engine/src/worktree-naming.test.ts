@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+
 import { branchName, slugify, ticketSlug, worktreePathFor, worktreeRoot } from "./worktree";
 
 describe("worktree naming", () => {

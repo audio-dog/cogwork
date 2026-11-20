@@ -1,5 +1,6 @@
 import { type HarnessName, type Session, type SessionId, sessionHandle } from "@cogwork/contracts";
 import * as Data from "effect/Data";
+
 import type { HarnessCapabilityProfile } from "./harness";
 import { decideResume, ResumeDecision, type ResumeInputs } from "./resume-policy";
 

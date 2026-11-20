@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import { HarnessName } from "./base-schemas";
 import { NeedIdentity, type WorkflowDocument, WorkflowDocument as WorkflowDocumentSchema } from "./workflow";
 import type { WorkflowDiagnosticCode } from "./workflow-diagnostic";

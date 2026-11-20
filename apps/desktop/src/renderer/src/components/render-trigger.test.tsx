@@ -2,6 +2,7 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
 import {
   contributionById,
   placeholderConfiguration,

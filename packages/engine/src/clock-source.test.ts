@@ -6,6 +6,7 @@ import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+
 import { clockSource, latestScheduledInstant, makeClockSource, nextScheduledInstant } from "./clock-source";
 import type { TriggerReadPort, TriggerSource, TriggerSubscription } from "./trigger-source";
 import { makeWorkflowOptions } from "./workflow-options";

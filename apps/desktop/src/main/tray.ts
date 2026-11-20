@@ -1,4 +1,5 @@
 import { Menu, nativeImage, Tray } from "electron";
+
 import icon from "../../resources/icon.png?asset";
 
 export interface TrayDeps {

@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
+
 import { ConnectionVerifier, layer } from "./connection-verify";
 import type { Credential } from "./credential-store";
 import { layer as githubClientLayer } from "./github/client";

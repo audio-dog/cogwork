@@ -8,6 +8,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { WorkingCopyDaemon } from "../daemon/working-copy-daemon";
 import { MemoryDaemon, memoryDaemonLayer } from "../testing/working-copy-daemon";
 import { WorkingCopies, type WorkingCopySnapshot, layer as workingCopiesLayer } from "./working-copy";

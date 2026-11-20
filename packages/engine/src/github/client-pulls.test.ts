@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import { vi } from "vitest";
+
 import { layer as clientLayer, GitHubClient, type GitHubRepoRef } from "./client";
 
 const repo: GitHubRepoRef = { owner: "colonylabs", name: "cogwork", tokenEnv: "GITHUB_TOKEN" };

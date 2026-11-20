@@ -15,6 +15,7 @@ import * as NetAddress from "effect/net/NetAddress";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import type * as Scope from "effect/Scope";
+
 import { BrowserOpener } from "./login";
 import { type SlackLoginConfig, slackLoginLayer } from "./slack-login";
 

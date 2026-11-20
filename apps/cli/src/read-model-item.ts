@@ -1,4 +1,5 @@
 import type { ReadModelItem, ReadyToMergeItem } from "@cogwork/contracts";
+
 import { terminalLine } from "./terminal-text";
 
 export const readyToMergeText = (item: ReadyToMergeItem) =>

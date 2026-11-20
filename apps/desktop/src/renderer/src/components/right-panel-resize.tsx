@@ -1,6 +1,7 @@
 import { useSidebar } from "@cogwork/ui/components/sidebar";
 import type { CSSProperties } from "react";
 import { createContext, use, useRef } from "react";
+
 import { clampResizableWidth, useResizableWidth } from "../hooks/use-resizable-width";
 
 export const RIGHT_PANEL_STORAGE_KEY = "cf.rightPanelWidth";

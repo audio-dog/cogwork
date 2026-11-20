@@ -3,6 +3,7 @@ import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { useUpdateEffect } from "@react-hookz/web";
 import { useRouter } from "@tanstack/react-router";
 import { useRef, useSyncExternalStore } from "react";
+
 import {
   type DesktopNotificationRequest,
   type DesktopNotificationStatus,

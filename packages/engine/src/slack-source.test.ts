@@ -22,6 +22,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+
 import { ConnectionStore, type ConnectionStoreService } from "./connection";
 import type { Credential } from "./credential-store";
 import {

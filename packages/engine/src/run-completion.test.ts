@@ -7,6 +7,7 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import { fold } from "./coordination";
 import {
   actionPlanCompletion,

@@ -2,8 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
+
 import { isDaemonListening } from "./socket-probe";
 
 const withTempDir = async (run: (dir: string) => Promise<void>): Promise<void> => {

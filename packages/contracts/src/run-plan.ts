@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import { HarnessName, TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
 import { Claim } from "./coordination";
 import { ProvenanceStamp } from "./provenance";

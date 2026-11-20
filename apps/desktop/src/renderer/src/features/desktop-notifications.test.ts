@@ -1,6 +1,7 @@
 import { WorkItemId, WorkItemRef, WorkspaceId } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+
 import { notificationChanges } from "./desktop-notifications";
 
 const workItemId = Schema.decodeSync(WorkItemId);

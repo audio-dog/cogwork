@@ -2,6 +2,7 @@ import type { WorkflowCatalogEntry, WorkflowTemplate } from "@cogwork/contracts"
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";
 import { SourceControlProvider } from "./source-control";
 import { type TriggerSource, TriggerSources } from "./trigger-source";
