@@ -1,0 +1,35 @@
+apps/cli/src/status.ts
+  s_4a1c6ee7a27e58::t_61df03a6b2d0ee 26,36,42
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_7cae705f91c4b8::t_829b53250128ee 442,444-451,455,472
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_4a1c6ee7a27e58::t_84f57ede2ba685 6,106-107,115,119-125,294
+packages/engine/src/commands.test.ts
+  s_4a1c6ee7a27e58::t_20a3798404ff5c 20,110,115-118
+packages/engine/src/commands.ts
+  s_7cae705f91c4b8::t_cb83d76c470944 362-363
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b5a0119fea9449e23aa67551a2c0f9f0fbf69a7",
+  "prompts": {},
+  "sessions": {
+    "s_4a1c6ee7a27e58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeaf75bf-a9ed-4a48-b63b-170c596b0298",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_7cae705f91c4b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e91baaa-e8f2-424b-89b2-85e8d656b270",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
