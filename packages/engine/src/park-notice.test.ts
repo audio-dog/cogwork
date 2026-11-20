@@ -104,6 +104,7 @@ const rawFailure = "fatal: unable to access /Users/someone/.local/bin/agent";
 const parksWithRawFailure: ReadonlyArray<ParkReason> = [
   { _tag: "Exhausted", reason: `Cause(HarnessError: ${rawFailure})` },
   { _tag: "WriteFailed", step: "github.open-pull-request", error: rawFailure },
+  { _tag: "Cancelled", note: rawFailure },
 ];
 
 parksWithRawFailure.map((reason) =>

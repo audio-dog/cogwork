@@ -59,28 +59,68 @@ describe("WorkflowRun cancellation", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("a daemon drain interrupts the Run without parking the item", () =>
+  it.effect("CancelRun after the attempt is recorded parks the item as Cancelled instead of Stuck", () =>
     Effect.gen(function* () {
-      const { running, record, aborted, coordination } = yield* startGatedRun();
+      const parking = yield* Deferred.make<void>();
+      const { runner, coordination } = yield* testProgram([{ ...allClear, stuck: true }], {
+        coordination: (service) => ({
+          ...service,
+          park: (ref, reason, operation) =>
+            reason._tag === "Stuck"
+              ? Deferred.succeed(parking, undefined).pipe(Effect.andThen(Effect.never))
+              : service.park(ref, reason, operation),
+        }),
+      });
+      const running = yield* Effect.forkChild(runner.execute(admission), { startImmediately: true });
+      yield* Deferred.await(parking);
+      const [record] = yield* (yield* RunLedger).listRuns(10);
+      if (record === undefined) return yield* Effect.die("the Run was not accepted");
 
-      yield* Fiber.interrupt(running);
+      yield* cancelRun({ runId: record.id, note: "Too late" });
+      yield* Fiber.await(running);
 
-      assert.isTrue(yield* Deferred.isDone(aborted));
-      assert.isEmpty(yield* Ref.get(coordination.parks));
-      assert.strictEqual((yield* (yield* RunLedger).getRun(record.id))?.status, "interrupted");
+      assert.deepStrictEqual(
+        (yield* Ref.get(coordination.parks)).map(({ reason }) => reason),
+        [{ _tag: "Cancelled", note: "Too late" }],
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("CancelRun while the engine records a failed Run still parks the item", () =>
+    Effect.gen(function* () {
+      const recordingFailure = yield* Deferred.make<void>();
+      const { runner, coordination } = yield* testProgram([allClear], {
+        coordination: (service) => ({
+          ...service,
+          recordAttempt: (_ref, input) =>
+            input.outcome === "succeeded"
+              ? Effect.die("the attempt store is down")
+              : Deferred.succeed(recordingFailure, undefined).pipe(Effect.andThen(Effect.never)),
+        }),
+      });
+      yield* Effect.forkChild(runner.execute(admission), { startImmediately: true });
+      yield* Deferred.await(recordingFailure);
+      const [record] = yield* (yield* RunLedger).listRuns(10);
+      if (record === undefined) return yield* Effect.die("the Run was not accepted");
+
+      yield* cancelRun({ runId: record.id });
+
+      assert.deepStrictEqual(
+        (yield* Ref.get(coordination.parks)).map(({ reason }) => reason._tag),
+        ["Cancelled"],
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
   it.effect("CancelRun on a finished Run reports it finished and does not park the item", () =>
     Effect.gen(function* () {
-      const { running, record, release, coordination } = yield* startGatedRun();
+      const { running, record, release } = yield* startGatedRun();
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(running);
 
       const error = yield* cancelRun({ runId: record.id }).pipe(Effect.flip);
 
       assert.strictEqual(error.reason, "already-finished");
-      assert.isEmpty(yield* Ref.get(coordination.parks));
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 });

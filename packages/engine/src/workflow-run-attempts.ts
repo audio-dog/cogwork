@@ -48,7 +48,11 @@ export type ClaimState = Data.TaggedEnum<{
     readonly run: RunId | null;
     readonly lineageParent: RunId | null;
   };
-  Attempted: { readonly run: RunId | null; readonly status: "succeeded" | "failed" };
+  Attempted: {
+    readonly key: ReturnType<typeof operationKeyOf>;
+    readonly run: RunId | null;
+    readonly status: "succeeded" | "failed";
+  };
 }>;
 export const ClaimState = Data.taggedEnum<ClaimState>();
 export type ClaimedWork = Data.TaggedEnum.Value<ClaimState, "Claimed">;
@@ -152,7 +156,7 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
       operation: work.key,
       lineage: admission.lineage,
     });
-    yield* Ref.set(claimed, ClaimState.Attempted({ run: work.run, status: attempt.outcome }));
+    yield* Ref.set(claimed, ClaimState.Attempted({ key: work.key, run: work.run, status: attempt.outcome }));
     return view;
   });
 
