@@ -63,6 +63,7 @@ const applyLimit = (config: SchedulerConfig, update: DaemonLimitUpdate) =>
 export interface SchedulerState {
   readonly global: number;
   readonly perWorkspace: ReadonlyMap<WorkspaceId, number>;
+  readonly startedRuns: ReadonlyMap<string, WorkspaceId | null>;
   readonly inflight: ReadonlySet<string>;
   readonly acted: ReadonlySet<string>;
   readonly budgetDay: number;
@@ -74,6 +75,7 @@ export interface SchedulerState {
 export const initialState: SchedulerState = {
   global: 0,
   perWorkspace: new Map(),
+  startedRuns: new Map(),
   inflight: new Set(),
   acted: new Set(),
   budgetDay: -1,
@@ -170,10 +172,19 @@ const reserve = (state: SchedulerState, candidate: WorkflowCandidate) => ({
   budgetUsed: state.budgetUsed + 1,
 });
 
+const startRun = (state: SchedulerState, candidate: WorkflowCandidate) => ({
+  ...state,
+  startedRuns: new Map([
+    ...state.startedRuns,
+    ...candidate.keys.map((key) => [key, candidate.workspace] as const),
+  ]),
+});
+
 const release = (state: SchedulerState, candidate: WorkflowCandidate, retry: boolean) => ({
   ...state,
   global: Math.max(0, state.global - 1),
   perWorkspace: workspaceLoad(state, candidate, -1),
+  startedRuns: new Map([...state.startedRuns].filter(([key]) => !candidate.keys.includes(key))),
   inflight: new Set([...state.inflight].filter((key) => !candidate.reservationKeys.includes(key))),
   acted: retry ? new Set([...state.acted].filter((key) => !candidate.keys.includes(key))) : state.acted,
 });
@@ -212,9 +223,12 @@ const planCandidates = (
   );
 
 const updateStateMetrics = (state: SchedulerState) =>
-  Effect.all([Metric.update(runsInFlight, state.global), Metric.update(budgetUsed, state.budgetUsed)], {
-    discard: true,
-  });
+  Effect.all(
+    [Metric.update(runsInFlight, state.startedRuns.size), Metric.update(budgetUsed, state.budgetUsed)],
+    {
+      discard: true,
+    },
+  );
 
 const jobOutcome = <A, E>(exit: Exit.Exit<A, E>) => {
   if (Exit.isSuccess(exit)) return "success";
@@ -236,34 +250,39 @@ export const make = (config: SchedulerConfig) =>
     const configRef = yield* Ref.make(config);
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
+    const updateState = (next: (state: SchedulerState) => SchedulerState) =>
+      stateMetricsGate.withPermit(Ref.updateAndGet(stateRef, next).pipe(Effect.flatMap(updateStateMetrics)));
+
     const runWorkflow = (candidate: WorkflowCandidate) =>
       Ref.make<ReservationDisposition>({ refundBudget: false, retry: true }).pipe(
         Effect.flatMap((dispositionRef) =>
-          workflowRun.execute(candidate.admission).pipe(
-            Effect.map((outcome) => workflowRunDispositions[outcome]),
-            Effect.tap((disposition) => Ref.set(dispositionRef, disposition)),
-            Effect.asVoid,
-            Effect.onExit(recordJobOutcome),
-            Effect.catchCauseIf(
-              (cause) => !Cause.hasInterruptsOnly(cause),
-              (cause) => Effect.logWarning("scheduled job crashed", cause),
-            ),
-            Effect.ensuring(
-              stateMetricsGate.withPermit(
+          workflowRun
+            .execute(
+              candidate.admission,
+              updateState((state) => startRun(state, candidate)),
+            )
+            .pipe(
+              Effect.map((outcome) => workflowRunDispositions[outcome]),
+              Effect.tap((disposition) => Ref.set(dispositionRef, disposition)),
+              Effect.asVoid,
+              Effect.onExit(recordJobOutcome),
+              Effect.catchCauseIf(
+                (cause) => !Cause.hasInterruptsOnly(cause),
+                (cause) => Effect.logWarning("scheduled job crashed", cause),
+              ),
+              Effect.ensuring(
                 Ref.get(dispositionRef).pipe(
                   Effect.flatMap((disposition) =>
-                    Ref.updateAndGet(stateRef, (state) => finishReservation(state, candidate, disposition)),
+                    updateState((state) => finishReservation(state, candidate, disposition)),
                   ),
-                  Effect.flatMap(updateStateMetrics),
                 ),
               ),
+              Effect.annotateLogs({
+                workflow: candidate.admission.subscription.workflow,
+                item: keyOf(candidate.admission.event.key),
+                operation: candidate.admission.subscription.operation,
+              }),
             ),
-            Effect.annotateLogs({
-              workflow: candidate.admission.subscription.workflow,
-              item: keyOf(candidate.admission.event.key),
-              operation: candidate.admission.subscription.operation,
-            }),
-          ),
         ),
       );
 

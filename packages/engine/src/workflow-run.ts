@@ -107,6 +107,7 @@ export const make = Effect.gen(function* () {
   const executeRaw = Effect.fn("WorkflowRun.execute")(function* (
     admission: TriggerAdmission,
     claimed: Ref.Ref<ClaimState>,
+    runStarted: Effect.Effect<void>,
   ) {
     const pendingPlan = yield* actionPlans.pending(
       keyOf(admission.event.key),
@@ -247,6 +248,7 @@ export const make = Effect.gen(function* () {
     const accepted = ClaimState.Claimed({ key, run: id, lineageParent: id });
     yield* Ref.set(claimed, accepted).pipe(
       Effect.andThen(ledger.acceptRun(run, plan)),
+      Effect.andThen(runStarted),
       Effect.uninterruptible,
     );
 
@@ -308,9 +310,12 @@ export const make = Effect.gen(function* () {
     });
   });
 
-  const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (admission: TriggerAdmission) {
+  const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (
+    admission: TriggerAdmission,
+    runStarted: Effect.Effect<void>,
+  ) {
     const claimed = yield* Ref.make<ClaimState>(ClaimState.Idle());
-    return yield* executeRaw(admission, claimed).pipe(
+    return yield* executeRaw(admission, claimed, runStarted).pipe(
       Effect.catchCauseIf(
         (cause) => !Cause.hasInterruptsOnly(cause),
         (cause) => recoverClaimed(admission, claimed, cause),
@@ -323,7 +328,7 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const executeAdmission = (admission: TriggerAdmission) =>
+  const executeAdmission = (admission: TriggerAdmission, runStarted: Effect.Effect<void> = Effect.void) =>
     observationStore.admissions.pipe(
       Effect.map(
         (admissions) =>
@@ -341,7 +346,7 @@ export const make = Effect.gen(function* () {
           (): AdmissionExecutionState => ({ current, outcome: "completed" }),
           (state) => {
             if (state.current === null) return Effect.succeed(state);
-            return executeToOutcome(state.current).pipe(
+            return executeToOutcome(state.current, runStarted).pipe(
               Effect.scoped,
               Effect.flatMap((next) => {
                 if (typeof next === "string") {
