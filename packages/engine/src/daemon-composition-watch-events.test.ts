@@ -67,6 +67,24 @@ const actionPlanEvent = {
 } as const;
 
 describe("daemon composition WatchEvents", () => {
+  it.effect("includes the queue picture in the WatchEvents seed", () =>
+    Effect.gen(function* () {
+      const rpc = yield* RpcClient.make(DaemonRpcs);
+      const seed = yield* rpc
+        .WatchEvents()
+        .pipe(
+          Stream.takeUntil(DaemonEvent.guards.SeedEnd),
+          Stream.filter(DaemonEvent.guards.QueueChanged),
+          Stream.runCollect,
+        );
+
+      assert.deepStrictEqual(
+        seed.map(({ queue }) => queue),
+        [{ queued: [] }],
+      );
+    }).pipe(Effect.provide(testLayer()), Effect.scoped),
+  );
+
   it.effect("delivers a recorded Action plan to a WatchEvents subscriber without failing its stream", () =>
     Effect.gen(function* () {
       const rpc = yield* RpcClient.make(DaemonRpcs);

@@ -1,4 +1,12 @@
-import { defaultPriority, keyOf, Lineage, type ParkReason, priorityRank } from "@cogwork/contracts";
+import {
+  defaultPriority,
+  keyOf,
+  Lineage,
+  type ParkReason,
+  priorityRank,
+  WorkItemId,
+  WorkspaceId,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 
 import { TriggerEvent, TriggerSubscription } from "./trigger-source";
@@ -9,6 +17,13 @@ export const TriggerAdmission = Schema.Struct({
   lineage: Lineage,
 });
 export type TriggerAdmission = typeof TriggerAdmission.Type;
+
+const decodeWorkspaceId = Schema.decodeSync(WorkspaceId);
+const decodeWorkItemId = Schema.decodeSync(WorkItemId);
+
+export const runWorkspaceOf = (admission: TriggerAdmission) =>
+  admission.event.workspace ?? decodeWorkspaceId(admission.subscription.workflow);
+export const runWorkItemOf = (admission: TriggerAdmission) => decodeWorkItemId(keyOf(admission.event.key));
 
 export const subscriptionKey = ({ workflow, trigger }: TriggerSubscription) => `${workflow}:${trigger}`;
 export const admissionKey = (admission: TriggerAdmission) =>

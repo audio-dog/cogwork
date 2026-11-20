@@ -6,8 +6,6 @@ import {
   type RunRecord,
   type WorkflowActionPlan,
   WorkflowTouchpointFailure,
-  WorkItemId,
-  WorkspaceId,
   workflowOperationResultSchema,
 } from "@cogwork/contracts";
 import * as Cause from "effect/Cause";
@@ -40,7 +38,7 @@ import {
 import { CheckoutRefused, make as makeRunPreparation, selectedWorkspaceIds } from "./run-preparation";
 import { RunRecorder } from "./run-recorder";
 import { TriggerObservation } from "./trigger-observation";
-import type { TriggerAdmission } from "./trigger-observation-admission";
+import { runWorkItemOf, runWorkspaceOf, type TriggerAdmission } from "./trigger-observation-admission";
 import { TriggerObservationStore } from "./trigger-observation-store";
 import { Recheck } from "./trigger-source";
 import { Workflows } from "./workflow";
@@ -55,8 +53,6 @@ import { touchpointFailure } from "./workflow-run-pending-plan";
 import { makeWorkflowRunTouchpoints } from "./workflow-run-touchpoints";
 
 const runId = Schema.decodeSync(RunId);
-const workspaceId = Schema.decodeSync(WorkspaceId);
-const workItemId = Schema.decodeSync(WorkItemId);
 const failedTerminal: AgUiEvent = { type: "RUN_FINISHED", finishReason: "failed" };
 
 export type WorkflowRunOutcome = "completed" | "retry" | "skipped" | "waiting";
@@ -191,7 +187,7 @@ export const make = Effect.gen(function* () {
     if (yield* parkCappedLineage(admission, key)) return "completed" as const;
     const startedAtMillis = yield* Clock.currentTimeMillis;
     const id = runId(SecureRandom.uuidV4Unsafe());
-    const runWorkspace = admission.event.workspace ?? workspaceId(admission.subscription.workflow);
+    const runWorkspace = runWorkspaceOf(admission);
     const priorRefusal = yield* takePriorRefusal(keyOf(admission.event.key));
     const prepared = yield* preparation
       .prepare({
@@ -232,7 +228,7 @@ export const make = Effect.gen(function* () {
     const run: RunRecord = {
       id,
       workspace: runWorkspace,
-      workItem: workItemId(keyOf(admission.event.key)),
+      workItem: runWorkItemOf(admission),
       ...(admission.event.subject ? { subject: admission.event.subject } : {}),
       workflow: record.id,
       operation: operation.id,
