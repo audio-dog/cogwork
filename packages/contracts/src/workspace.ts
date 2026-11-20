@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import { IssueTrackerType, SourceControlType, TrimmedNonEmptyString, WorkspaceId } from "./base-schemas";
 import { ConnectionBindingId } from "./connection";
 import { McpSkill } from "./mcp-skill";

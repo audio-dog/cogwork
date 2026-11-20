@@ -1,6 +1,7 @@
 import { HarnessManagedCatalog, HarnessModelOptionDescriptor } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import { ClaudeNativeSelectionResult, claudeNativeSelection } from "./model";
 import { claudeModelCatalog } from "./models.generated";
 

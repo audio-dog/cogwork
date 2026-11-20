@@ -2,6 +2,7 @@ import { type SchedulerStats, workspaceLabel } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { cn } from "@cogwork/ui/lib/utils";
+
 import { BoardResult, useBoard } from "../features/activity-session";
 import { useScheduling } from "../features/use-scheduling";
 

@@ -1,6 +1,7 @@
 import { WorkflowCatalogEntry, WorkflowNodeId, WorkflowOperation } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+
 import { outcomeEdits } from "./workflow-edits";
 
 const decodeNodeId = Schema.decodeUnknownSync(WorkflowNodeId);

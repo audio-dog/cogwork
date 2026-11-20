@@ -7,6 +7,7 @@ import * as ChildProcess from "effect/process/ChildProcess";
 import type * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
+
 import { CredentialError } from "../credential-store";
 
 const commandDeadline = "10 seconds";

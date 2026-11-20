@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it } from "vitest";
+
 import { ActivitySessionContext, initialActivitySession } from "../features/activity-session";
 import { AttentionList } from "./attention-rail";
 

@@ -18,6 +18,7 @@ import {
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { type ReactNode, useState } from "react";
+
 import { Attention } from "../components/attention-board";
 import type { AttentionLayout } from "../components/attention-board-context";
 import { relativeTime } from "./format";

@@ -3,6 +3,7 @@ import { Button } from "@cogwork/ui/components/button";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiCloseLine, RiRefreshLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
+
 import { checkHarnessesAtom, harnessReadinessAtom, workflowAttentionAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { plural } from "../features/format";

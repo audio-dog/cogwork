@@ -1,6 +1,7 @@
 import { RiArrowRightSLine } from "@remixicon/react";
 import { cn } from "cn";
 import type * as React from "react";
+
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#components/collapsible";
 
 function Trace({ className, ...props }: React.ComponentProps<"div">) {
@@ -126,7 +127,7 @@ function TraceCollapsibleContent({
       <div
         data-slot="trace-collapsible-content-inner"
         className={cn(
-          "mt-2 mb-1 ms-[calc(--spacing(2)-1px)] min-w-0 border-s pe-1 ps-4 leading-relaxed wrap-break-word text-muted-foreground",
+          "ms-[calc(--spacing(2)-1px)] mt-2 mb-1 min-w-0 border-s ps-4 pe-1 leading-relaxed wrap-break-word text-muted-foreground",
           className,
         )}
       >

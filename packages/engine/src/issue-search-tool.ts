@@ -2,6 +2,7 @@ import { TrimmedNonEmptyString } from "@cogwork/contracts";
 import { toolDefinition } from "@tanstack/ai";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import type { IssueTrackerService } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 

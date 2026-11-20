@@ -5,6 +5,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+
 import type { Credential } from "./credential-store";
 import { GitHubClient } from "./github/client";
 import { type GranolaHttpFailure, makeGranolaHttp } from "./granola-http";

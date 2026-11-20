@@ -1,5 +1,6 @@
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { getHeapStatistics } from "node:v8";
+
 import {
   type ProcessHealthSample,
   ProcessHealthSample as ProcessHealthSampleSchema,

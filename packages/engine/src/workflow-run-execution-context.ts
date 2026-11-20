@@ -1,6 +1,7 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+
 import { Coordination } from "./coordination";
 import type { HarnessRunnerEnv } from "./harness";
 import { IssueTracker } from "./issue-tracker";

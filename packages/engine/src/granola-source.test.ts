@@ -18,6 +18,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+
 import type { ConnectionStoreService } from "./connection";
 import { CoordinationError, type CoordinationService, fold } from "./coordination";
 import type { Credential } from "./credential-store";

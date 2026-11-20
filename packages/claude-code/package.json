@@ -2,8 +2,8 @@
   "name": "@cogwork/claude-code",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "Claude Code harness runner for Cogwork, built on the TanStack AI Claude Code adapter",
+  "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },

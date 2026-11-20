@@ -14,6 +14,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+
 import { ContextAssembler } from "./context-assembler";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import * as CredentialStore from "./credential-store";

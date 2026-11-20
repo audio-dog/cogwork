@@ -4,6 +4,7 @@ import * as Data from "effect/Data";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
+
 import type { HarnessCapabilityProfile } from "./harness";
 
 const formatIssues = SchemaIssue.makeFormatterStandardSchemaV1();

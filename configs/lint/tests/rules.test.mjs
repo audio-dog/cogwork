@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+
 import { fixtureRoot, lintWithRule, repoRoot } from "./rule-test-harness.mjs";
 
 const ruleCases = [

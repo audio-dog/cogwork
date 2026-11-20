@@ -1,8 +1,8 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createHash } from "node:crypto";
+
 import { AgUiEvent } from "@cogwork/contracts";
 import type { AnyTextAdapter, ChatMiddleware } from "@tanstack/ai";
-import { scrubSecrets } from "@tanstack/ai/byok";
 import {
   bearer,
   createSecrets,
@@ -14,8 +14,10 @@ import {
   type Secrets,
   type WorkspaceDefinition,
 } from "@tanstack/ai-sandbox";
+import { scrubSecrets } from "@tanstack/ai/byok";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+
 import type { ExternalHarnessDescriptor, ExternalHarnessResolvedRequest } from "./external-harness-runtime";
 import { HarnessError, type ResolvedMcpSkill } from "./harness";
 

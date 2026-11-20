@@ -19,6 +19,7 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftLine, RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+
 import {
   findSection,
   type SettingEntry,

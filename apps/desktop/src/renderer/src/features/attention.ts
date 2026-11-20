@@ -1,4 +1,5 @@
 import type { Board, ReadModelItem, WorkspaceId } from "@cogwork/contracts";
+
 import { workspaceLabelById } from "./workspace-record";
 
 export interface AttentionEntry {

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+
 import type { EngineStatus } from "../../../shared/ipc";
 import { reportRendererError } from "./report-error";
 

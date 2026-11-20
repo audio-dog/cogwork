@@ -5,6 +5,7 @@ import {
   RiOpenaiFill,
   RiSparklingFill,
 } from "@remixicon/react";
+
 import type { ProviderGlyph } from "../features/provider-presentation";
 
 const glyphIcons: Record<ProviderGlyph, typeof RiSparklingFill> = {

@@ -1,12 +1,13 @@
 import { ContributionSettingScope, ContributionSettingUpdate, type ControlStore } from "@cogwork/contracts";
-import * as Console from "effect/Console";
 import * as Argument from "effect/cli/Argument";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+
 import {
   type ControlStoreReadOptions,
   controlStoreFlag,

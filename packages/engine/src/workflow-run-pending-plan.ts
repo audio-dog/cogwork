@@ -9,8 +9,10 @@ import {
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import { Coordination } from "./coordination";
 import { WorkspaceRegistry } from "./registry-service";
+import { actionPlanCompletion, RunCompletionRoute } from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import type { TriggerAdmission } from "./trigger-observation-admission";
@@ -165,18 +167,20 @@ export const makeWorkflowRunPendingPlans = Effect.fn("WorkflowRun.makePendingPla
     admission: TriggerAdmission,
     execution: WorkflowActionPlanExecution,
   ) {
-    if (execution._tag !== "Complete") return;
-    const key = operationKeyOf(admission, plan.operation);
+    const { attempt, route } = actionPlanCompletion(execution);
+    if (attempt === null) return;
     yield* coordination.recordAttempt(admission.event.key, {
-      operation: key,
-      outcome: "succeeded",
+      operation: operationKeyOf(admission, plan.operation),
+      outcome: attempt,
       lineage: admission.lineage,
     });
-    if (execution.handOff === null) {
-      yield* complete(admission);
-      return;
-    }
-    yield* executeAdmission(handOffAdmission(admission, execution.handOff, plan.attempt));
+    yield* RunCompletionRoute.$match(route, {
+      Complete: () => complete(admission),
+      HandOff: ({ node }) => executeAdmission(handOffAdmission(admission, node, plan.attempt)),
+      Retry: () => Effect.void,
+      Replan: () => Effect.void,
+      Park: () => Effect.void,
+    });
   });
 
   const executeClaimedPlan = Effect.fn("WorkflowRun.executeClaimedPlan")(

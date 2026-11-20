@@ -1,6 +1,7 @@
 import { ScrollArea } from "@cogwork/ui/components/scroll-area";
 import { SidebarInset } from "@cogwork/ui/components/sidebar";
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+
 import { SettingsFocusProvider } from "../../components/settings-parts";
 import { SettingsSidebar } from "../../components/settings-sidebar";
 

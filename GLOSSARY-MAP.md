@@ -24,7 +24,7 @@ lives in a separate safekeep repo: [taylorfsteele/sync](https://github.com/taylo
 
 ### Self-correction (the sensing layer)
 
-- [sensor](./configs/sensor/GLOSSARY.md) — the CI-resident sensors: seed runs, test-suite budgets, and the paired comparison tool that measure the app's own health and file work items on the issue tracker (ADRs 0021, 0022, 0026).
+- [sensor](./configs/sensor/GLOSSARY.md) — the seed run that warms the turbo cache, and the measurement tools for the app's own performance (ADRs 0022, 0023, 0040).
 
 ## Relationships
 

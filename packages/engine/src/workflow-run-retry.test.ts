@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { HarnessError } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
 import { emptyRegistry } from "./projector";

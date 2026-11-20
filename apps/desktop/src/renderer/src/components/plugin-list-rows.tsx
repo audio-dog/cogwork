@@ -3,6 +3,7 @@ import { Button } from "@cogwork/ui/components/button";
 import { ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { RiBox3Line } from "@remixicon/react";
 import { useNavigate } from "@tanstack/react-router";
+
 import type { CatalogPlugin, InstalledPlugin } from "../features/configuration-model";
 import { attentionAction, attentionLine, PluginAttention } from "../features/plugins-view";
 import { useConfiguration } from "./configuration-provider";

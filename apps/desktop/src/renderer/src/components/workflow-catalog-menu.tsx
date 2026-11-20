@@ -35,6 +35,7 @@ import {
   RiWebhookLine,
 } from "@remixicon/react";
 import { type ComponentType, createContext, type ReactNode, use, useRef, useState } from "react";
+
 import type { CatalogIcon } from "../features/workflow-catalog";
 
 const catalogIcons: Record<CatalogIcon, ComponentType<{ className?: string }>> = {

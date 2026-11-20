@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+
 import { decideResume, ResumeDecision, type ResumeInputs, type ResumeReason } from "./resume-policy";
 
 const handle = "cursor-session-1";

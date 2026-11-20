@@ -1,5 +1,6 @@
 import { Connection, type ConnectionItem, connectionIdOf } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
+
 import {
   connectionAction,
   connectionStatus,

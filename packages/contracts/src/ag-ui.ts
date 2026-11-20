@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+
 import type { TokenUsage } from "./run";
 
 export const FILE_DIFF_EVENT = "sandbox.file.diff";
@@ -95,9 +96,16 @@ const AgUiNamedEvent = Schema.Union([
   eventVariant("RUN_ERROR", {
     message: Schema.optional(Schema.String),
   }),
-  eventVariant("SUBAGENT_STARTED", { subagentRunId }),
+  eventVariant("SUBAGENT_STARTED", {
+    subagentRunId,
+    name: Schema.optional(Schema.String),
+    parentToolCallId: Schema.optional(Schema.String),
+  }),
   eventVariant("SUBAGENT_FINISHED", { subagentRunId }),
-  eventVariant("SUBAGENT_ERROR", { subagentRunId }),
+  eventVariant("SUBAGENT_ERROR", {
+    subagentRunId,
+    message: Schema.optional(Schema.String),
+  }),
 ]).pipe(Schema.toTaggedUnion("type"));
 
 const agUiNamedEventTypes = new Set<PropertyKey>(AgUiNamedEvent.discriminants);

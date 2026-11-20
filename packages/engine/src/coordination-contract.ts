@@ -3,6 +3,7 @@ import { assert } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as TestClock from "effect/testing/TestClock";
+
 import type { CoordinationService } from "./coordination";
 
 export const verifyCoordinationContract = (coordination: CoordinationService, ref: WorkItemRef) =>

@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+
 import { kibibytesToBytes, ratePerSecond } from "./process-health";
 
 it("calculates monotonic rates and ignores counter resets", () => {

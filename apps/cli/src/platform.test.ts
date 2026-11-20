@@ -22,6 +22,7 @@ import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import { contextFsLayer, gitLayer, worktreeFsLayer } from "./platform";
 
 const interruptionGate = Latch.makeUnsafe();

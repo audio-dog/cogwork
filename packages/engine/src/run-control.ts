@@ -8,6 +8,7 @@ import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
 import * as MutableHashMap from "effect/MutableHashMap";
 import * as Option from "effect/Option";
+
 import type { WorkspaceIssueTrackerBinding } from "./projector";
 
 interface Registration {

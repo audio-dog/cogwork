@@ -7,6 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
+
 import type { CredentialAccount } from "../credential-store";
 import { make } from "./client-credentials";
 

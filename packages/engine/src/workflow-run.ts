@@ -23,11 +23,13 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+
 import { Coordination, maxLineageHops } from "./coordination";
 import { Harness } from "./harness";
 import { acceptOperationResult, harnessStreamFailed } from "./operation-result";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry-service";
+import { actionPlanCompletion, RunCompletionRoute } from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import {
   type RunPlanRejection,
@@ -45,7 +47,7 @@ import { Workflows } from "./workflow";
 import { itemWorkspaceOf } from "./workflow-action-entry";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
-import { handOffAdmission, operationKeyOf, parkedAdmission } from "./workflow-run-admission";
+import { operationKeyOf, parkedAdmission } from "./workflow-run-admission";
 import { ClaimState, makeWorkflowRunAttempts, resendOf } from "./workflow-run-attempts";
 import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
 import { makeWorkflowRunExecutionContext } from "./workflow-run-execution-context";
@@ -63,13 +65,6 @@ interface AdmissionExecutionState {
   readonly current: TriggerAdmission | null;
   readonly outcome: WorkflowRunOutcome;
 }
-
-const resumedPlanHaltOutcome = {
-  Retry: "retry",
-  Parked: "completed",
-  AwaitingApproval: "completed",
-  HandedToYou: "completed",
-} as const;
 
 const resumedLineageParentOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
   admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
@@ -98,6 +93,8 @@ export const make = Effect.gen(function* () {
     refuseResult,
     refusePreparation,
     recoverClaimed,
+    settleCompletion,
+    followCompletion,
     actOnResult,
   } = yield* makeWorkflowRunAttempts(pullRequestBuildInput);
   const preparation = yield* makeRunPreparation;
@@ -137,20 +134,10 @@ export const make = Effect.gen(function* () {
     const pendingClaim = resumed === null ? null : yield* claimItem(admission, claimed, resumed.work);
     if (resumed !== null) {
       if (yield* parkCappedLineage(admission, resumed.work.key)) return "completed" as const;
-      const execution = yield* executeWorkflowActionPlan(resumed.plan, admission);
-      if (execution._tag === "Replan") {
-        yield* settleClaimed(claimed, "interrupted");
-      }
-      if (execution._tag !== "Replan" && execution._tag !== "Complete") {
-        return resumedPlanHaltOutcome[execution._tag];
-      }
-      if (execution._tag === "Complete") {
-        yield* recordClaimedAttempt(admission, claimed, resumed.work, { outcome: "succeeded" });
-        if (execution.handOff !== null) {
-          return handOffAdmission(admission, execution.handOff, resumed.plan.attempt);
-        }
-        yield* complete(admission);
-        return "completed" as const;
+      const completion = actionPlanCompletion(yield* executeWorkflowActionPlan(resumed.plan, admission));
+      yield* settleCompletion(admission, claimed, resumed.work, completion);
+      if (!RunCompletionRoute.$is("Replan")(completion.route)) {
+        return yield* followCompletion(admission, completion, resumed.plan.attempt);
       }
     }
 

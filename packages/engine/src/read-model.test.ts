@@ -1,6 +1,7 @@
 import { WorkspaceConfig, WorkspaceId } from "@cogwork/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import { schedulerStatsOf } from "./read-model";
 
 const registered = Schema.decodeSync(WorkspaceId)("01a1a28e-b763-7ccb-9208-2b284d962dae");

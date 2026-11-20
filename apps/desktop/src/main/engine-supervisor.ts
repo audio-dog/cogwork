@@ -25,6 +25,7 @@ import * as Semaphore from "effect/Semaphore";
 import type * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
+
 import type { EngineStatus } from "../shared/ipc";
 import type { EngineCommand } from "./engine-command";
 import type { DaemonReachabilityError } from "./wait-for-socket";

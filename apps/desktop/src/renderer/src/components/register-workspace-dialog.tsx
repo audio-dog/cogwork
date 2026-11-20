@@ -27,6 +27,7 @@ import { RiAddLine, RiFolderOpenLine } from "@remixicon/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import * as Exit from "effect/Exit";
 import { type FormEvent, useRef, useState } from "react";
+
 import { registerWorkspaceAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { connectionSystemLabel, workspaceConnectionChoices } from "../features/connections-view";

@@ -12,6 +12,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import { deregisterWorkspace, getIssueTrackerPeople } from "./commands";
 import { ControlStore } from "./control-store";
 import { DaemonEventPublisher } from "./event-publisher";

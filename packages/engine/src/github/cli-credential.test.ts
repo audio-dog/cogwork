@@ -10,6 +10,7 @@ import * as Ref from "effect/Ref";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import { makeCliCredentialSource } from "./cli-credential";
 
 const output = (value: string) => Stream.make(new TextEncoder().encode(value));

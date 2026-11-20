@@ -18,6 +18,7 @@ import * as AsyncResult from "effect/reactivity/AsyncResult";
 import * as Atom from "effect/reactivity/Atom";
 import { RpcClientError } from "effect/rpc/RpcClientError";
 import { useCallback } from "react";
+
 import { runActivityAtom } from "../daemon/atoms";
 
 export interface RunActivityPreview {
@@ -168,7 +169,19 @@ export type TranscriptEntry =
     }
   | { readonly kind: "diff"; readonly key: string; readonly path: string; readonly diff: string }
   | { readonly kind: "warning"; readonly key: string; readonly message: string }
-  | { readonly kind: "error"; readonly key: string; readonly message: string };
+  | { readonly kind: "error"; readonly key: string; readonly message: string }
+  | SubagentCard;
+
+export type SubagentStatus = "running" | "finished" | "error";
+
+export interface SubagentCard {
+  readonly kind: "subagent";
+  readonly key: string;
+  readonly name: string;
+  readonly status: SubagentStatus;
+  readonly text: string;
+  readonly message: string | null;
+}
 
 interface TranscriptFold {
   readonly entries: Iterable<TranscriptEntry>;
@@ -233,8 +246,69 @@ const setDiffEntry = (state: TranscriptFold, path: string, diff: string) => {
   return setTranscriptEntry(state, key, entry);
 };
 
+const subagentKey = (subagentRunId: string | undefined) => `subagent:${subagentRunId ?? ""}`;
+
+const placeSubagent = (state: TranscriptFold, card: SubagentCard, parentToolCallId: string | undefined) => {
+  const toolKey = transcriptToolKey(parentToolCallId);
+  if (parentToolCallId === undefined || !HashMap.has(state.byKey, toolKey)) {
+    return setTranscriptEntry(state, card.key, card);
+  }
+  return transcriptFold(
+    Chunk.map(state.order, (key) => (key === toolKey ? card.key : key)),
+    HashMap.set(HashMap.remove(state.byKey, toolKey), card.key, card),
+    state.lastSeq,
+  );
+};
+
+const startSubagent = (state: TranscriptFold, event: NamedEvent<"SUBAGENT_STARTED">) => {
+  const key = subagentKey(event.subagentRunId);
+  if (HashMap.has(state.byKey, key)) return state;
+  const card: SubagentCard = {
+    kind: "subagent",
+    key,
+    name: event.name ?? "Subagent",
+    status: "running",
+    text: "",
+    message: null,
+  };
+  return placeSubagent(state, card, event.parentToolCallId);
+};
+
+const updateSubagent = (
+  state: TranscriptFold,
+  subagentRunId: string | undefined,
+  update: (card: SubagentCard) => SubagentCard,
+) => {
+  const entry = Option.getOrUndefined(HashMap.get(state.byKey, subagentKey(subagentRunId)));
+  if (entry?.kind !== "subagent") return state;
+  return setTranscriptEntry(state, entry.key, update(entry));
+};
+
+const foldSubagentActivity = (state: TranscriptFold, event: AgUiEvent) =>
+  AgUiEvent.matchOrElse(
+    event,
+    {
+      SUBAGENT_STARTED: (started) => startSubagent(state, started),
+      TEXT_MESSAGE_START: ({ subagentRunId }) =>
+        updateSubagent(state, subagentRunId, (card) =>
+          card.text === "" ? card : { ...card, text: `${card.text}\n\n` },
+        ),
+      TEXT_MESSAGE_CONTENT: ({ subagentRunId, delta }) =>
+        updateSubagent(state, subagentRunId, (card) => ({ ...card, text: card.text + (delta ?? "") })),
+      SUBAGENT_FINISHED: ({ subagentRunId }) =>
+        updateSubagent(state, subagentRunId, (card) => ({ ...card, status: "finished" })),
+      SUBAGENT_ERROR: ({ subagentRunId, message }) =>
+        updateSubagent(state, subagentRunId, (card) => ({
+          ...card,
+          status: "error",
+          message: message ?? "Subagent error",
+        })),
+    },
+    () => state,
+  );
+
 const foldTranscriptActivity = (state: TranscriptFold, activity: RunActivity) => {
-  if (agUiIsSubagentEvent(activity.event)) return state;
+  if (agUiIsSubagentEvent(activity.event)) return foldSubagentActivity(state, activity.event);
   return AgUiEvent.matchOrElse(
     activity.event,
     {

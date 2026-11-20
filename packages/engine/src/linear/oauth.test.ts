@@ -9,6 +9,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
+
 import {
   authorizeUrl,
   clientCredentialsRequest,

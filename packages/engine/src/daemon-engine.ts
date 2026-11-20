@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
-import { defaultControlStore, type WorkspaceId } from "@cogwork/contracts";
 
+import { defaultControlStore, type WorkspaceId } from "@cogwork/contracts";
 import type * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import type * as Digest from "effect/crypto/Digest";
 import type * as SecureRandom from "effect/crypto/SecureRandom";
@@ -13,6 +13,7 @@ import type { PlatformError } from "effect/PlatformError";
 import type * as RpcSerialization from "effect/rpc/RpcSerialization";
 import type * as RpcServer from "effect/rpc/RpcServer";
 import type { SqlError } from "effect/sql/SqlError";
+
 import { makeClockSource } from "./clock-source";
 import { ConnectionStore, layer as connectionStoreLayer } from "./connection";
 import { layer as connectionVerifierLayer } from "./connection-verify";

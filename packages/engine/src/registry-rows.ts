@@ -12,6 +12,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/sql/SqlClient";
+
 import type { RegisteredWorkspace, RegisteredWorkspaceFailure, RegistryState } from "./projector";
 import { registrationError, workspaceManagementFailure, workspaceNotFound } from "./registry-errors";
 import type { WorkspaceRegistrationChange } from "./registry-management";

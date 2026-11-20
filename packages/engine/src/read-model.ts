@@ -1,6 +1,7 @@
 import type { ReadyToMergeItem, SchedulerStats, WorkspaceId } from "@cogwork/contracts";
 import { workspaceFailureState, workspaceStateFromInfo } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import type { SchedulerConfig, SchedulerState } from "./scheduler";
 import { SourceControlProvider } from "./source-control";

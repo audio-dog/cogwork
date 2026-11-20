@@ -15,6 +15,7 @@ import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as TestClock from "effect/testing/TestClock";
+
 import type { ConnectionStoreService } from "./connection";
 import type { Credential } from "./credential-store";
 import type { SlackMessage, SlackSession } from "./slack-source";

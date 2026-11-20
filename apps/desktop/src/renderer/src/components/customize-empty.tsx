@@ -1,5 +1,6 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import type { ComponentType } from "react";
+
 import { useCustomizeFilter } from "./customize-filter";
 
 /**

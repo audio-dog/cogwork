@@ -6,6 +6,7 @@ import {
   type WorkspaceInfo,
   workspaceLabel,
 } from "@cogwork/contracts";
+
 import { readyToMergeText } from "./read-model-item";
 import { terminalLine } from "./terminal-text";
 

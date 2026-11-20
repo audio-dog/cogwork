@@ -1,5 +1,6 @@
 import { defaultPriority, keyOf, Lineage, type ParkReason, priorityRank } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
+
 import { TriggerEvent, TriggerSubscription } from "./trigger-source";
 
 export const TriggerAdmission = Schema.Struct({

@@ -13,6 +13,7 @@ import * as Schema from "effect/Schema";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { Attention } from "../components/attention-board";
 import { type AttentionClient, AttentionClientProvider, type AttentionSnapshot } from "./attention-session";
 

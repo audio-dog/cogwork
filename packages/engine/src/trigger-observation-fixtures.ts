@@ -16,6 +16,7 @@ import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+
 import { clockEntries } from "./clock-source";
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
@@ -157,6 +158,7 @@ export const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWo
       readonly store?: TriggerObservationStoreService;
       readonly document?: WorkflowDocument;
       readonly source?: { readonly id: TriggerSourceId; readonly entries: TriggerSource["entries"] };
+      readonly coordination?: CoordinationService;
     } = {},
   ) {
     const current = yield* Ref.make(record(true, options.document ?? selectedDocument));
@@ -180,7 +182,7 @@ export const makeWorkspaceObservation = Effect.fn("TriggerObservationTest.makeWo
       assignees: (_workspace: WorkspaceIssueTrackerBinding, itemId: WorkItemId) =>
         Ref.update(assigneeReads, (reads) => [...reads, itemId]).pipe(Effect.andThen(readAssignees(itemId))),
     };
-    const coordination = coordinationService(processed, observed, sourceRevision);
+    const coordination = options.coordination ?? coordinationService(processed, observed, sourceRevision);
     const observation = yield* make.pipe(
       Effect.provideService(Workflows, workflowService(current)),
       Effect.provideService(Coordination, coordination),

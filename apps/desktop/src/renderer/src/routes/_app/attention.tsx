@@ -1,6 +1,7 @@
 import { WorkItemRef } from "@cogwork/contracts";
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+
 import { Attention } from "../../components/attention-board";
 import { type AttentionLayout, isAttentionLayout } from "../../components/attention-board-context";
 import {

@@ -26,6 +26,7 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom, useAtomValue } from "@effect/atom-react";
 import { RiAlertLine, RiDeleteBinLine, RiGitRepositoryLine } from "@remixicon/react";
 import { useState } from "react";
+
 import { harnessCatalogsAtom, harnessReadinessAtom, setOperationSettingAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { workspaceConnectionChoices } from "../features/connections-view";
