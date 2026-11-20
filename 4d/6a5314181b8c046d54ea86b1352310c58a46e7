@@ -1,0 +1,25 @@
+apps/desktop/GLOSSARY-settings.md
+  s_70f633f86ff651::t_205b9a6c655ec8 1-24
+apps/desktop/GLOSSARY-shell.md
+  s_70f633f86ff651::t_15e2df6e6a0fb6 1-77
+apps/desktop/GLOSSARY-surfaces.md
+  s_70f633f86ff651::t_f0304ff3835007 1-145
+apps/desktop/GLOSSARY.md
+  s_70f633f86ff651::t_b295610079fd34 15,17-19,28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d6a5314181b8c046d54ea86b1352310c58a46e7",
+  "prompts": {},
+  "sessions": {
+    "s_70f633f86ff651": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba4421ab-059f-4e32-aebf-d40caeea514e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
