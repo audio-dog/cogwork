@@ -5,7 +5,8 @@ import {
   TrimmedNonEmptyString,
   WorkspaceConfig,
   WorkspaceId,
-  WorkspaceRegistration,
+  WorkspaceRecord,
+  type WorkspaceRegistration,
   type WorkspaceUpdate,
 } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
@@ -61,7 +62,7 @@ export const decodeLegacyGitHubRepositoryOption = Schema.decodeUnknownOption(
 );
 export const decodeWorkspaceBindingColumns = Schema.decodeUnknownEffect(WorkspaceBindingColumns);
 export const decodeWorkspaceConfig = Schema.decodeUnknownEffect(WorkspaceConfig);
-export const decodeWorkspaceRegistration = Schema.decodeUnknownEffect(WorkspaceRegistration);
+export const decodeWorkspaceRecord = Schema.decodeUnknownEffect(WorkspaceRecord);
 const encodeIssueTracker = Schema.encodeSync(Schema.fromJsonString(IssueTrackerConfig));
 const encodeSourceControl = Schema.encodeSync(Schema.fromJsonString(SourceControlConfig));
 const encodeMcpSkills = Schema.encodeSync(Schema.fromJsonString(McpSkills));

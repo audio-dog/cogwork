@@ -139,7 +139,12 @@ const testLayer = (handbacks: ReadonlyArray<HandbackRecord>) =>
         return Layer.mock(WorktreeManager, {
           ensure: (_workspace, _item, options) =>
             Ref.update(ensured, (calls) => [...calls, options?.resume ?? false]).pipe(
-              Effect.map(() => ({ branch: BranchName.make("42"), path: "/worktrees/42", created: false })),
+              Effect.map(() => ({
+                branch: BranchName.make("42"),
+                path: "/worktrees/42",
+                created: false,
+                operationInProgress: null,
+              })),
             ),
         });
       }),

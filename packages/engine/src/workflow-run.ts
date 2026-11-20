@@ -221,6 +221,7 @@ export const make = Effect.gen(function* () {
       lineageArtifacts: prepared.lineageArtifacts,
       claim,
       handback: prepared.handback,
+      gitOperationInProgress: prepared.checkout.operationInProgress,
       skills,
       subagents: prepared.subagents,
     });

@@ -69,6 +69,13 @@ export const TriggerEvent = Schema.Struct({
   subject: Schema.optional(RunSubject),
   workContext: Schema.optional(RunPlanWorkContextProse),
   payload: Schema.optional(TriggerEventPayload),
+  pullRequest: Schema.optional(
+    Schema.Struct({
+      author: Schema.String,
+      headRef: Schema.String,
+      closingIssueNumbers: Schema.Array(Schema.Int),
+    }),
+  ),
 });
 export type TriggerEvent = typeof TriggerEvent.Type;
 
@@ -78,6 +85,7 @@ export interface SweepCandidate {
   readonly subject?: RunSubject | undefined;
   readonly lastTouchedAtMillis: number;
   readonly loadWorkContext?: Effect.Effect<RunPlanWorkContextProse | undefined, SourceFailure>;
+  readonly pullRequest?: TriggerEvent["pullRequest"];
 }
 
 export interface TriggerReadPort {
