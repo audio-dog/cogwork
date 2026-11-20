@@ -1,0 +1,41 @@
+apps/desktop/src/renderer/src/components/feed.tsx
+  s_dfff94f7260c54::t_95ca9067f3a939 219
+packages/engine/src/daemon-composition-watch-events.test.ts
+  s_879522bbf48bef::t_936c0641ff3db1 69
+packages/engine/src/event-publisher.test.ts
+  s_879522bbf48bef::t_151af2abf04808 2,16,59-64,67-69,78-80,145-147,154-177
+packages/engine/src/event-publisher.ts
+  s_dfff94f7260c54::t_36522872838d07 140-150
+packages/engine/src/trigger-observation-admission.ts
+  s_879522bbf48bef::t_1eb826c3b7e123 1-9,20-26
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_dfff94f7260c54::t_0f46929bdfdcbc 91,189-190,193,197-198
+packages/engine/src/trigger-observation.ts
+  s_dfff94f7260c54::t_7664347f4f57c1 25,32-33,39,105-106,122-125,449
+packages/engine/src/workflow-run.ts
+  s_dfff94f7260c54::t_da7eeba390ed8e 40,189,230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c2c67d290716e4f50bfe5df0be35957561fb6f6a",
+  "prompts": {},
+  "sessions": {
+    "s_879522bbf48bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dc06238-5b4a-45a1-8802-fbb207af229a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_dfff94f7260c54": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "109cf01b-b58c-4bff-bad9-ea2df8533942",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
