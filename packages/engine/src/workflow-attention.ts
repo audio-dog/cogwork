@@ -35,6 +35,7 @@ export const parkCommandsByReason = {
   WorktreeBlocked: ["hand-back"],
   AwaitingApproval: ["approve", "reject", "hand-back"],
   HandedToYou: ["choose-answer", "hand-back"],
+  Cancelled: ["hand-back"],
 } satisfies Record<ParkReason["_tag"], ReadonlyArray<WorkflowParkCommand>>;
 
 type WorktreeBlocked = Extract<ParkReason, { readonly _tag: "WorktreeBlocked" }>;
@@ -62,6 +63,8 @@ const summaryByReason = {
   WorktreeBlocked: (reason: WorktreeBlocked) => worktreeBlockedSummaries[reason.reason](reason),
   AwaitingApproval: () => "The plan is waiting for approval",
   HandedToYou: () => "The Operation handed this item to you",
+  Cancelled: ({ note }: Extract<ParkReason, { readonly _tag: "Cancelled" }>) =>
+    note === undefined ? "A person cancelled the Run" : `A person cancelled the Run: ${note}`,
 } satisfies {
   [Tag in ParkReason["_tag"]]: (reason: Extract<ParkReason, { readonly _tag: Tag }>) => string;
 };

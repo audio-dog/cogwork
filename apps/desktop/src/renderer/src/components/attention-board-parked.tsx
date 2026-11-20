@@ -33,6 +33,7 @@ import {
   RiShieldCheckLine,
   RiSignpostLine,
   RiSkipForwardLine,
+  RiStopCircleLine,
   RiUserLine,
 } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
@@ -82,6 +83,7 @@ const reasonPresentations: Record<
   "draft-outcome-unknown": { icon: RiErrorWarningLine, tone: "failure" },
   "no-workspace-recognized": { icon: RiMapPinLine, tone: "setup" },
   "worktree-blocked": { icon: RiGitBranchLine, tone: "failure" },
+  cancelled: { icon: RiStopCircleLine, tone: "decision" },
 };
 
 function ReasonIcon({ reason }: { reason: ParkReason }) {

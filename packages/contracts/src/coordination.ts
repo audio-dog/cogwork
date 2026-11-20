@@ -159,6 +159,7 @@ export const ParkReason = Schema.TaggedUnion({
     revision: TrimmedNonEmptyString,
   },
   HandedToYou: {},
+  Cancelled: { note: Schema.optional(TrimmedNonEmptyString) },
 });
 export type ParkReason = typeof ParkReason.Type;
 

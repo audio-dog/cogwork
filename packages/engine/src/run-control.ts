@@ -8,20 +8,19 @@ import * as FiberMap from "effect/FiberMap";
 import * as Layer from "effect/Layer";
 import * as MutableHashMap from "effect/MutableHashMap";
 import * as Option from "effect/Option";
-import type { WorkspaceIssueTrackerBinding } from "./projector";
+
+export interface ManualCancellation {
+  readonly note?: string;
+}
 
 interface Registration {
   readonly fiber: Fiber.Fiber<unknown, unknown>;
-  readonly manualCancellation: Deferred.Deferred<void>;
-  readonly workspace: WorkspaceIssueTrackerBinding | undefined;
+  readonly manualCancellation: Deferred.Deferred<ManualCancellation>;
 }
 
 export type RunCancellation = Data.TaggedEnum<{
   NotFound: { readonly run?: never };
-  Interrupting: {
-    readonly workspace: Option.Option<WorkspaceIssueTrackerBinding>;
-    readonly awaitTermination: Effect.Effect<void>;
-  };
+  Interrupting: { readonly awaitTermination: Effect.Effect<void> };
 }>;
 
 export const RunCancellation = Data.taggedEnum<RunCancellation>();
@@ -40,19 +39,25 @@ export const make = Effect.gen(function* () {
   return {
     run: <A, E, R, R2 = never>(
       runId: RunId,
-      workspace: WorkspaceIssueTrackerBinding | undefined,
       effect: Effect.Effect<A, E, R>,
-      onCancel: Effect.Effect<void, never, R2> = Effect.void,
+      onCancel: (cancellation: ManualCancellation) => Effect.Effect<void, never, R2> = () => Effect.void,
     ) =>
       Effect.uninterruptibleMask((restore) =>
-        Effect.all({ ready: Deferred.make<void>(), manualCancellation: Deferred.make<void>() }).pipe(
+        Effect.all({
+          ready: Deferred.make<void>(),
+          manualCancellation: Deferred.make<ManualCancellation>(),
+        }).pipe(
           Effect.flatMap(({ ready, manualCancellation }) =>
             FiberMap.run(
               fibers,
               runId,
               restore(Deferred.await(ready).pipe(Effect.andThen(effect))).pipe(
                 Effect.onInterrupt(() =>
-                  Effect.suspend(() => (Deferred.isDoneUnsafe(manualCancellation) ? onCancel : Effect.void)),
+                  Effect.suspend(() =>
+                    Deferred.isDoneUnsafe(manualCancellation)
+                      ? Effect.flatMap(Deferred.await(manualCancellation), onCancel)
+                      : Effect.void,
+                  ),
                 ),
               ),
             ).pipe(
@@ -60,7 +65,7 @@ export const make = Effect.gen(function* () {
                 Effect.sync(() => {
                   const current = FiberMap.getUnsafe(fibers, runId);
                   if (Option.isSome(current) && current.value === fiber) {
-                    MutableHashMap.set(registrations, runId, { fiber, manualCancellation, workspace });
+                    MutableHashMap.set(registrations, runId, { fiber, manualCancellation });
                     fiber.addObserver(() => forget(runId, fiber));
                   }
                 }),
@@ -73,7 +78,7 @@ export const make = Effect.gen(function* () {
           ),
         ),
       ),
-    cancel: Effect.fn("RunControl.cancel")((runId: RunId) =>
+    cancel: Effect.fn("RunControl.cancel")((runId: RunId, cancellation: ManualCancellation = {}) =>
       Effect.sync(() => {
         const current = FiberMap.getUnsafe(fibers, runId);
         if (Option.isNone(current)) return RunCancellation.NotFound({});
@@ -81,15 +86,11 @@ export const make = Effect.gen(function* () {
         const registration = MutableHashMap.get(registrations, runId).pipe(
           Option.filter((candidate) => candidate.fiber === fiber),
         );
-        const workspace = registration.pipe(
-          Option.flatMap((registration) => Option.fromNullishOr(registration.workspace)),
-        );
         if (Option.isSome(registration)) {
-          Deferred.doneUnsafe(registration.value.manualCancellation, Effect.void);
+          Deferred.doneUnsafe(registration.value.manualCancellation, Effect.succeed(cancellation));
         }
         fiber.interruptUnsafe(Fiber.getCurrent()?.id);
         return RunCancellation.Interrupting({
-          workspace,
           awaitTermination: Fiber.await(fiber).pipe(Effect.asVoid),
         });
       }),

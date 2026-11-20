@@ -24,7 +24,8 @@ export type ParkReason =
       readonly tag: "worktree-blocked";
       readonly path: string | null;
       readonly unmergedPaths: readonly string[];
-    };
+    }
+  | { readonly tag: "cancelled" };
 
 export type ParkTag = ParkReason["tag"];
 
@@ -184,6 +185,11 @@ const reasonSpecs: { readonly [Tag in ParkTag]: ReasonSpec<Tag> } = {
   "worktree-blocked": {
     label: "Worktree blocked",
     urgency: 1,
+    detail: () => null,
+  },
+  cancelled: {
+    label: "Cancelled",
+    urgency: 2,
     detail: () => null,
   },
 };
