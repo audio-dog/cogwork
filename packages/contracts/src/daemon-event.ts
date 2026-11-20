@@ -7,7 +7,7 @@ import { HarnessReadiness } from "./harness";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
 import { WorkflowRecord } from "./workflow";
-import { WorkspaceRegistration } from "./workspace";
+import { WorkspaceRecord } from "./workspace";
 
 export const ReadModelItem = Schema.TaggedUnion({
   ReadyToMerge: ReadyToMergeItem.fields,
@@ -20,7 +20,7 @@ export const WorkspaceState = Schema.TaggedUnion({
     displayName: TrimmedNonEmptyString,
     checkoutPath: TrimmedNonEmptyString,
     issueTracker: IssueTrackerType,
-    record: WorkspaceRegistration,
+    record: WorkspaceRecord,
     contributions: Schema.Array(LocalContribution),
   },
   Failed: {

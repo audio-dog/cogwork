@@ -1127,19 +1127,23 @@ describe("GitHub client", () => {
     }).pipe(withHttpClient(httpClient));
   });
 
-  it.effect("lists collaborators from every page", () => {
-    const firstPage = Array.from({ length: 100 }, (_, index) => ({ login: `reviewer-${index}` }));
+  it.effect.each([
+    ["collaborators", "/collaborators", (client: GitHubClient["Service"]) => client.listCollaborators(repo)],
+    ["assignable users", "/assignees", (client: GitHubClient["Service"]) => client.listAssignees(repo)],
+  ] as const)("lists %s from every page", ([, path, list]) => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({ login: `user-${index}` }));
     const fetch = vi.fn<typeof globalThis.fetch>((input) => {
-      const url = typeof input === "string" || input instanceof URL ? String(input) : input.url;
-      const page = new URL(url).searchParams.get("page");
-      return Promise.resolve(jsonResponse(page === "1" ? firstPage : [{ login: "reviewer-100" }]));
+      const url = new URL(typeof input === "string" || input instanceof URL ? String(input) : input.url);
+      if (!url.pathname.endsWith(path)) return Promise.resolve(jsonResponse([], 404));
+      return Promise.resolve(
+        jsonResponse(url.searchParams.get("page") === "1" ? firstPage : [{ login: "user-100" }]),
+      );
     });
 
     return Effect.gen(function* () {
-      const client = yield* GitHubClient;
-      const reviewers = yield* client.listCollaborators(repo);
-      assert.lengthOf(reviewers, 101);
-      assert.strictEqual(reviewers.at(-1), "reviewer-100");
+      const users = yield* list(yield* GitHubClient);
+      assert.lengthOf(users, 101);
+      assert.strictEqual(users.at(-1), "user-100");
       assert.strictEqual(fetch.mock.calls.length, 2);
     }).pipe(withFetchClient(fetch));
   });
