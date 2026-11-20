@@ -151,6 +151,7 @@ const issueFacts: RunPlanFacts = {
   outputWorkspaces: [workspace("cogwork"), workspace("other")],
   harness: HarnessPreflight.Passed(passedHarness),
   workspaceCheckout: "/worktrees/42",
+  worktreeSetup: [],
   instructions: {
     layers: [{ kind: "rules", source: "rules/house.md", content: "House rules." }],
     operatingInstructionsName: "implement-agent",
@@ -456,6 +457,34 @@ describe("resolveRunPlan", () => {
         ],
       },
     );
+  });
+
+  it.each([
+    {
+      name: "a writable Run in a Workspace with worktree setup",
+      profile: "full" as const,
+      worktreeSetup: ["pnpm install"],
+      tools: ["issue-search", "pull-request", "worktree-setup"],
+    },
+    {
+      name: "a read-only Run",
+      profile: "read-only" as const,
+      worktreeSetup: ["pnpm install"],
+      tools: ["issue-search", "pull-request"],
+    },
+    {
+      name: "a Workspace with no worktree setup",
+      profile: "full" as const,
+      worktreeSetup: [],
+      tools: ["issue-search", "pull-request"],
+    },
+  ])("lists $tools for $name", ({ profile, worktreeSetup, tools }) => {
+    const plan = resolvedPlan({
+      ...issueFacts,
+      operation: { ...operation, permissionProfile: profile },
+      worktreeSetup,
+    });
+    assert.deepStrictEqual(plan.tools, tools);
   });
 
   const githubNeed = Schema.decodeSync(NeedIdentity)("connection:github");

@@ -280,6 +280,7 @@ describe("codexRunner configuration", { timeout: 30_000 }, () => {
 
           assert.include(args, "mcp_servers.test__linear_api__0.url=");
           assert.include(args, "mcp_servers.tanstack.url=");
+          assert.include(args, "mcp_servers.tanstack.tool_timeout_sec=7200");
         }),
       ),
     );

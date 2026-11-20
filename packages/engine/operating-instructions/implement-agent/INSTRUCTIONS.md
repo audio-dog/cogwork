@@ -49,6 +49,7 @@ Plan the change against the acceptance criteria, then build it.
 - **Tests earn their place.** Read `test-value/TEST-VALUE.md` before you add or change a test. Apply its four questions and hunt list while you write, beside `/tdd` and the lean-code ladder below.
 - **Any change to a React component or a `.tsx` / `.jsx` file — new or existing — you MUST load `/react-composition-patterns` and `/react-no-use-effect` before you write the code, then follow them.** This is not optional, and it does not wait for your own judgment that the change is "structural": a touched component file is the trigger. Boolean behavior props, `renderX` render props for static UI, monolithic components, prop drilling, `forwardRef`, and `useContext` are defects here, not style choices.
 - Run the repo's typecheck, the test files your diff touches, and lint on touched files frequently as you go. Leave the full build for the gate; it runs once.
+- **Install with the `worktree-setup` tool, never by hand.** The sandbox denies writes to the package manager's store, so `pnpm install` fails inside the Run. After you change a dependency manifest or a lockfile, call the `worktree-setup` tool. It runs the Workspace's configured worktree setup in this worktree, outside the sandbox, and takes no input. A result with `status: "failed"` names the command, its exit code, and the end of its output: the gate cannot run, so that is a real block — escalate per the [authority boundary](#authority-boundary) with those three facts.
 
 **Write it lean.** Simplicity is generated, not retrofitted — the reviewers only catch what slips, so apply this ladder while you write:
 
@@ -112,7 +113,7 @@ Take each failure the gate reports and:
 
 1. Commit your work first, so the base run cannot lose it.
 2. Find the base commit: `git merge-base HEAD origin/<base branch>`.
-3. Check that commit out detached in this same worktree, run the same command, and capture the output. Re-run the install first when your diff touched a manifest or a lockfile. Then return to the engine's branch — a detached base checkout is a measurement, and the branch rule above still holds.
+3. Check that commit out detached in this same worktree. Call the `worktree-setup` tool when your diff touched a manifest or a lockfile, then run the same command and capture the output. Then return to the engine's branch, and call the `worktree-setup` tool again if you called it at the base — a detached base checkout is a measurement, and the branch rule above still holds.
 4. Compare by **identity**, not by color: the same test and assertion, the same file and lint rule, the same type error at the same symbol. A suite red before and red now is not a match, and a failure whose message moved is a new failure.
 
 A failure that reproduces by identity at the base is a **baseline failure** — leave it. Every other failure is yours: fix it and re-run the failed check or build. Do not run another review round. A baseline failure the brief asked you to fix is yours too, whatever the base does.

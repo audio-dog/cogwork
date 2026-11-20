@@ -5,6 +5,8 @@ import * as Schema from "effect/Schema";
 export class WorktreeFsError extends Schema.TaggedError<WorktreeFsError>()("WorktreeFsError", {
   operation: Schema.String,
   message: Schema.String,
+  exitCode: Schema.optional(Schema.Number),
+  output: Schema.optional(Schema.String),
   retryable: Schema.Boolean,
 }) {}
 

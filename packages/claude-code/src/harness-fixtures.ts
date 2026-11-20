@@ -9,6 +9,7 @@ import { ContextAssembler, CredentialStore, Harness, SessionStore } from "@cogwo
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { assert } from "@effect/vitest";
+import type { AnyTool } from "@tanstack/ai";
 import type { ClaudeCodeTextProviderOptions } from "@tanstack/ai-claude-code";
 import { memoryPersistence } from "@tanstack/ai-persistence";
 import type { SandboxHandle } from "@tanstack/ai-sandbox";
@@ -206,6 +207,7 @@ interface RequestOverrides {
   readonly mcp?: boolean;
   readonly model?: string | null;
   readonly effort?: string | null;
+  readonly engineTools?: ReadonlyArray<AnyTool>;
 }
 
 const mcpSelection = (enabled?: boolean) => {
@@ -258,7 +260,7 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
         path: "/home/operating-instructions/implement-agent",
         resources: [],
       },
-      tools: [],
+      tools: (overrides.engineTools ?? []).map(({ name }) => name),
       skills: [],
       mcp,
       subagents: [],
@@ -292,6 +294,7 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
       },
     }),
     session: overrides.session === undefined ? freshSession : overrides.session,
+    ...(overrides.engineTools ? { engineTools: overrides.engineTools } : {}),
     mcpCredentials: overrides.mcp
       ? new Map([["local:repo/mcp/linear", Redacted.make("mcp-test-bearer")]])
       : new Map(),
@@ -358,6 +361,8 @@ const Capture = Schema.Struct({
   githubToken: Schema.NullOr(Schema.String),
   ghToken: Schema.NullOr(Schema.String),
   claudeConfigDir: Schema.NullOr(Schema.String),
+  mcpToolTimeout: Schema.NullOr(Schema.String),
+  mcpToolIdleTimeout: Schema.NullOr(Schema.String),
   windowsEnvironment: Schema.Struct({
     USERPROFILE: Schema.NullOr(Schema.String),
     HOMEDRIVE: Schema.NullOr(Schema.String),

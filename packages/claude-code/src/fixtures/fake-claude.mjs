@@ -88,6 +88,8 @@ const capture = {
   githubToken: process.env.GITHUB_TOKEN ?? null,
   ghToken: process.env.GH_TOKEN ?? null,
   claudeConfigDir: process.env.CLAUDE_CONFIG_DIR ?? null,
+  mcpToolTimeout: process.env.MCP_TOOL_TIMEOUT ?? null,
+  mcpToolIdleTimeout: process.env.CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT ?? null,
   windowsEnvironment: {
     USERPROFILE: process.env.USERPROFILE ?? null,
     HOMEDRIVE: process.env.HOMEDRIVE ?? null,

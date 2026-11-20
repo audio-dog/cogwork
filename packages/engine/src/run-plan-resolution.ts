@@ -24,7 +24,7 @@ import * as Schema from "effect/Schema";
 import type { AssembledContext } from "./context-assembler";
 import type { GitOperationInProgress } from "./git";
 import type { TriggerAdmission } from "./trigger-observation-admission";
-import { type EngineToolName, itemWorkspaceOf } from "./workflow-action-entry";
+import { type EngineToolName, engineToolNames, itemWorkspaceOf } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
 
 export interface PreparedHarness {
@@ -64,6 +64,7 @@ export interface RunPlanFacts {
   readonly catalog: WorkflowCatalog;
   readonly outputWorkspaces: ReadonlyArray<WorkspaceId>;
   readonly workspaceCheckout: string | null;
+  readonly worktreeSetup: ReadonlyArray<string>;
   readonly instructions: AssembledContext;
   readonly previousResultIssues: string | null;
   readonly resendRequest: string | null;
@@ -75,15 +76,21 @@ export interface RunPlanFacts {
   readonly subagents: RunPlan["subagents"];
 }
 
-const engineToolsFor = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
+const actionToolsFor = (operation: WorkflowOperation, catalog: WorkflowCatalog) => {
   const actionKeys = new Set(catalog.entries.filter(({ kind }) => kind === "action").map(({ key }) => key));
-  return new Set(
-    operation.transitions
-      .flatMap(({ actions }) => actions)
-      .filter(({ entry }) => actionKeys.has(entry))
-      .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []),
-  );
+  return operation.transitions
+    .flatMap(({ actions }) => actions)
+    .filter(({ entry }) => actionKeys.has(entry))
+    .flatMap(({ entry }) => actionEntryFor(entry)?.tools ?? []);
 };
+
+const worktreeToolsFor = ({ operation, worktreeSetup }: RunPlanFacts): ReadonlyArray<EngineToolName> => {
+  const writableRunWithSetup = operation.permissionProfile !== "read-only" && worktreeSetup.length > 0;
+  return writableRunWithSetup ? ["worktree-setup"] : [];
+};
+
+const engineToolsFor = (facts: RunPlanFacts) =>
+  new Set([...actionToolsFor(facts.operation, facts.catalog), ...worktreeToolsFor(facts)]);
 
 const workItemId = Schema.decodeSync(WorkItemId);
 const encodeArtifactContext = Schema.encodeSync(
@@ -97,8 +104,6 @@ const encodeArtifactContext = Schema.encodeSync(
     ),
   ),
 );
-
-const engineToolOrder: ReadonlyArray<EngineToolName> = ["issue-search", "pull-request"];
 
 const projection = [
   "Harness Adapter",
@@ -212,7 +217,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
     },
     messages: [{ role: "user", content: facts.resendRequest ?? operationMessage(operation, facts.handback) }],
     tools: harness.projectedMembers.includes("Tools")
-      ? engineToolOrder.filter((tool) => toolNeeds.has(tool))
+      ? engineToolNames.filter((tool) => toolNeeds.has(tool))
       : [],
     skills: facts.skills,
     mcp: [],
@@ -259,7 +264,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
 };
 
 export const resolveRunPlan = (facts: RunPlanFacts) => {
-  const toolNeeds = engineToolsFor(facts.operation, facts.catalog);
+  const toolNeeds = engineToolsFor(facts);
   return Result.match(readyHarness(facts.harness), {
     onFailure: (reason) => RunPlanResolution.Rejected({ reason }),
     onSuccess: (harness) =>
