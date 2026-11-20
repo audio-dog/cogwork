@@ -1,0 +1,19 @@
+packages/engine/src/workflow-action-plan-store.ts
+  s_879522bbf48bef::t_ba95182b701409 36-37,103-104,244-248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "db01e13423c88b5062fec77fb36d9a333fd78db7",
+  "prompts": {},
+  "sessions": {
+    "s_879522bbf48bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dc06238-5b4a-45a1-8802-fbb207af229a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
