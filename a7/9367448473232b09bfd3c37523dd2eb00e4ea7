@@ -1,0 +1,102 @@
+.agents/skills/test-audit/SKILL.md
+  h_46518a29d4dd91 12,90
+.github/workflows/test-suite-seed.yml
+  h_46518a29d4dd91 27-28
+GLOSSARY-MAP.md
+  h_46518a29d4dd91 27
+apps/desktop/GLOSSARY-settings.md
+  h_46518a29d4dd91 1,3,5,7-10,12-14,16-18,20-23
+apps/desktop/GLOSSARY-shell.md
+  h_46518a29d4dd91 1-77
+apps/desktop/GLOSSARY-surfaces.md
+  h_46518a29d4dd91 1-145
+apps/desktop/GLOSSARY.md
+  h_46518a29d4dd91 15,17-19,28
+apps/desktop/src/renderer/src/components/buffered-field.test.tsx
+  h_46518a29d4dd91 1,3-5,7,9,11-13,16-40
+apps/desktop/src/renderer/src/components/buffered-field.tsx
+  h_46518a29d4dd91 39-43
+apps/desktop/src/renderer/src/components/run-transcript.tsx
+  h_46518a29d4dd91 3,5,25-32,38,44-45,248-303,389
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  h_46518a29d4dd91 166-172,174-238
+apps/desktop/src/renderer/src/features/run-activity.ts
+  h_46518a29d4dd91 172-184,249-309,311
+apps/desktop/src/renderer/src/features/run-transcript.test.ts
+  h_46518a29d4dd91 39-47,181-200,331-334
+apps/desktop/src/renderer/src/features/run-transcript.ts
+  h_46518a29d4dd91 15,218-227,236-241,261-262,298-307,313
+configs/lint/package.json
+  h_46518a29d4dd91 7
+configs/sensor/GLOSSARY.md
+  h_46518a29d4dd91 3-5,15-16,20-22
+configs/sensor/package.json
+  h_46518a29d4dd91 19
+configs/test/tsconfig.json
+  h_46518a29d4dd91 14
+docs/adr/0022-a-sensor-lives-where-its-signal-is-produced.md
+  h_46518a29d4dd91 5-6
+docs/adr/0023-performance-budgets-file-work-the-app-has-never-done.md
+  h_46518a29d4dd91 5-7
+docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md
+  h_46518a29d4dd91 3
+docs/adr/0031-the-test-value-bar-ships-with-the-operating-instructions.md
+  h_46518a29d4dd91 23,100-101
+docs/adr/0038-oxlint-and-oxfmt-replace-biome-and-official-rules-win.md
+  h_46518a29d4dd91 111-113
+docs/adr/0040-the-test-suite-cost-sensor-is-removed.md
+  h_46518a29d4dd91 1-78
+docs/agent-patterns/test-value.md
+  h_46518a29d4dd91 35-36,44-45
+docs/spec/performance-observability.md
+  h_46518a29d4dd91 135-137
+packages/contracts/GLOSSARY-human-touchpoints.md
+  h_46518a29d4dd91 17-20
+packages/contracts/GLOSSARY.md
+  h_46518a29d4dd91 21
+packages/contracts/src/ag-ui.ts
+  h_46518a29d4dd91 99-103,105-108
+packages/engine/GLOSSARY-harness.md
+  h_46518a29d4dd91 42
+packages/engine/GLOSSARY-performance.md
+  h_46518a29d4dd91 14-15,18,23
+packages/engine/docs/adr/0018-start-over-deletes-what-cogwork-knows-about-a-work-item.md
+  h_46518a29d4dd91 1-14
+packages/engine/package.json
+  h_46518a29d4dd91 6
+packages/engine/src/performance-issue-filer.ts
+  h_46518a29d4dd91 46,127,135,142
+packages/engine/src/run-completion.test.ts
+  h_46518a29d4dd91 1-44
+packages/engine/src/run-completion.ts
+  h_46518a29d4dd91 1-37
+packages/engine/src/trigger-observation-eligible.test.ts
+  h_46518a29d4dd91 1-9,12,15-16,23,29,31,34-35,37,45-89,162-226
+packages/engine/src/trigger-observation-fixtures.ts
+  h_46518a29d4dd91 161,185
+packages/engine/src/trigger-observation-store.test.ts
+  h_46518a29d4dd91 14-21,135-164
+packages/engine/src/trigger-observation-store.ts
+  h_46518a29d4dd91 47-49,125-132,137,223-229,231-246,267
+packages/engine/src/trigger-observation-subscriptions.ts
+  h_46518a29d4dd91 7-13,15,35,38-43
+packages/engine/src/trigger-observation.ts
+  h_46518a29d4dd91 24,38,41,72-87,154-156,178-179,182,188,194,395
+packages/engine/src/workflow-run-attempts.ts
+  h_46518a29d4dd91 26,294-314,387-389,405-406
+packages/engine/src/workflow-run-pending-plan.ts
+  h_46518a29d4dd91 15,170-171,173-174,177-183
+packages/engine/src/workflow-run.ts
+  h_46518a29d4dd91 32,50,96-97,137-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a79367448473232b09bfd3c37523dd2eb00e4ea7",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
