@@ -5,6 +5,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as ChildProcess from "effect/process/ChildProcess";
@@ -17,6 +18,8 @@ const target = fileURLToPath(new URL("../src/models.generated.ts", import.meta.u
 const oxfmtBin = fileURLToPath(new URL("../../../node_modules/.bin/oxfmt", import.meta.url));
 const check = process.argv.includes("--check");
 const commandDeadline = "10 seconds";
+
+class StaleModelCatalog extends Data.TaggedError("StaleModelCatalog")<{ readonly message: string }> {}
 
 const commandOutput = Effect.fn("CursorModelSync.commandOutput")(function* (
   command: ChildProcess.Command,
@@ -45,7 +48,7 @@ const commandOutput = Effect.fn("CursorModelSync.commandOutput")(function* (
 
 const agentOutput = (agentBin: string, args: ReadonlyArray<string>) =>
   commandOutput(
-    ChildProcess.make(agentBin, [...args], { stderr: "inherit" }),
+    ChildProcess.make(agentBin, [...args], { stdin: "ignore", stderr: "inherit" }),
     `${agentBin} ${args.join(" ")}`,
   );
 
@@ -137,8 +140,8 @@ NodeRuntime.runMain(
       );
     }
 
-    return yield* Effect.die(
-      "Cursor model catalog is stale. Run `pnpm --filter @cogwork/cursor-acp models:sync`.",
-    );
+    return yield* new StaleModelCatalog({
+      message: "Cursor model catalog is stale. Run `pnpm --filter @cogwork/cursor-acp models:sync`.",
+    });
   }).pipe(Effect.provide(NodeServices.layer)),
 );

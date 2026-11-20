@@ -4,6 +4,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Config from "effect/Config";
 import * as Console from "effect/Console";
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as ChildProcess from "effect/process/ChildProcess";
@@ -13,6 +14,8 @@ import * as Stream from "effect/Stream";
 const target = fileURLToPath(new URL("../src/models.generated.ts", import.meta.url));
 const check = process.argv.includes("--check");
 const commandDeadline = "5 seconds";
+
+class StaleModelCatalog extends Data.TaggedError("StaleModelCatalog")<{ readonly message: string }> {}
 const effortValues = ["low", "medium", "high", "xhigh", "max"] as const;
 const modelSpecs = [
   ["sonnet", "Sonnet", true, "full"],
@@ -106,31 +109,33 @@ export type ClaudeCatalogModel = (typeof claudeModelCatalog.models)[number]["val
 `;
 };
 
-const claudeOutput = Effect.fn("ClaudeModelSync.claudeOutput")(function* (
-  claudeBin: string,
-  args: ReadonlyArray<string>,
+const commandOutput = Effect.fn("ClaudeModelSync.commandOutput")(function* (
+  command: ChildProcess.Command,
+  label: string,
 ) {
   const spawner = yield* ChildProcessSpawner;
-  const command = `${claudeBin} ${args.join(" ")}`;
   const result = yield* Effect.scoped(
-    Effect.flatMap(spawner.spawn(ChildProcess.make(claudeBin, [...args], { stderr: "inherit" })), (handle) =>
+    Effect.flatMap(spawner.spawn(command), (handle) =>
       Effect.all(
-        {
-          stdout: Stream.mkString(Stream.decodeText(handle.stdout)),
-          exitCode: handle.exitCode,
-        },
+        { stdout: Stream.mkString(Stream.decodeText(handle.stdout)), exitCode: handle.exitCode },
         { concurrency: "unbounded" },
       ),
     ),
   ).pipe(
     Effect.timeoutOrElse({
       duration: commandDeadline,
-      orElse: () => Effect.die(`${command} timed out after ${commandDeadline}`),
+      orElse: () => Effect.die(`${label} timed out after ${commandDeadline}`),
     }),
   );
   if (result.exitCode === 0) return result.stdout;
-  return yield* Effect.die(`${command} exited with ${result.exitCode}`);
+  return yield* Effect.die(`${label} exited with ${result.exitCode}`);
 });
+
+const claudeOutput = (claudeBin: string, args: ReadonlyArray<string>) =>
+  commandOutput(
+    ChildProcess.make(claudeBin, [...args], { stdin: "ignore", stderr: "inherit" }),
+    `${claudeBin} ${args.join(" ")}`,
+  );
 
 NodeRuntime.runMain(
   Effect.gen(function* () {
@@ -155,8 +160,8 @@ NodeRuntime.runMain(
         `Claude model catalog is in sync (${modelSpecs.length} models, Claude Code ${version}).`,
       );
     }
-    return yield* Effect.die(
-      "Claude model catalog is stale. Run `pnpm --filter @cogwork/claude-code models:sync`.",
-    );
+    return yield* new StaleModelCatalog({
+      message: "Claude model catalog is stale. Run `pnpm --filter @cogwork/claude-code models:sync`.",
+    });
   }).pipe(Effect.provide(NodeServices.layer)),
 );
