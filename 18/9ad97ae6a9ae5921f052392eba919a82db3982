@@ -1,0 +1,23 @@
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_70f633f86ff651::t_b90ede0f6b6a4b 17-20
+packages/contracts/GLOSSARY.md
+  s_70f633f86ff651::t_9322baac690705 21
+packages/engine/docs/adr/0018-start-over-deletes-what-cogwork-knows-about-a-work-item.md
+  s_70f633f86ff651::t_b0ee1218e6eb3d 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "189ad97ae6a9ae5921f052392eba919a82db3982",
+  "prompts": {},
+  "sessions": {
+    "s_70f633f86ff651": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba4421ab-059f-4e32-aebf-d40caeea514e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
