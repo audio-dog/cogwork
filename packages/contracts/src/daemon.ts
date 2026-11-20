@@ -6,7 +6,7 @@ import { LocalContribution } from "./contribution";
 import { HarnessEnablement } from "./harness";
 import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
-import { WorkspaceConcurrency, WorkspaceRegistration } from "./workspace";
+import { WorkspaceConcurrency, WorkspaceRecord } from "./workspace";
 
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -94,7 +94,7 @@ export const WorkspaceInfo = Schema.Struct({
   displayName: TrimmedNonEmptyString,
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerType,
-  record: WorkspaceRegistration,
+  record: WorkspaceRecord,
   contributions: Schema.Array(LocalContribution),
   readyToMerge: Schema.Array(ReadyToMergeItem),
 });

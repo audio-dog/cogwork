@@ -22,7 +22,7 @@ _Avoid_: Project; not pnpm's or TanStack's "workspace"
 
 **Assignee allowlist**:
 `issueTracker.assigneeAllowlist` — an optional, non-empty-when-present list of tracker-native identities whose assigned tickets this workspace is *allowed to pick up*. Absent means no gate: every item is eligible, as before. Distinct from the actor identity: this is whose work the daemon may take, not who it acts as. Enforced by the engine's Trigger observation, not here.
-An entry is the tracker's own identity for a person (a GitHub login, a Linear user id), never a display name. When the gate is on, an unassigned issue is nobody's, so it is not eligible: assigning it is how a person opts in. A pull request belongs to the Work item its link key names; with no linked Work item, it belongs to its author.
+Each entry is the tracker's own identity for a person: a GitHub login, or a Linear user id (a UUID, never a username), never a display name. The Workspace editor offers the people of the bound Connection by name and stores their identity. A register or update refuses an entry whose format is wrong for the tracker. A stored entry is not checked again on load, so an old value never fails the workspace: it matches no one, and the editor shows it as unknown so a person can remove it. When the gate is on, an unassigned issue is nobody's, so it is not eligible: assigning it is how a person opts in. A pull request belongs to the Work item its link key names; with no linked Work item, it belongs to its author.
 _Avoid_: Assignee filter, owner list (it's an allowlist of several), actor
 
 **Bot allowlist**:

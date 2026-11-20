@@ -157,6 +157,26 @@ const HistoryPayload = Schema.Struct({
 });
 export const decodeHistory = Schema.decodeUnknownEffect(HistoryPayload);
 
+export const activeUsersQuery = `
+query ActiveUsers($after: String) {
+  users(first: 250, after: $after, filter: { active: { eq: true } }) {
+    nodes { id name displayName }
+    pageInfo { hasNextPage endCursor }
+  }
+}`;
+
+const ActiveUsersPayload = Schema.Struct({
+  users: Schema.Struct({
+    nodes: Schema.Array(
+      Schema.Struct({ id: Schema.String, name: Schema.String, displayName: Schema.String }),
+    ),
+    pageInfo: PageInfoNode,
+  }),
+});
+export const decodeActiveUsers = Schema.decodeUnknownEffect(ActiveUsersPayload);
+
+export type LinearUser = (typeof ActiveUsersPayload.Type)["users"]["nodes"][number];
+
 export const coordinationCommentsQuery = `
 query IssueCoordinationComments($id: String!, $bot: ID!, $ledger: String!, $proposal: String!) {
   issue(id: $id) {${coordinationFields}

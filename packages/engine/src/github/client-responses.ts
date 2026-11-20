@@ -83,7 +83,7 @@ const PullFileSchema = Schema.Struct({
 const CompareSchema = Schema.Struct({ files: Schema.Array(PullFileSchema) });
 
 const GitHubUserSchema = Schema.Struct({ login: Schema.String, type: Schema.optional(Schema.String) });
-export const GitHubCollaboratorsSchema = Schema.Array(GitHubUserSchema);
+export const GitHubUsersSchema = Schema.Array(GitHubUserSchema);
 export const GitHubLabelsSchema = Schema.Array(Schema.Struct({ name: Schema.String }));
 export const RequestedReviewersSchema = Schema.Struct({ users: Schema.Array(GitHubUserSchema) });
 

@@ -381,6 +381,7 @@ it.effect("retries creation after a transient failure that did not report accept
                   closeIssue: unexpectedClientCall,
                   createComment: unexpectedClientCall,
                   listCollaborators: unexpectedClientCall,
+                  listAssignees: unexpectedClientCall,
                   listLabels: unexpectedClientCall,
                   listRequestedReviewers: unexpectedClientCall,
                   requestReview: unexpectedClientCall,

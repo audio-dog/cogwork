@@ -127,9 +127,10 @@ export function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
   // One GitHub client, built once: the issue tracker and the establish-time credential check must
   // share it, or the second instance resolves its own credentials and drifts from the first.
   const githubClient = GitHub.clientLayer.pipe(Layer.provide(credentials));
+  const linearClient = Linear.clientLayer.pipe(Layer.provide(credentials));
   const issueTrackerAdapters = Layer.mergeAll(issueTrackerRoutedLayer, GitHub.providerLayer).pipe(
     Layer.provide(githubClient),
-    Layer.provide(Linear.clientLayer),
+    Layer.provide(linearClient),
     Layer.provide(credentials),
   );
   const connections = connectionStoreLayer.pipe(
@@ -267,6 +268,7 @@ export function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     plugins,
     connections,
     githubClient,
+    linearClient,
     ...(adapters.granolaLogin ? [adapters.granolaLogin] : []),
     ...(adapters.slackLogin ? [adapters.slackLogin] : []),
     daemonInfoLayer,

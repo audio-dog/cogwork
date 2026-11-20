@@ -10,6 +10,7 @@ import {
   cancelRun,
   deregisterWorkspace,
   getGitHubPriorityFields,
+  getIssueTrackerPeople,
   handBack,
   installPlugin,
   rebindWorkspace,
@@ -112,6 +113,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
     return yield* (yield* HarnessReadinessCache).readiness(picture.harnessSettings);
   }),
   GetGitHubPriorityFields: getGitHubPriorityFields,
+  GetIssueTrackerPeople: getIssueTrackerPeople,
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
     return yield* ledger.listRuns(50);
