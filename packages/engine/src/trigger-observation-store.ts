@@ -43,6 +43,9 @@ export interface TriggerObservationStoreService {
   readonly putAll: (
     admissions: ReadonlyArray<TriggerAdmission>,
   ) => Effect.Effect<void, TriggerObservationStoreError>;
+  readonly refreshPending: (
+    admissions: ReadonlyArray<TriggerAdmission>,
+  ) => Effect.Effect<void, TriggerObservationStoreError>;
   readonly complete: <E, R>(
     admission: TriggerAdmission,
     closeRevision: Effect.Effect<void, E, R>,
@@ -118,10 +121,19 @@ export const makeMemoryTriggerObservationStore = Effect.gen(function* () {
       pending.delete(key);
       return { pending, processed: new Map(current.processed).set(key, admission) };
     });
+  const refreshPending = (batch: ReadonlyArray<TriggerAdmission>) =>
+    Ref.update(admissions, (current) => {
+      const pending = batch.reduce((next, admission) => {
+        const key = admissionKey(admission);
+        return next.has(key) ? new Map(next).set(key, admission) : next;
+      }, current.pending);
+      return { ...current, pending };
+    });
   return {
     admissions: Effect.map(Ref.get(admissions), (current) => [...current.pending.values()]),
     processed: Effect.map(Ref.get(admissions), (current) => [...current.processed.values()]),
     putAll: (batch) => completionGate.withPermit(putAll(batch)),
+    refreshPending: (batch) => completionGate.withPermit(refreshPending(batch)),
     complete: (admission, closeRevision) =>
       completionGate.withPermit(
         Ref.get(admissions).pipe(
@@ -207,14 +219,30 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
     controlStore
       .withWrite(sql.withTransaction(putStatements(admissions)))
       .pipe(Effect.asVoid, Effect.mapError(storeError));
+  const admissionRow = (admission: TriggerAdmission) =>
+    sql.and([
+      sql`work_item = ${keyOf(admission.event.key)}`,
+      sql`revision = ${admission.event.revision}`,
+      sql`workflow = ${admission.subscription.workflow}`,
+      sql`trigger = ${admission.subscription.trigger}`,
+    ]);
   const finishStatement = (admission: TriggerAdmission) =>
-    sql`
-        UPDATE trigger_admissions SET processed = 1
-        WHERE work_item = ${keyOf(admission.event.key)}
-          AND revision = ${admission.event.revision}
-          AND workflow = ${admission.subscription.workflow}
-          AND trigger = ${admission.subscription.trigger}
-      `.pipe(Effect.asVoid);
+    sql`UPDATE trigger_admissions SET processed = 1 WHERE ${admissionRow(admission)}`.pipe(Effect.asVoid);
+  const refreshPending = (admissions: ReadonlyArray<TriggerAdmission>) =>
+    controlStore
+      .withWrite(
+        sql.withTransaction(
+          Effect.forEach(
+            admissions,
+            (admission) => sql`
+              UPDATE trigger_admissions SET payload = ${encodeAdmission(admission)}
+              WHERE ${admissionRow(admission)} AND processed = 0
+            `,
+            { discard: true },
+          ),
+        ),
+      )
+      .pipe(Effect.mapError(storeError));
   const finish = (admission: TriggerAdmission) =>
     controlStore.withWrite(finishStatement(admission)).pipe(Effect.mapError(storeError));
   const closeAndFinish = <E, R>(admission: TriggerAdmission, closeRevision: Effect.Effect<void, E, R>) =>
@@ -235,6 +263,7 @@ export const makeControlStoreTriggerObservationStore = Effect.gen(function* () {
       ),
     ),
     putAll: (admissions) => completionGate.withPermit(putAll(admissions)),
+    refreshPending: (admissions) => completionGate.withPermit(refreshPending(admissions)),
     complete: (admission, closeRevision) =>
       completionGate.withPermit(
         sql<StoredAdmissionCount>`
