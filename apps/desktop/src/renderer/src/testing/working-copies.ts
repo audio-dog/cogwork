@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Scope from "effect/Scope";
+
 import { layer as workingCopiesLayer } from "../features/working-copy";
 import { type ListWorkflowOptions, makeWorkingCopiesClient } from "../features/working-copy-provider";
 import { MemoryDaemon, type MemoryDaemonProbe, memoryDaemonLayer } from "./working-copy-daemon";

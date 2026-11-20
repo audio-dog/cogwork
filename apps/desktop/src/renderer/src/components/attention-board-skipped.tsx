@@ -8,6 +8,7 @@ import {
   ItemTitle,
 } from "@cogwork/ui/components/item";
 import { RiSkipForwardLine } from "@remixicon/react";
+
 import { type SkippedRecord, skippedSummary, type WorkflowRef } from "../features/workflow-parks";
 import { AttentionCard, CatalogGlyph, RelativeTime } from "./attention-board-card";
 

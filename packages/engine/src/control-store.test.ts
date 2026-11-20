@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+
 import {
   ConnectionId,
   type ContributionSettingCell,
@@ -23,10 +24,11 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
+
 import {
   bootControlStoreLayer,
   ControlStore,

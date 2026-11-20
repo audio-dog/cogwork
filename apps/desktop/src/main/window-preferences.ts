@@ -1,6 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+
 import { app } from "electron";
+
 import type { WindowPreferences } from "../shared/ipc";
 import { mainLogger } from "./logger";
 

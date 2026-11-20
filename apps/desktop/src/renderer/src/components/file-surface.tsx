@@ -1,5 +1,6 @@
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiFileTextLine } from "@remixicon/react";
+
 import { authorityLabel, kindLabels, scopeCopy } from "../features/configuration-model";
 import { useRightPanelStore } from "../store/right-panel";
 import { useConfiguration } from "./configuration-provider";

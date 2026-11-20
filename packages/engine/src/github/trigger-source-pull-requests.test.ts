@@ -7,6 +7,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
+
 import { GitHubClient } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {

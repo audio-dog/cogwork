@@ -1,9 +1,10 @@
 import type { PluginMutationResult } from "@cogwork/contracts";
-import * as Console from "effect/Console";
 import * as Argument from "effect/cli/Argument";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
+
 import { defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";
 

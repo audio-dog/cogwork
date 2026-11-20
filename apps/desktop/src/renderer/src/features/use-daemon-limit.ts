@@ -1,6 +1,7 @@
 import type { ControlStore, DaemonLimitUpdate } from "@cogwork/contracts";
 import { useAtom } from "@effect/atom-react";
 import { useRef } from "react";
+
 import { setDaemonLimitAtom } from "../daemon/atoms";
 import { currentControlStore } from "./daemon-limit-state";
 

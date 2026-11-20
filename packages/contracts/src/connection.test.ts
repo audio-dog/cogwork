@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+
 import {
   Connection,
   ConnectionEstablishment,

@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import { TestConsole } from "effect/testing";
+
 import { startOver } from "./start-over-command";
 
 const issue: WorkItemRef = {

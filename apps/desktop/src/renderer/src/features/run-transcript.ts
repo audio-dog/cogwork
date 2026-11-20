@@ -11,6 +11,7 @@ import {
   RiTestTubeLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
+
 import type { SubagentCard, TranscriptEntry } from "./run-activity";
 
 /**

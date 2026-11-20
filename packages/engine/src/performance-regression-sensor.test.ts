@@ -7,6 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import { IssueTrackerError } from "./issue-tracker";
 import type { PerformanceHealthSnapshot } from "./performance-health-source";
 import {

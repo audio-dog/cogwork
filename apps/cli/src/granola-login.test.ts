@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
+
 import { Granola } from "@cogwork/engine";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -10,6 +11,7 @@ import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
+
 import { type GranolaLoginConfig, granolaLoginLayer, makeTokenRefresh } from "./granola-login";
 import { BrowserOpener } from "./login";
 

@@ -1,11 +1,12 @@
 import { type ControlStore, HarnessName, type HarnessReadiness } from "@cogwork/contracts";
 import { readControlStore } from "@cogwork/engine";
-import * as Console from "effect/Console";
 import * as Argument from "effect/cli/Argument";
 import * as Command from "effect/cli/Command";
 import * as Flag from "effect/cli/Flag";
+import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import { daemonOrStore } from "./commands";
 import { defaultControlStorePath, defaultSocketPath } from "./paths";
 import { clientLayer, makeDaemonClient } from "./rpc";

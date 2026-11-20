@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+
 import { CredentialStore, type ProviderAccount, type ProviderKeySource } from "./credential-store";
 
 export interface SupportedProvider {
@@ -30,9 +31,9 @@ export const configuredProviders = Effect.fn("providers.configured")(function* (
   const store = yield* CredentialStore;
   const resolved = yield* Effect.forEach(supportedProviders, (provider) =>
     store.providerKey(accountFor(provider)).pipe(
-      Effect.map(
-        (credential): ReadonlyArray<ConfiguredProvider> => [{ provider, source: credential.source }],
-      ),
+      Effect.map((credential): ReadonlyArray<ConfiguredProvider> => [
+        { provider, source: credential.source },
+      ]),
       Effect.orElseSucceed((): ReadonlyArray<ConfiguredProvider> => []),
     ),
   );

@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+
 import { useConfiguration } from "../../../components/configuration-provider";
 import { CustomizeFilterProvider } from "../../../components/customize-filter";
 

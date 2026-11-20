@@ -1,6 +1,7 @@
 import { defaultContributionEnabled } from "@cogwork/contracts";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiServerLine } from "@remixicon/react";
+
 import {
   authorityLabel,
   type Contribution,

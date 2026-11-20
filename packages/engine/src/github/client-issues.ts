@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+
 import { IssueTrackerError } from "../issue-tracker";
 import type {
   GitHubIssueCreateInput,

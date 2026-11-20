@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+
 import {
   type Connection,
   type ConnectionId,
@@ -43,6 +44,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SqlClient from "effect/sql/SqlClient";
 import lockfile, { type LockOptions } from "proper-lockfile";
+
 import * as controlStoreSchema from "./control-store-schema";
 import * as SqliteSchema from "./sqlite-schema";
 

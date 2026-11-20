@@ -7,6 +7,7 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiBox3Line, RiEqualizerLine, RiPulseLine, RiSearchLine } from "@remixicon/react";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+
 import { kindIcons } from "../features/configuration-icons";
 import {
   type ContributionKind,

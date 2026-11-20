@@ -9,6 +9,7 @@ import type {
 import { useAtom } from "@effect/atom-react";
 import type * as Cause from "effect/Cause";
 import { createContext, type ReactNode, use, useState } from "react";
+
 import { deregisterWorkspaceAtom, rebindWorkspaceAtom, updateWorkspaceAtom } from "../daemon/atoms";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";

@@ -14,6 +14,7 @@ import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+
 import { ContextAssembler } from "./context-assembler";
 import { CredentialStore } from "./credential-store";
 import {
@@ -40,9 +41,12 @@ export interface ControlledOptions {
   readonly sessionId: string | null;
 }
 
-export class ControlledAdapter
-  implements TextAdapter<"controlled", ControlledOptions, readonly ["text"], DefaultMessageMetadataByModality>
-{
+export class ControlledAdapter implements TextAdapter<
+  "controlled",
+  ControlledOptions,
+  readonly ["text"],
+  DefaultMessageMetadataByModality
+> {
   readonly kind = "text";
   readonly name = "controlled";
   readonly model = "controlled";

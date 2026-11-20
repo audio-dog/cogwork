@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
+
 import { WorkspaceState } from "./daemon-event";
 import { IssueTrackerConfig, linearTeams, SourceControlConfig, WorkspaceUpdate } from "./workspace";
 

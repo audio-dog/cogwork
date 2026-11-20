@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as Http from "node:http";
+
 import { CredentialStore } from "@cogwork/engine";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -21,6 +22,7 @@ import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
+
 import { makeFileStore } from "./credentials";
 import { BrowserOpener, browserOpenerLayer, type LinearLoginConfig, loginKey, loginLinear } from "./login";
 

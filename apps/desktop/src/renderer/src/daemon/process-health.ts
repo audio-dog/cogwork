@@ -9,6 +9,7 @@ import * as MutableRef from "effect/MutableRef";
 import * as Ref from "effect/Ref";
 import * as References from "effect/References";
 import * as Schedule from "effect/Schedule";
+
 import { ratePerSecond } from "../../../shared/process-health";
 
 interface RendererCounters {

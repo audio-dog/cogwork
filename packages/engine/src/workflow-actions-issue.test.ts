@@ -15,6 +15,7 @@ import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+
 import { Coordination, fold } from "./coordination";
 import { IssueTracker, makeEmpty } from "./issue-tracker";
 import { issueTrackerWorkflowCatalogContribution } from "./issue-workflow-catalog";

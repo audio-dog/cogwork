@@ -12,6 +12,7 @@ import {
 } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+
 import {
   HarnessPreflight,
   type RunPlanFacts,

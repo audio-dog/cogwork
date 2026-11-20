@@ -1,6 +1,7 @@
 import type { IssueLabelConnection } from "@linear/sdk";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import type { IssueTrackerError } from "../issue-tracker";
 import { toUnavailable } from "./client-errors";
 import {

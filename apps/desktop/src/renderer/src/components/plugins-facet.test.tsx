@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
 import { Authority, type ConfigurationPicture, type InstalledPlugin } from "../features/configuration-model";
 import { placeholderConfiguration } from "../testing/configuration";
 import { Configuration, PluginFailurePresentation } from "./configuration-provider";

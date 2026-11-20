@@ -4,6 +4,7 @@ import { FormDevtoolsPanel } from "@tanstack/react-form-devtools";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { CSSProperties } from "react";
+
 import { RightPanelWidthProvider } from "../components/right-panel-resize";
 import { useSidebarWidth } from "../components/sidebar-resize";
 import { daemonAtomRegistry, primeRootAtoms } from "../daemon/atom-registry";
