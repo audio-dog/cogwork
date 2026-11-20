@@ -22,6 +22,7 @@ import {
   refusalForPerson,
   refusalResumesSession,
 } from "./operation-result";
+import { actionPlanCompletion, type RunCompletion, RunCompletionRoute } from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import type { TriggerAdmission } from "./trigger-observation-admission";
@@ -289,6 +290,27 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     });
   });
 
+  const settleCompletion = Effect.fn("WorkflowRun.settleCompletion")(function* (
+    admission: TriggerAdmission,
+    claimed: Ref.Ref<ClaimState>,
+    work: ClaimedWork,
+    completion: RunCompletion,
+  ) {
+    if (completion.attempt !== null) {
+      yield* recordClaimedAttempt(admission, claimed, work, { outcome: completion.attempt });
+    }
+    yield* settleClaimed(claimed, completion.settle);
+  });
+
+  const followCompletion = (admission: TriggerAdmission, completion: RunCompletion, lineageParent: RunId) =>
+    RunCompletionRoute.$match(completion.route, {
+      Complete: () => complete(admission).pipe(Effect.map(() => "completed" as const)),
+      HandOff: ({ node }) => Effect.succeed(handOffAdmission(admission, node, lineageParent)),
+      Retry: () => Effect.succeed("retry" as const),
+      Replan: () => Effect.succeed(admission),
+      Park: () => Effect.succeed("completed" as const),
+    });
+
   const actOnResult = Effect.fn("WorkflowRun.actOnResult")(function* ({
     admission,
     claimed,
@@ -361,24 +383,9 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
       value: { object: actionPlan, raw: encodeActionPlan(actionPlan) },
     };
     yield* recorder.record(run, actionPlanEvent);
-    const execution = yield* executeWorkflowActionPlan(actionPlan, admission);
-    if (execution._tag === "Replan") {
-      yield* settleClaimed(claimed, "interrupted");
-      return admission;
-    }
-    if (execution._tag !== "Complete") {
-      const status =
-        execution._tag === "AwaitingApproval" || execution._tag === "HandedToYou" ? "succeeded" : "failed";
-      yield* settleClaimed(claimed, status);
-      return execution._tag === "Retry" ? ("retry" as const) : ("completed" as const);
-    }
-    yield* recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" });
-    yield* settleClaimed(claimed, "succeeded");
-    if (execution.handOff !== null) {
-      return handOffAdmission(admission, execution.handOff, run.id);
-    }
-    yield* complete(admission);
-    return "completed" as const;
+    const completion = actionPlanCompletion(yield* executeWorkflowActionPlan(actionPlan, admission));
+    yield* settleCompletion(admission, claimed, accepted, completion);
+    return yield* followCompletion(admission, completion, run.id);
   });
 
   return {
@@ -394,6 +401,8 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     refuseResult,
     refusePreparation,
     recoverClaimed,
+    settleCompletion,
+    followCompletion,
     actOnResult,
   };
 });
