@@ -1,0 +1,107 @@
+.gitignore
+  s_99f1d8dca23ac2::t_67c215ee7d1d4f 1
+apps/desktop/src/renderer/src/components/workspace-setting-rows.test.ts
+  s_99f1d8dca23ac2::t_7ab51a14968288 4,8,39,62,67,99-113
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_99f1d8dca23ac2::t_751d906ee05894 1-7,10-21,37,39,146,149-171,318-320,331,428-535,539
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_99f1d8dca23ac2::t_57af7541adab89 115-123
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_99f1d8dca23ac2::t_1c4f1896051d98 179,193
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_99f1d8dca23ac2::t_506a5cfcd0e12f 12,36,74,160
+packages/contracts/GLOSSARY-work.md
+  s_99f1d8dca23ac2::t_9fbed67d727936 25
+packages/contracts/src/daemon-event.ts
+  s_3dba1bcd03afaf::t_dbe6502a269f8a 10,23
+packages/contracts/src/daemon.ts
+  s_99f1d8dca23ac2::t_4a777657b19f4f 9,97
+packages/contracts/src/rpc.ts
+  s_99f1d8dca23ac2::t_ff6a7cf4d6f4d2 57,98-103,178
+packages/contracts/src/workspace.test.ts
+  s_99f1d8dca23ac2::t_3c971df0596653 2,4-5,86-129
+packages/contracts/src/workspace.ts
+  s_99f1d8dca23ac2::t_b575ad7788d566 28-33,92-118,122,126-128
+packages/engine/GLOSSARY-daemon.md
+  s_99f1d8dca23ac2::t_7851215982e35e 26
+packages/engine/src/clock-source.ts
+  s_99f1d8dca23ac2::t_e383108a301334 307
+packages/engine/src/commands.test.ts
+  s_99f1d8dca23ac2::t_234306c88d33f8 1-94
+packages/engine/src/commands.ts
+  s_99f1d8dca23ac2::t_42095d7a6498ed 12,17,39,46-47,49,64,67-131,134,137-142
+packages/engine/src/daemon-engine.ts
+  s_99f1d8dca23ac2::t_8dc3520997572f 130,133,271
+packages/engine/src/daemon-handlers.ts
+  s_99f1d8dca23ac2::t_7b88399a147785 13,116
+packages/engine/src/github/client.test.ts
+  s_99f1d8dca23ac2::t_501214da42d3b5 1130-1134,1136-1140,1144-1146
+packages/engine/src/github/client.ts
+  s_99f1d8dca23ac2::t_b8fd84d30b4c4f 230,1339,1341,1343,1345,1352-1360,1738
+packages/engine/src/github/performance-issue-filer.test.ts
+  s_99f1d8dca23ac2::t_cf950d2b0e9ec5 384
+packages/engine/src/github/provider.ts
+  s_99f1d8dca23ac2::t_d0f1a283c40e7b 27-28,126-127,132,152
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_99f1d8dca23ac2::t_8e15ae0930e951 250-255
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_99f1d8dca23ac2::t_a604c73c2c52d1 145-169
+packages/engine/src/linear/client-queries.ts
+  s_99f1d8dca23ac2::t_ef7a349c27c9f1 160-179
+packages/engine/src/linear/client.test.ts
+  s_99f1d8dca23ac2::t_b91768a8d56f6c 10,18-19,21,24-29,40,45-73,75,77,87
+packages/engine/src/linear/client.ts
+  s_99f1d8dca23ac2::t_5a9cc1c652fd54 29,32,36,109-121,331
+packages/engine/src/linear/host.ts
+  s_99f1d8dca23ac2::t_ef7e0d17212d4c 1-6,39-46
+packages/engine/src/projector.ts
+  s_99f1d8dca23ac2::t_99b3e05aefc4eb 7,18
+packages/engine/src/registry-loading.ts
+  s_99f1d8dca23ac2::t_00cbe389a39d8c 26,174
+packages/engine/src/registry-rows.ts
+  s_99f1d8dca23ac2::t_486e4bd4fe22c4 8-9,65
+packages/engine/src/trigger-observation-assignees.test.ts
+  s_99f1d8dca23ac2::t_e396d4a1fb7499 1,7,10-11,17-18,24-113,115,117,128,133-134
+packages/engine/src/trigger-observation-assignees.ts
+  s_99f1d8dca23ac2::t_71c8aa1805ed03 1-138
+packages/engine/src/trigger-observation-fixtures.ts
+  s_99f1d8dca23ac2::t_c2746448341485 155,176-179
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_99f1d8dca23ac2::t_9c5688344d682b 3,5,14,27-28,30-31,34-35,239-326
+packages/engine/src/trigger-observation-sweep.ts
+  s_99f1d8dca23ac2::t_46cc106f837420 151
+packages/engine/src/trigger-observation.ts
+  s_99f1d8dca23ac2::t_17f94597481038 34,118
+packages/engine/src/trigger-source.ts
+  s_99f1d8dca23ac2::t_e187245c0ec0d0 72-78,88
+packages/engine/src/workspace-registry-registration.test.ts
+  s_99f1d8dca23ac2::t_7a40bc28546459 12,29-30,91-125
+packages/engine/src/worktree-link-key.ts
+  s_99f1d8dca23ac2::t_f2ea614b2660b3 1-16
+packages/ui/src/components/combobox.tsx
+  s_99f1d8dca23ac2::t_6da7f82ba03bf8 1-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0b422ee388a563285cf17165539ff4465eebb663",
+  "prompts": {},
+  "sessions": {
+    "s_3dba1bcd03afaf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1bd39aaf-cf6f-4c41-beb3-cc8d2525d818",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_99f1d8dca23ac2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f7d14b0e-cd97-4069-a7f8-a9bbf9e567e7",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
