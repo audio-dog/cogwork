@@ -45,12 +45,14 @@ export function ImportReviewBanner() {
   const review = use(ImportReviewContext);
   if (!review || review.marks.size === 0) return null;
   return (
-    <Alert variant="warning">
-      <RiAlertLine />
-      <AlertTitle>Review these before you turn this on</AlertTitle>
-      <AlertDescription>
-        These values came from another machine. Change one to clear its highlight. Save accepts the rest.
-      </AlertDescription>
-    </Alert>
+    <output className="block">
+      <Alert variant="warning" role="none">
+        <RiAlertLine />
+        <AlertTitle>Review these before you turn this on</AlertTitle>
+        <AlertDescription>
+          These values came from another machine. Change one to clear its highlight. Save accepts the rest.
+        </AlertDescription>
+      </Alert>
+    </output>
   );
 }

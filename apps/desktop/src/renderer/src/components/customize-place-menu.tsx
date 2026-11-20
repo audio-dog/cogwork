@@ -89,7 +89,7 @@ function NavRow({
       render={
         <button
           type="button"
-          aria-label={title}
+          aria-label={`${title}, ${count}`}
           onClick={onHighlight}
           onMouseEnter={onHighlight}
           onFocus={onHighlight}
