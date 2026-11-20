@@ -12,11 +12,6 @@ import type { TriggerAdmission } from "./trigger-observation-admission";
 import type { WorkflowActionPlanExecution } from "./workflow-action-plan";
 import { fanOutAdmission } from "./workflow-run-admission";
 
-export interface FanOutChild {
-  readonly admission: TriggerAdmission;
-  readonly element: WorkflowOperationElement;
-}
-
 export type RunCompletionRoute = Data.TaggedEnum<{
   Complete: Record<never, never>;
   HandOff: { readonly node: WorkflowNodeId };
@@ -25,7 +20,12 @@ export type RunCompletionRoute = Data.TaggedEnum<{
   Park: Record<never, never>;
   Exhaust: { readonly park: ParkReason };
   ParkStuck: { readonly park: ParkReason };
-  FanOut: { readonly children: ReadonlyArray<FanOutChild> };
+  FanOut: {
+    readonly children: ReadonlyArray<{
+      readonly admission: TriggerAdmission;
+      readonly element: WorkflowOperationElement;
+    }>;
+  };
 }>;
 export const RunCompletionRoute = Data.taggedEnum<RunCompletionRoute>();
 
@@ -84,7 +84,7 @@ export const stuckCompletion = (summary: string): RunCompletion => ({
 
 export const fanOutCompletion = (
   admission: TriggerAdmission,
-  attempt: RunId,
+  run: RunId,
   elements: ReadonlyArray<WorkflowOperationElement>,
 ) =>
   ({
@@ -92,7 +92,7 @@ export const fanOutCompletion = (
     attempt: succeeded,
     route: RunCompletionRoute.FanOut({
       children: elements.map((element, position) => ({
-        admission: fanOutAdmission(admission, attempt, position, element),
+        admission: fanOutAdmission(admission, run, position, element),
         element,
       })),
     }),

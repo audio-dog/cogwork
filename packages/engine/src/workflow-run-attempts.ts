@@ -215,8 +215,9 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     reason: ParkReason,
   ) {
     yield* coordination.park(admission.event.key, reason, work.key);
-    if (work.lineageParent === null) return "completed" as const;
-    yield* observationStore.putAll([parkedAdmission(admission, work.lineageParent)]);
+    if (work.lineageParent !== null) {
+      yield* observationStore.putAll([parkedAdmission(admission, work.lineageParent)]);
+    }
     return "completed" as const;
   });
 
