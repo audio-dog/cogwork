@@ -46,6 +46,7 @@ const diffDebounce = "250 millis";
 const debouncedPathConcurrency = 32;
 const diffBatchSize = 32;
 const diffBatchWindow = "250 millis";
+const classificationConcurrency = 8;
 const configuredIgnoreBatchSize = 256;
 const configuredIgnoreWindow = "50 millis";
 const fallbackCadence = "1 second";
@@ -395,24 +396,16 @@ const computeSourcedFileDiffBatch = Effect.fn("Tools.computeSourcedFileDiffBatch
   );
 });
 
-const classifySourcedEvents = Effect.fn("Tools.classifySourcedFileDiffEvents")(
-  (sandbox: WorktreeSandbox, events: ReadonlyArray<SourcedWatchEvent>) =>
-    Effect.forEach(
-      events,
-      (event) =>
-        classifySourcedEvent(sandbox, event).pipe((effect) => pollingContext(sandbox, event.source, effect)),
-      { concurrency: "unbounded" },
-    ).pipe(Effect.map(Arr.filter(Predicate.isNotNull))),
-);
-
-const computeSettledFileDiffBatch = Effect.fn("Tools.computeSettledFileDiffBatch")(function* (
+const classifyAndComputeFileDiffBatch = Effect.fn("Tools.classifyAndComputeFileDiffBatch")(function* (
   sandbox: WorktreeSandbox,
   baseSha: string,
   externalDiff: Effect.Effect<ExternalDiffScope, ToolError>,
   fallbackStarted: Deferred.Deferred<void>,
   events: ReadonlyArray<SourcedWatchEvent>,
 ) {
-  const classified = yield* classifySourcedEvents(sandbox, events);
+  const classified = yield* Effect.forEach(events, (event) => classifySourcedEvent(sandbox, event), {
+    concurrency: classificationConcurrency,
+  }).pipe(Effect.map(Arr.filter(Predicate.isNotNull)));
   if (classified.length === 0) return [];
   return yield* computeSourcedFileDiffBatch(sandbox, baseSha, externalDiff, fallbackStarted, classified);
 });
@@ -464,13 +457,13 @@ export const watchWorktreeDiffs = (
         debounceByPath,
         Stream.groupedWithin(diffBatchSize, diffBatchWindow),
         Stream.mapEffect((events) =>
-          computeSettledFileDiffBatch(
+          classifyAndComputeFileDiffBatch(
             sandbox,
             baseSha,
             cachedExternalDiff.pipe(Effect.tapError(() => invalidateExternalDiff)),
             fallbackStarted,
             events,
-          ),
+          ).pipe((effect) => pollingContext(sandbox, feedSource(events), effect)),
         ),
         Stream.flatMap(Stream.fromIterable),
         Stream.mapEffect((event) =>
