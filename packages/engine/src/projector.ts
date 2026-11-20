@@ -4,18 +4,18 @@ import type {
   SourceControlConfig,
   WorkspaceConfig,
   WorkspaceFailureInfo,
-  WorkspaceRegistration,
+  WorkspaceRecord,
 } from "@cogwork/contracts";
 
 export interface WorkspaceIssueTrackerBinding {
-  readonly config: Pick<WorkspaceConfig, "name" | "issueTracker" | "sourceControl">;
+  readonly config: Pick<WorkspaceConfig, "id" | "issueTracker" | "sourceControl">;
   readonly repository?: string;
 }
 
 export interface RegisteredWorkspace extends WorkspaceIssueTrackerBinding {
   readonly source: string;
   readonly config: WorkspaceConfig;
-  readonly record?: WorkspaceRegistration;
+  readonly record?: WorkspaceRecord;
   readonly contributions: ReadonlyArray<LocalContribution>;
   readonly workspaceLimit?: number;
 }

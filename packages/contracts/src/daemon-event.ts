@@ -6,8 +6,8 @@ import { ControlStore, ReadyToMergeItem, SchedulerStats } from "./daemon";
 import { HarnessReadiness } from "./harness";
 import { PluginOverview } from "./plugin";
 import { RunActivity, RunSummary } from "./run";
-import { WorkflowRecord } from "./workflow";
-import { WorkspaceRegistration } from "./workspace";
+import { WorkflowRecord } from "./workflow-catalog";
+import { WorkspaceRecord } from "./workspace";
 
 export const ReadModelItem = Schema.TaggedUnion({
   ReadyToMerge: ReadyToMergeItem.fields,
@@ -16,15 +16,15 @@ export type ReadModelItem = typeof ReadModelItem.Type;
 
 export const WorkspaceState = Schema.TaggedUnion({
   Registered: {
-    name: WorkspaceId,
-    displayName: Schema.optional(TrimmedNonEmptyString),
+    id: WorkspaceId,
+    displayName: TrimmedNonEmptyString,
     checkoutPath: TrimmedNonEmptyString,
     issueTracker: IssueTrackerType,
-    record: WorkspaceRegistration,
+    record: WorkspaceRecord,
     contributions: Schema.Array(LocalContribution),
   },
   Failed: {
-    name: Schema.optional(WorkspaceId),
+    id: Schema.optional(WorkspaceId),
     displayName: Schema.optional(TrimmedNonEmptyString),
     source: TrimmedNonEmptyString,
     message: Schema.String,

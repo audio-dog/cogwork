@@ -26,7 +26,7 @@ export const make = Effect.gen(function* () {
             makePullRequestTool(sourceControl, toolWorkspaces, (selected, pullRequest) =>
               Ref.update(pullRequestSnapshots, (snapshots) => [
                 ...snapshots,
-                { workspace: selected.config.name, pullRequest },
+                { workspace: selected.config.id, pullRequest },
               ]),
             ),
           ]

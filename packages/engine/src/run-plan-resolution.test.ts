@@ -19,7 +19,7 @@ import {
   RunPlanResolution,
   resolveRunPlan,
 } from "./run-plan-resolution";
-import { TriggerAdmission } from "./trigger-observation";
+import { TriggerAdmission } from "./trigger-observation-admission";
 
 const encodePlan = Schema.encodeSync(RunPlan);
 const workspace = Schema.decodeSync(WorkspaceId);
@@ -159,6 +159,7 @@ const issueFacts: RunPlanFacts = {
     sources: [],
   },
   previousResultIssues: "The summary was empty.",
+  resendRequest: null,
   lineageArtifacts: [],
   claim: {
     by: "cogwork",
@@ -167,6 +168,7 @@ const issueFacts: RunPlanFacts = {
     lineage: issueAdmission.lineage,
   },
   handback: null,
+  gitOperationInProgress: null,
   skills: [{ identity: "skill:tdd", name: "tdd", source: "/skills/tdd/SKILL.md" }],
   subagents: [
     {
@@ -276,6 +278,11 @@ describe("resolveRunPlan", () => {
           { member: "Provenance", disposition: "projected" },
           { member: "Tools", disposition: "projected" },
           { member: "Skills", disposition: "projected" },
+          {
+            member: "Subagents",
+            disposition: "not-projected",
+            reason: "selected harness does not project Subagents",
+          },
         ],
         observation: { generation: 7, observedAtMillis: 5_000 },
       },
@@ -416,7 +423,7 @@ describe("resolveRunPlan", () => {
     );
   });
 
-  it("lists no Tools and records both members unprojected when the Harness projects neither", () => {
+  it("lists no Tools and records every member unprojected when the Harness projects none", () => {
     const plan = encodePlan(
       resolvedPlan({
         ...issueFacts,
@@ -440,6 +447,11 @@ describe("resolveRunPlan", () => {
             member: "Skills",
             disposition: "not-projected" as const,
             reason: "selected harness does not project Skills",
+          },
+          {
+            member: "Subagents",
+            disposition: "not-projected" as const,
+            reason: "selected harness does not project Subagents",
           },
         ],
       },

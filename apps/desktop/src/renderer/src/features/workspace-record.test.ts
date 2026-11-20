@@ -19,7 +19,7 @@ import {
 
 const decodeDaemonEvent = Schema.decodeUnknownSync(DaemonEvent);
 
-const registered = (name: string, displayName?: string) =>
+const registered = (id: string, displayName: string) =>
   applyDaemonEvent(
     initialBoard,
     decodeDaemonEvent({
@@ -27,12 +27,12 @@ const registered = (name: string, displayName?: string) =>
       emittedAtMillis: 0,
       workspace: {
         _tag: "Registered",
-        name,
-        ...(displayName ? { displayName } : {}),
+        id,
+        displayName,
         checkoutPath: "/tmp/checkout",
         issueTracker: "github",
         record: {
-          name: displayName ?? name,
+          displayName,
           checkoutPath: "/tmp/checkout",
           issueTracker: { type: "github" },
           linearHistory: false,
@@ -49,14 +49,6 @@ describe("workspaceLabelById", () => {
     const board = registered("01a05d92-f135-7e4a-b80b-40484b5d9775", "cogwork");
 
     expect(workspaceLabelById(board, id("01a05d92-f135-7e4a-b80b-40484b5d9775"))).toBe("cogwork");
-  });
-
-  it("falls back to the id when the workspace named itself nothing", () => {
-    const board = registered("01a05d92-f135-7e4a-b80b-40484b5d9775");
-
-    expect(workspaceLabelById(board, id("01a05d92-f135-7e4a-b80b-40484b5d9775"))).toBe(
-      "01a05d92-f135-7e4a-b80b-40484b5d9775",
-    );
   });
 
   it("falls back to the id for a workspace the board has never seen", () => {
@@ -76,12 +68,12 @@ describe("workspace record draft", () => {
   it("round-trips every editable registration field", () => {
     const state = Schema.decodeSync(WorkspaceState)({
       _tag: "Registered",
-      name: "01a05d92-f135-7e4a-b80b-40484b5d9775",
+      id: "01a05d92-f135-7e4a-b80b-40484b5d9775",
       displayName: "cogwork",
       checkoutPath: "/repos/cogwork",
       issueTracker: "linear",
       record: {
-        name: "cogwork",
+        displayName: "cogwork",
         checkoutPath: "/repos/cogwork",
         issueTracker: {
           type: "linear",
@@ -117,7 +109,7 @@ describe("workspace record draft", () => {
   it("keeps failed workspace records read-only while preserving their checkout path", () => {
     const state = Schema.decodeSync(WorkspaceState)({
       _tag: "Failed",
-      name: "01a05d92-f135-7e4a-b80b-40484b5d9775",
+      id: "01a05d92-f135-7e4a-b80b-40484b5d9775",
       displayName: "cogwork",
       source: "/repos/cogwork",
       message: "Workspace input failed",
@@ -184,7 +176,7 @@ describe("workspace record draft", () => {
       displayName: "  cogwork  ",
       issueTrackerConnectionId: "github/acme",
       teams: " ENG, APP ",
-      assigneeAllowlist: " taylor, cogwork ",
+      assigneeAllowlist: ["taylorfsteele", "cogwork-bot"],
       priorityFieldId: " 12 ",
       worktreeRoot: " /worktrees ",
       worktreeLinkPaths: " package.json \n config.json ",
@@ -198,7 +190,7 @@ describe("workspace record draft", () => {
       displayName: "cogwork",
       checkoutPath: "/repos/cogwork",
       teams: "ENG, APP",
-      assigneeAllowlist: "taylor, cogwork",
+      assigneeAllowlist: ["taylorfsteele", "cogwork-bot"],
       priorityFieldId: "12",
       worktreeRoot: "/worktrees",
       worktreeLinkPaths: "package.json\nconfig.json",

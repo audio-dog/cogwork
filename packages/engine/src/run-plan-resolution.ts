@@ -22,7 +22,8 @@ import * as Data from "effect/Data";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { AssembledContext } from "./context-assembler";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { GitOperationInProgress } from "./git";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { type EngineToolName, itemWorkspaceOf } from "./workflow-action-entry";
 import { actionEntryFor } from "./workflow-action-registry";
 
@@ -65,9 +66,11 @@ export interface RunPlanFacts {
   readonly workspaceCheckout: string | null;
   readonly instructions: AssembledContext;
   readonly previousResultIssues: string | null;
+  readonly resendRequest: string | null;
   readonly lineageArtifacts: ReadonlyArray<Pick<WorkflowActionArtifact, "workspace" | "issue" | "url">>;
   readonly claim: Claim;
   readonly handback: HandbackRecord | null;
+  readonly gitOperationInProgress: GitOperationInProgress | null;
   readonly skills: RunPlan["skills"];
   readonly subagents: RunPlan["subagents"];
 }
@@ -109,7 +112,10 @@ const projection = [
   "Provenance",
 ].map((member) => ({ member, disposition: "projected" as const }));
 
-const memberDisposition = (projectedMembers: ReadonlyArray<RunPlanMember>, member: "Tools" | "Skills") =>
+const memberDisposition = (
+  projectedMembers: ReadonlyArray<RunPlanMember>,
+  member: "Tools" | "Skills" | "Subagents",
+) =>
   projectedMembers.includes(member)
     ? { member, disposition: "projected" as const }
     : {
@@ -153,6 +159,18 @@ const workContextProse = ({ admission, workflow, lineageArtifacts }: RunPlanFact
   return { ...prose, body: [prose.body, "", "## Artifacts this lineage created", artifacts].join("\n") };
 };
 
+const gitOperationFact = (inProgress: GitOperationInProgress | null) => {
+  if (inProgress === null) return {};
+  const { operation, unmergedPaths } = inProgress;
+  return {
+    gitOperationInProgress: {
+      operation,
+      unmergedPaths,
+      instruction: `This ${operation} was in progress in the worktree when the last Run of this work item ended. Finish or abort it before any other work.`,
+    },
+  };
+};
+
 const operationMessage = (operation: WorkflowOperation, handback: HandbackRecord | null) => {
   const request = `Run Workflow Operation: ${operation.name}`;
   const note = handback?.note?.trim();
@@ -192,7 +210,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
           : [{ source: "previous-result-issues", content: facts.previousResultIssues }]),
       ],
     },
-    messages: [{ role: "user", content: operationMessage(operation, facts.handback) }],
+    messages: [{ role: "user", content: facts.resendRequest ?? operationMessage(operation, facts.handback) }],
     tools: harness.projectedMembers.includes("Tools")
       ? engineToolOrder.filter((tool) => toolNeeds.has(tool))
       : [],
@@ -218,6 +236,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
         openBlockers: 0,
         claim: facts.claim,
         priority: admission.event.priority ?? defaultPriority,
+        ...gitOperationFact(facts.gitOperationInProgress),
       },
       prose: workContextProse(facts),
       observation,
@@ -232,6 +251,7 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
         ...projection,
         memberDisposition(harness.projectedMembers, "Tools"),
         memberDisposition(harness.projectedMembers, "Skills"),
+        memberDisposition(harness.projectedMembers, "Subagents"),
       ],
       observation,
     },

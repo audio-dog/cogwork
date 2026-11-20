@@ -76,7 +76,7 @@ const issueNumberOf = Effect.fn("github.issueNumberOf")(function* (id: string) {
 const notGitHub = (workspace: WorkspaceIssueTrackerBinding) =>
   new IssueTrackerError({
     reason: "unavailable",
-    message: `workspace ${workspace.config.name} does not use GitHub Issues`,
+    message: `workspace ${workspace.config.id} does not use GitHub Issues`,
   });
 
 const writeMarker = (writeKey: string) =>
@@ -181,22 +181,23 @@ export const makeIssueReads = (client: GitHubClientService) => {
   });
   const listItems = Effect.fn("github.listItems")(function* (
     workspace: WorkspaceIssueTrackerBinding,
-    query: { readonly state: "open" | "all"; readonly since?: number; readonly label?: string },
+    query: { readonly since?: number; readonly label?: string },
   ) {
     const target = targetFor(workspace);
     if (!target) return [];
-    const issues = yield* client.listIssues(target, query);
+    const issues = yield* client.listIssues(target, { state: "open", ...query });
     return yield* listedItems(
       target,
       issues.filter((issue) => !issue.isPullRequest),
     );
   });
   return {
-    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, { state: "open" }),
-    itemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
-      listItems(workspace, { state: "all", since: sinceMillis }),
+    observe: (workspace: WorkspaceIssueTrackerBinding) => listItems(workspace, {}),
+    // GitHub answers `since=1970-01-01T00:00:00.000Z` with an empty issue list.
+    openItemsChangedSince: (workspace: WorkspaceIssueTrackerBinding, sinceMillis: number) =>
+      listItems(workspace, sinceMillis > 0 ? { since: sinceMillis } : {}),
     openItemsWithLabel: (workspace: WorkspaceIssueTrackerBinding, label: string) =>
-      listItems(workspace, { state: "open", label }),
+      listItems(workspace, { label }),
     readItem: Effect.fn("github.readItem")(function* (
       workspace: WorkspaceIssueTrackerBinding,
       id: WorkItemId,
@@ -289,7 +290,7 @@ export const makeIssueActions = (client: GitHubClientService) => {
   ) {
     return WorkflowActionArtifact.make({
       kind: "IssueCreated",
-      workspace: workspace.config.name,
+      workspace: workspace.config.id,
       issue: yield* itemId(issue.number),
       url: issue.url,
       origin,

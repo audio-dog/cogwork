@@ -24,11 +24,12 @@ import * as Schema from "effect/Schema";
 import { Coordination } from "./coordination";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { SlackWrite } from "./slack-write";
 import { SourceControlProvider, type SourceControlProviderService } from "./source-control";
-import { type TriggerAdmission, TriggerObservationStore } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
+import { TriggerObservationStore } from "./trigger-observation-store";
 import {
   decodeFailure,
   invalidTarget,
@@ -73,9 +74,9 @@ interface BuildInput {
 const selectedWorkspaces = (document: WorkflowDocument, workspaces: ReadonlyArray<RegisteredWorkspace>) => {
   const selected =
     document.workspaces._tag === "Every"
-      ? workspaces.map(({ config }) => config.name)
+      ? workspaces.map(({ config }) => config.id)
       : document.workspaces.workspaces;
-  return workspaces.filter(({ config }) => selected.includes(config.name));
+  return workspaces.filter(({ config }) => selected.includes(config.id));
 };
 
 const planJson = Schema.fromJsonString(WorkflowActionPlan);
@@ -196,7 +197,7 @@ const targetWorkspace = (step: WorkflowActionPlanStep) => {
   const matchesApp = app === target.app && target.issueTracker.type === target.app;
   if (!matchesApp) return null;
   return {
-    config: { name: target.workspace, issueTracker: target.issueTracker },
+    config: { id: target.workspace, issueTracker: target.issueTracker },
     ...(target.repository === null ? {} : { repository: target.repository }),
   };
 };
@@ -209,7 +210,7 @@ const sourceTargetWorkspace = (
   if (!WorkflowActionTarget.isAnyOf(["NewPullRequest", "CurrentPullRequest", "NamedPullRequest"])(target)) {
     return null;
   }
-  const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+  const workspace = workspaces.find(({ config }) => config.id === target.workspace);
   const app = workspace?.config.sourceControl?.type ?? workspace?.config.issueTracker.type;
   return app === target.app ? (workspace ?? null) : null;
 };

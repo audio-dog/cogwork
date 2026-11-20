@@ -101,8 +101,8 @@ const registeredWorkspaces = (board: Board) =>
 
 const workspaceOf = (state: ReturnType<typeof registeredWorkspaces>[number]) =>
   ({
-    id: state.name,
-    name: state.displayName ?? state.name,
+    id: state.id,
+    name: state.displayName,
     checkoutPath: state.checkoutPath,
   }) satisfies Workspace;
 
@@ -151,7 +151,7 @@ export const configurationPicture = (board: Board) => {
   const settings = board.controlStore?.contributionSettings ?? [];
   const contributions = uniqueContributions(
     registered.flatMap((state) =>
-      state.contributions.map((contribution) => contributionOf(contribution, state.name, settings)),
+      state.contributions.map((contribution) => contributionOf(contribution, state.id, settings)),
     ),
   );
   return {

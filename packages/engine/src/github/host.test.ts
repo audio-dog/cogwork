@@ -12,7 +12,8 @@ import { wireCodec } from "./markers";
 const workspace: WorkspaceIssueTrackerBinding = {
   repository: "acme/example",
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    id: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github" },
   }),
@@ -20,14 +21,14 @@ const workspace: WorkspaceIssueTrackerBinding = {
 const allowlistedWorkspace: WorkspaceIssueTrackerBinding = {
   repository: "acme/example",
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    id: Schema.decodeSync(WorkspaceId)("github-workspace"),
+    displayName: "Test workspace",
     checkoutPath: "/repos/example",
     issueTracker: { type: "github" },
     sourceControl: { type: "github", botAllowlist: ["release-bot"] },
   }),
 };
 const issueId = Schema.decodeSync(WorkItemId)("#7");
-const closedIssueId = Schema.decodeSync(WorkItemId)("#8");
 
 const issue = (labels: ReadonlyArray<string>): RawIssue => ({
   nodeId: "issue-7",
@@ -143,40 +144,50 @@ describe("GitHub trigger prose", () => {
 });
 
 describe("GitHub issue listing", () => {
-  it.effect("lists closed issues since a cursor, and open ones when observing or by label", () =>
+  it.effect("asks GitHub for open issues since a cursor, when observing, and by label", () =>
     Effect.gen(function* () {
-      const closed: RawIssue = { ...issue([]), number: 8, state: "closed", updatedAtMillis: 9 };
+      const queries: Array<unknown> = [];
       const client = yield* GitHubClient.pipe(
         Effect.provide(
           Layer.mock(GitHubClient, {
             listIssues: (_repo, query) => {
-              if (query?.label) return Effect.succeed([issue([query.label])]);
-              return Effect.succeed(query?.state === "all" ? [issue([]), closed] : [issue([])]);
+              queries.push(query);
+              return Effect.succeed([issue([])]);
             },
           }),
         ),
       );
       const reads = makeIssueReads(client);
 
-      const observed = yield* reads.observe(workspace);
-      const changed = yield* reads.itemsChangedSince(workspace, 1);
-      const labelled = yield* reads.openItemsWithLabel(workspace, "needs-triage");
+      yield* reads.observe(workspace);
+      yield* reads.openItemsChangedSince(workspace, 1);
+      yield* reads.openItemsWithLabel(workspace, "needs-triage");
 
-      assert.deepStrictEqual(
-        observed.map(({ id }) => id),
-        [issueId],
+      assert.deepStrictEqual(queries, [
+        { state: "open" },
+        { state: "open", since: 1 },
+        { state: "open", label: "needs-triage" },
+      ]);
+    }),
+  );
+
+  it.effect("omits the lower bound when it lists issues changed since the epoch", () =>
+    Effect.gen(function* () {
+      const sentSince: Array<number | undefined> = [];
+      const client = yield* GitHubClient.pipe(
+        Effect.provide(
+          Layer.mock(GitHubClient, {
+            listIssues: (_repo, query) => {
+              sentSince.push(query?.since);
+              return Effect.succeed([]);
+            },
+          }),
+        ),
       );
-      assert.deepStrictEqual(
-        changed.map(({ id, open }) => [id, open]),
-        [
-          [issueId, true],
-          [closedIssueId, false],
-        ],
-      );
-      assert.deepStrictEqual(
-        labelled.map(({ id, labels }) => [id, labels]),
-        [[issueId, ["needs-triage"]]],
-      );
+
+      yield* makeIssueReads(client).openItemsChangedSince(workspace, 0);
+
+      assert.deepStrictEqual(sentSince, [undefined]);
     }),
   );
 });

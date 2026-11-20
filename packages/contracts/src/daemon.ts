@@ -6,7 +6,7 @@ import { LocalContribution } from "./contribution";
 import { HarnessEnablement } from "./harness";
 import { PluginInstall } from "./plugin";
 import { ContributionSettingRow, OperationSettingRow } from "./settings";
-import { WorkspaceConcurrency, WorkspaceRegistration } from "./workspace";
+import { WorkspaceConcurrency, WorkspaceRecord } from "./workspace";
 
 export const DaemonHealth = Schema.Literals(["running", "store-unavailable"]);
 export type DaemonHealth = typeof DaemonHealth.Type;
@@ -90,18 +90,18 @@ export const PollPauseReason = Schema.Literals(["auth", "unavailable", "rate-lim
 export type PollPauseReason = typeof PollPauseReason.Type;
 
 export const WorkspaceInfo = Schema.Struct({
-  name: WorkspaceId,
-  displayName: Schema.optional(TrimmedNonEmptyString),
+  id: WorkspaceId,
+  displayName: TrimmedNonEmptyString,
   checkoutPath: TrimmedNonEmptyString,
   issueTracker: IssueTrackerType,
-  record: WorkspaceRegistration,
+  record: WorkspaceRecord,
   contributions: Schema.Array(LocalContribution),
   readyToMerge: Schema.Array(ReadyToMergeItem),
 });
 export type WorkspaceInfo = typeof WorkspaceInfo.Type;
 
 export const WorkspaceFailureInfo = Schema.Struct({
-  name: Schema.optional(WorkspaceId),
+  id: Schema.optional(WorkspaceId),
   displayName: Schema.optional(TrimmedNonEmptyString),
   source: TrimmedNonEmptyString,
   message: Schema.String,
@@ -116,7 +116,7 @@ export const SchedulerLimit = Schema.Int.check(
 export type SchedulerLimit = typeof SchedulerLimit.Type;
 
 export const WorkspaceLoad = Schema.Struct({
-  name: WorkspaceId,
+  id: WorkspaceId,
   inFlight: Schema.Natural,
   limit: WorkspaceConcurrency,
 });

@@ -1,5 +1,6 @@
 import {
   keyOf,
+  type ParkReason,
   Principal,
   type RunId,
   WorkflowActionPlan,
@@ -10,9 +11,9 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { Coordination } from "./coordination";
-import { WorkspaceRegistry } from "./registry";
+import { WorkspaceRegistry } from "./registry-service";
 import { SourceControlProvider } from "./source-control";
-import { TriggerObservationStore } from "./trigger-observation";
+import { TriggerObservationStore } from "./trigger-observation-store";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { operationKeyOf } from "./workflow-run-admission";
 import {
@@ -20,6 +21,12 @@ import {
   makeWorkflowRunPendingPlans,
   type PendingPlanDependencies,
 } from "./workflow-run-pending-plan";
+import { WorktreeManager } from "./worktree";
+import { operationInProgressSummary } from "./worktree-diagnostics";
+
+type WorktreeBlocked = Extract<ParkReason, { readonly _tag: "WorktreeBlocked" }>;
+
+const probedWorktreePath = ({ reason, path }: WorktreeBlocked) => (reason === "detached" ? undefined : path);
 
 const waitingReviewTarget = (plan: WorkflowActionPlan) => {
   const waiting = plan.steps.some(
@@ -38,6 +45,7 @@ export const makeWorkflowRunTouchpoints = Effect.fn("WorkflowRun.makeTouchpoints
   const registry = yield* WorkspaceRegistry;
   const observationStore = yield* TriggerObservationStore;
   const sourceControl = Option.getOrNull(yield* Effect.serviceOption(SourceControlProvider));
+  const worktrees = Option.getOrNull(yield* Effect.serviceOption(WorktreeManager));
   const { currentPlan, rebuildPlan, recordDecision, finishTouchpointPlan, executeClaimedPlan } =
     yield* makeWorkflowRunPendingPlans(dependencies);
 
@@ -51,7 +59,7 @@ export const makeWorkflowRunTouchpoints = Effect.fn("WorkflowRun.makeTouchpoints
       (plan) => {
         const target = waitingReviewTarget(plan);
         if (target?._tag !== "NamedPullRequest") return Effect.void;
-        const workspace = workspaces.find(({ config }) => config.name === target.workspace);
+        const workspace = workspaces.find(({ config }) => config.id === target.workspace);
         if (!workspace) return Effect.void;
         return sourceControl.readPullRequest(workspace, `#${target.number}`).pipe(
           Effect.flatMap((pullRequest) => {
@@ -191,6 +199,27 @@ export const makeWorkflowRunTouchpoints = Effect.fn("WorkflowRun.makeTouchpoints
     yield* finishTouchpointPlan(rebuilt, admission, execution);
   });
 
+  const refuseBlockedWorktree = Effect.fn("WorkflowRun.refuseBlockedWorktree")(function* (
+    blocked: WorktreeBlocked,
+  ) {
+    if (worktrees === null) return;
+    const path = probedWorktreePath(blocked);
+    if (path === undefined) return;
+    const operation = yield* worktrees.operationInProgress(path).pipe(
+      Effect.catchTag("GitError", (error) =>
+        Effect.logWarning("worktree probe failed; handing back without it", {
+          path,
+          message: error.message,
+        }).pipe(Effect.map(() => null)),
+      ),
+    );
+    if (operation === null) return;
+    return yield* failTouchpoint(
+      "worktree-blocked",
+      `Hand Back needs the worktree at ${path}: ${operationInProgressSummary(blocked.branch, operation)} Finish or abort it first.`,
+    );
+  });
+
   const handBack = Effect.fn("WorkflowRun.handBack")(function* (payload: {
     readonly item: WorkItemRef;
     readonly note?: string;
@@ -199,6 +228,7 @@ export const makeWorkflowRunTouchpoints = Effect.fn("WorkflowRun.makeTouchpoints
     if (view.park === null) {
       return yield* failTouchpoint("not-found", "This item is not parked");
     }
+    if (view.park.reason._tag === "WorktreeBlocked") yield* refuseBlockedWorktree(view.park.reason);
     const principal = yield* Principal;
     yield* coordination.handBack(payload.item, { by: principal.id, note: payload.note });
   });

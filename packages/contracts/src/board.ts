@@ -58,14 +58,14 @@ export const itemKey = (workspace: WorkspaceId, id: string) => `${workspace}::${
 
 export const workspaceKey = (state: WorkspaceState) =>
   WorkspaceState.match(state, {
-    Registered: ({ name }) => name,
-    Failed: ({ name, source }) => name ?? source,
+    Registered: ({ id }) => id,
+    Failed: ({ id, source }) => id ?? source,
   });
 
 export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
   _tag: "Registered" as const,
-  name: info.name,
-  ...(info.displayName ? { displayName: info.displayName } : {}),
+  id: info.id,
+  displayName: info.displayName,
   checkoutPath: info.checkoutPath,
   issueTracker: info.issueTracker,
   record: info.record,
@@ -74,7 +74,7 @@ export const workspaceStateFromInfo = (info: WorkspaceInfo) => ({
 
 export const workspaceFailureState = (failure: WorkspaceFailureInfo) => ({
   _tag: "Failed" as const,
-  ...(failure.name ? { name: failure.name } : {}),
+  ...(failure.id ? { id: failure.id } : {}),
   ...(failure.displayName ? { displayName: failure.displayName } : {}),
   source: failure.source,
   message: failure.message,

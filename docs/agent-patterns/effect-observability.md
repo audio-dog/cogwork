@@ -29,7 +29,7 @@ Every service method already runs inside a named span (`Effect.fn("Service.metho
 
 ```ts
 const correlation = {
-  workspace: workspace.config.name,
+  workspace: workspace.config.id,
   item: item.id,
   stage: item.stage,
   runId,
@@ -44,7 +44,7 @@ The scheduler (`runJob`), the reconcile tick, and the recovery pass annotate the
 ```ts
 // Avoid: the enclosing workflow already knows workspace and item
 yield* Effect.logInfo("recovered stale claim", {
-  workspace: workspace.config.name,
+  workspace: workspace.config.id,
   item: item.id,
 });
 ```

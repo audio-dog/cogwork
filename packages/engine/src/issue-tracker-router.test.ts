@@ -12,14 +12,19 @@ import type { RegisteredWorkspace } from "./projector";
 const id = Schema.decodeSync(WorkItemId);
 
 const workspaceOf = (
-  name: string,
+  workspaceId: string,
   issueTracker: (typeof WorkspaceConfig.Encoded)["issueTracker"],
   repository?: string,
 ): RegisteredWorkspace => ({
-  source: `${name}.workspace.ts`,
+  source: `${workspaceId}.workspace.ts`,
   contributions: [],
   ...(repository ? { repository } : {}),
-  config: Schema.decodeSync(WorkspaceConfig)({ name, checkoutPath: `/repos/${name}`, issueTracker }),
+  config: Schema.decodeSync(WorkspaceConfig)({
+    id: workspaceId,
+    displayName: workspaceId,
+    checkoutPath: `/repos/${workspaceId}`,
+    issueTracker,
+  }),
 });
 
 const githubWorkspace = workspaceOf("gh", { type: "github", priority: { field: 42 } }, "acme/example");
@@ -77,25 +82,25 @@ const githubClient = Layer.mock(GitHubClient, {
   listIssueFieldValues: () => Effect.succeed(new Map([[1, new Map([[42, "Urgent"]])]])),
 });
 
+const linearIssue = (createdAtMillis: number) => ({
+  id: "linear-id",
+  identifier: "AUD-7",
+  title: "Audit export",
+  url: "https://linear.app/acme/issue/AUD-7",
+  labels: ["needs-triage"],
+  assignees: ["owner"],
+  stateName: "Todo",
+  stateType: "unstarted",
+  openBlockers: 1,
+  priority: "high" as const,
+  updatedAtMillis: 3_000,
+  createdAtMillis,
+  coordinationComments: [],
+});
+
 const linearClient = Layer.mock(LinearClient, {
-  observeIssues: (_ref, _coordination, _assignees, updatedSince) =>
-    Effect.succeed([
-      {
-        id: "linear-id",
-        identifier: "AUD-7",
-        title: "Audit export",
-        url: "https://linear.app/acme/issue/AUD-7",
-        labels: ["needs-triage"],
-        assignees: ["owner"],
-        stateName: "Todo",
-        stateType: "unstarted",
-        openBlockers: 1,
-        priority: "high",
-        updatedAtMillis: 3_000,
-        createdAtMillis: updatedSince ?? 2_500,
-        coordinationComments: [],
-      },
-    ]),
+  observeIssues: () => Effect.succeed([linearIssue(2_500)]),
+  observeOpenIssuesSince: (_ref, updatedSince) => Effect.succeed([linearIssue(updatedSince)]),
   readProse: () =>
     Effect.succeed({
       body: "Linear body",
@@ -148,7 +153,7 @@ describe("routed issue tracker reads", () => {
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
       const prose = yield* tracker.readProse(githubWorkspace, id("#1"));
-      const assignees = yield* tracker.assignees?.(githubWorkspace, id("#1")) ?? Effect.succeed([]);
+      const assignees = yield* tracker.assignees(githubWorkspace, id("#1"));
       assert.strictEqual(prose.body, "Body 1");
       assert.deepStrictEqual(
         prose.comments.map(({ author, body }) => ({ author, body })),
@@ -163,7 +168,7 @@ describe("routed issue tracker reads", () => {
       const tracker = yield* IssueTracker;
       const items = yield* tracker.observe(linearWorkspace);
       const prose = yield* tracker.readProse(linearWorkspace, id("AUD-7"));
-      const assignees = yield* tracker.assignees?.(linearWorkspace, id("AUD-7")) ?? Effect.succeed([]);
+      const assignees = yield* tracker.assignees(linearWorkspace, id("AUD-7"));
       assert.deepStrictEqual(
         items.map(({ id, priority, openBlockers, states }) => ({ id, priority, openBlockers, states })),
         [{ id: id("AUD-7"), priority: "high", openBlockers: 1, states: ["needs-triage", "Todo"] }],
@@ -177,7 +182,7 @@ describe("routed issue tracker reads", () => {
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
       const observed = yield* tracker.observe(githubWorkspace);
-      const changed = yield* tracker.itemsChangedSince(githubWorkspace, 5_000);
+      const changed = yield* tracker.openItemsChangedSince(githubWorkspace, 5_000);
       assert.deepStrictEqual(
         observed.map(({ id, lastTouchedAtMillis }) => ({ id, lastTouchedAtMillis })),
         [{ id: id("#1"), lastTouchedAtMillis: 2_000 }],
@@ -229,7 +234,7 @@ describe("routed issue tracker reads", () => {
   it.effect("lists Linear issues changed since a cursor and reads label history, prose, and labels", () =>
     Effect.gen(function* () {
       const tracker = yield* IssueTracker;
-      const changed = yield* tracker.itemsChangedSince(linearWorkspace, 3_000);
+      const changed = yield* tracker.openItemsChangedSince(linearWorkspace, 3_000);
       const appliedAt = yield* tracker.labelAppliedAt(linearWorkspace, id("AUD-7"), "needs-triage");
       const prose = yield* tracker.readTriggerProse(linearWorkspace, id("AUD-7"));
       const labels = yield* tracker.listLabels(linearWorkspace);

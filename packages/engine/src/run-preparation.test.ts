@@ -35,7 +35,7 @@ import { RunLedger } from "./run-ledger";
 import { HarnessPreflight } from "./run-plan-resolution";
 import { make as makeRunPreparation, type RunPreparationInput } from "./run-preparation";
 import { engineTestLayer } from "./testing/engine-test-layer";
-import { TriggerAdmission } from "./trigger-observation";
+import { TriggerAdmission } from "./trigger-observation-admission";
 import { memoryLayer as workflowArtifactStoreLayer } from "./workflow-artifact-store";
 import { WorktreeManager } from "./worktree";
 
@@ -86,7 +86,8 @@ const workspace: RegisteredWorkspace = {
   repository: "owner/cogwork",
   contributions: [],
   config: Schema.decodeSync(WorkspaceConfig)({
-    name: "cogwork",
+    id: "cogwork",
+    displayName: "cogwork",
     checkoutPath: "/cogwork",
     issueTracker: { type: "github" },
   }),
@@ -138,7 +139,12 @@ const testLayer = (handbacks: ReadonlyArray<HandbackRecord>) =>
         return Layer.mock(WorktreeManager, {
           ensure: (_workspace, _item, options) =>
             Ref.update(ensured, (calls) => [...calls, options?.resume ?? false]).pipe(
-              Effect.map(() => ({ branch: BranchName.make("42"), path: "/worktrees/42", created: false })),
+              Effect.map(() => ({
+                branch: BranchName.make("42"),
+                path: "/worktrees/42",
+                created: false,
+                operationInProgress: null,
+              })),
             ),
         });
       }),
@@ -219,6 +225,7 @@ const input = (pendingPlanAttempt: RunId | null): RunPreparationInput => ({
   harness: harnessName,
   run: { id: Schema.decodeSync(RunId)("run-next"), workspace: runWorkspace, startedAtMillis: 6_000 },
   pendingPlanAttempt,
+  resend: null,
 });
 
 const handback: HandbackRecord = { by: "taylor", atMillis: 7_000, note: "Use the smaller fix." };

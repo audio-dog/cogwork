@@ -3,7 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-09-30
 
-> **Amendment (2026-10-27).** [Customizable Workflows §17](../spec/customizable-workflows.md#17-documents-and-adrs-the-build-changes)
+> **Amendment (2026-10-27).** [Customizable Workflows §17](../spec/customizable-workflows-documents-and-adrs-the-build-changes.md#17-documents-and-adrs-the-build-changes)
 > generalizes Work Context to every source. Each item kind has one frozen shape, read once at
 > admission: issue, pull request, transcript, Slack conversation, schedule tick, or a future source.
 

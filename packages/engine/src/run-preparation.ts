@@ -6,6 +6,7 @@ import {
   type ParkReason,
   PluginContributionLoad,
   RunId,
+  sessionResumable,
   type WorkflowDocument,
   type WorkflowOperation,
   WorkItemId,
@@ -29,7 +30,7 @@ import { subagentMembers } from "./run-plan";
 import { HarnessPreflight, harnessOptions } from "./run-plan-resolution";
 import { SessionStore } from "./session-store";
 import { SourceControlProvider } from "./source-control";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import { WorkflowArtifactStore } from "./workflow-artifact-store";
 import { ticketSlug, type WorktreeError, WorktreeManager } from "./worktree";
 
@@ -76,7 +77,7 @@ export const selectedWorkspaceIds = (
   document: WorkflowDocument,
   workspaces: ReadonlyArray<RegisteredWorkspace>,
 ) => {
-  const registered = workspaces.map(({ config }) => config.name);
+  const registered = workspaces.map(({ config }) => config.id);
   return document.workspaces._tag === "Every"
     ? registered
     : document.workspaces.workspaces.filter((workspace) => registered.includes(workspace));
@@ -89,6 +90,7 @@ export interface RunPreparationInput {
   readonly harness: HarnessName;
   readonly run: { readonly id: RunId; readonly workspace: WorkspaceId; readonly startedAtMillis: number };
   readonly pendingPlanAttempt: RunId | null;
+  readonly resend: { readonly run: RunId; readonly request: string } | null;
 }
 
 export const make = Effect.gen(function* () {
@@ -108,7 +110,7 @@ export const make = Effect.gen(function* () {
     required: ReadonlyArray<string>,
   ) {
     if (workspace === null) return [];
-    const fromPlugins = yield* plugins.contributions(workspace.config.name).pipe(
+    const fromPlugins = yield* plugins.contributions(workspace.config.id).pipe(
       Effect.map((contributions) =>
         contributions.filter(({ load }) => PluginContributionLoad.guards.Loaded(load)),
       ),
@@ -158,10 +160,10 @@ export const make = Effect.gen(function* () {
   ) {
     if (workspace === null) {
       const path = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workflow-" });
-      return { path, branch: null } as const;
+      return { path, branch: null, operationInProgress: null } as const;
     }
     if (permissionProfile === "read-only") {
-      return { path: workspace.config.checkoutPath, branch: null } as const;
+      return { path: workspace.config.checkoutPath, branch: null, operationInProgress: null } as const;
     }
     const pullRequest =
       sourceControl === null ? null : yield* sourceControl.resolvePullRequest(workspace, admission.event.key);
@@ -179,7 +181,7 @@ export const make = Effect.gen(function* () {
       pushOwner: "engine",
       resume,
     });
-    return { path: checkout.path, branch } as const;
+    return { path: checkout.path, branch, operationInProgress: checkout.operationInProgress } as const;
   });
 
   const checkoutPark = (error: Effect.Error<ReturnType<typeof ensureCheckout>>) =>
@@ -195,6 +197,17 @@ export const make = Effect.gen(function* () {
       PlatformError: () => null,
     });
 
+  const resendResumption = Effect.fn("RunPreparation.resendResumption")(function* (
+    resend: RunPreparationInput["resend"],
+    selectedHarness: HarnessName,
+  ) {
+    if (resend === null) return null;
+    const sessionId = (yield* ledger.getRun(resend.run))?.session ?? null;
+    const session = sessionId === null ? null : yield* ledger.getSession(sessionId);
+    const resumable = session?.harness === selectedHarness && sessionResumable(session);
+    return resumable ? { session: session.id, request: resend.request } : null;
+  });
+
   const prepare = Effect.fn("RunPreparation.prepare")(function* (input: RunPreparationInput) {
     const { admission, workspace, operation, run } = input;
     const view = yield* coordination.read(admission.event.key);
@@ -204,7 +217,8 @@ export const make = Effect.gen(function* () {
       handback === null || admission.lineage.parent === null ? null : RunId.make(admission.lineage.parent);
     const resumedAttempt = input.pendingPlanAttempt ?? handedBackAttempt;
     const resumedRun = resumedAttempt === null ? null : yield* ledger.getRun(resumedAttempt);
-    const resumedSession = resumedRun?.session ?? null;
+    const resent = resumedAttempt === null ? yield* resendResumption(input.resend, input.harness) : null;
+    const resumedSession = resumedRun?.session ?? resent?.session ?? null;
     const checkout = yield* ensureCheckout(
       admission,
       workspace,
@@ -232,6 +246,7 @@ export const make = Effect.gen(function* () {
       checkout,
       session,
       handback,
+      resendRequest: resent?.request ?? null,
       instructions,
       lineageArtifacts: yield* artifacts.byLineage(admission.lineage.root),
       subagents: yield* subagentMembers(workspace?.contributions ?? [], operation.requires),

@@ -11,9 +11,10 @@ import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import { externalHarnessDeclaration } from "./external-harness-runtime";
 import type { HarnessRunner } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import { emptyService as emptySourceControl } from "./source-control";
@@ -233,6 +234,14 @@ describe("WorkflowRun", () => {
           reason: "selected harness does not project Tools",
         },
       );
+      assert.deepStrictEqual(
+        { ...plan?.provenance.projection.find(({ member }) => member === "Subagents") },
+        {
+          member: "Subagents",
+          disposition: "not-projected",
+          reason: "selected harness does not project Subagents",
+        },
+      );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
@@ -267,7 +276,8 @@ describe("WorkflowRun", () => {
         },
       ],
       config: yield* Schema.decodeEffect(WorkspaceConfig)({
-        name: "repo",
+        id: "repo",
+        displayName: "repo",
         checkoutPath: "/repo",
         issueTracker: { type: "github" },
       }),
@@ -310,10 +320,10 @@ describe("WorkflowRun", () => {
   });
 
   it.effect(
-    "admits a required Skill over a same-named Skill, and Plugin Skills, into the Run Plan of a Harness that projects Skills",
+    "admits a required Skill over a same-named Skill, and Plugin Skills, into the Run Plan of an External Harness",
     () =>
       Effect.gen(function* () {
-        const { plan } = yield* skillProgram(["Tools", "Skills"]);
+        const { plan } = yield* skillProgram(externalHarnessDeclaration.projectedMembers);
 
         assert.deepStrictEqual(
           plan?.skills.map(({ identity, name, source }) => ({ identity, name, source })),
@@ -327,8 +337,13 @@ describe("WorkflowRun", () => {
           ],
         );
         assert.deepStrictEqual(
-          { ...plan?.provenance.projection.find(({ member }) => member === "Skills") },
-          { member: "Skills", disposition: "projected" },
+          plan?.provenance.projection
+            .filter(({ member }) => member === "Tools" || member === "Skills")
+            .map(({ member, disposition }) => ({ member, disposition })),
+          [
+            { member: "Tools", disposition: "projected" },
+            { member: "Skills", disposition: "projected" },
+          ],
         );
       }).pipe(Effect.provide(requirements), Effect.scoped),
   );

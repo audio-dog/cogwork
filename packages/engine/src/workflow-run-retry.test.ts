@@ -7,10 +7,10 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { HarnessError } from "./harness";
 import type { RegisteredWorkspace } from "./projector";
-import { emptyRegistry } from "./registry";
+import { emptyRegistry } from "./projector";
 import { RunLedger } from "./run-ledger";
 import { emptyService as emptySourceControl, SourceControlProvider } from "./source-control";
-import type { TriggerAdmission } from "./trigger-observation";
+import type { TriggerAdmission } from "./trigger-observation-admission";
 import type { WorkflowsService } from "./workflow";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { admission } from "./workflow-run-admissions-fixtures";
@@ -29,9 +29,21 @@ import {
   type HarnessBehavior,
   previousResultIssues,
   requirements,
+  runSessions,
   testProgram,
 } from "./workflow-run-fixtures";
 import { PullRequestReadiness, WorktreeManager } from "./worktree";
+
+const mismatchedResult = { summary: "Done", stuck: false, answers: { done: "maybe" } };
+const acceptedResult = {
+  summary: "Done",
+  stuck: false,
+  answers: { done: "yes" },
+  inputs: { notification: "Done" },
+};
+const workRequest = "Run Workflow Operation: Summarize";
+const resendRequest = (agentText: string) =>
+  `${agentText}\n\nDo no other work unless an issue above needs it.`;
 
 describe("WorkflowRun", () => {
   it.effect("refuses a matched action input that is empty after trim", () =>
@@ -59,7 +71,8 @@ describe("WorkflowRun", () => {
       repository: "owner/repo",
       contributions: [],
       config: Schema.decodeSync(WorkspaceConfig)({
-        name: "github",
+        id: "github",
+        displayName: "github",
         checkoutPath: "/repos/github",
         issueTracker: { type: "github" },
       }),
@@ -72,19 +85,19 @@ describe("WorkflowRun", () => {
       ...admission,
       event: {
         ...admission.event,
-        key: { _tag: "Issue", workspace: workspace.config.name, id: issue },
+        key: { _tag: "Issue", workspace: workspace.config.id, id: issue },
         entry: issueEntry,
-        workspace: workspace.config.name,
+        workspace: workspace.config.id,
       },
       subscription: {
         ...admission.subscription,
         entry: issueEntry,
-        workspaces: [workspace.config.name],
+        workspaces: [workspace.config.id],
       },
     } satisfies TriggerAdmission;
     const pullRequestDocument = Schema.decodeSync(WorkflowDocument)({
       ...document,
-      workspaces: { _tag: "Listed", workspaces: [workspace.config.name] },
+      workspaces: { _tag: "Listed", workspaces: [workspace.config.id] },
       triggers: [{ ...document.triggers[0], entry: issueEntry, parameters: [] }],
       operations: [
         {
@@ -107,7 +120,13 @@ describe("WorkflowRun", () => {
       openWorkflowPullRequest: () => Effect.die("must not open"),
     };
     const worktreeService = {
-      ensure: () => Effect.succeed({ branch: BranchName.make("820"), path: "/worktrees/820", created: true }),
+      ensure: () =>
+        Effect.succeed({
+          branch: BranchName.make("820"),
+          path: "/worktrees/820",
+          created: true,
+          operationInProgress: null,
+        }),
       pullRequestReadiness: () => Effect.succeed(PullRequestReadiness.Declined({ reason })),
     };
     const service = {
@@ -159,7 +178,7 @@ describe("WorkflowRun", () => {
         machine: {
           workspaces: [
             {
-              id: workspace.config.name,
+              id: workspace.config.id,
               binds: ["github"],
             },
           ],
@@ -237,6 +256,7 @@ describe("WorkflowRun", () => {
       ].join("\n"),
       personText:
         'The agent\'s result did not match the Operation\'s result schema (["x\\n- y"]: Expected no excess property; answers.done: Expected "yes"; inputs: Missing key).',
+      resumesSession: true,
     },
     {
       name: "a result the action plan refuses",
@@ -251,6 +271,7 @@ describe("WorkflowRun", () => {
         "The engine could not build an action plan from your previous result: Action cogwork.notify needs non-empty input notification. Change the result so that the engine can act on it.",
       personText:
         "The engine could not act on the agent's result: Action cogwork.notify needs non-empty input notification.",
+      resumesSession: false,
     },
     {
       name: "a Harness stream that fails",
@@ -264,6 +285,7 @@ describe("WorkflowRun", () => {
       agentText:
         "Your previous Run stopped before it returned a result. Return the result before the Run ends.",
       personText: "The Harness stopped before the agent returned a result: The model connection closed.",
+      resumesSession: false,
     },
   ] satisfies ReadonlyArray<{
     readonly name: string;
@@ -271,9 +293,10 @@ describe("WorkflowRun", () => {
     readonly behavior: HarnessBehavior;
     readonly agentText: string;
     readonly personText: string;
+    readonly resumesSession: boolean;
   }>;
 
-  refusedResults.map(({ name, results, behavior, agentText, personText }) =>
+  refusedResults.map(({ name, results, behavior, agentText, personText, resumesSession }) =>
     it.effect(`parks the item after three refusals of ${name}`, () =>
       Effect.gen(function* () {
         const { runner, coordination } = yield* testProgram(results, behavior);
@@ -282,6 +305,7 @@ describe("WorkflowRun", () => {
           yield* runner.execute(admission),
           yield* runner.execute(admission),
         ];
+        const nextRequest = resumesSession ? resendRequest(agentText) : workRequest;
 
         assert.deepStrictEqual(
           {
@@ -290,6 +314,7 @@ describe("WorkflowRun", () => {
             park: (yield* Ref.get(coordination.parks)).at(-1)?.reason,
             processed: yield* Ref.get(coordination.processed),
             nextRunIssues: yield* previousResultIssues(),
+            runs: yield* runSessions(),
           },
           {
             outcomes: ["retry", "retry", "completed"],
@@ -297,10 +322,38 @@ describe("WorkflowRun", () => {
             park: { _tag: "Exhausted", reason: personText },
             processed: null,
             nextRunIssues: [agentText, agentText],
+            runs: {
+              sessions: resumesSession ? 1 : 3,
+              requests: [workRequest, nextRequest, nextRequest].sort(),
+            },
           },
         );
       }).pipe(Effect.provide(requirements), Effect.scoped),
     ),
+  );
+
+  it.effect("mints a Session after a schema refusal when the Harness stored no resume handle", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram([mismatchedResult, acceptedResult], {
+        sessionKind: "opaque-handle",
+      });
+      yield* runner.execute(admission);
+      yield* runner.execute(admission);
+
+      assert.deepStrictEqual(
+        { issues: yield* previousResultIssues(), runs: yield* runSessions() },
+        {
+          issues: [
+            [
+              "Your previous result did not match the result schema. Correct each issue below, then return the complete result again.",
+              '- answers.done: Expected "yes"',
+              "- inputs: Missing key",
+            ].join("\n"),
+          ],
+          runs: { sessions: 2, requests: [workRequest, workRequest] },
+        },
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
   it.effect("parks a stuck result without blocking a sibling Workflow", () =>

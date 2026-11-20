@@ -9,7 +9,7 @@ export interface WorkspaceRecordDraft {
   readonly issueTrackerConnectionId: string;
   readonly teams: string;
   readonly organization: string;
-  readonly assigneeAllowlist: string;
+  readonly assigneeAllowlist: readonly string[];
   readonly trackerBotAllowlist: string;
   readonly priorityFieldId: string;
   readonly linearHistory: boolean;
@@ -33,7 +33,7 @@ export const emptyDraft: WorkspaceRecordDraft = {
   issueTrackerConnectionId: "unbound",
   teams: "",
   organization: "",
-  assigneeAllowlist: "",
+  assigneeAllowlist: [],
   trackerBotAllowlist: "",
   priorityFieldId: "",
   linearHistory: false,
@@ -65,13 +65,13 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
   const sourceControl = record.sourceControl;
   const worktrees = record.worktrees;
   return {
-    displayName: record.name,
+    displayName: record.displayName,
     checkoutPath: record.checkoutPath,
     issueTrackerType: tracker.type === "linear" ? "linear" : "github",
     issueTrackerConnectionId: tracker.connectionId,
     teams: joined(tracker.teams),
     organization: tracker.organization ?? "",
-    assigneeAllowlist: joined(tracker.assigneeAllowlist),
+    assigneeAllowlist: tracker.assigneeAllowlist ?? [],
     trackerBotAllowlist: joined(tracker.botAllowlist),
     priorityFieldId: tracker.priority?.field.toString() ?? "",
     linearHistory: record.linearHistory,
@@ -151,13 +151,13 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
   const hasWorktrees = Object.values(worktrees).some((value) => value !== undefined);
   return Option.getOrNull(
     decodeWorkspaceUpdate({
-      name: draft.displayName,
+      displayName: draft.displayName,
       issueTracker: {
         type: draft.issueTrackerType,
         connectionId: draft.issueTrackerConnectionId,
         teams: list(draft.teams),
         organization: optional(draft.organization),
-        assigneeAllowlist: list(draft.assigneeAllowlist),
+        assigneeAllowlist: draft.assigneeAllowlist.length > 0 ? draft.assigneeAllowlist : undefined,
         botAllowlist: list(draft.trackerBotAllowlist),
         priority: priorityFrom(draft),
       },
@@ -191,20 +191,20 @@ export const workspaceRecordWritable = (workspace: WorkspaceState) =>
 
 export const workspaceIdentity = (workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
-    Registered: ({ name }) => name,
-    Failed: ({ name }) => name ?? null,
+    Registered: ({ id }) => id,
+    Failed: ({ id }) => id ?? null,
   });
 
 export const workspaceKey = (workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
-    Registered: ({ name }) => name,
-    Failed: ({ name, source }) => name ?? source,
+    Registered: ({ id }) => id,
+    Failed: ({ id, source }) => id ?? source,
   });
 
 export const workspaceLabel = (workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
-    Registered: ({ displayName, name }) => displayName ?? name,
-    Failed: ({ displayName, name, source }) => displayName ?? name ?? source,
+    Registered: ({ displayName }) => displayName,
+    Failed: ({ displayName, id, source }) => displayName ?? id ?? source,
   });
 
 export const workspaceLabelById = (board: Board, workspace: WorkspaceId) => {
