@@ -174,14 +174,14 @@ const reserve = (state: SchedulerState, candidate: WorkflowCandidate) => ({
 
 const startRun = (state: SchedulerState, candidate: WorkflowCandidate) => ({
   ...state,
-  startedRuns: new Map([...state.startedRuns, [workflowKeyFor(candidate.admission), candidate.workspace]]),
+  startedRuns: new Map([...state.startedRuns, ...candidate.keys.map((key) => [key, candidate.workspace] as const)]),
 });
 
 const release = (state: SchedulerState, candidate: WorkflowCandidate, retry: boolean) => ({
   ...state,
   global: Math.max(0, state.global - 1),
   perWorkspace: workspaceLoad(state, candidate, -1),
-  startedRuns: new Map([...state.startedRuns].filter(([key]) => key !== workflowKeyFor(candidate.admission))),
+  startedRuns: new Map([...state.startedRuns].filter(([key]) => !candidate.keys.includes(key))),
   inflight: new Set([...state.inflight].filter((key) => !candidate.reservationKeys.includes(key))),
   acted: retry ? new Set([...state.acted].filter((key) => !candidate.keys.includes(key))) : state.acted,
 });
