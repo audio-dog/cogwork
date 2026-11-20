@@ -92,7 +92,13 @@ describe("WorkflowRun", () => {
       const starts = yield* Ref.make(0);
       yield* observationStore.putAll([admission]);
 
-      assert.strictEqual(yield* runner.execute(admission, Ref.update(starts, (n) => n + 1)), "waiting");
+      assert.strictEqual(
+        yield* runner.execute(
+          admission,
+          Ref.update(starts, (n) => n + 1),
+        ),
+        "waiting",
+      );
       assert.strictEqual(yield* Ref.get(starts), 0);
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
       assert.isNull(yield* Ref.get(coordination.processed));

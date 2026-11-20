@@ -174,7 +174,10 @@ const reserve = (state: SchedulerState, candidate: WorkflowCandidate) => ({
 
 const startRun = (state: SchedulerState, candidate: WorkflowCandidate) => ({
   ...state,
-  startedRuns: new Map([...state.startedRuns, ...candidate.keys.map((key) => [key, candidate.workspace] as const)]),
+  startedRuns: new Map([
+    ...state.startedRuns,
+    ...candidate.keys.map((key) => [key, candidate.workspace] as const),
+  ]),
 });
 
 const release = (state: SchedulerState, candidate: WorkflowCandidate, retry: boolean) => ({
@@ -220,9 +223,12 @@ const planCandidates = (
   );
 
 const updateStateMetrics = (state: SchedulerState) =>
-  Effect.all([Metric.update(runsInFlight, state.startedRuns.size), Metric.update(budgetUsed, state.budgetUsed)], {
-    discard: true,
-  });
+  Effect.all(
+    [Metric.update(runsInFlight, state.startedRuns.size), Metric.update(budgetUsed, state.budgetUsed)],
+    {
+      discard: true,
+    },
+  );
 
 const jobOutcome = <A, E>(exit: Exit.Exit<A, E>) => {
   if (Exit.isSuccess(exit)) return "success";
@@ -250,28 +256,33 @@ export const make = (config: SchedulerConfig) =>
     const runWorkflow = (candidate: WorkflowCandidate) =>
       Ref.make<ReservationDisposition>({ refundBudget: false, retry: true }).pipe(
         Effect.flatMap((dispositionRef) =>
-          workflowRun.execute(candidate.admission, updateState((state) => startRun(state, candidate))).pipe(
-            Effect.map((outcome) => workflowRunDispositions[outcome]),
-            Effect.tap((disposition) => Ref.set(dispositionRef, disposition)),
-            Effect.asVoid,
-            Effect.onExit(recordJobOutcome),
-            Effect.catchCauseIf(
-              (cause) => !Cause.hasInterruptsOnly(cause),
-              (cause) => Effect.logWarning("scheduled job crashed", cause),
-            ),
-            Effect.ensuring(
-              Ref.get(dispositionRef).pipe(
-                Effect.flatMap((disposition) =>
-                  updateState((state) => finishReservation(state, candidate, disposition)),
+          workflowRun
+            .execute(
+              candidate.admission,
+              updateState((state) => startRun(state, candidate)),
+            )
+            .pipe(
+              Effect.map((outcome) => workflowRunDispositions[outcome]),
+              Effect.tap((disposition) => Ref.set(dispositionRef, disposition)),
+              Effect.asVoid,
+              Effect.onExit(recordJobOutcome),
+              Effect.catchCauseIf(
+                (cause) => !Cause.hasInterruptsOnly(cause),
+                (cause) => Effect.logWarning("scheduled job crashed", cause),
+              ),
+              Effect.ensuring(
+                Ref.get(dispositionRef).pipe(
+                  Effect.flatMap((disposition) =>
+                    updateState((state) => finishReservation(state, candidate, disposition)),
+                  ),
                 ),
               ),
+              Effect.annotateLogs({
+                workflow: candidate.admission.subscription.workflow,
+                item: keyOf(candidate.admission.event.key),
+                operation: candidate.admission.subscription.operation,
+              }),
             ),
-            Effect.annotateLogs({
-              workflow: candidate.admission.subscription.workflow,
-              item: keyOf(candidate.admission.event.key),
-              operation: candidate.admission.subscription.operation,
-            }),
-          ),
         ),
       );
 
