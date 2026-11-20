@@ -1,0 +1,21 @@
+packages/engine/src/start-over.test.ts
+  s_879522bbf48bef::t_30a80e16d937d9 1-177
+packages/engine/src/start-over.ts
+  s_879522bbf48bef::t_6b0ca4df5e601e 1-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2fda4237ffdbaffd842a5fb2aa5787140020242c",
+  "prompts": {},
+  "sessions": {
+    "s_879522bbf48bef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dc06238-5b4a-45a1-8802-fbb207af229a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
