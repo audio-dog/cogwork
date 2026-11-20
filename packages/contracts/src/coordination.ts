@@ -1,4 +1,5 @@
 import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString, WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionId } from "./connection";
@@ -83,6 +84,43 @@ export const refOfKey = (key: string) => {
     Option.filter((ref) => keyOf(ref) === key),
     Option.getOrNull,
   );
+};
+
+const issueRef = (workspace: WorkspaceId, id: string): WorkItemRef =>
+  WorkItemRef.cases.Issue.make({ workspace, id: WorkItemId.make(id) });
+
+const urlTail = "(?:[/?#].*)?$";
+const workItemReferences: ReadonlyArray<{
+  readonly pattern: RegExp;
+  readonly ref: (workspace: WorkspaceId, captured: string) => WorkItemRef;
+}> = [
+  { pattern: /^#([1-9]\d*)$/, ref: (workspace, number) => issueRef(workspace, `#${number}`) },
+  { pattern: /^([A-Z][A-Z0-9]*-[1-9]\d*)$/, ref: issueRef },
+  {
+    pattern: new RegExp(String.raw`^https://github\.com/[^/]+/[^/]+/issues/([1-9]\d*)${urlTail}`),
+    ref: (workspace, number) => issueRef(workspace, `#${number}`),
+  },
+  {
+    pattern: new RegExp(String.raw`^https://github\.com/[^/]+/[^/]+/pull/([1-9]\d*)${urlTail}`),
+    ref: (workspace, number) => WorkItemRef.cases.PullRequest.make({ workspace, number: Number(number) }),
+  },
+  {
+    pattern: new RegExp(String.raw`^https://linear\.app/[^/]+/issue/([A-Z][A-Z0-9]*-[1-9]\d*)${urlTail}`),
+    ref: issueRef,
+  },
+];
+
+export const parseWorkItemReference = (workspace: WorkspaceId, reference: string) => {
+  const text = reference.trim();
+  const match = workItemReferences
+    .map(({ pattern, ref }) => ({ captured: pattern.exec(text)?.[1], ref }))
+    .find(({ captured }) => captured !== undefined);
+  if (match?.captured === undefined) {
+    return Result.fail(
+      `"${text}" is not a work item reference. Use #N, ABC-N, or a GitHub or Linear issue or pull request URL.`,
+    );
+  }
+  return Result.succeed(match.ref(workspace, match.captured));
 };
 
 export const OperationKey = Schema.Struct({
