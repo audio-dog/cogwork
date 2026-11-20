@@ -29,7 +29,7 @@ import {
   RiRobot2Line,
   RiStopCircleLine,
 } from "@remixicon/react";
-import { type ComponentType, createContext, type ReactNode, use } from "react";
+import { type ComponentProps, type ComponentType, createContext, type ReactNode, use } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
 import { useOperationName } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
@@ -244,16 +244,19 @@ function WarningRow({ row }: { row: Extract<TranscriptRow, { kind: "warning" }> 
   );
 }
 
-const subagentStatusIcons = {
-  running: Spinner,
-  finished: RiCheckLine,
-  error: RiErrorWarningLine,
-} satisfies Record<SubagentStatus, ComponentType<{ className?: string }>>;
+const subagentStatusBadges = {
+  running: { Icon: Spinner, variant: "secondary" },
+  finished: { Icon: RiCheckLine, variant: "secondary" },
+  error: { Icon: RiErrorWarningLine, variant: "destructive" },
+} satisfies Record<
+  SubagentStatus,
+  { Icon: ComponentType<{ className?: string }>; variant: ComponentProps<typeof Badge>["variant"] }
+>;
 
 function SubagentStatusBadge({ status }: { status: SubagentStatus }) {
-  const Icon = subagentStatusIcons[status];
+  const { Icon, variant } = subagentStatusBadges[status];
   return (
-    <Badge variant={status === "error" ? "destructive" : "secondary"}>
+    <Badge variant={variant}>
       <Icon data-icon="inline-start" />
       {status}
     </Badge>

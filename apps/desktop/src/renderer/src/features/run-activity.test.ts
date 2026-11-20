@@ -179,7 +179,7 @@ describe("foldTranscript", () => {
     ]);
   });
 
-  it("gives parallel children one card each, with only their own text", () => {
+  it("gives parallel children one card each, with only their own text and status", () => {
     const entries = foldTranscript(
       runActivities([
         { type: "SUBAGENT_STARTED", subagentRunId: "a", name: "reviewer" },
@@ -188,15 +188,27 @@ describe("foldTranscript", () => {
         { type: "TEXT_MESSAGE_CONTENT", messageId: "mb", delta: "tests ", subagentRunId: "b" },
         { type: "TEXT_MESSAGE_CONTENT", messageId: "ma", delta: "passed", subagentRunId: "a" },
         { type: "SUBAGENT_ERROR", subagentRunId: "b", message: "model overloaded" },
-        { type: "TEXT_MESSAGE_START", messageId: "ma2", subagentRunId: "a" },
-        { type: "TEXT_MESSAGE_CONTENT", messageId: "ma2", delta: "Done.", subagentRunId: "a" },
       ]),
     );
 
     expect(entries).toEqual([
-      { ...card("a", "reviewer"), status: "running", text: "review passed\n\nDone." },
+      { ...card("a", "reviewer"), status: "running", text: "review passed" },
       { ...card("b", "tester"), status: "error", text: "tests ", message: "model overloaded" },
     ]);
+  });
+
+  it("separates a child's messages with a blank line", () => {
+    const entries = foldTranscript(
+      runActivities([
+        { type: "SUBAGENT_STARTED", subagentRunId: "a", name: "reviewer" },
+        { type: "TEXT_MESSAGE_START", messageId: "m1", subagentRunId: "a" },
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "m1", delta: "Reading.", subagentRunId: "a" },
+        { type: "TEXT_MESSAGE_START", messageId: "m2", subagentRunId: "a" },
+        { type: "TEXT_MESSAGE_CONTENT", messageId: "m2", delta: "Done.", subagentRunId: "a" },
+      ]),
+    );
+
+    expect(entries).toMatchObject([{ key: "subagent:a", text: "Reading.\n\nDone." }]);
   });
 
   it.each([

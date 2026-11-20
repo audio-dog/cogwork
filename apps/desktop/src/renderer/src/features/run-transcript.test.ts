@@ -187,6 +187,16 @@ describe("transcriptRows", () => {
     expect(rows[1]).toEqual(reviewerCard);
   });
 
+  it.each([
+    { runComplete: false, status: "running", message: null },
+    { runComplete: true, status: "error", message: "The Run ended before this Subagent finished." },
+  ])(
+    "shows a running card as $status when the run is complete: $runComplete",
+    ({ runComplete, status, message }) => {
+      expect(transcriptRows([reviewerCard], runComplete)).toEqual([{ ...reviewerCard, status, message }]);
+    },
+  );
+
   it("clips an output too large to draw and says so", () => {
     const [row] = transcriptRows([{ ...shell("cat big"), result: shellOutput("x".repeat(9000)) }], true);
 

@@ -11,7 +11,7 @@ import {
   RiTestTubeLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
-import type { TranscriptEntry } from "./run-activity";
+import type { SubagentCard, TranscriptEntry } from "./run-activity";
 
 /**
  * A harness puts three shapes on the wire that the AG-UI types do not describe,
@@ -214,10 +214,15 @@ const stepView = (entry: StepEntry, runComplete: boolean): StepView => {
 export const stepBody = (view: StepView) =>
   [view.target, view.detail].filter((block) => block.trim().length > 0).join("\n\n");
 
-type OwnRowEntry = Extract<TranscriptEntry, { kind: "warning" | "error" | "subagent" }>;
+type AlertEntry = Extract<TranscriptEntry, { kind: "warning" | "error" }>;
 
-const isOwnRow = (entry: TranscriptEntry): entry is OwnRowEntry =>
-  entry.kind === "warning" || entry.kind === "error" || entry.kind === "subagent";
+const isAlertEntry = (entry: TranscriptEntry): entry is AlertEntry =>
+  entry.kind === "warning" || entry.kind === "error";
+
+const settledCard = (card: SubagentCard, runComplete: boolean): SubagentCard => {
+  if (!runComplete || card.status !== "running") return card;
+  return { ...card, status: "error", message: "The Run ended before this Subagent finished." };
+};
 
 export type TranscriptRow =
   | {
@@ -227,7 +232,8 @@ export type TranscriptRow =
       readonly foldNoun: "tool call" | "step";
     }
   | { readonly kind: "note"; readonly key: string; readonly text: string }
-  | OwnRowEntry;
+  | AlertEntry
+  | SubagentCard;
 
 export type TranscriptRowKind = TranscriptRow["kind"];
 
@@ -251,7 +257,8 @@ const noteRow = (entry: Extract<TranscriptEntry, { kind: "text" }>): TranscriptR
 const toRow = (group: readonly TranscriptEntry[], runComplete: boolean): TranscriptRow | null => {
   const [first] = group;
   if (!first) return null;
-  if (isOwnRow(first)) return first;
+  if (isAlertEntry(first)) return first;
+  if (first.kind === "subagent") return settledCard(first, runComplete);
   if (first.kind === "text") return noteRow(first);
   const steps = group.filter(isStep);
   return {
