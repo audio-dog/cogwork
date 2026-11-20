@@ -36,7 +36,11 @@ const useBufferedText = (value: string, save: (text: string) => Promise<string>)
       if (!editing.current) setState({ server: value, text: value, dirty: false });
     }
   };
-  const submitAfterPause = useDebouncedCallback(submit, [save], 500);
+  const submitWhileEditing = async (text: string) => {
+    if (!editing.current) return;
+    await submit(text);
+  };
+  const submitAfterPause = useDebouncedCallback(submitWhileEditing, [save], 500);
   return {
     text: draft.text,
     setText: (next: string) => {
