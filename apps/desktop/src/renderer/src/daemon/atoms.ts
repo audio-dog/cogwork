@@ -112,6 +112,15 @@ const githubPriorityFieldsForWorkspaceAtom = Atom.family((workspace: WorkspaceId
 export const githubPriorityFieldsAtom = (workspace: WorkspaceId, connection: ConnectionBindingId) =>
   githubPriorityFieldsForWorkspaceAtom(workspace)(connection);
 
+const issueTrackerPeopleForWorkspaceAtom = Atom.family((workspace: WorkspaceId) =>
+  Atom.family((connection: ConnectionBindingId) =>
+    DaemonAtomRpc.query("GetIssueTrackerPeople", { workspace, connection }),
+  ),
+);
+
+export const issueTrackerPeopleAtom = (workspace: WorkspaceId, connection: ConnectionBindingId) =>
+  issueTrackerPeopleForWorkspaceAtom(workspace)(connection);
+
 export const setHarnessEnabledAtom = DaemonAtomRpc.mutation("SetHarnessEnabled");
 
 export const installPluginAtom = DaemonAtomRpc.mutation("InstallPlugin");

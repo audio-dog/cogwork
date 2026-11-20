@@ -9,7 +9,7 @@ export interface WorkspaceRecordDraft {
   readonly issueTrackerConnectionId: string;
   readonly teams: string;
   readonly organization: string;
-  readonly assigneeAllowlist: string;
+  readonly assigneeAllowlist: readonly string[];
   readonly trackerBotAllowlist: string;
   readonly priorityFieldId: string;
   readonly linearHistory: boolean;
@@ -33,7 +33,7 @@ export const emptyDraft: WorkspaceRecordDraft = {
   issueTrackerConnectionId: "unbound",
   teams: "",
   organization: "",
-  assigneeAllowlist: "",
+  assigneeAllowlist: [],
   trackerBotAllowlist: "",
   priorityFieldId: "",
   linearHistory: false,
@@ -71,7 +71,7 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     issueTrackerConnectionId: tracker.connectionId,
     teams: joined(tracker.teams),
     organization: tracker.organization ?? "",
-    assigneeAllowlist: joined(tracker.assigneeAllowlist),
+    assigneeAllowlist: tracker.assigneeAllowlist ?? [],
     trackerBotAllowlist: joined(tracker.botAllowlist),
     priorityFieldId: tracker.priority?.field.toString() ?? "",
     linearHistory: record.linearHistory,
@@ -157,7 +157,7 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
         connectionId: draft.issueTrackerConnectionId,
         teams: list(draft.teams),
         organization: optional(draft.organization),
-        assigneeAllowlist: list(draft.assigneeAllowlist),
+        assigneeAllowlist: draft.assigneeAllowlist.length > 0 ? draft.assigneeAllowlist : undefined,
         botAllowlist: list(draft.trackerBotAllowlist),
         priority: priorityFrom(draft),
       },

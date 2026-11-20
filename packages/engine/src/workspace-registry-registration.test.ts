@@ -9,6 +9,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import { controlStoreClientLayer } from "./control-store";
 import { layer as registryLayer } from "./registry";
@@ -24,6 +25,8 @@ import {
   registryLayerAt,
   testGitLayer,
 } from "./workspace-registry-fixtures";
+
+const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const signalRead = (started: Deferred.Deferred<void>, release: Deferred.Deferred<void>) =>
   Deferred.succeed(started, undefined).pipe(Effect.andThen(Deferred.await(release)));
@@ -82,6 +85,41 @@ layer(Layer.merge(NodeServices.layer, NodeCrypto.layerSecureRandom))((it) => {
 
       assert.include(duplicate.message, `already registered as ${first.workspace.config.id}`);
       assert.strictEqual((yield* liveRegistry.state).workspaces.length, 1);
+    }),
+  );
+
+  it.effect("still loads a stored assignee allowlist entry that is not a tracker identity", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-workspace-registry-allowlist-" });
+      const storePath = path.join(root, "control.db");
+      const checkoutPath = yield* makeCheckout(root, "allowlist");
+      const context = yield* Layer.build(registryLayerAt(storePath));
+      const change = yield* Context.get(context, WorkspaceManagement).register(
+        registration({
+          displayName: "allowlist",
+          checkoutPath,
+          issueTracker: { type: "linear", teams: ["ENG"] },
+          linearHistory: false,
+        }),
+      );
+      if (change._tag === "Failed") return assert.fail("expected registration to succeed");
+      const storedTracker = yield* encodeJson({
+        type: "linear",
+        teams: ["ENG"],
+        assigneeAllowlist: ["taylor.steele"],
+      });
+      yield* Effect.flatMap(
+        SqlClient.SqlClient,
+        (sql) => sql`UPDATE workspaces SET issue_tracker = ${storedTracker}`,
+      ).pipe(Effect.provide(controlStoreClientLayer(storePath)));
+
+      const reloadedContext = yield* Layer.build(registryLayerAt(storePath));
+      const state = yield* Context.get(reloadedContext, WorkspaceRegistry).state;
+
+      assert.deepStrictEqual(state.failures, []);
+      assert.deepStrictEqual(state.workspaces[0]?.record?.issueTracker.assigneeAllowlist, ["taylor.steele"]);
     }),
   );
 
