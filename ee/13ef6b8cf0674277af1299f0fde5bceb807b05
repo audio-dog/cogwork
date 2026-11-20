@@ -1,0 +1,21 @@
+packages/engine/src/run-completion.ts
+  s_83070658b7e584::t_79fa43b2d7ab11 23-28,87,95
+packages/engine/src/workflow-run-attempts.ts
+  s_83070658b7e584::t_d5e64fb2615a64 218-220
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee13ef6b8cf0674277af1299f0fde5bceb807b05",
+  "prompts": {},
+  "sessions": {
+    "s_83070658b7e584": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "599c8bf1-8888-4951-9a84-c9d9b2d5c343",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
