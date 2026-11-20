@@ -1,6 +1,8 @@
 import type { RunSummary } from "@cogwork/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
+import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@cogwork/ui/components/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@cogwork/ui/components/collapsible";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@cogwork/ui/components/empty";
 import {
@@ -20,18 +22,26 @@ import {
 import { Spinner } from "@cogwork/ui/components/spinner";
 import { cn } from "@cogwork/ui/lib/utils";
 import { useAtom } from "@effect/atom-react";
-import { RiArrowDownSLine, RiCheckLine, RiErrorWarningLine, RiStopCircleLine } from "@remixicon/react";
-import { createContext, type ReactNode, use } from "react";
+import {
+  RiArrowDownSLine,
+  RiCheckLine,
+  RiErrorWarningLine,
+  RiRobot2Line,
+  RiStopCircleLine,
+} from "@remixicon/react";
+import { type ComponentProps, type ComponentType, createContext, type ReactNode, use } from "react";
 import { cancelRunAtom } from "../daemon/atoms";
 import { useOperationName } from "../features/activity-session";
 import { daemonFailureMessage } from "../features/daemon-failure";
 import { duration } from "../features/format";
-import { transcriptReplaying, useRunTranscript } from "../features/run-activity";
+import { type SubagentStatus, transcriptReplaying, useRunTranscript } from "../features/run-activity";
 import {
   headingLine,
   type StepView,
   stepBody,
   type TranscriptRow,
+  type TranscriptRowKind,
+  type TranscriptRowOf,
   transcriptRows,
 } from "../features/run-transcript";
 import { useNow } from "../features/use-now";
@@ -234,11 +244,62 @@ function WarningRow({ row }: { row: Extract<TranscriptRow, { kind: "warning" }> 
   );
 }
 
-function Row({ row }: { row: TranscriptRow }) {
-  if (row.kind === "work") return <WorkRow row={row} />;
-  if (row.kind === "note") return <NoteRow row={row} />;
-  if (row.kind === "warning") return <WarningRow row={row} />;
-  return <ErrorRow row={row} />;
+const subagentStatusBadges = {
+  running: { Icon: Spinner, variant: "secondary" },
+  finished: { Icon: RiCheckLine, variant: "secondary" },
+  error: { Icon: RiErrorWarningLine, variant: "destructive" },
+} satisfies Record<
+  SubagentStatus,
+  { Icon: ComponentType<{ className?: string }>; variant: ComponentProps<typeof Badge>["variant"] }
+>;
+
+function SubagentStatusBadge({ status }: { status: SubagentStatus }) {
+  const { Icon, variant } = subagentStatusBadges[status];
+  return (
+    <Badge variant={variant}>
+      <Icon data-icon="inline-start" />
+      {status}
+    </Badge>
+  );
+}
+
+function SubagentRow({ row }: { row: TranscriptRowOf<"subagent"> }) {
+  return (
+    <div className="py-1">
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-1.5">
+            <RiRobot2Line className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            {row.name}
+          </CardTitle>
+          <CardAction>
+            <SubagentStatusBadge status={row.status} />
+          </CardAction>
+        </CardHeader>
+        {(row.text || row.message) && (
+          <CardContent>
+            {row.text && <Markdown className="text-sm">{row.text}</Markdown>}
+            {row.message && <p className="text-xs text-destructive">{row.message}</p>}
+          </CardContent>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+const rowViews: {
+  readonly [Kind in TranscriptRowKind]: ComponentType<{ row: TranscriptRowOf<Kind> }>;
+} = {
+  work: WorkRow,
+  note: NoteRow,
+  warning: WarningRow,
+  error: ErrorRow,
+  subagent: SubagentRow,
+};
+
+function Row<Kind extends TranscriptRowKind>({ kind, row }: { kind: Kind; row: TranscriptRowOf<Kind> }) {
+  const View: ComponentType<{ row: TranscriptRowOf<Kind> }> = rowViews[kind];
+  return <View row={row} />;
 }
 
 function WorkingRow() {
@@ -324,7 +385,7 @@ function TranscriptConversation() {
             <MessageScrollerContent className="gap-0 px-3 py-2">
               {rows.map((row) => (
                 <MessageScrollerItem key={row.key} messageId={row.key}>
-                  <Row row={row} />
+                  <Row kind={row.kind} row={row} />
                 </MessageScrollerItem>
               ))}
               {running && (
