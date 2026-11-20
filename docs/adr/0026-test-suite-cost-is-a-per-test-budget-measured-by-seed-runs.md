@@ -1,6 +1,6 @@
 # 0026 — Test-suite cost is a per-test budget measured by seed runs
 
-- **Status:** accepted
+- **Status:** superseded by ADR [0040](./0040-the-test-suite-cost-sensor-is-removed.md)
 - **Date:** 2026-09-23
 
 ## Context

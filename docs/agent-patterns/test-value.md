@@ -32,9 +32,8 @@ Keep a test that is the only guard of:
 For everything else, apply _test what fails silently_: **if this broke, would anything tell us?** When
 the answer is "the next run just does the wrong thing", keep the test.
 
-Slow is not a reason to delete. Suite cost goes through the sensor and the measured prototype in
-ADR 0026. A test that resembles the implementation can still be the only guard of a contract: prove
-it is not before you remove it.
+Slow is not a reason to delete. A test that resembles the implementation can still be the only
+guard of a contract: prove it is not before you remove it.
 
 ## Sources
 
@@ -42,7 +41,7 @@ it is not before you remove it.
   what fails silently_, _declared is not reachable_.
 - `packages/engine/operating-instructions/shared/test-value/TEST-VALUE.md`: the general test-value bar.
 - `docs/agent-patterns/effect-test-layers.md`: probe services and test-only interface leaks.
-- `docs/adr/0026-test-suite-cost-is-a-per-test-budget-measured-by-seed-runs.md`: cut by measurement
-  and judgment, never by category.
+- `docs/adr/0040-the-test-suite-cost-sensor-is-removed.md`: slow is not a reason to delete, and
+  suites are never cut by category.
 - OpenClaw's `test-audit` skill (`.agents/skills/test-audit/SKILL.md` in `openclaw/openclaw`): the
   four questions, the hunt list, and the retention bar are adapted from it. A **borrow**.
