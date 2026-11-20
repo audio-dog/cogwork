@@ -45,7 +45,7 @@ export function ImportReviewBanner() {
   const review = use(ImportReviewContext);
   if (!review || review.marks.size === 0) return null;
   return (
-    <Alert variant="warning" role="status">
+    <Alert variant="warning">
       <RiAlertLine />
       <AlertTitle>Review these before you turn this on</AlertTitle>
       <AlertDescription>

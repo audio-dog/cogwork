@@ -54,7 +54,7 @@ function SearchResult({ entry, onSelect }: { entry: SettingEntry; onSelect: () =
   return (
     <Item
       size="sm"
-      render={<button type="button" onClick={onSelect} />}
+      render={<button type="button" aria-label={entry.title} onClick={onSelect} />}
       className="w-full cursor-pointer text-left hover:bg-sidebar-accent"
     >
       {Icon ? (
