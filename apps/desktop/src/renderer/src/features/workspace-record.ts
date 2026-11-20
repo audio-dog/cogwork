@@ -201,7 +201,7 @@ export const workspaceKey = (workspace: WorkspaceState) =>
     Failed: ({ id, source }) => id ?? source,
   });
 
-export const workspaceLabel = (workspace: WorkspaceState) =>
+export const workspaceStateLabel = (workspace: WorkspaceState) =>
   WorkspaceState.match(workspace, {
     Registered: ({ displayName }) => displayName,
     Failed: ({ displayName, id, source }) => displayName ?? id ?? source,
@@ -209,7 +209,7 @@ export const workspaceLabel = (workspace: WorkspaceState) =>
 
 export const workspaceLabelById = (board: Board, workspace: WorkspaceId) => {
   const state = board.workspaces.get(workspace);
-  return state ? workspaceLabel(state) : workspace;
+  return state ? workspaceStateLabel(state) : workspace;
 };
 
 export interface WorkspaceHealth {

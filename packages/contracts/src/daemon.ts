@@ -115,8 +115,12 @@ export const SchedulerLimit = Schema.Int.check(
 );
 export type SchedulerLimit = typeof SchedulerLimit.Type;
 
+export const workspaceLabel = (workspace: { readonly id: WorkspaceId; readonly displayName?: string }) =>
+  workspace.displayName ?? workspace.id;
+
 export const WorkspaceLoad = Schema.Struct({
   id: WorkspaceId,
+  displayName: Schema.optional(TrimmedNonEmptyString),
   inFlight: Schema.Natural,
   limit: WorkspaceConcurrency,
 });

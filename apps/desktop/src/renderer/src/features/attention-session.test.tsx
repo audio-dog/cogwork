@@ -166,6 +166,7 @@ const attentionWith = (
   commands: ReadonlyArray<string>,
   activePlan: unknown = plan,
   summary = "Ready to comment",
+  parked: { readonly lineage: unknown; readonly parentRun: unknown } = { lineage, parentRun: null },
 ) =>
   decodeAttention({
     parks: [
@@ -174,7 +175,7 @@ const attentionWith = (
         workflow: "triage",
         publishedRevision: 4,
         operation: "review",
-        lineage,
+        ...parked,
         summary,
         changedSinceParked: false,
         commands,
@@ -435,6 +436,35 @@ describe("AttentionClientProvider", () => {
     expect(text).toContain("/worktrees/947");
     expect(text).toContain("src/a.ts");
     expect(text).toContain("src/b.ts");
+    await act(async () => root.unmount());
+  });
+
+  it.each([
+    { parentRun: { operation: "review", startedAtMillis: 0 }, label: /^Review · started / },
+    { parentRun: null, label: /^Earlier Run$/ },
+  ])("labels the parent Run in the lineage without its Run id ($label)", async ({ parentRun, label }) => {
+    const parentRunId = "8a30130e-a15e-411b-87c3-6b23cc581c24";
+    const { container, root } = await renderAttention({
+      snapshot: snapshot(
+        attentionWith({ _tag: "Stuck", summary: "Need a person" }, ["hand-back"], null, "Need a person", {
+          lineage: { ...lineage, parent: parentRunId, hop: 1 },
+          parentRun,
+        }),
+      ),
+      client: defaultClient(),
+    });
+
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((candidate) => candidate.textContent?.includes("From #817"))
+        ?.click(),
+    );
+
+    const titles = [...container.querySelectorAll('[data-slot="trace-title"]')].map(
+      (node) => node.textContent,
+    );
+    expect(titles.some((title) => label.test(title ?? ""))).toBe(true);
+    expect(container.textContent).not.toContain(parentRunId);
     await act(async () => root.unmount());
   });
 

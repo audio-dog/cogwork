@@ -1,6 +1,8 @@
 import {
   keyOf,
+  type Lineage,
   ParkReason,
+  RunId,
   WorkflowAttention as WorkflowAttentionSchema,
   type WorkflowParkCommand,
   WorkflowTouchpointFailure,
@@ -9,6 +11,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { Coordination } from "./coordination";
+import { RunLedger } from "./run-ledger";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import { TriggerObservationStore } from "./trigger-observation-store";
 import { type TriggerEvent, TriggerEventPayload } from "./trigger-source";
@@ -85,6 +88,18 @@ export const make = Effect.gen(function* () {
   const observationStore = yield* TriggerObservationStore;
   const actionPlans = yield* WorkflowActionPlanStore;
   const workflows = yield* Workflows;
+  const ledger = yield* RunLedger;
+
+  const parentRunOf = ({ parent }: Lineage) => {
+    if (parent === null) return Effect.succeed(null);
+    return ledger
+      .getRun(RunId.make(parent))
+      .pipe(
+        Effect.map((run) =>
+          run === null ? null : { operation: run.operation, startedAtMillis: run.startedAtMillis },
+        ),
+      );
+  };
 
   return {
     list: Effect.all([
@@ -132,9 +147,15 @@ export const make = Effect.gen(function* () {
             }),
           ),
         ).pipe(
+          Effect.flatMap((parks) =>
+            Effect.forEach(
+              parks.filter((park) => park !== null),
+              (park) => Effect.map(parentRunOf(park.lineage), (parentRun) => ({ ...park, parentRun })),
+            ),
+          ),
           Effect.map((parks) =>
             WorkflowAttentionSchema.make({
-              parks: parks.filter((park) => park !== null),
+              parks,
               skipped: listed.workflows.map(({ id }) => ({
                 workflow: id,
                 steps: plans

@@ -67,6 +67,7 @@ const park = (reason: { readonly _tag: string }, operation = "triage") =>
     publishedRevision: 1,
     operation,
     lineage: { root: "issue:acme:%231", parent: null, hop: 0 },
+    parentRun: null,
     summary: "Parked",
     changedSinceParked: false,
     commands: ["hand-back"],

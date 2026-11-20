@@ -5,7 +5,7 @@ import { cn } from "@cogwork/ui/lib/utils";
 import { RiExternalLinkLine, RiGitPullRequestLine } from "@remixicon/react";
 import { BoardResult, useBoard } from "../features/activity-session";
 import { type AttentionEntry, attentionEntries, filterAttention } from "../features/attention";
-import { registeredWorkspaces } from "../features/feed";
+import { registeredWorkspaceOptions, type WorkspaceOption } from "../features/feed";
 import { relativeTime } from "../features/format";
 import { useRightPanelStore } from "../store/right-panel";
 import { FunnelFilter, useFunnelSelection } from "./funnel-filter";
@@ -102,7 +102,7 @@ function AttentionRow({ entry }: { entry: AttentionEntry }) {
         <span className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
           <span>{entry.item.id}</span>
           <span aria-hidden>·</span>
-          <span className="truncate">{entry.workspace}</span>
+          <span className="truncate">{entry.workspaceLabel}</span>
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
@@ -121,15 +121,15 @@ function AttentionContent({
   workspaces,
 }: {
   entries: ReadonlyArray<AttentionEntry>;
-  workspaces: ReadonlyArray<string>;
+  workspaces: ReadonlyArray<WorkspaceOption>;
 }) {
   const workspace = useFunnelSelection();
   const rows = filterAttention(entries, workspace.selected);
   const hasActiveFilters = workspace.selected.size > 0;
-  const options = workspaces.map((name) => ({
-    key: name,
-    label: name,
-    count: entries.filter((entry) => entry.workspace === name).length,
+  const options = workspaces.map(({ id, label }) => ({
+    key: id,
+    label,
+    count: entries.filter((entry) => entry.workspace === id).length,
   }));
 
   return (
@@ -175,5 +175,5 @@ export function AttentionList() {
   const result = useBoard();
   if (!BoardResult.$is("Success")(result)) return null;
   const entries = attentionEntries(result.board);
-  return <AttentionContent entries={entries} workspaces={registeredWorkspaces(result.board)} />;
+  return <AttentionContent entries={entries} workspaces={registeredWorkspaceOptions(result.board)} />;
 }

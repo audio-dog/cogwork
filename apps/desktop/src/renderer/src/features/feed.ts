@@ -67,11 +67,6 @@ const runs = (board: Board, filter: WorkspaceId | null) =>
 const registeredStates = (board: Board) =>
   [...board.workspaces.values()].filter(WorkspaceState.guards.Registered);
 
-export const registeredWorkspaces = (board: Board): WorkspaceId[] =>
-  registeredStates(board)
-    .map((state) => state.id)
-    .sort();
-
 export interface WorkspaceOption {
   readonly id: WorkspaceId;
   readonly label: string;

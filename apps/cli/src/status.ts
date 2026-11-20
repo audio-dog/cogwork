@@ -1,14 +1,20 @@
-import type { ControlStore, DaemonStatus, SchedulerStats, WorkspaceInfo } from "@cogwork/contracts";
+import {
+  type ControlStore,
+  type DaemonStatus,
+  type SchedulerStats,
+  type WorkspaceId,
+  type WorkspaceInfo,
+  workspaceLabel,
+} from "@cogwork/contracts";
 import { readyToMergeText } from "./read-model-item";
 import { terminalLine } from "./terminal-text";
 
 const section = (label: string, lines: ReadonlyArray<string>) =>
   lines.length === 0 ? [] : [`      ${label}:`, ...lines.map((line) => `        · ${line}`)];
 
-const workspaceLabel = (workspace: { readonly id?: string; readonly displayName?: string }) => {
-  if (workspace.id === undefined) return workspace.displayName ?? "";
-  if (workspace.displayName === undefined) return workspace.id;
-  return `${workspace.displayName} (${workspace.id})`;
+const labelWithId = (workspace: { readonly id: WorkspaceId; readonly displayName?: string }) => {
+  const label = workspaceLabel(workspace);
+  return label === workspace.id ? label : `${label} (${workspace.id})`;
 };
 
 const formatWorkspace = (workspace: WorkspaceInfo) => {
@@ -17,19 +23,24 @@ const formatWorkspace = (workspace: WorkspaceInfo) => {
     workspace.readyToMerge.map((item) => terminalLine(readyToMergeText(item))),
   );
   return [
-    `  - ${workspaceLabel(workspace)} [${workspace.issueTracker}] ${workspace.checkoutPath}`,
+    `  - ${labelWithId(workspace)} [${workspace.issueTracker}] ${workspace.checkoutPath}`,
     ...readyToMerge,
   ].join("\n");
 };
 
 const formatFailure = (failure: DaemonStatus["failures"][number]) => {
-  const label = workspaceLabel(failure);
-  const workspace = label.length === 0 ? "" : `${label} · `;
+  const label =
+    failure.id === undefined
+      ? failure.displayName
+      : labelWithId({ id: failure.id, displayName: failure.displayName });
+  const workspace = label === undefined ? "" : `${label} · `;
   return `  ! ${workspace}${failure.source}: ${failure.message}`;
 };
 
 export const formatScheduler = (scheduler: SchedulerStats) => {
-  const loads = scheduler.perWorkspace.map((load) => `${load.id}=${load.inFlight}/${load.limit}`).join(" ");
+  const loads = scheduler.perWorkspace
+    .map((load) => `${workspaceLabel(load)}=${load.inFlight}/${load.limit}`)
+    .join(" ");
   const suffix = loads.length === 0 ? "" : ` (${loads})`;
   const paused = scheduler.scheduling === "paused" ? " · paused" : "";
   return `scheduler: ${scheduler.globalInFlight}/${scheduler.globalLimit} in-flight · budget ${scheduler.dailyBudgetUsed}/${scheduler.dailyBudgetLimit}${paused}${suffix}`;

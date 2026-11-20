@@ -76,6 +76,7 @@ export const workspaceStatesOf = (
 const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, state: SchedulerState) => [
   ...registry.workspaces.map((workspace) => ({
     id: workspace.config.id,
+    displayName: workspace.config.displayName,
     inFlight: state.perWorkspace.get(workspace.config.id) ?? 0,
     limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
   })),
@@ -84,6 +85,7 @@ const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, stat
     return [
       {
         id: failure.id,
+        displayName: failure.displayName,
         inFlight: state.perWorkspace.get(failure.id) ?? 0,
         limit: failure.workspaceLimit ?? config.perWorkspaceLimit,
       },

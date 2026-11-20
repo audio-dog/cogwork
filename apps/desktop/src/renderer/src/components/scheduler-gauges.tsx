@@ -1,4 +1,4 @@
-import type { SchedulerStats } from "@cogwork/contracts";
+import { type SchedulerStats, workspaceLabel } from "@cogwork/contracts";
 import { Badge } from "@cogwork/ui/components/badge";
 import { Button } from "@cogwork/ui/components/button";
 import { cn } from "@cogwork/ui/lib/utils";
@@ -42,7 +42,7 @@ function SchedulerSummary({ scheduler }: { scheduler: SchedulerStats }) {
       </span>
       {busy.map((load) => (
         <Badge key={load.id} variant="secondary">
-          {load.id} · {load.inFlight} / {load.limit}
+          {workspaceLabel(load)} · {load.inFlight} / {load.limit}
         </Badge>
       ))}
     </div>

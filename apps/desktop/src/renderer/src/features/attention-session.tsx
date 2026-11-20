@@ -19,6 +19,7 @@ import * as Schema from "effect/Schema";
 import { type ReactNode, useState } from "react";
 import { Attention } from "../components/attention-board";
 import type { AttentionLayout } from "../components/attention-board-context";
+import { relativeTime } from "./format";
 import type { CatalogIcon } from "./workflow-catalog";
 import type {
   Artifact,
@@ -101,10 +102,22 @@ const workflowRef = (
   };
 };
 
+const operationIn = (
+  workflows: ReadonlyArray<WorkflowRecord>,
+  workflow: WorkflowPark["workflow"],
+  operation: string,
+) =>
+  workflows.find(({ id }) => id === workflow)?.publishedCopy?.operations.find(({ id }) => id === operation);
+
 const operationOf = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>) =>
-  workflows
-    .find(({ id }) => id === park.workflow)
-    ?.publishedCopy?.operations.find(({ id }) => id === park.operation);
+  operationIn(workflows, park.workflow, park.operation);
+
+const parentRunLabel = (park: WorkflowPark, workflows: ReadonlyArray<WorkflowRecord>) => {
+  if (park.parentRun === null) return "Earlier Run";
+  const { operation, startedAtMillis } = park.parentRun;
+  const name = operationIn(workflows, park.workflow, operation)?.name ?? operation;
+  return `${name} · started ${relativeTime(startedAtMillis)}`;
+};
 
 const titleCase = (value: string) =>
   value
@@ -267,7 +280,7 @@ const parkedItem = (
   const source = sourceOf(park.item, issueApp ?? "cogwork");
   const workflow = workflowRef(park.workflow, park.publishedRevision, workflows);
   const parent = park.lineage.parent
-    ? [{ app: "operation" as const, label: park.lineage.parent, workflow: workflow.name }]
+    ? [{ app: "operation" as const, label: parentRunLabel(park, workflows), workflow: workflow.name }]
     : [];
   return {
     id: keyOf(park.item),

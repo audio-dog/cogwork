@@ -261,7 +261,9 @@ export function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
     ),
   );
   const workflowAttention = workflowAttentionLayer.pipe(
-    Layer.provide(Layer.mergeAll(workflows, coordination, triggerObservationStore, workflowActionPlans)),
+    Layer.provide(
+      Layer.mergeAll(workflows, coordination, triggerObservationStore, workflowActionPlans, runLedger),
+    ),
   );
   const base = Layer.mergeAll(
     registry,
