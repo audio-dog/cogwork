@@ -20,6 +20,21 @@ blocks a change.
 `docs/agent-patterns/test-value.md` is the bar a test must meet to earn its place. Read it before you
 add, change, review, or delete a test.
 
+## Bug review
+
+Every review of a diff in this repo includes a bug-hunter, and an implement Run's review round adds
+it to its reviewers. Dispatch a read-only reviewer with a clean context. Its brief is
+`docs/agents/bug-hunt.md`, and it also gets the diff and the work item.
+
+In the fix round, prove each blocking bug-hunter finding before you fix it. Write the test that its
+sketch describes, and run it on the reviewed code:
+
+- **It fails on its assertion.** The bug is real. Fix it, and record the red proof as a Mutation
+  whose named break is the finding: `Mutation: B1 unfixed`.
+- **It passes.** The finding is refuted. Delete the test, and give the finding *won't-fix* with the
+  passing run as the reason.
+- **No test can express the bug.** Decide at your judgment, and record the call.
+
 ## Effect TS
 
 The Effect v4 repository is cloned to `.repos/effect` for reference.

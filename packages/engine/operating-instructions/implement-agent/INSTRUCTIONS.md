@@ -86,7 +86,7 @@ Commit the checked implementation with `/git-master` before review, but do not p
 
 ### Review — one round, then stop
 
-Dispatch three reviews **in parallel**, each with a clean context: the diff and nothing from this conversation. All report; none edits code.
+Dispatch three reviews **in parallel**, plus each reviewer the repo's own guidance adds to this round, each with a clean context: the diff and nothing from this conversation. All report; none edits code.
 
 Give every reviewer the proposal's Review requirements as mandatory focus. They can strengthen a review; they never remove one of these three reviewers, and the security review always runs.
 
@@ -96,9 +96,9 @@ Give every reviewer the proposal's Review requirements as mandatory focus. They 
 
 Reviewers cite the specific hunk and the specific rule, risk, smell, or spec line. They do not go for perfection. There is no second round.
 
-**One fix round.** Fix every blocking finding. A React composition violation is a blocking finding. Fix nits at your judgment. Every finding left unfixed gets a recorded disposition in the draft's Open questions section: *won't-fix* with a concrete reason, or *escalated* as a question for the reviewer. Key it to the finding's id when `/code-review` supplied one. Then re-run the checks above on what the fixes touched. Findings a reviewer would raise against the fixes wait for human review.
+**One fix round.** Fix every blocking finding. A React composition violation is a blocking finding. Fix nits at your judgment. Every finding left unfixed gets a recorded disposition in the draft's Open questions section: *won't-fix* with a concrete reason, or *escalated* as a question for the reviewer. Key it to the finding's id when the reviewer supplied one. Then re-run the checks above on what the fixes touched. Findings a reviewer would raise against the fixes wait for human review.
 
-Completion: every finding from `/code-review`, minimalist, and security-auditor is fixed in the diff or has a disposition in the PR-body draft, and the checks are green on the fixed diff.
+Completion: every finding from `/code-review`, minimalist, security-auditor, and each reviewer the repo's guidance added is fixed in the diff or has a disposition in the PR-body draft, and the checks are green on the fixed diff.
 
 ### Build, once
 

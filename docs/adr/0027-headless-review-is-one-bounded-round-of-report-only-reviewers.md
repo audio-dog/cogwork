@@ -3,6 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-09-23
 - **Amended:** 2026-09-29 — compose `/code-review` intact; drop the forked spec-reviewer
+- **Amended:** 2026-11-02 — a repo's own guidance may add reviewers to the round
 
 ## Context
 
@@ -44,6 +45,16 @@ The shipped `implement-agent` and `follow-up-agent` packages restructure their r
   *won't-fix* with a concrete reason, or *escalated* — never a silent pass; `/code-review`'s
   numbered findings (`S1`, `SP1`, …) give the completion criterion something checkable to bind to.
   After the fix round the Run re-gates what the fixes touched and does **not** re-review.
+- **A repo may add reviewers to the round** (amendment 2026-11-02). The round dispatches the three
+  reviewers above plus each reviewer the repo's own guidance adds, in the same parallel batch, under
+  the same bound. Their findings need the same dispositions. The three stay: a repo adds a concern
+  and never removes one. What a repo reviews for is the repo's development process, not a Cogwork
+  feature, so its brief lives in the repo and the stock package names no repo reviewer. The first
+  case is cogwork's own bug-hunter (`AGENTS.md`, `docs/agents/bug-hunt.md`). Cogwork lost access to
+  Bugbot, which this decision had given the bug review through CI, and the external Harnesses
+  project no Subagent from the Run Plan, so a repo doc that `AGENTS.md` points at is the carrier
+  that reaches every Harness
+  ([research](../research/bugbot-alternatives-for-bug-review.md)).
 - **The perfection guard sits on the reviewer.** A finding must cite the specific hunk and the
   specific rule, smell, or risk; judges are told not to go for perfection. The guard limits
   reviewer churn, not implementer diligence.
