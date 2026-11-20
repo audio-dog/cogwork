@@ -1,29 +1,90 @@
-import { AttemptRecord, keyOf, LineageId, ParkRecord, type WorkItemRef } from "@cogwork/contracts";
+import {
+  AttemptRecord,
+  keyOf,
+  LineageId,
+  ParkRecord,
+  WorkflowCatalogKey,
+  WorkflowDocument,
+  type WorkItemRef,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
-import * as TestClock from "effect/testing/TestClock";
+import * as Stream from "effect/Stream";
+import { TestClock } from "effect/testing";
 import { Coordination, type CoordinationService, fold, makeCoordination } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";
 import { emptyRegistry } from "./projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
+import { trackerTriggerEntries } from "./tracker-trigger-source";
 import { make } from "./trigger-observation";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import {
   coordinationService,
   event,
+  issueHasLabelKey,
   lineage,
+  makeWorkspaceObservation,
   otherWorkflowId,
   record,
+  selectedDocument,
+  selectedEvent,
   subscription,
+  triggerId,
   workflowId,
   workflowService,
 } from "./trigger-observation-fixtures";
 import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";
 import { type TriggerEvent, TriggerSources } from "./trigger-source";
 import { Workflows, type WorkflowsService } from "./workflow";
+
+const notBlocked = Schema.decodeSync(WorkflowCatalogKey)("github.issue-not-blocked");
+const newCommentKey = Schema.decodeSync(WorkflowCatalogKey)("github.new-comment-from-person");
+const labelParameters = [{ id: "label", value: "ready-for-agent" }];
+
+const observeFilteredTrigger = Effect.fn("TriggerObservationTest.observeFilteredTrigger")(function* (
+  entry: WorkflowCatalogKey,
+  coordination?: CoordinationService,
+) {
+  yield* TestClock.setTime(1_000);
+  const document = yield* Schema.decodeEffect(WorkflowDocument)({
+    ...selectedDocument,
+    triggers: [
+      {
+        id: triggerId,
+        entry,
+        parameters: labelParameters,
+        filters: [{ entry: notBlocked }],
+        start: subscription.operation,
+      },
+    ],
+  });
+  const { observation, scripted } = yield* makeWorkspaceObservation({
+    document,
+    source: { id: "github", entries: trackerTriggerEntries("github") },
+    ...(coordination === undefined ? {} : { coordination }),
+  });
+  const admitted = yield* observation.changes.pipe(
+    Stream.take(1),
+    Stream.runCollect,
+    Effect.forkChild({ startImmediately: true }),
+  );
+  const first = {
+    ...selectedEvent,
+    entry,
+    revision: `${entry}:1500`,
+    atMillis: 1_500,
+    parameters: labelParameters,
+  };
+  yield* scripted.emit({ ...first, passes: [notBlocked] });
+  yield* Fiber.join(admitted);
+  const redeliver = (revision: string, passes: ReadonlyArray<WorkflowCatalogKey>) =>
+    scripted.emit({ ...first, revision, passes }).pipe(Effect.andThen(TestClock.adjust("1 second")));
+  return { observation, first, redeliver };
+});
 
 describe("TriggerObservation", () => {
   it.effect("orders waiting work by prior Workflow action, priority, then oldest revision", () =>
@@ -94,6 +155,71 @@ describe("TriggerObservation", () => {
       assert.deepStrictEqual(
         (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
         ["acted", "old-urgent", "new-urgent", "old-low"],
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("offers an admitted issue only while a redelivery still passes its Trigger's filters", () =>
+    Effect.gen(function* () {
+      const { observation, first, redeliver } = yield* observeFilteredTrigger(issueHasLabelKey);
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [first.revision],
+      );
+
+      yield* redeliver(first.revision, []);
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [],
+      );
+
+      yield* redeliver(first.revision, [notBlocked]);
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [first.revision],
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("offers a filtered-out admission again when it passes after a newer revision was observed", () =>
+    Effect.gen(function* () {
+      const latest = yield* Ref.make<string | null>(null);
+      const seen = yield* Ref.make<ReadonlySet<string>>(new Set());
+      const coordination = {
+        ...coordinationService(yield* Ref.make<string | null>(null), yield* Ref.make(0), latest),
+        observe: (_ref: WorkItemRef, revision: string) =>
+          Ref.modify(
+            seen,
+            (current) =>
+              [current.has(revision) ? "redelivered" : "moved", new Set(current).add(revision)] as const,
+          ).pipe(
+            Effect.tap((outcome) =>
+              Ref.update(latest, (previous) => (outcome === "moved" ? revision : previous)),
+            ),
+          ),
+      } satisfies CoordinationService;
+      const { observation, first, redeliver } = yield* observeFilteredTrigger(issueHasLabelKey, coordination);
+
+      yield* redeliver(first.revision, []);
+      yield* redeliver(`${issueHasLabelKey}:2500`, []);
+      yield* redeliver(first.revision, [notBlocked]);
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [first.revision],
+      );
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps a catch-up Trigger's admission offered when a redelivery fails its filters", () =>
+    Effect.gen(function* () {
+      const { observation, first, redeliver } = yield* observeFilteredTrigger(newCommentKey);
+
+      yield* redeliver(first.revision, []);
+
+      assert.deepStrictEqual(
+        (yield* observation.eligible).map(({ event: candidate }) => candidate.revision),
+        [first.revision],
       );
     }).pipe(Effect.scoped),
   );
