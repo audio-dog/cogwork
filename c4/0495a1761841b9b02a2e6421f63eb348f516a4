@@ -1,0 +1,43 @@
+packages/contracts/src/coordination.ts
+  s_70f633f86ff651::t_35f5e00854cbe9 162
+packages/engine/src/commands.ts
+  s_70f633f86ff651::t_1c1100a7c05eea 172
+packages/engine/src/daemon-engine.ts
+  s_70f633f86ff651::t_483f5082e281ed 260
+packages/engine/src/workflow-attention.ts
+  s_70f633f86ff651::t_8cfae0ea099e12 38,66-67
+packages/engine/src/workflow-run-fixtures.ts
+  s_70f633f86ff651::t_ec2f7be4c0c4ca 29,150
+apps/desktop/src/renderer/src/components/attention-board-parked.tsx
+  s_b62fc48840c2bf::t_fa2c2902f735b0 36,86
+apps/desktop/src/renderer/src/features/attention-session.tsx
+  s_b62fc48840c2bf::t_f26a2667d99383 250
+apps/desktop/src/renderer/src/features/workflow-parks.ts
+  s_b62fc48840c2bf::t_1bbde1e8290c69 27-28,190-194
+packages/contracts/GLOSSARY-human-touchpoints.md
+  s_b62fc48840c2bf::t_eb656bed0307f4 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c40495a1761841b9b02a2e6421f63eb348f516a4",
+  "prompts": {},
+  "sessions": {
+    "s_70f633f86ff651": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba4421ab-059f-4e32-aebf-d40caeea514e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_b62fc48840c2bf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5aabf8ea-001c-4641-a48d-a24c6204457a",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
