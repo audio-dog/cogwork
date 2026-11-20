@@ -1,18 +1,58 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { HarnessModelOptionDescriptor } from "@cogwork/contracts";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as ChildProcess from "effect/process/ChildProcess";
+import { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
+import * as Stream from "effect/Stream";
 
-import { createCursorModelCatalog } from "../src/model.ts";
+import { createCursorModelCatalog } from "../src/model";
 
-const agentBin = process.env.CURSOR_AGENT_BIN ?? "agent";
 const target = fileURLToPath(new URL("../src/models.generated.ts", import.meta.url));
 const oxfmtBin = fileURLToPath(new URL("../../../node_modules/.bin/oxfmt", import.meta.url));
 const check = process.argv.includes("--check");
-const processLimits = { encoding: "utf8", timeout: 10_000, maxBuffer: 1_048_576 } as const;
+const commandDeadline = "10 seconds";
 
-const render = (catalog: ReturnType<typeof createCursorModelCatalog>["catalog"]) => {
+class StaleModelCatalog extends Data.TaggedError("StaleModelCatalog")<{ readonly message: string }> {}
+
+const commandOutput = Effect.fn("CursorModelSync.commandOutput")(function* (
+  command: ChildProcess.Command,
+  label: string,
+) {
+  const spawner = yield* ChildProcessSpawner;
+  const result = yield* Effect.scoped(
+    Effect.flatMap(spawner.spawn(command), (handle) =>
+      Effect.all(
+        {
+          stdout: Stream.mkString(Stream.decodeText(handle.stdout)),
+          exitCode: handle.exitCode,
+        },
+        { concurrency: "unbounded" },
+      ),
+    ),
+  ).pipe(
+    Effect.timeoutOrElse({
+      duration: commandDeadline,
+      orElse: () => Effect.die(`${label} timed out after ${commandDeadline}`),
+    }),
+  );
+  if (result.exitCode === 0) return result.stdout;
+  return yield* Effect.die(`${label} exited with ${result.exitCode}`);
+});
+
+const agentOutput = (agentBin: string, args: ReadonlyArray<string>) =>
+  commandOutput(
+    ChildProcess.make(agentBin, [...args], { stdin: "ignore", stderr: "inherit" }),
+    `${agentBin} ${args.join(" ")}`,
+  );
+
+const render = (agentBin: string, catalog: ReturnType<typeof createCursorModelCatalog>["catalog"]) => {
   const descriptors = catalog.models.flatMap(({ options }) => options ?? []);
   const uniqueDescriptors = Array.from(
     new Map(descriptors.map((descriptor) => [JSON.stringify(descriptor), descriptor])).values(),
@@ -63,37 +103,45 @@ const render = (catalog: ReturnType<typeof createCursorModelCatalog>["catalog"])
     "export type CursorModel = (typeof cursorModels)[number];",
     "",
   ].join("\n");
-  return execFileSync(oxfmtBin, ["--disable-nested-config", `--stdin-filepath=${target}`], {
-    input: source,
-    ...processLimits,
-  });
+  return commandOutput(
+    ChildProcess.make(oxfmtBin, ["--disable-nested-config", `--stdin-filepath=${target}`], {
+      stdin: Stream.encodeText(Stream.make(source)),
+      stderr: "inherit",
+    }),
+    "oxfmt",
+  );
 };
 
-const version = execFileSync(agentBin, ["--version"], processLimits).trim();
-const output = execFileSync(agentBin, ["--list-models"], processLimits);
-const { catalog, opaqueModelIds } = createCursorModelCatalog(output, version);
+NodeRuntime.runMain(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const agentBin = yield* Config.String("CURSOR_AGENT_BIN").pipe(Config.withDefault("agent"));
+    const version = (yield* agentOutput(agentBin, ["--version"])).trim();
+    const output = yield* agentOutput(agentBin, ["--list-models"]);
+    const { catalog, opaqueModelIds } = createCursorModelCatalog(output, version);
 
-if (catalog.rawModelIds.length === 0) {
-  throw new Error(`\`${agentBin} --list-models\` reported no models`);
-}
+    if (catalog.rawModelIds.length === 0) {
+      return yield* Effect.die(`\`${agentBin} --list-models\` reported no models`);
+    }
 
-const file = render(catalog);
-const opaqueSummary = opaqueModelIds.length > 0 ? ` Opaque: ${opaqueModelIds.join(", ")}.` : "";
+    const file = yield* render(agentBin, catalog);
+    const opaqueSummary = opaqueModelIds.length > 0 ? ` Opaque: ${opaqueModelIds.join(", ")}.` : "";
 
-if (!check) {
-  writeFileSync(target, file);
-  console.log(
-    `Wrote ${catalog.models.length} Cursor models from ${catalog.rawModelIds.length} native ids to ${target}.${opaqueSummary}`,
-  );
-  process.exit(0);
-}
+    if (!check) {
+      yield* fs.writeFileString(target, file);
+      return yield* Console.log(
+        `Wrote ${catalog.models.length} Cursor models from ${catalog.rawModelIds.length} native ids to ${target}.${opaqueSummary}`,
+      );
+    }
 
-if (readFileSync(target, "utf8") === file) {
-  console.log(
-    `Cursor model catalog is in sync (${catalog.models.length} models, ${catalog.rawModelIds.length} native ids).${opaqueSummary}`,
-  );
-  process.exit(0);
-}
+    if ((yield* fs.readFileString(target)) === file) {
+      return yield* Console.log(
+        `Cursor model catalog is in sync (${catalog.models.length} models, ${catalog.rawModelIds.length} native ids).${opaqueSummary}`,
+      );
+    }
 
-console.error(`Cursor model catalog is stale. Run \`pnpm --filter @cogwork/cursor-acp models:sync\`.`);
-process.exit(1);
+    return yield* new StaleModelCatalog({
+      message: "Cursor model catalog is stale. Run `pnpm --filter @cogwork/cursor-acp models:sync`.",
+    });
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
