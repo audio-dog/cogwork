@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-reporter=spec --test-reporter=./tests/test-count-reporter.mjs --test-reporter-destination=stdout --test-reporter-destination=stdout tests/react-lint-scope.test.mjs tests/test-count-reporter.test.mjs",
+    "test": "node --test --test-reporter=spec tests/react-lint-scope.test.mjs",
     "test:rules": "node --test --test-reporter=spec tests/rules.test.mjs"
   }
 }

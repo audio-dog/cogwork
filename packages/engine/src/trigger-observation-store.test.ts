@@ -10,7 +10,14 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { bootControlStoreLayer } from "./control-store";
 import { makeControlStoreCoordination } from "./coordination-control-store";
 import type { TriggerAdmission } from "./trigger-observation-admission";
-import { event, lineage, otherWorkflowId, subscription, workflowId } from "./trigger-observation-fixtures";
+import {
+  entry,
+  event,
+  lineage,
+  otherWorkflowId,
+  subscription,
+  workflowId,
+} from "./trigger-observation-fixtures";
 import { makeControlStoreTriggerObservationStore } from "./trigger-observation-store";
 
 const exerciseFailedLastAdmissionFinish = (storePath: string, admission: TriggerAdmission) =>
@@ -121,6 +128,36 @@ layer(NodeServices.layer)((it) => {
       assert.strictEqual(result.closedAfterFirst, 0);
       assert.strictEqual(result.closedAfterSecond, 1);
       assert.deepStrictEqual(result.remaining, []);
+    }),
+  );
+
+  it.effect("refreshes a pending admission, and never reopens a processed one or inserts a new one", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped({ prefix: "cogwork-trigger-refresh-" });
+      const admissionAt = (revision: string) => ({
+        event: { ...event, revision, passes: [entry] },
+        subscription,
+        lineage,
+      });
+      const refreshed = (admission: TriggerAdmission) => ({
+        ...admission,
+        event: { ...admission.event, passes: [] },
+      });
+      const pending = admissionAt("pending");
+      const processed = admissionAt("processed");
+      const neverStored = admissionAt("never-stored");
+      const result = yield* makeControlStoreTriggerObservationStore.pipe(
+        Effect.tap((store) => store.putAll([pending, processed])),
+        Effect.tap((store) => store.complete(processed, Effect.void)),
+        Effect.tap((store) => store.refreshPending([pending, processed, neverStored].map(refreshed))),
+        Effect.flatMap((store) => Effect.all({ admissions: store.admissions, done: store.processed })),
+        Effect.provide(bootControlStoreLayer(path.join(directory, "control.db"))),
+      );
+
+      assert.deepStrictEqual(result.admissions, [refreshed(pending)]);
+      assert.deepStrictEqual(result.done, [processed]);
     }),
   );
 

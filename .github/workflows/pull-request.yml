@@ -31,8 +31,6 @@ jobs:
     needs: install
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      TURBO_RUN_SUMMARY: 'true'
 
     steps:
       - name: Checkout
@@ -48,44 +46,6 @@ jobs:
 
       - name: Run tests
         run: pnpm test
-
-      - name: Collect test suite measurement
-        continue-on-error: true
-        run: cp "$(ls -t .turbo/runs/*.json | head -1)" test-suite-measurement.json
-
-      - name: Write test suite summary
-        continue-on-error: true
-        run: |
-          node --input-type=module <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          import { readFile } from 'node:fs/promises'
-
-          const summary = JSON.parse(await readFile('test-suite-measurement.json', 'utf8'))
-          const counts = await Promise.all(
-            summary.tasks.map(async ({ logFile }) => {
-              const log = await readFile(logFile, 'utf8')
-              const marker = log.match(/^cogwork-test-count:(\d+)$/m)
-              if (!marker) throw new Error(`No test count in ${logFile}`)
-              return Number(marker[1])
-            }),
-          )
-          const testCount = counts.reduce((total, count) => total + count, 0)
-          const { attempted, cached, startTime, endTime } = summary.execution
-          const executed = attempted - cached
-          const duration = executed === 0 ? 'Not measured (all tasks replayed)' : `${((endTime - startTime) / 1000).toFixed(1)} s`
-
-          console.log('## Test suite')
-          console.log('')
-          console.log('| Tests | Duration | Tasks executed | Tasks replayed |')
-          console.log('| ---: | ---: | ---: | ---: |')
-          console.log(`| ${testCount} | ${duration} | ${executed} of ${attempted} | ${cached} of ${attempted} |`)
-          EOF
-
-      - name: Upload test suite measurement
-        continue-on-error: true
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: test-suite-measurement
-          path: test-suite-measurement.json
 
   format-and-lint:
     needs: install
