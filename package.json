@@ -6,9 +6,9 @@
   "type": "module",
   "packageManager": "pnpm@12.16.1",
   "scripts": {
-    "format-and-lint:fix": "biome check . --write",
-    "format-and-lint:unsafe": "biome check . --write --unsafe",
-    "format-and-lint": "biome check .",
+    "format-and-lint:fix": "oxfmt --disable-nested-config && biome lint . --write",
+    "format-and-lint:unsafe": "oxfmt --disable-nested-config && biome lint . --write --unsafe",
+    "format-and-lint": "oxfmt --check --disable-nested-config && biome lint .",
     "prepare": "effect-tsgo patch && node scripts/install-commit-hook.mjs",
     "dev": "turbo dev",
     "build": "turbo build",
@@ -25,6 +25,7 @@
     "@j178/prek": "0.5.3",
     "@types/node": "catalog:",
     "effect": "catalog:effect",
+    "oxfmt": "0.79.0",
     "tsx": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:"

@@ -6,7 +6,7 @@ import { createCursorModelCatalog } from "../src/model.ts";
 
 const agentBin = process.env.CURSOR_AGENT_BIN ?? "agent";
 const target = fileURLToPath(new URL("../src/models.generated.ts", import.meta.url));
-const biomeBin = fileURLToPath(new URL("../../../node_modules/.bin/biome", import.meta.url));
+const oxfmtBin = fileURLToPath(new URL("../../../node_modules/.bin/oxfmt", import.meta.url));
 const check = process.argv.includes("--check");
 const processLimits = { encoding: "utf8", timeout: 10_000, maxBuffer: 1_048_576 } as const;
 
@@ -61,7 +61,7 @@ const render = (catalog: ReturnType<typeof createCursorModelCatalog>["catalog"])
     "export type CursorModel = (typeof cursorModels)[number];",
     "",
   ].join("\n");
-  return execFileSync(biomeBin, ["format", `--stdin-file-path=${target}`], {
+  return execFileSync(oxfmtBin, ["--disable-nested-config", `--stdin-filepath=${target}`], {
     input: source,
     ...processLimits,
   });
