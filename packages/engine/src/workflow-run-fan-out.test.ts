@@ -78,7 +78,7 @@ const exerciseFanOut = Effect.fn("WorkflowRunTest.exerciseFanOut")(function* (
       },
     })),
   );
-  yield* Effect.forEach(children, runner.execute, { discard: true });
+  yield* Effect.forEach(children, (child) => runner.execute(child), { discard: true });
   assert.deepStrictEqual(
     (yield* notifications.list).map(({ summary }) => summary),
     [...summaries],
@@ -284,7 +284,9 @@ describe("WorkflowRun", () => {
       yield* observationStore.putAll([granolaAdmission]);
 
       yield* runner.execute(granolaAdmission);
-      yield* Effect.forEach(yield* observationStore.admissions, runner.execute, { discard: true });
+      yield* Effect.forEach(yield* observationStore.admissions, (child) => runner.execute(child), {
+        discard: true,
+      });
 
       assert.deepStrictEqual(yield* Ref.get(writes), [
         "create:Add retries",
