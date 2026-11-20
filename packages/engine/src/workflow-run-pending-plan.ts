@@ -170,7 +170,7 @@ export const makeWorkflowRunPendingPlans = Effect.fn("WorkflowRun.makePendingPla
     if (attempt === null) return;
     yield* coordination.recordAttempt(admission.event.key, {
       operation: operationKeyOf(admission, plan.operation),
-      outcome: attempt,
+      ...attempt,
       lineage: admission.lineage,
     });
     yield* RunCompletionRoute.$match(route, {
@@ -179,6 +179,9 @@ export const makeWorkflowRunPendingPlans = Effect.fn("WorkflowRun.makePendingPla
       Retry: () => Effect.void,
       Replan: () => Effect.void,
       Park: () => Effect.void,
+      Exhaust: () => Effect.void,
+      ParkStuck: () => Effect.void,
+      FanOut: () => Effect.void,
     });
   });
 

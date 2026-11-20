@@ -22,7 +22,14 @@ import {
   refusalForPerson,
   refusalResumesSession,
 } from "./operation-result";
-import { actionPlanCompletion, type RunCompletion, RunCompletionRoute } from "./run-completion";
+import {
+  actionPlanCompletion,
+  type CompletionAttempt,
+  failedAttemptCompletion,
+  fanOutCompletion,
+  type RunCompletion,
+  RunCompletionRoute,
+} from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import { RunRecorder } from "./run-recorder";
 import type { TriggerAdmission } from "./trigger-observation-admission";
@@ -30,12 +37,7 @@ import { TriggerObservationStore } from "./trigger-observation-store";
 import type { WorkflowActionPlanDecodeError } from "./workflow-action-entry";
 import { buildWorkflowActionPlan, executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
-import {
-  fanOutAdmission,
-  handOffAdmission,
-  type operationKeyOf,
-  parkedAdmission,
-} from "./workflow-run-admission";
+import { handOffAdmission, type operationKeyOf, parkedAdmission } from "./workflow-run-admission";
 
 const encodeActionPlan = Schema.encodeSync(Schema.fromJsonString(WorkflowActionPlan));
 
@@ -146,7 +148,7 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     admission: TriggerAdmission,
     claimed: Ref.Ref<ClaimState>,
     work: ClaimedWork,
-    attempt: { readonly outcome: "succeeded" } | { readonly outcome: "failed"; readonly reason: string },
+    attempt: CompletionAttempt,
   ) {
     const view = yield* coordination.recordAttempt(admission.event.key, {
       ...attempt,
@@ -213,8 +215,9 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     reason: ParkReason,
   ) {
     yield* coordination.park(admission.event.key, reason, work.key);
-    if (work.lineageParent === null) return;
+    if (work.lineageParent === null) return "completed" as const;
     yield* observationStore.putAll([parkedAdmission(admission, work.lineageParent)]);
+    return "completed" as const;
   });
 
   const failAttempt = Effect.fn("WorkflowRun.failAttempt")(function* (
@@ -225,11 +228,10 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     status: "failed" | "declined" = "failed",
   ) {
     const view = yield* recordClaimedAttempt(admission, claimed, work, { outcome: "failed", reason });
-    const exhausted = view.counters(work.key).exhausted;
-    yield* settleClaimed(claimed, exhausted ? "exhausted" : status);
-    if (!exhausted) return "retry" as const;
-    yield* parkClaimed(admission, work, { _tag: "Exhausted", reason });
-    return "completed" as const;
+    const completion = failedAttemptCompletion(view, work.key, reason, status);
+    yield* settleClaimed(claimed, completion.settle);
+    if (!RunCompletionRoute.$is("Exhaust")(completion.route)) return "retry" as const;
+    return yield* parkClaimed(admission, work, completion.route.park);
   });
 
   const refusePreparation = Effect.fn("WorkflowRun.refusePreparation")(function* (
@@ -242,8 +244,7 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     if (park === null) return yield* failAttempt(admission, claimed, work, reason);
     yield* recordClaimedAttempt(admission, claimed, work, { outcome: "failed", reason });
     yield* settleClaimed(claimed, "failed");
-    yield* parkClaimed(admission, work, park);
-    return "completed" as const;
+    return yield* parkClaimed(admission, work, park);
   });
 
   const refuseResult = Effect.fn("WorkflowRun.refuseResult")(function* (
@@ -297,18 +298,33 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     completion: RunCompletion,
   ) {
     if (completion.attempt !== null) {
-      yield* recordClaimedAttempt(admission, claimed, work, { outcome: completion.attempt });
+      yield* recordClaimedAttempt(admission, claimed, work, completion.attempt);
     }
     yield* settleClaimed(claimed, completion.settle);
   });
 
-  const followCompletion = (admission: TriggerAdmission, completion: RunCompletion, lineageParent: RunId) =>
+  const followCompletion = (
+    admission: TriggerAdmission,
+    work: ClaimedWork,
+    completion: RunCompletion,
+    lineageParent: RunId,
+  ) =>
     RunCompletionRoute.$match(completion.route, {
       Complete: () => complete(admission).pipe(Effect.map(() => "completed" as const)),
       HandOff: ({ node }) => Effect.succeed(handOffAdmission(admission, node, lineageParent)),
       Retry: () => Effect.succeed("retry" as const),
       Replan: () => Effect.succeed(admission),
       Park: () => Effect.succeed("completed" as const),
+      Exhaust: ({ park }) => parkClaimed(admission, work, park),
+      ParkStuck: ({ park }) => parkClaimed(admission, work, park),
+      FanOut: ({ children }) =>
+        observationStore
+          .fanOut(
+            admission,
+            children.map((child) => child.admission),
+            closeRevision(admission),
+          )
+          .pipe(Effect.map(() => "completed" as const)),
     });
 
   const actOnResult = Effect.fn("WorkflowRun.actOnResult")(function* ({
@@ -321,31 +337,23 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     plan,
   }: AcceptedResult) {
     if ("elements" in output) {
-      const children = output.elements.map((element, position) => ({
-        admission: fanOutAdmission(admission, run.id, position, element),
-        element,
-      }));
+      const completion = fanOutCompletion(admission, run.id, output.elements);
+      const { children } = completion.route;
       const acceptPlans = (plans: ReadonlyArray<WorkflowActionPlan>) =>
-        actionPlans.createAll(plans).pipe(
-          Effect.andThen(
-            Effect.forEach(
-              children,
-              ({ admission: child }) =>
-                coordination.observe(child.event.key, child.event.revision, child.event.cause),
-              { discard: true },
+        actionPlans
+          .createAll(plans)
+          .pipe(
+            Effect.andThen(
+              Effect.forEach(
+                children,
+                ({ admission: child }) =>
+                  coordination.observe(child.event.key, child.event.revision, child.event.cause),
+                { discard: true },
+              ),
             ),
-          ),
-          Effect.andThen(recordClaimedAttempt(admission, claimed, accepted, { outcome: "succeeded" })),
-          Effect.andThen(settleClaimed(claimed, "succeeded")),
-          Effect.andThen(
-            observationStore.fanOut(
-              admission,
-              children.map(({ admission: child }) => child),
-              closeRevision(admission),
-            ),
-          ),
-          Effect.map(() => "completed" as const),
-        );
+            Effect.andThen(settleCompletion(admission, claimed, accepted, completion)),
+            Effect.andThen(followCompletion(admission, accepted, completion, run.id)),
+          );
       return yield* Effect.forEach(children, ({ admission: child, element }) =>
         buildWorkflowActionPlan({
           ...plan,
@@ -385,14 +393,13 @@ export const makeWorkflowRunAttempts = Effect.fn("WorkflowRun.makeAttempts")(fun
     yield* recorder.record(run, actionPlanEvent);
     const completion = actionPlanCompletion(yield* executeWorkflowActionPlan(actionPlan, admission));
     yield* settleCompletion(admission, claimed, accepted, completion);
-    return yield* followCompletion(admission, completion, run.id);
+    return yield* followCompletion(admission, accepted, completion, run.id);
   });
 
   return {
     previousRefusals,
     takePriorRefusal,
     settleClaimed,
-    recordClaimedAttempt,
     claimItem,
     complete,
     parkCappedLineage,
