@@ -1,0 +1,19 @@
+packages/engine/src/granola-source.test.ts
+  s_4a1c6ee7a27e58::t_db6aaee3898c48 1,9,11-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d7edf3a74560304f278665b2adcd0a75bb0fb092",
+  "prompts": {},
+  "sessions": {
+    "s_4a1c6ee7a27e58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeaf75bf-a9ed-4a48-b63b-170c596b0298",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
