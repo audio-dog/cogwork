@@ -9,7 +9,7 @@ disable-model-invocation: true
 One session, one artifact: **tickets** that delete, merge, move, or rename the tests that fail the bar
 in [`docs/agent-patterns/test-value.md`](../../../docs/agent-patterns/test-value.md). That doc is the
 rulebook; this skill runs the sweep. The session commits nothing. Deleting a test loses signal for
-good (ADR 0040), so each deletion reaches an agent only through a ticket that names it and carries
+good, so each deletion reaches an agent only through a ticket that names it and carries
 its proof, and the human approves the breakdown first.
 
 Argument: the scope, a package, directory, or list of test files. No scope given: ask for one. A few

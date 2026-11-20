@@ -2,7 +2,8 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-03
-- **Amended by:** [0040](./0040-the-test-suite-cost-sensor-is-removed.md), which replaces the amendment from superseded ADR 0026 — the test-suite cost sensor is removed: no scheduled comparison, no comparison tool, and no test count or duration reporting in CI. "A sensor lives where its signal is produced" stays.
+- **Amended by:** [0040](./0040-the-test-suite-cost-sensor-is-removed.md). The test-suite cost sensor
+  is removed. This replaces the amendment from ADR 0026.
 
 ## Context
 

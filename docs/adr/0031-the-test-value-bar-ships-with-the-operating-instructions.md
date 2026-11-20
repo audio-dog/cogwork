@@ -98,8 +98,8 @@ Coverage is a structural diagnostic, not a target (technical disposition): a tes
 can guard nothing, and coverage cannot tell a sole guard from a duplicate.
 
 **A mutation-testing tool in CI.** Mutates everything, not the contract a test names, and multiplies
-a suite cost that ADR 0040 traces to subprocess starvation on the runner. The named mutation buys
-the same evidence for the one contract under change.
+the suite cost that ADR 0040 records. The named mutation buys the same evidence for the one
+contract under change.
 
 **The engine verifies the proof now.** The engine does not know a Workspace's test commands; the
 Run discovers them. Deferred: the engine can first check that the "Test proof" section names every

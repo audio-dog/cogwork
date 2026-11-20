@@ -1,8 +1,8 @@
 # Sensor
 
-The self-correction sensing layer: the tools that measure the app's own health signals in CI and
-file work items when a signal degrades or misses its target. The mechanism contract is ADR 0021;
-the placement rule ("a sensor lives where its signal is produced") is ADR 0022.
+The seed run that warms the turbo cache, and the tools that measure the app's own performance.
+The placement rule ("a sensor lives where its signal is produced") is ADR 0022. Performance budgets
+are ADR 0023.
 
 ## Language
 
@@ -19,4 +19,4 @@ _Avoid_: threshold (that is a sensor's firing point, not the target), SLA
 **Seed run**:
 The run on each push to `main` that saves the shared turbo cache. Pull-request and merge-queue runs
 restore that cache.
-_Avoid_: warmup run, baseline run
+_Avoid_: warmup run

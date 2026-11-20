@@ -2,7 +2,9 @@
 
 - **Status:** accepted
 - **Date:** 2026-09-08
-- **Amended by:** [0040](./0040-the-test-suite-cost-sensor-is-removed.md), which replaces the amendment from superseded ADR 0026 — a budget is a count, never a duration, with no exception. The fortnightly workflow of #500 is not built, so the Performance budget sensor adds its own scheduled workflow and its own `budget` verdict kind.
+- **Amended by:** [0040](./0040-the-test-suite-cost-sensor-is-removed.md). A budget is a count, never
+  a duration, with no exception. The fortnightly workflow of #500 is not built. This replaces the
+  amendment from ADR 0026.
 
 ## Context
 

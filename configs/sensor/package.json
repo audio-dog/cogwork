@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@cogwork/contracts": "workspace:*",
+    "@cogwork/engine": "workspace:*",
     "@effect/platform-node": "catalog:effect",
     "effect": "catalog:effect"
   },

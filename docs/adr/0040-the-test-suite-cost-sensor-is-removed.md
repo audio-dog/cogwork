@@ -30,11 +30,9 @@ loss that ADR [0021](./0021-the-performance-sensor-files-its-own-tickets.md) exi
 
 ## Decision
 
-**The test-suite cost sensor is removed.** These parts are deleted: the seed-run measurement, the
-per-test budget, the slowest-test-file budget, the paired comparison tool, the test count and timing
-reporters, and the pull-request summary table. The Performance issue filer accepts only the
-`health-signal` verdict kind. The `suite-comparison`, `budget`, and `test-file-budget` kinds are
-deleted.
+**The test-suite cost sensor is removed.** All the parts listed above are deleted, except that the
+seed run stays as a cache warm-up. The Performance issue filer accepts only the `health-signal`
+verdict kind. The `suite-comparison`, `budget`, and `test-file-budget` kinds are deleted.
 
 **The seed run becomes a cache warm-up.** It runs `turbo run test` on each push to `main` and saves
 the turbo cache at the `main` scope. Pull-request runs restore that cache. It does not force task
