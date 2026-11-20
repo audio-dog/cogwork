@@ -18,8 +18,8 @@ export type RunCompletionRoute = Data.TaggedEnum<{
   Retry: Record<never, never>;
   Replan: Record<never, never>;
   Park: Record<never, never>;
-  Exhaust: { readonly park: ParkReason };
-  ParkStuck: { readonly park: ParkReason };
+  Exhaust: { readonly park: Extract<ParkReason, { readonly _tag: "Exhausted" }> };
+  ParkStuck: { readonly park: Extract<ParkReason, { readonly _tag: "Stuck" }> };
   FanOut: {
     readonly children: ReadonlyArray<{
       readonly admission: TriggerAdmission;
