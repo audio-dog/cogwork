@@ -1,0 +1,19 @@
+packages/engine/src/run-completion.ts
+  s_9423342923a02e::t_af93bc47e6a6e5 21-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f07df868b4e64faad749365f3ccb4f141a97e1e7",
+  "prompts": {},
+  "sessions": {
+    "s_9423342923a02e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf1233f9-71e9-4ac7-8b05-b2363a6f62e4",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
