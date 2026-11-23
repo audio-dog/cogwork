@@ -25,7 +25,7 @@ import {
 import type { TriggerSubscription } from "./trigger-source";
 
 export const connectionId = connectionIdOf("granola", "person@example.com");
-export const connection = Connection.make({
+const connection = Connection.make({
   id: connectionId,
   system: "granola",
   account: "person@example.com",

@@ -66,7 +66,7 @@ const sameOperation = (left: OperationKey, right: OperationKey) =>
   left.workflow === right.workflow && left.operation === right.operation;
 
 const retryAtFor = (failures: ReadonlyArray<AttemptRecord>) => {
-  const delay = retryDelays[failures.length - 1];
+  const delay = retryDelays[Math.min(failures.length, retryDelays.length) - 1];
   const lastFailure = failures.at(-1);
   return delay && lastFailure ? lastFailure.atMillis + Duration.toMillis(delay) : null;
 };
@@ -81,11 +81,12 @@ const failureStateFor = (
   );
   const lastNonFailure = relevant.findLastIndex((attempt) => attempt.outcome !== "failed");
   const failures = relevant.slice(lastNonFailure + 1);
+  const terminal =
+    failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true);
   return {
     consecutiveFailures: failures.length,
-    terminal:
-      failures.length >= maxConsecutiveFailures || failures.some((attempt) => attempt.terminal === true),
-    retryAtMillis: retryAtFor(failures),
+    terminal,
+    retryAtMillis: terminal ? null : retryAtFor(failures),
   };
 };
 
