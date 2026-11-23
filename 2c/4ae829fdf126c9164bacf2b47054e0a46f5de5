@@ -1,0 +1,21 @@
+packages/engine/GLOSSARY-runs.md
+  s_30343882a804fa::t_3f60fabc0a257b 34
+packages/engine/src/granola-source-fixtures.ts
+  s_30343882a804fa::t_452f6b42d4c572 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2c4ae829fdf126c9164bacf2b47054e0a46f5de5",
+  "prompts": {},
+  "sessions": {
+    "s_30343882a804fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5348ad6b-0de3-4d40-a5b2-de730a0d4dc1",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
