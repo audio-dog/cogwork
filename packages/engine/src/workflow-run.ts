@@ -5,6 +5,7 @@ import {
   RunId,
   type RunRecord,
   type WorkflowActionPlan,
+  type WorkflowRecord,
   WorkflowTouchpointFailure,
   WorkItemId,
   WorkspaceId,
@@ -68,6 +69,18 @@ interface AdmissionExecutionState {
 
 const resumedLineageParentOf = (admission: TriggerAdmission, plan: WorkflowActionPlan) =>
   admission.event.key._tag === "FanOutChild" ? null : plan.attempt;
+
+const startableOperation = (
+  record: WorkflowRecord,
+  admission: TriggerAdmission,
+  operationId: TriggerAdmission["subscription"]["operation"],
+) => {
+  const document = record.publishedCopy;
+  const hasTrigger = document?.triggers.some(({ id }) => id === admission.subscription.trigger);
+  const operation = document?.operations.find(({ id }) => id === operationId);
+  if (!record.enabled || document === null || !hasTrigger || operation === undefined) return null;
+  return { document, operation };
+};
 
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
@@ -143,13 +156,12 @@ export const make = Effect.gen(function* () {
     }
 
     const record = yield* workflows.get({ id: admission.subscription.workflow });
-    const document = record.publishedCopy;
-    const hasTrigger = document?.triggers.some(({ id }) => id === admission.subscription.trigger);
-    const operation = document?.operations.find(({ id }) => id === operationId);
-    if (!record.enabled || document === null || !hasTrigger || operation === undefined) {
+    const startable = startableOperation(record, admission, operationId);
+    if (startable === null) {
       yield* complete(admission);
       return "skipped" as const;
     }
+    const { document, operation } = startable;
     if (admission.event.payload?._tag === "GranolaNoteRejected") {
       return yield* rejectPlan(admission, admission.event.payload.reason);
     }
@@ -310,6 +322,20 @@ export const make = Effect.gen(function* () {
     });
   });
 
+  const isWaiting = Effect.fn("WorkflowRun.isWaiting")(function* (admission: TriggerAdmission) {
+    const pendingPlan = yield* actionPlans.pending(
+      keyOf(admission.event.key),
+      admission.subscription.workflow,
+    );
+    if (pendingPlan?.revision === admission.event.revision) return false;
+    const record = yield* workflows.get({ id: admission.subscription.workflow });
+    const recheckDecides =
+      startableOperation(record, admission, admission.subscription.operation) !== null &&
+      admission.event.payload?._tag !== "GranolaNoteRejected";
+    if (!recheckDecides) return false;
+    return Recheck.$is("Waiting")(yield* triggerObservation.recheck(admission));
+  });
+
   const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (
     admission: TriggerAdmission,
     runStarted: Effect.Effect<void>,
@@ -386,6 +412,7 @@ export const make = Effect.gen(function* () {
 
   return {
     execute: executeAdmission,
+    isWaiting,
     refreshReviewPlans: () => touchpointGate.withPermit(touchpoints.refreshReviewPlans()),
     approve: (payload: Parameters<typeof touchpoints.approve>[0]) =>
       runTouchpoint(touchpoints.approve(payload)),
@@ -402,6 +429,7 @@ export const WorkflowRun = Context.Reference<Effect.Success<typeof make>>(
   {
     defaultValue: () => ({
       execute: () => Effect.succeed("completed" as const),
+      isWaiting: () => Effect.succeed(false),
       refreshReviewPlans: () => Effect.void,
       approve: () =>
         Effect.fail(new WorkflowTouchpointFailure({ reason: "unavailable", message: "unavailable" })),
