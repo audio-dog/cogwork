@@ -22,13 +22,14 @@ const noCommandRules = { allow: [], deny: [] };
 const codingCommandRules = {
   allow: [],
   deny: [
-    "gh pr merge*",
-    "gh pr review*--approve*",
-    "gh pr close*",
-    "gh issue close*",
-    "gh repo*",
-    "gh secret*",
-    "gh auth*",
+    "*gh pr merge*",
+    "*gh pr review*--approve*",
+    "*gh pr review* -a*",
+    "*gh pr close*",
+    "*gh issue close*",
+    "*gh repo*",
+    "*gh secret*",
+    "*gh auth*",
   ],
 };
 

@@ -19,6 +19,8 @@ WorkflowDocument {
     instructionPackage: string | null              // a first-party Operating-instructions package
     instruction: string                            // inline Operating Instructions
     permissionProfile: "read-only" | "full"
+    commands: { allow: string[]; deny: string[] }  // TanStack SandboxPolicy command patterns, on top of the profile
+    connections: "github"[]                        // systems whose Connection credential the Run receives
     requires: NeedIdentity[]                       // concrete identities; no binding
     model: { harness: HarnessName | null; model: string | null; options: { id: string; value: string | boolean }[] }
     forEach: string | null                         // null = once; a noun = for each ⟨finding⟩

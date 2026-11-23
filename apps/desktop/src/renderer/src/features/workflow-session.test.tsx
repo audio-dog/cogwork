@@ -19,7 +19,7 @@ import {
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 vi.mock("@tanstack/react-router", async (importOriginal) =>
-  (await import("./workflow-session-router")).mockedRouter(await importOriginal()),
+  (await import("./workflow-session-router-fixtures")).mockedRouter(await importOriginal()),
 );
 
 afterEach(async () => {

@@ -26,7 +26,7 @@ export class TestStorePath extends Context.Service<TestStorePath, string>()(
   "@cogwork/cli/ledger-fixtures/TestStorePath",
 ) {}
 
-export interface LedgerLogProbeService {
+interface LedgerLogProbeService {
   readonly capture: (entry: unknown) => void;
   readonly entries: Effect.Effect<ReadonlyArray<unknown>>;
 }
@@ -51,7 +51,7 @@ export class LedgerLogProbe extends Context.Service<LedgerLogProbe, LedgerLogPro
 export const bootedLedgerLayer = (storePath: string) =>
   ledgerLayer.pipe(Layer.provideMerge(bootControlStoreLayer(storePath, { busyTimeout: "25 millis" })));
 
-export const runRow = (run: RunRecord) =>
+const runRow = (run: RunRecord) =>
   [
     run.id,
     run.workspace,

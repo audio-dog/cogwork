@@ -25,14 +25,14 @@ import {
   unused,
   workflowDocument,
 } from "./workflow-session-fixtures";
-import { navigate } from "./workflow-session-router";
+import { navigate } from "./workflow-session-router-fixtures";
 import { exportWorkflow, importWorkflow } from "./workflow-transfer";
 import { WorkingCopiesProvider } from "./working-copy-provider";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 vi.mock("@tanstack/react-router", async (importOriginal) =>
-  (await import("./workflow-session-router")).mockedRouter(await importOriginal()),
+  (await import("./workflow-session-router-fixtures")).mockedRouter(await importOriginal()),
 );
 
 afterEach(async () => {

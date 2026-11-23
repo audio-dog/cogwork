@@ -115,7 +115,7 @@ export const sessionStore: SessionStore.SessionStoreService = {
 
 const unexpected = () => Effect.die(new Error("unexpected service access"));
 
-export const harnessServices = {
+const harnessServices = {
   sessionStore,
   contextAssembler: { assemble: unexpected, cleanup: unexpected },
   credentialStore: {

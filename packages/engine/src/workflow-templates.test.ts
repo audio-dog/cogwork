@@ -367,13 +367,14 @@ layer(NodeServices.layer)((it) => {
         commands: {
           allow: [],
           deny: [
-            "gh pr merge*",
-            "gh pr review*--approve*",
-            "gh pr close*",
-            "gh issue close*",
-            "gh repo*",
-            "gh secret*",
-            "gh auth*",
+            "*gh pr merge*",
+            "*gh pr review*--approve*",
+            "*gh pr review* -a*",
+            "*gh pr close*",
+            "*gh issue close*",
+            "*gh repo*",
+            "*gh secret*",
+            "*gh auth*",
           ],
         },
         connections: ["github"],
@@ -403,20 +404,24 @@ layer(NodeServices.layer)((it) => {
           "slack-to-github-review/review": none,
         },
       );
+      const decisions = [
+        ["gh pr merge 12 --squash", "deny"],
+        ["git push && gh pr merge 12", "deny"],
+        ["gh pr review 12 --approve", "deny"],
+        ["gh pr review 12 -a", "deny"],
+        ["gh pr close 12", "deny"],
+        ["gh issue close 7 --reason completed", "deny"],
+        ["gh repo delete audio-dog/cogwork", "deny"],
+        ["gh secret set TOKEN", "deny"],
+        ["GH_TOKEN=x gh auth token", "deny"],
+        ["gh pr review 12 --comment -b 'Fixed.'", "allow"],
+        ["gh pr view 12 --json mergeable", "allow"],
+      ] as const;
       assert.deepStrictEqual(
-        [
-          "gh pr merge 12 --squash",
-          "gh pr review 12 --approve",
-          "gh pr close 12",
-          "gh issue close 7 --reason completed",
-          "gh repo delete audio-dog/cogwork",
-          "gh secret set TOKEN",
-          "gh auth token",
-          "gh pr view 12",
-        ].map((command) =>
+        decisions.map(([command]) =>
           evaluateCommand(command, { commands: { deny: [...coding.commands.deny] }, default: "allow" }),
         ),
-        ["deny", "deny", "deny", "deny", "deny", "deny", "deny", "allow"],
+        decisions.map(([, decision]) => decision),
       );
     }),
   );

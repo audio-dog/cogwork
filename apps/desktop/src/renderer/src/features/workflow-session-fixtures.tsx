@@ -25,11 +25,11 @@ import {
 import { type ListWorkflowOptions, WorkingCopiesProvider } from "./working-copy-provider";
 
 export const decodeWorkflowId = Schema.decodeUnknownSync(WorkflowId);
-export const decodePrincipalId = Schema.decodeUnknownSync(PrincipalId);
-export const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
-export const decodeDocument = Schema.decodeUnknownSync(WorkflowDocument);
-export const decodeCatalog = Schema.decodeUnknownSync(WorkflowCatalog);
-export const decodeMachine = Schema.decodeUnknownSync(MachineReadiness);
+const decodePrincipalId = Schema.decodeUnknownSync(PrincipalId);
+const decodeWorkspaceId = Schema.decodeUnknownSync(WorkspaceId);
+const decodeDocument = Schema.decodeUnknownSync(WorkflowDocument);
+const decodeCatalog = Schema.decodeUnknownSync(WorkflowCatalog);
+const decodeMachine = Schema.decodeUnknownSync(MachineReadiness);
 
 export const workflowDocument = decodeDocument({
   name: "Local name",
@@ -125,7 +125,7 @@ export const catalog = decodeCatalog({
   harnesses: [{ name: "codex", models: [{ id: "gpt-5", options: [] }] }],
 });
 
-export const filterEntry = (key: string, name: string, system: string | null) => ({
+const filterEntry = (key: string, name: string, system: string | null) => ({
   key,
   name,
   kind: "filter",
@@ -184,7 +184,7 @@ export const everyRecord: WorkflowRecord = {
   publishedRevision: 1,
 };
 
-export const transitionDocument = decodeDocument({
+const transitionDocument = decodeDocument({
   ...everyDocument,
   operations: everyDocument.operations.map((operation) => ({
     ...operation,

@@ -313,11 +313,11 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
 
 describe("Workflow Operation decoding", () => {
   it.each([
-    ["no commands", Struct.omit(operation, ["commands"])],
-    ["no connections", Struct.omit(operation, ["connections"])],
-    ["an unknown connection system", { ...operation, connections: ["linear"] }],
-  ])("rejects an Operation with %s", (_, candidate) => {
-    assert.throws(() => decodeDocument({ ...baseDocument, operations: [candidate] }));
+    ["no commands", Struct.omit(operation, ["commands"]), /\["commands"\]/],
+    ["no connections", Struct.omit(operation, ["connections"]), /\["connections"\]/],
+    ["an unknown connection system", { ...operation, connections: ["linear"] }, /\["connections"\]\[0\]/],
+  ])("rejects an Operation with %s", (_, candidate, failurePath) => {
+    assert.throws(() => decodeDocument({ ...baseDocument, operations: [candidate] }), failurePath);
   });
 });
 

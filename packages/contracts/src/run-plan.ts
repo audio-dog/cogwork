@@ -216,14 +216,14 @@ export const RunPlanCommandRules = Schema.Struct({
 });
 export type RunPlanCommandRules = typeof RunPlanCommandRules.Type;
 
-export const RunPlanConnection = ConnectionSystem.pick(["github"]);
-export type RunPlanConnection = typeof RunPlanConnection.Type;
+export const RunPlanConnectionSystem = ConnectionSystem.pick(["github"]);
+export type RunPlanConnectionSystem = typeof RunPlanConnectionSystem.Type;
 
 export class RunPlanSandbox extends Schema.Class<RunPlanSandbox>("RunPlanSandbox")({
   workspace: Schema.NullOr(TrimmedNonEmptyString),
   policy: RunPlanPolicyProfile,
   commands: RunPlanCommandRules,
-  connections: Schema.Array(RunPlanConnection),
+  connections: Schema.Array(RunPlanConnectionSystem),
 }) {}
 
 export class RunPlanPersistence extends Schema.Class<RunPlanPersistence>("RunPlanPersistence")({
