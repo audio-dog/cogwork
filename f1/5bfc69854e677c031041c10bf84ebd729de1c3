@@ -1,0 +1,31 @@
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_734095a0b9bff8::t_383c359410f3bd 5
+packages/engine/src/coordination-fold.test.ts
+  s_734095a0b9bff8::t_f418c0673adec7 155,163,171,179,187,191-198,201,206
+packages/engine/src/coordination.ts
+  s_734095a0b9bff8::t_1d81025bed4544 197-204
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_734095a0b9bff8::t_6dce9186be6291 253,255-257,262-265,269-272,283,300,397,430,461-472,474-479,481-482
+packages/engine/src/github/trigger-source-pull-request-conditions.test.ts
+  s_734095a0b9bff8::t_fc77bc8e4de139 1-115
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_734095a0b9bff8::t_24e300842ff0fb 375-410,414-445,447-448,450,452-463
+packages/engine/src/trigger-observation.ts
+  s_734095a0b9bff8::t_0c0c2bf893de2b 58,84-85,329-331,333,337,345,348-355,377-380,417
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f15bfc69854e677c031041c10bf84ebd729de1c3",
+  "prompts": {},
+  "sessions": {
+    "s_734095a0b9bff8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e8aec8da-68d1-4078-a896-7643f6bd9d42",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
