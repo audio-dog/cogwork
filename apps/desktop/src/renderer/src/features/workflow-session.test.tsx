@@ -156,6 +156,18 @@ describe("WorkflowEditor", () => {
     await act(async () => root.unmount());
   });
 
+  it("shows why Save did not publish when another edit arrives first", async () => {
+    const { container, root, daemon } = await mountEditor(record, { session: {} });
+    await daemon((probe) => probe.holdReplies);
+
+    await act(async () => buttonNamed(container, "Save")?.click());
+    await daemon((probe) => probe.editAsAnotherAuthor(record.id, [{ _tag: "Rename", name: "Agent name" }]));
+    await daemon((probe) => probe.releaseReplies);
+
+    await eventually(() => expect(container.textContent).toContain("Another edit changed this Workflow"));
+    await act(async () => root.unmount());
+  });
+
   it("shows another author's change while an edit preview is pending", async () => {
     const { container, root, daemon } = await mountEditor(everyRecord);
     await daemon((probe) => probe.holdReplies);
