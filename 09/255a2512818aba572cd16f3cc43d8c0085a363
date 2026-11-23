@@ -1,0 +1,75 @@
+apps/cli/package.json
+  s_e4af7fe6d86a0b::t_349d4727eeda03 39
+apps/cli/tsconfig.json
+  s_e4af7fe6d86a0b::t_69bbd53935f1a3 2
+apps/desktop/package.json
+  s_e4af7fe6d86a0b::t_fbbc1f19570609 54
+apps/desktop/tsconfig.node.json
+  s_e4af7fe6d86a0b::t_621c08cbd03df0 2
+apps/desktop/tsconfig.web.json
+  s_e4af7fe6d86a0b::t_878bcc20a8d247 2
+configs/sensor/package.json
+  s_e4af7fe6d86a0b::t_11ba827b1ebfc0 17
+configs/sensor/tsconfig.json
+  s_e4af7fe6d86a0b::t_fba8ac1ebd8944 2
+configs/test/package.json
+  s_e4af7fe6d86a0b::t_3555dafba4fb22 17
+configs/test/tsconfig.json
+  s_e4af7fe6d86a0b::t_e989be52747b53 2
+configs/types/package.json
+  s_e4af7fe6d86a0b::t_c53cc3f7c77f6b 1-9
+packages/claude-code/package.json
+  s_e4af7fe6d86a0b::t_8fd29acb059e6f 28
+packages/claude-code/tsconfig.json
+  s_e4af7fe6d86a0b::t_ffe9c8536b72cb 2
+packages/codex-cli/package.json
+  s_e4af7fe6d86a0b::t_3d94ed9b726a3f 26
+packages/codex-cli/tsconfig.json
+  s_e4af7fe6d86a0b::t_c413f937139bb9 2
+packages/contracts/package.json
+  s_e4af7fe6d86a0b::t_ce5101ea68418f 17
+packages/contracts/tsconfig.json
+  s_e4af7fe6d86a0b::t_e18875c458f2a7 2
+packages/cursor-acp/package.json
+  s_e4af7fe6d86a0b::t_903bd2da9a964d 29
+packages/cursor-acp/tsconfig.json
+  s_e4af7fe6d86a0b::t_03a9b34985cf74 2
+packages/engine/package.json
+  s_e4af7fe6d86a0b::t_98d3d4cbc48a96 34
+packages/engine/tsconfig.json
+  s_e4af7fe6d86a0b::t_ff8e24cd1cae8c 2
+packages/process-diagnostics/package.json
+  s_e4af7fe6d86a0b::t_8556db68f11025 19
+packages/process-diagnostics/tsconfig.json
+  s_e4af7fe6d86a0b::t_aa9d47a4ecc457 2
+packages/ui/package.json
+  s_e4af7fe6d86a0b::t_6c5adb7107f8c6 32
+packages/ui/tsconfig.json
+  s_e4af7fe6d86a0b::t_48327b5b32c6cb 2
+pnpm-lock.yaml
+  s_2625c9fcf2c219::t_e365208fc1159e 372-374,463-465,562-564,584-586,591-592,620-622,666-668,694-696,737-739,819-821,850-852,905-907
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "09255a2512818aba572cd16f3cc43d8c0085a363",
+  "prompts": {},
+  "sessions": {
+    "s_2625c9fcf2c219": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8f16819d-2df4-4e17-91ac-030ea51649c4",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e4af7fe6d86a0b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba1cc794-28df-49a3-89af-d0817ab5ef85",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
