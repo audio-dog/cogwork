@@ -1,0 +1,31 @@
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_ec10506843cbcc::t_dbe2228a8f25c6 22
+docs/spec/customizable-workflows-the-workflow-document.md
+  s_ec10506843cbcc::t_2f1c87ccb2f72e 22-23
+packages/contracts/src/run-plan.ts
+  s_ec10506843cbcc::t_48aa0efd5500ad 219-220,226
+packages/contracts/src/workflow-validation.test.ts
+  s_ec10506843cbcc::t_acde9fd0c6bcf6 316-320
+packages/contracts/src/workflow.ts
+  s_ec10506843cbcc::t_957ddd90beafc9 19,317
+packages/engine/src/issue-workflow-catalog.ts
+  s_ec10506843cbcc::t_e043d46ebd0070 25-32
+packages/engine/src/workflow-templates.test.ts
+  s_ec10506843cbcc::t_f2362003a3860f 370-377,407-419,421,424
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "206edd5e0fce6cb9202025215e83e6199bc53f3e",
+  "prompts": {},
+  "sessions": {
+    "s_ec10506843cbcc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2e6f14c-bf5f-4e79-99ff-7fb10b3334f2",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
