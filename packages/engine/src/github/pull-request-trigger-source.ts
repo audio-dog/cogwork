@@ -1,9 +1,11 @@
-import { WorkflowCatalogKey, type WorkItemRef } from "@cogwork/contracts";
+import { keyOf, WorkflowCatalogKey, type WorkItemRef } from "@cogwork/contracts";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Stream from "effect/Stream";
 
-import { type CheckRun, isFailing } from "../ci";
+import { type CheckRun, isFailing, latestFailingCheckAtMillis } from "../ci";
 import type { RegisteredWorkspace, RegistryState } from "../projector";
 import {
   catchUpParameter,
@@ -249,6 +251,32 @@ const failedJobLogsOf = (
       ),
   ).pipe(Effect.map((entries): JobLogExcerpts => new Map(entries)));
 
+type ConflictStarts = Ref.Ref<ReadonlyMap<string, number | null>>;
+
+const conflictStartOf = (
+  seen: ReadonlyMap<string, number | null>,
+  item: string,
+  pull: RawPull,
+  now: number,
+) => {
+  // A restart forgets which conflicts it saw; a later start here would wake every parked pull request.
+  if (!seen.has(item)) return pull.updatedAtMillis;
+  return seen.get(item) ?? now;
+};
+
+const observeConflict = (
+  starts: ConflictStarts,
+  ref: WorkItemRef,
+  pull: RawPull,
+  conflicts: boolean,
+  now: number,
+) =>
+  Ref.modify(starts, (seen) => {
+    const item = keyOf(ref);
+    const startedAtMillis = conflicts ? conflictStartOf(seen, item, pull, now) : null;
+    return [startedAtMillis, new Map(seen).set(item, startedAtMillis)] as const;
+  });
+
 const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(function* (
   client: GitHubClientService,
   target: GitHubTargetConfig,
@@ -256,6 +284,7 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   selected: ReadonlyArray<TriggerSubscription>,
   pull: RawPull,
   now: number,
+  conflictStarts: ConflictStarts,
 ) {
   const [checks, detail, issueComments, reviewComments, reviews] = yield* Effect.all([
     client.listCheckRuns(target, pull.headSha),
@@ -271,6 +300,15 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
     .filter(isFailing)
     .map(({ name, conclusion }) => `${name}:${conclusion}`)
     .toSorted();
+  const conflictStartedAtMillis = selected.some(({ entry }) => entry === conflictsKey)
+    ? yield* observeConflict(
+        conflictStarts,
+        ref,
+        pull,
+        baseDivergenceOf(detail.mergeableState) === "conflict",
+        now,
+      )
+    : null;
   const conditionEvents: ReadonlyArray<TriggerEvent> = [
     ...(selected.some(({ entry }) => entry === checksFailedKey) && failed.length > 0
       ? [
@@ -278,21 +316,20 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
             key: ref,
             revision: `checks:${pull.headSha}:${failed.join(",")}`,
             cause: { _tag: "Unknown" } as const,
-            atMillis: pull.updatedAtMillis,
+            atMillis: latestFailingCheckAtMillis(checks) ?? pull.updatedAtMillis,
             entry: checksFailedKey,
             workspace: workspace.config.id,
             subject,
           },
         ]
       : []),
-    ...(selected.some(({ entry }) => entry === conflictsKey) &&
-    baseDivergenceOf(detail.mergeableState) === "conflict"
+    ...(conflictStartedAtMillis !== null
       ? [
           {
             key: ref,
             revision: `conflict:${pull.headSha}:${pull.baseSha ?? "unknown"}`,
             cause: { _tag: "Unknown" } as const,
-            atMillis: pull.updatedAtMillis,
+            atMillis: conflictStartedAtMillis,
             entry: conflictsKey,
             workspace: workspace.config.id,
             subject,
@@ -367,6 +404,7 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
   subscriptions: ReadonlyArray<TriggerSubscription>,
   workspace: RegistryState["workspaces"][number],
   now: number,
+  conflictStarts: ConflictStarts,
 ) {
   const selected = workspaceSubscriptions(workspace.config.id, subscriptions);
   const target = selected.length > 0 ? sourceControlTargetFor(workspace) : null;
@@ -384,7 +422,7 @@ const readWorkspace = Effect.fn("GitHubPullRequestTriggerSource.readWorkspace")(
   const events = yield* Effect.forEach(pulls, (pull) =>
     isolateProviderItemRead(
       { source: "github", workspace: workspace.config.id, item: `pull request #${pull.number}` },
-      eventsForPull(client, target, workspace, selected, pull, now),
+      eventsForPull(client, target, workspace, selected, pull, now, conflictStarts),
     ),
   );
   return {
@@ -399,11 +437,19 @@ const read = Effect.fn("GitHubPullRequestTriggerSource.read")(function* (
   registry: Effect.Effect<RegistryState>,
   subscriptions: ReadonlyArray<TriggerSubscription>,
   checkpoint: ProviderPollCheckpoint,
+  conflictStarts: ConflictStarts,
 ) {
   const now = yield* Clock.currentTimeMillis;
   const state = yield* registry;
   const reads = yield* Effect.forEach(state.workspaces, (workspace) =>
-    readWorkspace(client, checkpoint.cursors.get(workspace.config.id), subscriptions, workspace, now),
+    readWorkspace(
+      client,
+      checkpoint.cursors.get(workspace.config.id),
+      subscriptions,
+      workspace,
+      now,
+      conflictStarts,
+    ),
   );
   return {
     events: reads.flatMap(({ events }) => events),
@@ -437,5 +483,13 @@ export const makeGitHubPullRequestTriggerSource = (
     },
   ],
   observe: (subscriptions) =>
-    providerPollingStream("github", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
+    Stream.unwrap(
+      Ref.make<ReadonlyMap<string, number | null>>(new Map()).pipe(
+        Effect.map((conflictStarts) =>
+          providerPollingStream("github", (checkpoint) =>
+            read(client, registry, subscriptions, checkpoint, conflictStarts),
+          ),
+        ),
+      ),
+    ),
 });

@@ -146,4 +146,56 @@ describe("coordination fold", () => {
     assert.strictEqual(view.gate(judge, "sweep-revision")._tag, "Open");
     assert.strictEqual(view.gate(operation, "tracker-revision")._tag, "Open");
   });
+
+  const failureParkCases = [
+    {
+      name: "a stuck park holds it from the newest failed attempt",
+      reason: { _tag: "Stuck", summary: "needs a person" },
+      handbacks: [],
+      key: operation,
+      expected: 3,
+    },
+    {
+      name: "an exhausted park holds it from the newest failed attempt",
+      reason: { _tag: "Exhausted", reason: "failure limit" },
+      handbacks: [],
+      key: operation,
+      expected: 3,
+    },
+    {
+      name: "a park that is not a failure does not hold it",
+      reason: { _tag: "HandedToYou" },
+      handbacks: [],
+      key: operation,
+      expected: null,
+    },
+    {
+      name: "a handback after the park releases it",
+      reason: { _tag: "Stuck", summary: "needs a person" },
+      handbacks: [{ by: "person", atMillis: 5, note: null }],
+      key: operation,
+      expected: null,
+    },
+    {
+      name: "a park on another Operation does not hold it",
+      reason: { _tag: "Stuck", summary: "needs a person" },
+      handbacks: [],
+      key: operationOf("verify"),
+      expected: null,
+    },
+  ] as const;
+
+  failureParkCases.forEach(({ name, reason, handbacks, key, expected }) => {
+    it(`reports the failed attempt behind a failure park: ${name}`, () => {
+      const view = fold(
+        {
+          ...ledger([attempt("failed", 1), attempt("succeeded", 2), attempt("failed", 3)], handbacks),
+          parks: [{ reason, operation, atMillis: 4 }],
+        },
+        "cogwork",
+      );
+
+      assert.strictEqual(view.failedAttemptAtMillis(key), expected);
+    });
+  });
 });
