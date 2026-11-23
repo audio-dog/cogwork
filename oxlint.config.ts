@@ -1,23 +1,32 @@
-import { globSync } from "node:fs";
-
-import { defineConfig, type OxlintConfig, type OxlintOverride } from "oxlint";
-
-export type LintArea = Required<Pick<OxlintOverride, "files" | "rules">>;
-
-const defaultExports = <T>(pattern: string) =>
-  Promise.all(
-    globSync(pattern, { cwd: import.meta.dirname })
-      .toSorted()
-      .map(async (file): Promise<T> => (await import(`./${file}`)).default),
-  );
-
-const [configs, areas] = await Promise.all([
-  defaultExports<OxlintConfig>("configs/lint/oxlint/*.ts"),
-  defaultExports<LintArea>("configs/lint/areas/*.ts"),
-]);
+import { defineConfig } from "oxlint";
 
 export default defineConfig({
-  extends: configs,
+  plugins: ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y", "vitest"],
+  categories: {
+    correctness: "error",
+  },
+  options: {
+    reportUnusedDisableDirectives: "error",
+  },
   ignorePatterns: ["**/*.gen.ts", "configs/lint/tests/fixtures/**"],
-  overrides: areas,
+  rules: {
+    "unicorn/filename-case": ["error", { case: "kebabCase" }],
+    "react/refs": "off",
+    "react/set-state-in-effect": "off",
+    "react/static-components": "off",
+    "vitest/expect-expect": "off",
+    "vitest/no-conditional-expect": "off",
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/require-to-throw-message": "off",
+    "vitest/valid-expect": "off",
+    "vitest/valid-title": "off",
+  },
+  overrides: [
+    {
+      files: ["**/routes/**"],
+      rules: {
+        "unicorn/filename-case": "off",
+      },
+    },
+  ],
 });
