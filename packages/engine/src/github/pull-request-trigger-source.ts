@@ -154,13 +154,21 @@ const indented = (text: string) =>
 
 const singleLine = (text: string) => text.replaceAll(/\s*[\r\n]+\s*/g, " ");
 
-const checkLines = (check: CheckRun) => [
+type JobLogExcerpts = ReadonlyMap<number, string | null>;
+
+const jobLogLines = (check: CheckRun, logs: JobLogExcerpts) =>
+  check.actionsJobId == null
+    ? []
+    : ["  - Log excerpt:", indented(logs.get(check.actionsJobId) ?? "unavailable")];
+
+const checkLines = (check: CheckRun, logs: JobLogExcerpts) => [
   `- ${singleLine(check.name)}: ${check.status}, ${check.conclusion ?? "no conclusion"}, ${singleLine(check.detailsUrl ?? "no details URL")}`,
   ...(isFailing(check)
     ? [
         `  - Title: ${singleLine(check.outputTitle ?? "none")}`,
         "  - Summary:",
         indented(check.outputSummary ?? "none"),
+        ...jobLogLines(check, logs),
       ]
     : []),
 ];
@@ -181,11 +189,12 @@ const changedFilesSection = (files: ReadonlyArray<RawPullFile> | null) =>
 interface PullRequestFacts {
   readonly detail: RawPullDetail;
   readonly checks: ReadonlyArray<CheckRun>;
+  readonly logs: JobLogExcerpts;
   readonly reviews: ReadonlyArray<RawReview>;
   readonly files: ReadonlyArray<RawPullFile> | null;
 }
 
-const pullRequestBody = ({ detail, checks, reviews, files }: PullRequestFacts) =>
+const pullRequestBody = ({ detail, checks, logs, reviews, files }: PullRequestFacts) =>
   [
     `# ${singleLine(detail.title)}`,
     "",
@@ -205,7 +214,7 @@ const pullRequestBody = ({ detail, checks, reviews, files }: PullRequestFacts) =
     writeAccessReviewDecision(reviews),
     "",
     "## Checks",
-    listOrNone(checks.flatMap(checkLines)),
+    listOrNone(checks.flatMap((check) => checkLines(check, logs))),
     "",
     "## Changed files",
     changedFilesSection(files),
@@ -225,6 +234,20 @@ const changedFilesOf = (client: GitHubClientService, target: GitHubTargetConfig,
   pull.baseSha === undefined
     ? Effect.succeed(null)
     : client.listPullFiles(target, pull.baseSha, pull.headSha).pipe(Effect.orElseSucceed(() => null));
+
+const failedJobLogsOf = (
+  client: GitHubClientService,
+  target: GitHubTargetConfig,
+  checks: ReadonlyArray<CheckRun>,
+) =>
+  Effect.forEach(
+    checks.filter(isFailing).flatMap(({ actionsJobId }) => (actionsJobId == null ? [] : [actionsJobId])),
+    (jobId) =>
+      client.getActionsJobLogExcerpt(target, jobId).pipe(
+        Effect.orElseSucceed(() => null),
+        Effect.map((excerpt) => [jobId, excerpt] as const),
+      ),
+  ).pipe(Effect.map((entries): JobLogExcerpts => new Map(entries)));
 
 const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(function* (
   client: GitHubClientService,
@@ -325,8 +348,11 @@ const eventsForPull = Effect.fn("GitHubPullRequestTriggerSource.eventsForPull")(
   });
   const events = [...conditionEvents, ...occurrenceEvents];
   if (events.length === 0) return events;
-  const files = yield* changedFilesOf(client, target, pull);
-  const workContext = proseOf({ detail, checks, reviews, files }, feedback);
+  const [files, logs] = yield* Effect.all([
+    changedFilesOf(client, target, pull),
+    failedJobLogsOf(client, target, checks),
+  ]);
+  const workContext = proseOf({ detail, checks, logs, reviews, files }, feedback);
   const pullRequest = {
     author: pull.authorLogin,
     headRef: pull.headRef,
