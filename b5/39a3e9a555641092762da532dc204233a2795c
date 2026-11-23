@@ -1,0 +1,23 @@
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  s_5274ed9c233c99::t_8d7195be3ed9f5 40
+  s_5274ed9c233c99::t_3f52c9275308e2 30
+  s_5274ed9c233c99::t_42a1378a799ecb 10
+packages/contracts/GLOSSARY-operations.md
+  s_5274ed9c233c99::t_0b08d61c83b66b 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b539a3e9a555641092762da532dc204233a2795c",
+  "prompts": {},
+  "sessions": {
+    "s_5274ed9c233c99": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bb0a5ac4-ecb3-471d-ad01-7bc2aac13199",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
