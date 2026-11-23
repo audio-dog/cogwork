@@ -1,0 +1,33 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_ec10506843cbcc::t_4eb510da24e545 47,134-146,240
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  s_ec10506843cbcc::t_06119a5c041506 1-8,49-62,76,122-131
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  s_ec10506843cbcc::t_b3c4a97da9f1dd 5,20,45-52,55
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_ec10506843cbcc::t_3dc80c083d23b6 159-171
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  s_ec10506843cbcc::t_d90295b89447d6 19-23,27,33,101-105,128-136,157,164,177
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_ec10506843cbcc::t_a77b3f7a3a4361 167,188-236
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_ec10506843cbcc::t_40bff430c7dd07 33-36,41-42,47,55-57,76-77,85-87,91,95-105,136-154,157-161,164-172,177,183,189,191-192,205-206,220,222,225,229-233,237-239,243,246,258-262,270-284,294-301,303-304
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_ec10506843cbcc::t_688566ea92659c 58-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b4663ad4a9cae5966976679a1f6ac2722d932b00",
+  "prompts": {},
+  "sessions": {
+    "s_ec10506843cbcc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2e6f14c-bf5f-4e79-99ff-7fb10b3334f2",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
