@@ -1,0 +1,57 @@
+packages/engine/src/scheduler.test.ts
+  s_e4af7fe6d86a0b::t_c427a3a3a8263f 48
+  s_e4af7fe6d86a0b::t_e09b4f73eeece6 129
+  s_e4af7fe6d86a0b::t_2a39a1c8271821 96
+  s_e4af7fe6d86a0b::t_bf3a3e92582dea 138
+  s_e4af7fe6d86a0b::t_78ebad1d5c3721 114,126,133,167,184,191
+  s_e4af7fe6d86a0b::t_610a502d0edea7 61-78
+  s_e4af7fe6d86a0b::t_03be0faeb1ae2b 106
+  s_e4af7fe6d86a0b::t_4519c821d07829 119,131,196
+  s_e4af7fe6d86a0b::t_d8d3b5ef2f8d9b 144-162
+  s_e4af7fe6d86a0b::t_1b05d08e19db56 17
+  s_e4af7fe6d86a0b::t_d6605b06899e56 192
+  s_e4af7fe6d86a0b::t_f2db2ad9253d67 97-100,102-104
+  s_e4af7fe6d86a0b::t_16f7aed710aea6 1-16,18-47,49-60,79-95,101,105,107-113,115-118,120-125,127-128,130,132,134-137,139-143,163-166,168-183,185-190,193-195,197-199
+packages/engine/src/scheduler.ts
+  s_e4af7fe6d86a0b::t_a3cbe6b65735da 258
+  s_e4af7fe6d86a0b::t_0f2fd4e2fb2303 80
+  s_e4af7fe6d86a0b::t_f27aa6e3f57c25 281
+  s_e4af7fe6d86a0b::t_af5a7fbfb9bed9 309,356
+  s_e4af7fe6d86a0b::t_ccd9e6bd9e5fc3 359
+  s_e4af7fe6d86a0b::t_dbbc7d9b4af54f 111,115-118
+  s_e4af7fe6d86a0b::t_69a6e2af7fe99e 207-211
+  s_e4af7fe6d86a0b::t_a31d6e9141a0e2 271-275
+  s_e4af7fe6d86a0b::t_94a232c2fe7b7c 358
+  s_e4af7fe6d86a0b::t_30b100bd006055 204
+  s_e4af7fe6d86a0b::t_9810424b530a4b 121
+  s_e4af7fe6d86a0b::t_f3feafee1e774f 312-320
+  s_e4af7fe6d86a0b::t_857a2dac3b55bb 295-296
+  s_e4af7fe6d86a0b::t_7a3aaf44afad1a 286
+  s_e4af7fe6d86a0b::t_9a930e1c946d5f 287-290,294,297,311,321-326,329-330,332
+  s_e4af7fe6d86a0b::t_3aa9a7b10a7314 327-328
+  s_e4af7fe6d86a0b::t_0b3eb3e07bfb28 352-355,361-362,364-366,368,370
+  s_e4af7fe6d86a0b::t_e37cdb26fe92e0 186
+  s_e4af7fe6d86a0b::t_f8f364a4359510 187-193,198,201,215-220,223-229
+  s_e4af7fe6d86a0b::t_b63d45f9506468 298-308,310
+  s_e4af7fe6d86a0b::t_693593f52e6c35 68
+  s_e4af7fe6d86a0b::t_9b49ef4d5aeac7 331
+  s_e4af7fe6d86a0b::t_64c872f871b9a3 291-293
+  s_e4af7fe6d86a0b::t_6fa9dd9d84625f 150
+  s_e4af7fe6d86a0b::t_91a89d30bb2ebc 122,212,333,357
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "96dd9453d0ea9963b79ec423ce9c0b9d5de6110c",
+  "prompts": {},
+  "sessions": {
+    "s_e4af7fe6d86a0b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ba1cc794-28df-49a3-89af-d0817ab5ef85",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
