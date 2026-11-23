@@ -1,0 +1,44 @@
+packages/contracts/GLOSSARY-operations.md
+  h_46518a29d4dd91 55
+packages/engine/operating-instructions/follow-up-agent/INSTRUCTIONS.md
+  h_46518a29d4dd91 10,30,40
+packages/engine/src/ci.ts
+  h_46518a29d4dd91 12
+packages/engine/src/github/actions-job-log.test.ts
+  h_46518a29d4dd91 1-65
+packages/engine/src/github/actions-job-log.ts
+  h_46518a29d4dd91 1-52
+packages/engine/src/github/client-pulls.test.ts
+  h_46518a29d4dd91 58-121
+packages/engine/src/github/client-pulls.ts
+  h_46518a29d4dd91 28,407
+packages/engine/src/github/client-responses.ts
+  h_46518a29d4dd91 156-157,174-177
+packages/engine/src/github/client.ts
+  h_46518a29d4dd91 2,4-5,7,13-14,18,162-184,189-205,207-208
+packages/engine/src/github/performance-issue-filer.test.ts
+  h_46518a29d4dd91 391
+packages/engine/src/github/pull-request-trigger-source.ts
+  h_46518a29d4dd91 157-164,171,192,197,217,238-251,351-355
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  h_46518a29d4dd91 159-213
+packages/engine/src/scheduler.test.ts
+  h_46518a29d4dd91 1,5,7-8,11,13,15,19,22,27-204,258-259,269,302,327
+packages/engine/src/scheduler.ts
+  h_46518a29d4dd91 69,82,113,117-120,123-124,152,197-204,209,212,215,218-223,226-231,234-240,275,292-294,298,303-350,369-376,378-379,381-383,385,387
+packages/engine/src/workflow-run-admission.test.ts
+  h_46518a29d4dd91 1,14,17,27-43,109,146-178
+packages/engine/src/workflow-run.ts
+  h_46518a29d4dd91 8,73-84,159-160,164,325-338,415,432
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "81aa439dea033ce62e8b4a4960c134d0a858d7f7",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
