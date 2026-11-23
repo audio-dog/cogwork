@@ -9,6 +9,7 @@ export interface CheckRun {
   readonly detailsUrl?: string | null;
   readonly outputTitle?: string | null;
   readonly outputSummary?: string | null;
+  readonly actionsJobId?: number | null;
 }
 
 const failingConclusions = new Set(["failure", "timed_out", "cancelled", "startup_failure"]);

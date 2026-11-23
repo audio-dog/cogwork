@@ -388,6 +388,7 @@ it.effect("retries creation after a transient failure that did not report accept
                   requestReview: unexpectedClientCall,
                   editComment: unexpectedClientCall,
                   verifyCredential: unexpectedClientCall,
+                  getActionsJobLogExcerpt: unexpectedClientCall,
                 } satisfies GitHubClientService;
               }),
             ),

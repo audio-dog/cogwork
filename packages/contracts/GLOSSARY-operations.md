@@ -52,7 +52,7 @@ Reusable guidance an agent must follow when performing an operation, resolved se
 _Avoid_: Skill, playbook skill, prompt, work context
 
 **Work context**:
-The work-specific facts supplied to a run, in one frozen shape for each item kind: an issue's body and comments; a pull request's description, review comments, checks, and changed files, but never its diff; a Granola transcript; a Slack message or conversation with its thread; a schedule tick's fire times. It also records which Trigger fired and when, and the artifacts this item's lineage already created. After a hand-off, the next Operation gets the item read again plus the previous Operation's result. No source has options: one shape per kind.
+The work-specific facts supplied to a run, in one frozen shape for each item kind: an issue's body and comments; a pull request's description, review comments, checks with a log excerpt for each failed GitHub Actions job, and changed files, but never its diff; a Granola transcript; a Slack message or conversation with its thread; a schedule tick's fire times. It also records which Trigger fired and when, and the artifacts this item's lineage already created. After a hand-off, the next Operation gets the item read again plus the previous Operation's result. No source has options: one shape per kind.
 **The engine supplies them; the agent never fetches its own brief.** The work item's prose — and, for follow-up, its pull request's description and review comments — is read once, at admission, and frozen into the Run Plan, so a Run starts with its brief and a tracker MCP server is at most optional context. A steer posted mid-Run reaches the next round, not this one. See ADR 0030.
 _Avoid_: Operating instructions, prompt template, workflow settings
 
