@@ -1,0 +1,19 @@
+oxlint.config.ts
+  s_b87b11c204af99::t_81411678dc3c4b 1,4-10,12-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "21f30de9f6c012d82f9584e6cce7011f8d0181b6",
+  "prompts": {},
+  "sessions": {
+    "s_b87b11c204af99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-afa9f742768d59be6",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
