@@ -1,0 +1,25 @@
+packages/engine/src/provider-trigger-source.ts
+  s_7dacd9fa13bfb0::t_efedc5c85cfb68 193,276-285
+packages/engine/src/tracker-trigger-source.test.ts
+  s_7dacd9fa13bfb0::t_3ba47b59b56310 20,267-301
+packages/engine/src/tracker-trigger-source.ts
+  s_7dacd9fa13bfb0::t_99a444f2c6a66e 16,98,246
+packages/engine/src/trigger-observation.ts
+  s_7dacd9fa13bfb0::t_bb30b30ef127d9 26,103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9b3b0a15877af554e7198b5e0e816cebdb3ec55a",
+  "prompts": {},
+  "sessions": {
+    "s_7dacd9fa13bfb0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "80eb3600-3ceb-4b69-a0ab-9b8e625edbc4",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
