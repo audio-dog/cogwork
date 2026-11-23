@@ -81,7 +81,7 @@ const modifiedSinceLowerBound = (
   const earliestCatchUp = Math.min(
     ...occurrences.map(({ parameters, catchUp }) => catchUpSince(parameters, catchUp?.since ?? now, now)),
   );
-  return (cursor ?? earliestCatchUp) - providerModifiedSinceGraceMillis;
+  return Math.max(cursor ?? 0, earliestCatchUp) - providerModifiedSinceGraceMillis;
 };
 
 export const makeTrackerTriggerSource = (

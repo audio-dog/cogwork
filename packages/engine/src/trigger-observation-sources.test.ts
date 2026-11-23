@@ -157,7 +157,18 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("restarts a rate-limited source only after Retry-After", () =>
+  it.effect.each([
+    {
+      name: "restarts a rate-limited source only after Retry-After",
+      failure: { reason: "rate-limited", retryAfterMillis: 12_000 },
+      waitMillis: 12_000,
+    },
+    {
+      name: "waits one poll interval before it restarts a source that failed with no retry delay",
+      failure: { reason: "unavailable", retryAfterMillis: null },
+      waitMillis: 60_000,
+    },
+  ] as const)("$name", ({ failure, waitMillis }) =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_000_000);
       const current = yield* Ref.make(record(true));
@@ -167,19 +178,14 @@ describe("TriggerObservation", () => {
       const starts = yield* Ref.make(0);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
-      const rateLimited = sourceFailingOnce(
+      const failing = sourceFailingOnce(
         starts,
-        new SourceFailure({
-          source: "clock",
-          reason: "rate-limited",
-          retryAfterMillis: 12_000,
-          message: "wait",
-        }),
+        new SourceFailure({ source: "clock", message: "wait", ...failure }),
       );
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
         Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
-        Effect.provideService(TriggerSources, [rateLimited]),
+        Effect.provideService(TriggerSources, [failing]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
         Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
@@ -190,45 +196,7 @@ describe("TriggerObservation", () => {
       yield* Effect.yieldNow;
 
       assert.strictEqual(yield* Ref.get(starts), 1);
-      yield* TestClock.adjust(11_999);
-      yield* observation.refresh;
-      assert.strictEqual(yield* Ref.get(starts), 1);
-      yield* TestClock.adjust(1);
-      yield* Effect.yieldNow;
-      yield* observation.refresh;
-      yield* Effect.yieldNow;
-      assert.strictEqual(yield* Ref.get(starts), 2);
-    }).pipe(Effect.scoped),
-  );
-
-  it.effect("waits one poll interval before it restarts a source that failed with no retry delay", () =>
-    Effect.gen(function* () {
-      const current = yield* Ref.make(record(true));
-      const processed = yield* Ref.make<string | null>(null);
-      const observed = yield* Ref.make(0);
-      const sourceRevision = yield* Ref.make<string | null>(null);
-      const starts = yield* Ref.make(0);
-      const store = yield* makeMemoryTriggerObservationStore;
-      const bus = yield* makeDaemonEventBus;
-      const unavailable = sourceFailingOnce(
-        starts,
-        new SourceFailure({ source: "clock", reason: "unavailable", retryAfterMillis: null, message: "502" }),
-      );
-      const observation = yield* make.pipe(
-        Effect.provideService(Workflows, workflowService(current)),
-        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
-        Effect.provideService(TriggerSources, [unavailable]),
-        Effect.provideService(TriggerObservationStore, store),
-        Effect.provideService(DaemonEventBus, bus),
-        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
-        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
-      );
-      yield* Effect.yieldNow;
-      yield* observation.refresh;
-      yield* Effect.yieldNow;
-
-      assert.strictEqual(yield* Ref.get(starts), 1);
-      yield* TestClock.adjust(59_999);
+      yield* TestClock.adjust(waitMillis - 1);
       yield* observation.refresh;
       assert.strictEqual(yield* Ref.get(starts), 1);
       yield* TestClock.adjust(1);
