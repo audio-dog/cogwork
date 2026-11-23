@@ -7,7 +7,7 @@ export interface WorkspaceRecordDraft {
   readonly checkoutPath: string;
   readonly issueTrackerType: "github" | "linear";
   readonly issueTrackerConnectionId: string;
-  readonly teams: string;
+  readonly teams: readonly string[];
   readonly organization: string;
   readonly assigneeAllowlist: readonly string[];
   readonly trackerBotAllowlist: string;
@@ -31,7 +31,7 @@ export const emptyDraft: WorkspaceRecordDraft = {
   checkoutPath: "",
   issueTrackerType: "github",
   issueTrackerConnectionId: "unbound",
-  teams: "",
+  teams: [],
   organization: "",
   assigneeAllowlist: [],
   trackerBotAllowlist: "",
@@ -69,7 +69,7 @@ const draftFromRecord = (record: WorkspaceUpdate & { readonly checkoutPath: stri
     checkoutPath: record.checkoutPath,
     issueTrackerType: tracker.type === "linear" ? "linear" : "github",
     issueTrackerConnectionId: tracker.connectionId,
-    teams: joined(tracker.teams),
+    teams: tracker.teams ?? [],
     organization: tracker.organization ?? "",
     assigneeAllowlist: tracker.assigneeAllowlist ?? [],
     trackerBotAllowlist: joined(tracker.botAllowlist),
@@ -155,7 +155,7 @@ export const workspaceUpdateFromDraft = (draft: WorkspaceRecordDraft) => {
       issueTracker: {
         type: draft.issueTrackerType,
         connectionId: draft.issueTrackerConnectionId,
-        teams: list(draft.teams),
+        teams: draft.teams.length > 0 ? draft.teams : undefined,
         organization: optional(draft.organization),
         assigneeAllowlist: draft.assigneeAllowlist.length > 0 ? draft.assigneeAllowlist : undefined,
         botAllowlist: list(draft.trackerBotAllowlist),
