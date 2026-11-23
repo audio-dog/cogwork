@@ -1,0 +1,91 @@
+apps/desktop/fixtures/imported-workflow-causing-highlights.json
+  s_e4f23ce3661b61::t_41a29b4748898a 27-28,53-54
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_e4f23ce3661b61::t_474d1d27349a6b 35-36
+apps/desktop/src/renderer/src/features/feed.test.ts
+  s_e4f23ce3661b61::t_bb8537624d976d 57-58
+apps/desktop/src/renderer/src/features/harness-alerts.test.ts
+  s_e4f23ce3661b61::t_766bbc3cea411c 26-27
+apps/desktop/src/renderer/src/features/workflow-import-review.test.ts
+  s_e4f23ce3661b61::t_8adcf190b3498e 42-43
+apps/desktop/src/renderer/src/features/workflow-session-fixtures.tsx
+  s_5274ed9c233c99::t_d7428e34009412 1-281
+apps/desktop/src/renderer/src/features/workflow-session-list.test.tsx
+  s_5274ed9c233c99::t_50d0e01bdf5a07 1-214
+apps/desktop/src/renderer/src/features/workflow-session-router.tsx
+  s_5274ed9c233c99::t_b7f61ebd62cee3 1-37
+apps/desktop/src/renderer/src/features/workflow-transfer.test.ts
+  s_e4f23ce3661b61::t_64c77602a44938 26-27
+packages/contracts/src/workflow-fixtures.ts
+  s_e4f23ce3661b61::t_ebbbcb8bde4a69 41-42
+packages/engine/src/external-harness-runtime-fixtures.ts
+  s_e4f23ce3661b61::t_e4cc92bc591687 214
+packages/engine/src/harness.test.ts
+  s_e4f23ce3661b61::t_350746a6ebe12a 116
+packages/engine/src/replay-harness.test.ts
+  s_e4f23ce3661b61::t_2f3d878cacbb26 82
+packages/engine/src/run-preparation.test.ts
+  s_e4f23ce3661b61::t_cec76ef1b44ec6 56-57
+packages/engine/src/trigger-observation-sweep.test.ts
+  s_e4f23ce3661b61::t_33da565abbc70f 74-75
+packages/engine/src/workflow-action-plan-pull-requests.test.ts
+  s_e4f23ce3661b61::t_89f6874b381b1c 61-62,275-276
+packages/engine/src/workflow-action-plan-slack.test.ts
+  s_e4f23ce3661b61::t_cc0025d3a4a45a 34-35
+packages/engine/src/workflow-actions-issue.test.ts
+  s_e4f23ce3661b61::t_5a770c2f80a8c0 98-99
+packages/engine/src/workflow-fixtures.ts
+  s_e4f23ce3661b61::t_f532d806dca3a9 129-130
+packages/engine/src/workflow-run-documents-fixtures.ts
+  s_e4f23ce3661b61::t_0cf98527d1e9f3 65-66
+apps/desktop/src/renderer/src/features/workflow-defaults.ts
+  s_43f0cff252d2ea::t_791141df5049b2 36-37
+apps/desktop/src/renderer/src/features/workflow-edits.test.ts
+  s_43f0cff252d2ea::t_ce51a79377f822 39-40
+packages/claude-code/src/harness-fixtures.ts
+  s_43f0cff252d2ea::t_ee07c0131f9229 284-289
+packages/codex-cli/src/harness-fixtures.ts
+  s_43f0cff252d2ea::t_49e74fecb82517 143-148
+packages/contracts/src/run-plan.ts
+  s_43f0cff252d2ea::t_868f52c334ff7b 5,213-221,225-226
+packages/contracts/src/workflow-validation.test.ts
+  s_43f0cff252d2ea::t_06c848f415aada 3,314-323
+packages/engine/src/github/provider-slack-review-template.ts
+  s_43f0cff252d2ea::t_31d2abc5481dc8 29-30,74-75
+packages/engine/src/provider-runner-fixtures.ts
+  s_43f0cff252d2ea::t_b0628aa552c82c 190-191
+packages/engine/src/run-plan-resolution.test.ts
+  s_43f0cff252d2ea::t_febc8ee71f96d6 34-35,267-272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "77d132c8694edd6b03b3ac8816cf25d2f3621ce6",
+  "prompts": {},
+  "sessions": {
+    "s_43f0cff252d2ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fe58f3c-12a7-4b18-86e9-997abd9002d7",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_5274ed9c233c99": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bb0a5ac4-ecb3-471d-ad01-7bc2aac13199",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_e4f23ce3661b61": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5fb570d7-31a6-4658-8c6c-ee85059ec2fb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
