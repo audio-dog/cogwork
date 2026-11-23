@@ -194,7 +194,14 @@ export const fold = (ledger: CoordinationLedger, claimant: string): Coordination
   };
   const failedAttemptAtMillis = (key: OperationKey) => {
     const held = holdingPark(key, () => false);
-    if (held === null || !failureParks.has(held.reason._tag)) return null;
+    const releasesOnlyThisFailure = activeParks.every(
+      (candidate) =>
+        claimClearsPark(candidate, claims) ||
+        (candidate.operation !== undefined &&
+          sameOperation(candidate.operation, key) &&
+          failureParks.has(candidate.reason._tag)),
+    );
+    if (held === null || !releasesOnlyThisFailure) return null;
     const failures = ledger.attempts.filter(
       (attempt) => attempt.outcome === "failed" && sameOperation(attempt.operation, key),
     );

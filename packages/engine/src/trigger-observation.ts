@@ -7,7 +7,6 @@ import {
   type ParkReason,
   type TriggerSourceHealth,
   type WorkflowCatalog,
-  type WorkItemRef,
 } from "@cogwork/contracts";
 import * as EffectCause from "effect/Cause";
 import * as Clock from "effect/Clock";
@@ -27,7 +26,6 @@ import { DaemonEventBus } from "./daemon-event-bus";
 import { WorkspaceRegistry } from "./registry-service";
 import {
   admissionIsOlder,
-  admissionKey,
   oldestRevisionAdmissions,
   revisionAdvancedParks,
   sameSubscription,
@@ -57,6 +55,7 @@ import {
   type TriggerSubscription,
 } from "./trigger-source";
 import { Workflows } from "./workflow";
+import { operationKeyOf } from "./workflow-run-admission";
 
 const decodeTriggerEvent = Schema.decodeUnknownEffect(TriggerEvent);
 
@@ -82,10 +81,8 @@ interface AdmissionState {
   readonly isUnprocessedRevision: boolean;
 }
 
-const operationKeyOf = ({ subscription }: TriggerAdmission) => ({
-  workflow: subscription.workflow,
-  operation: subscription.operation,
-});
+const heldOperationOf = (admission: TriggerAdmission) =>
+  operationKeyOf(admission, admission.subscription.operation);
 
 const isOfferable = ({ admission, gate, isUnprocessedRevision }: AdmissionState) => {
   const passesFilters = passesTriggerFilters(admission.subscription, admission.event);
@@ -327,44 +324,36 @@ export const make = Effect.gen(function* () {
   );
 
   const wakeFollowUp = Effect.fn("TriggerObservation.wakeFollowUp")(function* (
-    item: WorkItemRef,
     pending: ReadonlyArray<TriggerAdmission>,
   ) {
-    const view = yield* coordination.read(item);
+    const [first] = pending;
+    if (first === undefined) return;
+    const view = yield* coordination.read(first.event.key);
     const held = pending.flatMap((admission) => {
-      const failedAtMillis = view.failedAttemptAtMillis(operationKeyOf(admission));
+      const failedAtMillis = view.failedAttemptAtMillis(heldOperationOf(admission));
       return failedAtMillis === null ? [] : [{ admission, failedAtMillis }];
     });
     const woken = held.some(({ admission, failedAtMillis }) => admission.event.atMillis > failedAtMillis);
-    if (!woken) return [];
+    if (!woken) return;
     const superseded = held
       .map(({ admission }) => admission)
       .toSorted((left, right) => (admissionIsOlder(left, right) ? -1 : 1))
       .slice(0, -1);
-    yield* coordination.handBack(item, { by: defaultClaimant });
     yield* Effect.forEach(superseded, (admission) => store.complete(admission, Effect.void), {
       discard: true,
     });
-    return superseded;
+    yield* coordination.handBack(first.event.key, { by: defaultClaimant });
   });
 
-  const wakeFollowUps = Effect.fn("TriggerObservation.wakeFollowUps")(function* (
-    pending: ReadonlyArray<TriggerAdmission>,
-  ) {
-    const pullRequests = new Map(
-      pending
-        .filter(({ event }) => event.key._tag === "PullRequest")
-        .map(({ event }) => [keyOf(event.key), event.key]),
+  const wakeFollowUps = (pending: ReadonlyArray<TriggerAdmission>) =>
+    Effect.forEach(
+      Map.groupBy(
+        pending.filter(({ event }) => event.key._tag === "PullRequest"),
+        ({ event }) => keyOf(event.key),
+      ).values(),
+      wakeFollowUp,
+      { discard: true },
     );
-    const superseded = yield* Effect.forEach(pullRequests, ([item, ref]) =>
-      wakeFollowUp(
-        ref,
-        pending.filter(({ event }) => keyOf(event.key) === item),
-      ),
-    );
-    const completed = new Set(superseded.flat().map(admissionKey));
-    return pending.filter((admission) => !completed.has(admissionKey(admission)));
-  });
 
   const recheck = Effect.fn("TriggerObservation.recheck")(function* (admission: TriggerAdmission) {
     const source = sources.find((candidate) => ownsEntry(candidate, admission.event.entry));
@@ -385,7 +374,10 @@ export const make = Effect.gen(function* () {
   });
 
   return {
-    eligible: Effect.all([workflows.list, Effect.flatMap(store.admissions, wakeFollowUps)]).pipe(
+    eligible: Effect.all([
+      workflows.list,
+      Effect.flatMap(store.admissions, wakeFollowUps).pipe(Effect.andThen(store.admissions)),
+    ]).pipe(
       Effect.flatMap(([listed, current]) => {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
         return Effect.forEach(oldestRevisionAdmissions(current), (admission) =>
@@ -422,7 +414,7 @@ export const make = Effect.gen(function* () {
                       admission,
                       actedOn: view.actedOn(admission.subscription.workflow),
                       isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
-                      gate: view.gate(operationKeyOf(admission), admission.event.revision),
+                      gate: view.gate(heldOperationOf(admission), admission.event.revision),
                     })),
                   ),
                 ),

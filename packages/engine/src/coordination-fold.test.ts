@@ -152,6 +152,7 @@ describe("coordination fold", () => {
       name: "a stuck park holds it from the newest failed attempt",
       reason: { _tag: "Stuck", summary: "needs a person" },
       handbacks: [],
+      otherParks: [],
       key: operation,
       expected: 3,
     },
@@ -159,6 +160,7 @@ describe("coordination fold", () => {
       name: "an exhausted park holds it from the newest failed attempt",
       reason: { _tag: "Exhausted", reason: "failure limit" },
       handbacks: [],
+      otherParks: [],
       key: operation,
       expected: 3,
     },
@@ -166,6 +168,7 @@ describe("coordination fold", () => {
       name: "a park that is not a failure does not hold it",
       reason: { _tag: "HandedToYou" },
       handbacks: [],
+      otherParks: [],
       key: operation,
       expected: null,
     },
@@ -173,6 +176,7 @@ describe("coordination fold", () => {
       name: "a handback after the park releases it",
       reason: { _tag: "Stuck", summary: "needs a person" },
       handbacks: [{ by: "person", atMillis: 5, note: null }],
+      otherParks: [],
       key: operation,
       expected: null,
     },
@@ -180,17 +184,26 @@ describe("coordination fold", () => {
       name: "a park on another Operation does not hold it",
       reason: { _tag: "Stuck", summary: "needs a person" },
       handbacks: [],
+      otherParks: [],
       key: operationOf("verify"),
+      expected: null,
+    },
+    {
+      name: "another Operation's park on the item keeps a hand-back from releasing it",
+      reason: { _tag: "Stuck", summary: "needs a person" },
+      handbacks: [],
+      otherParks: [{ reason: { _tag: "HandedToYou" }, operation: operationOf("verify"), atMillis: 2 }],
+      key: operation,
       expected: null,
     },
   ] as const;
 
-  failureParkCases.forEach(({ name, reason, handbacks, key, expected }) => {
+  failureParkCases.forEach(({ name, reason, handbacks, otherParks, key, expected }) => {
     it(`reports the failed attempt behind a failure park: ${name}`, () => {
       const view = fold(
         {
           ...ledger([attempt("failed", 1), attempt("succeeded", 2), attempt("failed", 3)], handbacks),
-          parks: [{ reason, operation, atMillis: 4 }],
+          parks: [{ reason, operation, atMillis: 4 }, ...otherParks],
         },
         "cogwork",
       );

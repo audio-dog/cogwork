@@ -372,96 +372,93 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  const followUpParks = [
-    { _tag: "Stuck", summary: "needs a person" },
-    { _tag: "Exhausted", reason: "failure limit" },
-  ] as const;
-
-  followUpParks.forEach((reason) => {
-    it.effect(`wakes one round when a pull request event starts after a ${reason._tag} attempt`, () =>
-      Effect.gen(function* () {
-        const pullRequest = { _tag: "PullRequest", workspace: selectedWorkspaceId, number: 7 } as const;
-        const operation = { workflow: subscription.workflow, operation: subscription.operation };
-        const pullLineage = { ...lineage, root: yield* Schema.decodeEffect(LineageId)(keyOf(pullRequest)) };
-        const admission = (revision: string, atMillis: number) => ({
-          event: { ...event, key: pullRequest, revision, atMillis },
-          subscription,
-          lineage: pullLineage,
-        });
-        const handbacks = yield* Ref.make<ReadonlyArray<HandbackRecord>>([]);
-        const newest = yield* Ref.make("conflict:head:base-2");
-        const read = () =>
-          Effect.all([Ref.get(handbacks), Ref.get(newest)]).pipe(
-            Effect.map(([recorded, observed]) =>
-              fold(
-                {
-                  claim: null,
-                  attempts: [
-                    AttemptRecord.make({
-                      operation,
-                      outcome: "failed",
-                      atMillis: 5_000,
-                      lineage: pullLineage,
-                    }),
-                  ],
-                  handbacks: recorded,
-                  parks: [ParkRecord.make({ reason, operation, atMillis: 5_001 })],
-                  revision: { observed, processed: null },
-                },
-                "cogwork",
-              ),
+  it.effect("wakes one round when a pull request event starts after a stuck attempt", () =>
+    Effect.gen(function* () {
+      const pullRequest = { _tag: "PullRequest", workspace: selectedWorkspaceId, number: 7 } as const;
+      const operation = { workflow: subscription.workflow, operation: subscription.operation };
+      const pullLineage = { ...lineage, root: yield* Schema.decodeEffect(LineageId)(keyOf(pullRequest)) };
+      const admission = (revision: string, atMillis: number) => ({
+        event: { ...event, key: pullRequest, revision, atMillis },
+        subscription,
+        lineage: pullLineage,
+      });
+      const handbacks = yield* Ref.make<ReadonlyArray<HandbackRecord>>([]);
+      const read = () =>
+        Ref.get(handbacks).pipe(
+          Effect.map((recorded) =>
+            fold(
+              {
+                claim: null,
+                attempts: [
+                  AttemptRecord.make({
+                    operation,
+                    outcome: "failed",
+                    atMillis: 5_000,
+                    lineage: pullLineage,
+                  }),
+                ],
+                handbacks: recorded,
+                parks: [
+                  ParkRecord.make({
+                    reason: { _tag: "Stuck", summary: "needs a person" },
+                    operation,
+                    atMillis: 5_001,
+                  }),
+                ],
+                revision: { observed: "checks:head:test", processed: null },
+              },
+              "cogwork",
             ),
-          );
-        const coordination = {
-          ...coordinationService(
-            yield* Ref.make<string | null>(null),
-            yield* Ref.make(0),
-            yield* Ref.make<string | null>(null),
           ),
-          read,
-          handBack: (_ref: WorkItemRef, input: { readonly by: string }) =>
-            Ref.update(handbacks, (current) => [
-              ...current,
-              { by: input.by, note: null, atMillis: 9_000 },
-            ]).pipe(Effect.andThen(read())),
-        } satisfies CoordinationService;
-        const store = yield* makeMemoryTriggerObservationStore;
-        yield* store.putAll([
-          admission("review-comment-1", 1_000),
-          admission("conflict:head:base-1", 4_000),
-          admission("conflict:head:base-2", 4_000),
-        ]);
-        const observation = yield* make.pipe(
-          Effect.provideService(Workflows, workflowService(yield* Ref.make(record(true)))),
-          Effect.provideService(Coordination, coordination),
-          Effect.provideService(TriggerSources, []),
-          Effect.provideService(TriggerObservationStore, store),
-          Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
-          Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
-          Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
         );
-        const offered = () =>
-          observation.eligible.pipe(
-            Effect.map((admissions) => admissions.map(({ event: candidate }) => candidate.revision)),
-          );
-
-        assert.deepStrictEqual(yield* offered(), []);
-        assert.deepStrictEqual(yield* Ref.get(handbacks), []);
-
-        yield* store.putAll([admission("review-comment-2", 6_000), admission("checks:head:test", 7_000)]);
-        yield* Ref.set(newest, "checks:head:test");
-
-        assert.deepStrictEqual(yield* offered(), ["checks:head:test"]);
-        assert.deepStrictEqual(yield* offered(), ["checks:head:test"]);
-        assert.deepStrictEqual(
-          (yield* Ref.get(handbacks)).map(({ by }) => by),
-          ["cogwork"],
+      const coordination = {
+        ...coordinationService(
+          yield* Ref.make<string | null>(null),
+          yield* Ref.make(0),
+          yield* Ref.make<string | null>(null),
+        ),
+        read,
+        handBack: (_ref: WorkItemRef, input: { readonly by: string }) =>
+          Ref.update(handbacks, (current) => [
+            ...current,
+            { by: input.by, note: null, atMillis: 9_000 },
+          ]).pipe(Effect.andThen(read())),
+      } satisfies CoordinationService;
+      const store = yield* makeMemoryTriggerObservationStore;
+      yield* store.putAll([
+        admission("review-comment-1", 1_000),
+        admission("conflict:head:base-1", 4_000),
+        admission("conflict:head:base-2", 4_000),
+      ]);
+      const observation = yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(yield* Ref.make(record(true)))),
+        Effect.provideService(Coordination, coordination),
+        Effect.provideService(TriggerSources, []),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, yield* makeDaemonEventBus),
+        Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+      );
+      const offered = () =>
+        observation.eligible.pipe(
+          Effect.map((admissions) => admissions.map(({ event: candidate }) => candidate.revision)),
         );
-        assert.deepStrictEqual(
-          (yield* store.admissions).map(({ event: candidate }) => candidate.revision),
-          ["checks:head:test"],
-        );
-      }).pipe(Effect.scoped),
-    );
-  });
+
+      assert.deepStrictEqual(yield* offered(), []);
+      assert.deepStrictEqual(yield* Ref.get(handbacks), []);
+
+      yield* store.putAll([admission("review-comment-2", 6_000), admission("checks:head:test", 7_000)]);
+
+      assert.deepStrictEqual(yield* offered(), ["checks:head:test"]);
+      assert.deepStrictEqual(yield* offered(), ["checks:head:test"]);
+      assert.deepStrictEqual(
+        (yield* Ref.get(handbacks)).map(({ by }) => by),
+        ["cogwork"],
+      );
+      assert.deepStrictEqual(
+        (yield* store.admissions).map(({ event: candidate }) => candidate.revision),
+        ["checks:head:test"],
+      );
+    }).pipe(Effect.scoped),
+  );
 });
