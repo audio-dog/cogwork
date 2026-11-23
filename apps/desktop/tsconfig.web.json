@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@cogwork/types-config/tsconfig.base.json",
   "include": [
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",

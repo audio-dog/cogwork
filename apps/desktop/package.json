@@ -51,6 +51,7 @@
   "devDependencies": {
     "@babel/core": "^8.0.1",
     "@cogwork/test-config": "workspace:*",
+    "@cogwork/types-config": "workspace:*",
     "@effect/vitest": "catalog:effect",
     "@electron/fuses": "^1.8.0",
     "@rolldown/plugin-babel": "^0.2.3",

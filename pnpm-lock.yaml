@@ -369,6 +369,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(vitest@5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -457,6 +460,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(vitest@5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -553,6 +559,9 @@ importers:
         specifier: catalog:effect
         version: 4.1.4
     devDependencies:
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6
@@ -572,9 +581,14 @@ importers:
         specifier: 'catalog:'
         version: 5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
     devDependencies:
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+
+  configs/types: {}
 
   packages/claude-code:
     dependencies:
@@ -603,6 +617,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -646,6 +663,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -671,6 +691,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(vitest@5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -711,6 +734,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -790,6 +816,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/platform-node':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(redis@6.2.1(@opentelemetry/api@1.9.1))
@@ -818,6 +847,9 @@ importers:
       '@cogwork/test-config':
         specifier: workspace:*
         version: link:../../configs/test
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(vitest@5.1.0(@opentelemetry/api@1.9.1)(@types/node@26.6.6)(happy-dom@21.0.4)(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))
@@ -870,6 +902,9 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
     devDependencies:
+      '@cogwork/types-config':
+        specifier: workspace:*
+        version: link:../../configs/types
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.5(vite@8.2.2(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
