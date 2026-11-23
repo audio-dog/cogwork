@@ -190,7 +190,7 @@ export const providerSubject = (title: string | undefined, url: string | null) =
 };
 
 export const providerModifiedSinceGraceMillis = 30_000;
-const providerPollInterval = Duration.seconds(60);
+export const providerPollInterval = Duration.seconds(60);
 const zeroCatchUpGraceMillis = Duration.toMillis(providerPollInterval) + providerModifiedSinceGraceMillis;
 
 export const providerCursorAfterRead = (cursor: number | undefined, startedAtMillis: number) =>
@@ -273,17 +273,13 @@ const poll = <R>(
     Effect.mapError((error) => sourceFailure(source, error)),
   );
 
-export const providerPollingStream = <R>(
-  source: TriggerSourceId,
-  read: (checkpoint: ProviderPollCheckpoint) => Effect.Effect<ProviderPollRead, IssueTrackerError, R>,
-) =>
-  Stream.unwrap(
-    Ref.make<ProviderPollState>({ cursors: new Map(), pending: [] }).pipe(
-      Effect.map((state) =>
-        Stream.fromEffect(poll(source, state, read)).pipe(
-          Stream.repeat(Schedule.spaced(providerPollInterval)),
-          Stream.flattenIterable,
-        ),
-      ),
-    ),
-  );
+export const makeProviderPollingStream = (source: TriggerSourceId) => {
+  const state = Ref.makeUnsafe<ProviderPollState>({ cursors: new Map(), pending: [] });
+  return <R>(
+    read: (checkpoint: ProviderPollCheckpoint) => Effect.Effect<ProviderPollRead, IssueTrackerError, R>,
+  ) =>
+    Stream.fromEffect(poll(source, state, read)).pipe(
+      Stream.repeat(Schedule.spaced(providerPollInterval)),
+      Stream.flattenIterable,
+    );
+};

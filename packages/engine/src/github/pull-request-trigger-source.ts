@@ -11,11 +11,11 @@ import {
   conditionEntryKeys,
   isolateProviderItemRead,
   liveParameter,
+  makeProviderPollingStream,
   type ProviderPollCheckpoint,
   parameterValue,
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
-  providerPollingStream,
   providerSubject,
   triggerEntry,
   workspaceOptionReader,
@@ -422,20 +422,23 @@ const configuredBots = ({ config }: RegisteredWorkspace) =>
 export const makeGitHubPullRequestTriggerSource = (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
-): TriggerSource => ({
-  id: "github",
-  entries: githubPullRequestEntries,
-  availability: () => Effect.succeed({ _tag: "Available" }),
-  options: [
-    {
-      system: "github",
-      readers: {
-        bot: workspaceOptionReader("github", registry, (workspace) =>
-          Effect.succeed(configuredBots(workspace)),
-        ),
+): TriggerSource => {
+  const pollingStream = makeProviderPollingStream("github");
+  return {
+    id: "github",
+    entries: githubPullRequestEntries,
+    availability: () => Effect.succeed({ _tag: "Available" }),
+    options: [
+      {
+        system: "github",
+        readers: {
+          bot: workspaceOptionReader("github", registry, (workspace) =>
+            Effect.succeed(configuredBots(workspace)),
+          ),
+        },
       },
-    },
-  ],
-  observe: (subscriptions) =>
-    providerPollingStream("github", (checkpoint) => read(client, registry, subscriptions, checkpoint)),
-});
+    ],
+    observe: (subscriptions) =>
+      pollingStream((checkpoint) => read(client, registry, subscriptions, checkpoint)),
+  };
+};
