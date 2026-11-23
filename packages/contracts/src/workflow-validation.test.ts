@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { HarnessName } from "./base-schemas";
 import { NeedIdentity, type WorkflowDocument, WorkflowDocument as WorkflowDocumentSchema } from "./workflow";
@@ -309,6 +310,16 @@ const diagnosticCases: ReadonlyArray<DiagnosticCase> = [
     },
   },
 ];
+
+describe("Workflow Operation decoding", () => {
+  it.each([
+    ["no commands", Struct.omit(operation, ["commands"])],
+    ["no connections", Struct.omit(operation, ["connections"])],
+    ["an unknown connection system", { ...operation, connections: ["linear"] }],
+  ])("rejects an Operation with %s", (_, candidate) => {
+    assert.throws(() => decodeDocument({ ...baseDocument, operations: [candidate] }));
+  });
+});
 
 describe("Workflow validator", () => {
   it("bounds the answer combinations expanded by validation", () => {

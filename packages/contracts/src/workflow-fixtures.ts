@@ -38,6 +38,8 @@ export const baseDocument = decodeDocument({
       instructionPackage: null,
       instruction: "Decide what to do.",
       permissionProfile: "full",
+      commands: { allow: [], deny: [] },
+      connections: [],
       requires: [],
       model: { harness: "codex", model: "gpt-5", options: [] },
       forEach: null,

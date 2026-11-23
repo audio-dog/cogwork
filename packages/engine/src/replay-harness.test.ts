@@ -79,7 +79,7 @@ const replayRequest = (speed: ReplaySpeed) => ({
       },
       observation: { generation: 1, observedAtMillis: 1 },
     },
-    sandbox: { workspace: "/repo", policy: "full" },
+    sandbox: { workspace: "/repo", policy: "full", commands: { allow: [], deny: [] }, connections: [] },
     persistence: { sessionKind: "owned-transcript" },
     provenance: {
       resolution: [],

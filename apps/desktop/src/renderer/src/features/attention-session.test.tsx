@@ -32,6 +32,8 @@ const operation = {
   instructionPackage: null,
   instruction: "",
   permissionProfile: "read-only",
+  commands: { allow: [], deny: [] },
+  connections: [],
   requires: [],
   model: { harness: null, model: null, options: [] },
   forEach: null,

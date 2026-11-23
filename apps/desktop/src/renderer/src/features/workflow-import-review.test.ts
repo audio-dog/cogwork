@@ -39,6 +39,8 @@ const quiet = decodeDocument({
       instructionPackage: null,
       instruction: "Draft a reply.",
       permissionProfile: "read-only",
+      commands: { allow: [], deny: [] },
+      connections: [],
       requires: [],
       model: { harness: null, model: null, options: [] },
       forEach: null,

@@ -16,6 +16,7 @@ import {
 } from "./base-schemas";
 import { Lineage, ParkReason, WorkItemKey, WorkItemRef } from "./coordination";
 import { RunId } from "./run";
+import { RunPlanCommandRules, RunPlanConnection } from "./run-plan";
 import { RunPlanPolicyProfile } from "./settings";
 import { IssueTrackerConfig, SourceControlConfig } from "./workspace";
 
@@ -312,6 +313,8 @@ export const WorkflowOperation = Schema.Struct({
   instructionPackage: Schema.NullOr(TrimmedNonEmptyString),
   instruction: Schema.String,
   permissionProfile: RunPlanPolicyProfile,
+  commands: RunPlanCommandRules,
+  connections: Schema.Array(RunPlanConnection),
   requires: Schema.Array(NeedIdentity),
   model: WorkflowModelSelection,
   forEach: Schema.NullOr(TrimmedNonEmptyString),

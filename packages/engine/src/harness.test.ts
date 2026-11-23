@@ -113,7 +113,7 @@ const request = {
       },
       observation: { generation: 1, observedAtMillis: 1 },
     },
-    sandbox: { workspace: "/repo", policy: "read-only" },
+    sandbox: { workspace: "/repo", policy: "read-only", commands: { allow: [], deny: [] }, connections: [] },
     persistence: { sessionKind: "opaque-handle" },
     provenance: {
       resolution: [],

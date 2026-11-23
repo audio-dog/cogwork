@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, layer } from "@effect/vitest";
+import { evaluateCommand } from "@tanstack/ai-sandbox";
 import * as Effect from "effect/Effect";
 
 import { temporaryStore, withWorkflows } from "./workflow-fixtures";
@@ -354,6 +355,69 @@ layer(NodeServices.layer)((it) => {
           ),
         );
       });
+    }),
+  );
+
+  it.effect("grants coding Implement and Follow-up the GitHub Connection and deny list", () =>
+    Effect.gen(function* () {
+      const storePath = yield* temporaryStore();
+      const templates = yield* withWorkflows(storePath, ({ templates }) => templates);
+      const none = { commands: { allow: [], deny: [] }, connections: [] };
+      const coding = {
+        commands: {
+          allow: [],
+          deny: [
+            "gh pr merge*",
+            "gh pr review*--approve*",
+            "gh pr close*",
+            "gh issue close*",
+            "gh repo*",
+            "gh secret*",
+            "gh auth*",
+          ],
+        },
+        connections: ["github"],
+      } as const;
+
+      assert.deepStrictEqual(
+        Object.fromEntries(
+          templates.flatMap(({ id, document }) =>
+            document.operations.map(({ id: operation, commands, connections }) => [
+              `${id}/${operation}`,
+              { commands, connections },
+            ]),
+          ),
+        ),
+        {
+          "granola-to-github-issue/extract": none,
+          "github-staleness-sweep/judge": none,
+          "github-coding-pipeline/triage": none,
+          "github-coding-pipeline/implement": coding,
+          "github-coding-pipeline/follow-up": coding,
+          "granola-to-linear-issue/extract": none,
+          "linear-staleness-sweep/judge": none,
+          "linear-coding-pipeline/triage": none,
+          "linear-coding-pipeline/implement": coding,
+          "linear-coding-pipeline/follow-up": coding,
+          "slack-to-github-review/classify": none,
+          "slack-to-github-review/review": none,
+        },
+      );
+      assert.deepStrictEqual(
+        [
+          "gh pr merge 12 --squash",
+          "gh pr review 12 --approve",
+          "gh pr close 12",
+          "gh issue close 7 --reason completed",
+          "gh repo delete audio-dog/cogwork",
+          "gh secret set TOKEN",
+          "gh auth token",
+          "gh pr view 12",
+        ].map((command) =>
+          evaluateCommand(command, { commands: { deny: [...coding.commands.deny] }, default: "allow" }),
+        ),
+        ["deny", "deny", "deny", "deny", "deny", "deny", "deny", "allow"],
+      );
     }),
   );
 

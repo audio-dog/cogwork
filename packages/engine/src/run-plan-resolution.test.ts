@@ -31,6 +31,8 @@ const operation = Schema.decodeSync(WorkflowOperation)({
   instructionPackage: "implement-agent",
   instruction: "Build it.",
   permissionProfile: "full",
+  commands: { allow: ["pnpm test*"], deny: ["gh pr merge*"] },
+  connections: ["github"],
   requires: [],
   model: { harness: "claude-code", model: "opus", options: [{ id: "effort", value: "high" }] },
   forEach: null,
@@ -262,7 +264,12 @@ describe("resolveRunPlan", () => {
       },
       connections: [],
       workContext: issueWorkContext,
-      sandbox: { workspace: "/worktrees/42", policy: "full" },
+      sandbox: {
+        workspace: "/worktrees/42",
+        policy: "full",
+        commands: { allow: ["pnpm test*"], deny: ["gh pr merge*"] },
+        connections: ["github"],
+      },
       persistence: { sessionKind: "opaque-handle" },
       provenance: {
         resolution: [],

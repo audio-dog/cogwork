@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import { HarnessName, TrimmedNonEmptyString, WorkItemId } from "./base-schemas";
+import { ConnectionSystem } from "./connection";
 import { Claim } from "./coordination";
 import { ProvenanceStamp } from "./provenance";
 import { RunId, SessionKind } from "./run";
@@ -209,9 +210,20 @@ export class RunPlanProvenance extends Schema.Class<RunPlanProvenance>("RunPlanP
   observation: RunPlanObservation,
 }) {}
 
+export const RunPlanCommandRules = Schema.Struct({
+  allow: Schema.Array(TrimmedNonEmptyString),
+  deny: Schema.Array(TrimmedNonEmptyString),
+});
+export type RunPlanCommandRules = typeof RunPlanCommandRules.Type;
+
+export const RunPlanConnection = ConnectionSystem.pick(["github"]);
+export type RunPlanConnection = typeof RunPlanConnection.Type;
+
 export class RunPlanSandbox extends Schema.Class<RunPlanSandbox>("RunPlanSandbox")({
   workspace: Schema.NullOr(TrimmedNonEmptyString),
   policy: RunPlanPolicyProfile,
+  commands: RunPlanCommandRules,
+  connections: Schema.Array(RunPlanConnection),
 }) {}
 
 export class RunPlanPersistence extends Schema.Class<RunPlanPersistence>("RunPlanPersistence")({

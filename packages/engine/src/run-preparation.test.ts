@@ -53,6 +53,8 @@ const operation = Schema.decodeSync(WorkflowOperation)({
   instructionPackage: "implement-agent",
   instruction: "Build it.",
   permissionProfile: "full",
+  commands: { allow: [], deny: [] },
+  connections: [],
   requires: [],
   model: { harness: "scripted", model: null, options: [] },
   forEach: null,

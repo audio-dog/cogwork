@@ -23,6 +23,8 @@ const operation = (id: string, harness: string | null) => ({
   instructionPackage: null,
   instruction: "",
   permissionProfile: "read-only",
+  commands: { allow: [], deny: [] },
+  connections: [],
   requires: [],
   model: { harness, model: null, options: [] },
   forEach: null,

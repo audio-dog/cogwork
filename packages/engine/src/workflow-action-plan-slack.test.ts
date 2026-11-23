@@ -31,6 +31,8 @@ describe("Workflow action plan", () => {
         instructionPackage: null,
         instruction: "Respond in Slack.",
         permissionProfile: "read-only",
+        commands: { allow: [], deny: [] },
+        connections: [],
         requires: [],
         model: { harness: null, model: null, options: [] },
         forEach: null,

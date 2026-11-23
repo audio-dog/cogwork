@@ -26,6 +26,8 @@ export const slackReviewTemplate = decodeTemplate({
         instruction:
           "Decide whether the Slack message asks for a pull request review, asks a question, or needs no action.",
         permissionProfile: "read-only",
+        commands: { allow: [], deny: [] },
+        connections: [],
         requires: [],
         model: { harness: null, model: null, options: [] },
         forEach: null,
@@ -69,6 +71,8 @@ export const slackReviewTemplate = decodeTemplate({
         instruction:
           "Read the pull request named in the Slack thread. Review the frozen commit and choose a verdict.",
         permissionProfile: "read-only",
+        commands: { allow: [], deny: [] },
+        connections: [],
         requires: [],
         model: { harness: null, model: null, options: [] },
         forEach: null,

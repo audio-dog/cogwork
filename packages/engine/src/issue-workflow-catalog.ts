@@ -17,6 +17,21 @@ const triageLabels = {
   linear: "state:needs-triage",
 } as const;
 
+const noCommandRules = { allow: [], deny: [] };
+
+const codingCommandRules = {
+  allow: [],
+  deny: [
+    "gh pr merge*",
+    "gh pr review*--approve*",
+    "gh pr close*",
+    "gh issue close*",
+    "gh repo*",
+    "gh secret*",
+    "gh auth*",
+  ],
+};
+
 const roleLabel = (system: "github" | "linear", role: string) =>
   system === "github" ? role : `state:${role}`;
 
@@ -52,6 +67,8 @@ const stalenessSweepTemplate = (system: "github" | "linear") => {
           instruction:
             "Review why this issue is parked. Keep it, retire it with a short explanation, or refresh it for triage.",
           permissionProfile: "read-only",
+          commands: noCommandRules,
+          connections: [],
           requires: [],
           model: { harness: null, model: null, options: [] },
           forEach: null,
@@ -127,6 +144,8 @@ const granolaIssueTemplate = (system: "github" | "linear") => {
           instruction:
             "Extract every concrete commitment from the note. For each commitment, find related issues and decide whether it is new, duplicate, or related.",
           permissionProfile: "read-only",
+          commands: noCommandRules,
+          connections: [],
           requires: [],
           model: { harness: null, model: null, options: [] },
           forEach: "commitment",
@@ -252,6 +271,8 @@ const codingPipelineTemplate = (system: "github" | "linear") => {
           instructionPackage: "triage-agent",
           instruction: "",
           permissionProfile: "read-only",
+          commands: noCommandRules,
+          connections: [],
           requires: [],
           model: { harness: null, model: null, options: [] },
           forEach: null,
@@ -281,6 +302,8 @@ const codingPipelineTemplate = (system: "github" | "linear") => {
           instructionPackage: "implement-agent",
           instruction: "",
           permissionProfile: "full",
+          commands: codingCommandRules,
+          connections: ["github"],
           requires: [],
           model: { harness: null, model: null, options: [] },
           forEach: null,
@@ -300,6 +323,8 @@ const codingPipelineTemplate = (system: "github" | "linear") => {
           instructionPackage: "follow-up-agent",
           instruction: "",
           permissionProfile: "full",
+          commands: codingCommandRules,
+          connections: ["github"],
           requires: [],
           model: { harness: null, model: null, options: [] },
           forEach: null,
