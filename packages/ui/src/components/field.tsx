@@ -70,8 +70,8 @@ function Field({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
       role="group"
       data-slot="field"
       data-orientation={orientation}

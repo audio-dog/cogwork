@@ -60,6 +60,7 @@ export interface CoordinationView {
   readonly actedOn: (workflow: WorkflowId) => boolean;
   readonly counters: (key: OperationKey) => CoordinationCounters;
   readonly gate: (key: OperationKey, sourceRevision?: string) => CoordinationGate;
+  readonly failedAttemptAtMillis: (key: OperationKey) => number | null;
 }
 
 const sameOperation = (left: OperationKey, right: OperationKey) =>
@@ -144,6 +145,8 @@ const revisionClearedParks = new Set<ParkReason["_tag"]>([
   "AwaitingApproval",
 ]);
 
+const failureParks = new Set<ParkReason["_tag"]>(["Stuck", "Exhausted"]);
+
 const gateRules = [
   {
     when: ({ ledger }: GateInput) => ledger.claim !== null,
@@ -198,6 +201,32 @@ export const fold = (ledger: CoordinationLedger, claimant: string, nowMillis: nu
     };
   };
   const counters = (key: OperationKey) => countersAfter(key, barrierAtMillis);
+  const holdingPark = (key: OperationKey, revisionMovedPast: (candidate: ParkRecord) => boolean) => {
+    const matchingPark = newestByTime(
+      activeParks.filter((candidate) => {
+        const matchesOperation = candidate.operation === undefined || sameOperation(candidate.operation, key);
+        const clearedByRevision =
+          revisionMovedPast(candidate) && revisionClearedParks.has(candidate.reason._tag);
+        return matchesOperation && !clearedByRevision;
+      }),
+    );
+    return claimClearsPark(matchingPark, claims) ? null : matchingPark;
+  };
+  const failedAttemptAtMillis = (key: OperationKey) => {
+    const held = holdingPark(key, () => false);
+    const releasesOnlyThisFailure = activeParks.every(
+      (candidate) =>
+        claimClearsPark(candidate, claims) ||
+        (candidate.operation !== undefined &&
+          sameOperation(candidate.operation, key) &&
+          failureParks.has(candidate.reason._tag)),
+    );
+    if (held === null || !releasesOnlyThisFailure) return null;
+    const failures = ledger.attempts.filter(
+      (attempt) => attempt.outcome === "failed" && sameOperation(attempt.operation, key),
+    );
+    return newestByTime(failures)?.atMillis ?? held.atMillis;
+  };
   const gate = (key: OperationKey, sourceRevision?: string): CoordinationGate => {
     const processedRevision = ledger.revision?.processed;
     const hasProcessedRevision = processedRevision !== null && processedRevision !== undefined;
@@ -209,17 +238,9 @@ export const fold = (ledger: CoordinationLedger, claimant: string, nowMillis: nu
     const isNewSourceRevision =
       sourceRevision !== undefined &&
       (hasProcessedRevision ? sourceRevision !== processedRevision : activeParks.some(revisionMovedPast));
-    const matchingPark = newestByTime(
-      activeParks.filter((candidate) => {
-        const matchesOperation = candidate.operation === undefined || sameOperation(candidate.operation, key);
-        const clearedByRevision =
-          revisionMovedPast(candidate) && revisionClearedParks.has(candidate.reason._tag);
-        return matchesOperation && !clearedByRevision;
-      }),
-    );
     const input = {
       ledger,
-      park: claimClearsPark(matchingPark, claims) ? null : matchingPark,
+      park: holdingPark(key, revisionMovedPast),
       counters: isNewSourceRevision
         ? { consecutiveFailures: 0, exhausted: false, hop: 0, hopCapped: false }
         : countersAfter(key, barrierAtMillis),
@@ -241,6 +262,7 @@ export const fold = (ledger: CoordinationLedger, claimant: string, nowMillis: nu
       ),
     counters,
     gate,
+    failedAttemptAtMillis,
   };
 };
 
