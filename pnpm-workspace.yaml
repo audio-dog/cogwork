@@ -13,7 +13,7 @@ allowBuilds:
   protobufjs: false
 
 catalog:
-  '@effect/tsgo': '0.69.0'
+  '@effect/tsgo': '0.73.2'
   drizzle-orm: '1.0.0-rc.5'
   drizzle-kit: '1.0.0-rc.5'
   '@tanstack/ai': '1.0.0'
