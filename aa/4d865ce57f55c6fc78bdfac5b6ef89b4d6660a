@@ -1,0 +1,19 @@
+packages/engine/src/coordination-fold.test.ts
+  s_21038402bc2c71::t_365eae0819b658 266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aa4d865ce57f55c6fc78bdfac5b6ef89b4d6660a",
+  "prompts": {},
+  "sessions": {
+    "s_21038402bc2c71": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6155eee9-bf49-4d00-b619-6a7ab31eb4ad",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
