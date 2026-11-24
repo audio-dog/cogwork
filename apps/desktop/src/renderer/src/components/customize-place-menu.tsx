@@ -86,7 +86,15 @@ function NavRow({
     <Item
       size="xs"
       variant={active ? "muted" : "default"}
-      render={<button type="button" onClick={onHighlight} onMouseEnter={onHighlight} onFocus={onHighlight} />}
+      render={
+        <button
+          type="button"
+          aria-label={`${title}, ${count}`}
+          onClick={onHighlight}
+          onMouseEnter={onHighlight}
+          onFocus={onHighlight}
+        />
+      }
       className="cursor-pointer text-left hover:bg-muted/50"
     >
       {Icon ? (

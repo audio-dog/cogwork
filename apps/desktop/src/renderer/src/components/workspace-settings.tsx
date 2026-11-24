@@ -54,7 +54,8 @@ import {
 import { absoluteCheckoutPathFrom } from "../features/workspace-registration";
 import { OperationSettings } from "./operation-settings";
 import { SettingsSection, SubSectionCard } from "./settings-parts";
-import { type PatchDraft, WorkspaceRecord } from "./workspace-setting-rows";
+import type { PatchDraft } from "./workspace-record-context";
+import { WorkspaceRecord } from "./workspace-setting-rows";
 import { useWorkspaces } from "./workspaces-provider";
 
 interface WorkspaceSettings {

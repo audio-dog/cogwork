@@ -2,6 +2,7 @@ import {
   DaemonEvent,
   type WorkflowEditBatch,
   type WorkflowId,
+  WorkflowPublishRefused,
   type WorkflowRecord,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
@@ -16,7 +17,7 @@ import { DaemonAtomRpc, daemonEventAtom, workflowsAtom } from "./atoms";
 
 export class WorkingCopyDaemonError extends Schema.TaggedError<WorkingCopyDaemonError>()(
   "WorkingCopyDaemonError",
-  { message: Schema.String },
+  { message: Schema.String, reason: Schema.optional(Schema.Literal("stale-revision")) },
 ) {}
 
 export interface WorkingCopyDaemonService {
@@ -41,13 +42,17 @@ export class WorkingCopyDaemon extends Context.Service<WorkingCopyDaemon, Workin
 
 const daemonCallDeadline = "30 seconds";
 
+const daemonErrorOf = (error: { readonly _tag: string; readonly message: string }) => {
+  const message = error.message || error._tag;
+  if (error instanceof WorkflowPublishRefused && error.reason === "stale-revision") {
+    return new WorkingCopyDaemonError({ message, reason: "stale-revision" });
+  }
+  return new WorkingCopyDaemonError({ message });
+};
+
 export const boundDaemonCall = <A, E extends { readonly _tag: string; readonly message: string }>(
   call: Effect.Effect<A, E>,
-) =>
-  call.pipe(
-    Effect.timeout(daemonCallDeadline),
-    Effect.mapError((error) => new WorkingCopyDaemonError({ message: error.message || error._tag })),
-  );
+) => call.pipe(Effect.timeout(daemonCallDeadline), Effect.mapError(daemonErrorOf));
 
 const recordsOf = (events: ReadonlyArray<DaemonEvent>) =>
   events.flatMap((event) => (DaemonEvent.guards.WorkflowChanged(event) ? [event.workflow] : []));

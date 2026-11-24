@@ -74,11 +74,14 @@ export const workspaceStatesOf = (
   ...registry.failures.map(workspaceFailureState),
 ];
 
+const runsIn = (state: SchedulerState, workspace: WorkspaceId) =>
+  [...state.startedRuns.values()].filter((runWorkspace) => runWorkspace === workspace).length;
+
 const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, state: SchedulerState) => [
   ...registry.workspaces.map((workspace) => ({
     id: workspace.config.id,
     displayName: workspace.config.displayName,
-    inFlight: state.perWorkspace.get(workspace.config.id) ?? 0,
+    inFlight: runsIn(state, workspace.config.id),
     limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
   })),
   ...registry.failures.flatMap((failure) => {
@@ -87,12 +90,15 @@ const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, stat
       {
         id: failure.id,
         displayName: failure.displayName,
-        inFlight: state.perWorkspace.get(failure.id) ?? 0,
+        inFlight: runsIn(state, failure.id),
         limit: failure.workspaceLimit ?? config.perWorkspaceLimit,
       },
     ];
   }),
 ];
+
+const budgetChargedToRuns = (state: SchedulerState) =>
+  Math.max(0, state.budgetUsed - (state.global - state.startedRuns.size));
 
 export const schedulerStatsOf = (
   registry: RegistryState,
@@ -100,10 +106,10 @@ export const schedulerStatsOf = (
   state: SchedulerState,
 ): SchedulerStats => ({
   scheduling: state.paused ? "paused" : "running",
-  globalInFlight: state.global,
+  globalInFlight: state.startedRuns.size,
   globalLimit: config.globalLimit,
   perWorkspaceLimit: config.perWorkspaceLimit,
-  dailyBudgetUsed: state.budgetUsed,
+  dailyBudgetUsed: budgetChargedToRuns(state),
   dailyBudgetLimit: config.dailyBudget,
   perWorkspace: workspaceLoadsOf(registry, config, state),
 });

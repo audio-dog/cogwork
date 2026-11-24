@@ -12,7 +12,7 @@ and acts on lives in that context's glossary, even when another context names it
 
 Each file below holds one group of terms. Find a term in this list, then read its file.
 
-- [Work](./GLOSSARY-work.md): **Issue tracker**, **Source control provider**, **Work item**, **Workspace**, **Assignee allowlist**, **Bot allowlist**, **Follow-up trigger**
+- [Work](./GLOSSARY-work.md): **Issue tracker**, **Source control provider**, **Work item**, **Workspace**, **Assignee allowlist**, **Linear teams**, **Bot allowlist**, **Follow-up trigger**
 - [Configuration](./GLOSSARY-configuration.md): **Control store**, **Settings profile**, **Runtime host**, **Workspace input**, **Private workspace overlay**, **Authoring tree**, **Authority**, **Scope**, **Skill, Rules and Subagent have no setting**, **Resolution**, **Plugin**, **Install record**, **Plugin catalog**
 - [Contributions](./GLOSSARY-contributions.md): **Contribution kind**, **Connection**, **Connection readiness**, **Tool**, **Skill**, **MCP server**, **MCP server readiness**, **Rules**, **Middleware**, **Hook**, **Subagent**, **Sandbox policy**
 - [Workflows](./GLOSSARY-workflows.md): **Workflow**, **Workflow document**, **Working copy**, **Workflow edit**, **Published revision**, **Diagnostic**, **Workspace selection**, **Workflow template**, **Trigger and action catalog**

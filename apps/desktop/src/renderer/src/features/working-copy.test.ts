@@ -185,10 +185,103 @@ describe("WorkingCopies", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("refuses to publish when an edit queued before the publish is refused", () =>
+    Effect.gen(function* () {
+      const daemon = yield* MemoryDaemon;
+      const copies = yield* WorkingCopies;
+      yield* daemon.holdReplies;
+
+      const edit = yield* Effect.forkChild(
+        copies.edit(workflowId, [{ _tag: "RemoveOperation", operation: "missing" }]),
+      );
+      yield* snapshotWhere(({ pending }) => pending.length === 1);
+      const publish = yield* Effect.forkChild(copies.publish(workflowId));
+      yield* Effect.yieldNow;
+      yield* daemon.releaseReplies;
+      yield* Fiber.await(edit);
+      const published = yield* Effect.exit(Fiber.join(publish));
+
+      assert.strictEqual(Option.getOrNull(Exit.findErrorOption(published))?._tag, "WorkingCopyNotSaved");
+      const refused = yield* snapshotWhere(({ publishRefusal }) => publishRefusal !== null);
+      assert.deepStrictEqual(
+        (yield* daemon.calls).map(({ _tag }) => _tag),
+        ["edit"],
+      );
+      assert.strictEqual(refused._tag === "Some" ? refused.value.publishRefusal : null, "not-saved");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("refuses to publish when another author edits before the publish reaches the daemon", () =>
+    Effect.gen(function* () {
+      const daemon = yield* MemoryDaemon;
+      const copies = yield* WorkingCopies;
+      yield* snapshotWhere(() => true);
+      yield* daemon.holdReplies;
+
+      const publish = yield* Effect.forkChild(copies.publish(workflowId));
+      yield* Effect.yieldNow;
+      yield* daemon.editAsAnotherAuthor(workflowId, [{ _tag: "Rename", name: "Agent name" }]);
+      yield* daemon.releaseReplies;
+      const refusal = Option.getOrNull(Exit.findErrorOption(yield* Effect.exit(Fiber.join(publish))));
+
+      assert.strictEqual(
+        refusal?._tag === "WorkingCopyDaemonError" ? refusal.reason : refusal?._tag,
+        "stale-revision",
+      );
+      const refused = yield* snapshotWhere(({ publishRefusal }) => publishRefusal !== null);
+      assert.strictEqual((yield* daemon.record(workflowId))?.publishedRevision, null);
+      assert.strictEqual(refused._tag === "Some" ? refused.value.publishRefusal : null, "stale-revision");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("publishes the revision the person saw when the change arrives before the edit reply", () =>
+    Effect.gen(function* () {
+      const daemon = yield* MemoryDaemon;
+      const copies = yield* WorkingCopies;
+      yield* daemon.holdDelivery;
+
+      const edit = yield* Effect.forkChild(copies.edit(workflowId, [{ _tag: "Rename", name: "Ready" }]));
+      yield* snapshotWhere(({ accepted, pending }) => accepted.workingRevision === 2 && pending.length === 1);
+      const publish = yield* Effect.forkChild(copies.publish(workflowId));
+      yield* Effect.yieldNow;
+      yield* daemon.releaseDelivery;
+      yield* Fiber.await(edit);
+      const published = yield* Effect.exit(Fiber.join(publish));
+
+      assert.isTrue(Exit.isSuccess(published));
+      assert.strictEqual((yield* daemon.record(workflowId))?.publishedRevision, 2);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("refuses to switch on a draft when another author edits it before the switch runs", () =>
+    Effect.gen(function* () {
+      const daemon = yield* MemoryDaemon;
+      const copies = yield* WorkingCopies;
+      yield* snapshotWhere(() => true);
+      yield* daemon.holdReplies;
+
+      const switched = yield* Effect.forkChild(copies.switchEnabled(workflowId, true));
+      yield* Effect.yieldNow;
+      yield* daemon.editAsAnotherAuthor(workflowId, [{ _tag: "Rename", name: "Agent name" }]);
+      yield* daemon.releaseReplies;
+      const refusal = Option.getOrNull(Exit.findErrorOption(yield* Effect.exit(Fiber.join(switched))));
+
+      assert.strictEqual(
+        refusal?._tag === "WorkingCopyDaemonError" ? refusal.reason : refusal?._tag,
+        "stale-revision",
+      );
+      assert.deepStrictEqual(
+        [(yield* daemon.record(workflowId))?.enabled, (yield* daemon.record(workflowId))?.publishedRevision],
+        [false, null],
+      );
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("publishes a draft before it switches the Workflow on", () =>
     Effect.gen(function* () {
       const daemon = yield* MemoryDaemon;
       const copies = yield* WorkingCopies;
+      yield* snapshotWhere(() => true);
 
       const switched = yield* Effect.exit(copies.switchEnabled(workflowId, true));
 

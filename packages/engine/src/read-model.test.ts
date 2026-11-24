@@ -3,6 +3,7 @@ import { assert, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 
 import { schedulerStatsOf } from "./read-model";
+import { initialState } from "./scheduler";
 
 const registered = Schema.decodeSync(WorkspaceId)("01a1a28e-b763-7ccb-9208-2b284d962dae");
 const failed = Schema.decodeSync(WorkspaceId)("01a1ebe3-0000-7000-8000-000000000000");
@@ -25,16 +26,7 @@ it("names each workspace's scheduler load with its display name", () => {
       failures: [{ id: failed, displayName: "web", source: "test", message: "checkout missing" }],
     },
     { globalLimit: 4, perWorkspaceLimit: 2, dailyBudget: 10 },
-    {
-      global: 1,
-      perWorkspace: new Map([[registered, 1]]),
-      inflight: new Set(),
-      acted: new Set(),
-      budgetDay: 0,
-      budgetUsed: 0,
-      stopping: false,
-      paused: false,
-    },
+    { ...initialState, global: 1, startedRuns: new Map([["run-1", registered]]) },
   );
 
   assert.deepStrictEqual(
