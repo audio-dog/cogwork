@@ -126,6 +126,8 @@ export const document = decodeDocument({
       instructionPackage: null,
       instruction: "Do the work.",
       permissionProfile: "read-only",
+      commands: { allow: [], deny: [] },
+      connections: [],
       requires: [],
       model: { harness: null, model: null, options: [] },
       forEach: null,

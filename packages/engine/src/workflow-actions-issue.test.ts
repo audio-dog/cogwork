@@ -95,6 +95,8 @@ const writeOperation = (system: IssueTrackerApp) =>
     instructionPackage: null,
     instruction: "Write to the issue.",
     permissionProfile: "read-only",
+    commands: { allow: [], deny: [] },
+    connections: [],
     requires: [],
     model: { harness: null, model: null, options: [] },
     forEach: null,

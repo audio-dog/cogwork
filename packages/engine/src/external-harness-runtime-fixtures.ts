@@ -211,7 +211,7 @@ export const request = Schema.decodeSync(RunPlan)({
     },
     observation: { generation: 1, observedAtMillis: 1 },
   },
-  sandbox: { workspace: checkoutPath, policy: "full" },
+  sandbox: { workspace: checkoutPath, policy: "full", commands: { allow: [], deny: [] }, connections: [] },
   persistence: { sessionKind: "opaque-handle" },
   provenance: {
     resolution: [],

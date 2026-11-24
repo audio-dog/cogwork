@@ -281,7 +281,12 @@ const makeRequest = (checkoutPath: string, overrides: RequestOverrides = {}) => 
         },
         observation: { generation: 1, observedAtMillis: 1 },
       },
-      sandbox: { workspace: checkoutPath, policy: profile },
+      sandbox: {
+        workspace: checkoutPath,
+        policy: profile,
+        commands: { allow: [], deny: [] },
+        connections: [],
+      },
       persistence: { sessionKind: "opaque-handle" },
       provenance: {
         resolution: [],

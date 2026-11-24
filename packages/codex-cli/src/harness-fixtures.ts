@@ -140,7 +140,12 @@ const makeRequest = (overrides: RequestOverrides): Harness.HarnessRequest => {
         },
         observation: { generation: 1, observedAtMillis: 1 },
       },
-      sandbox: { workspace: overrides.checkoutPath, policy: profile },
+      sandbox: {
+        workspace: overrides.checkoutPath,
+        policy: profile,
+        commands: { allow: [], deny: [] },
+        connections: [],
+      },
       persistence: { sessionKind: "opaque-handle" },
       provenance: {
         resolution: [],

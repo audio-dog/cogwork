@@ -247,7 +247,12 @@ const planOf = (facts: RunPlanFacts, harness: PreparedHarness, toolNeeds: Readon
       prose: workContextProse(facts),
       observation,
     },
-    sandbox: { workspace: facts.workspaceCheckout, policy: operation.permissionProfile },
+    sandbox: {
+      workspace: facts.workspaceCheckout,
+      policy: operation.permissionProfile,
+      commands: operation.commands,
+      connections: operation.connections,
+    },
     persistence: { sessionKind: harness.sessionKind },
     provenance: {
       resolution: [],

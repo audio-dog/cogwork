@@ -187,6 +187,8 @@ export const request = (overrides: RequestOverrides): HarnessRequest => {
       sandbox: {
         workspace: overrides.checkoutPath === undefined ? "/tmp/does-not-matter" : overrides.checkoutPath,
         policy: profile,
+        commands: { allow: [], deny: [] },
+        connections: [],
       },
       persistence: { sessionKind: "owned-transcript" },
       provenance: {

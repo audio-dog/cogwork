@@ -54,6 +54,8 @@ const workflowWithOperation = (id: string, name: string): WorkflowRecord => {
         instructionPackage: null,
         instruction: "",
         permissionProfile: "read-only",
+        commands: { allow: [], deny: [] },
+        connections: [],
         requires: [],
         model: { harness: null, model: null, options: [] },
         forEach: null,

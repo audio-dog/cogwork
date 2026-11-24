@@ -62,6 +62,8 @@ export const document = Schema.decodeSync(WorkflowDocument)({
       instructionPackage: "implement-agent",
       instruction: "Summarize the day.",
       permissionProfile: "read-only",
+      commands: { allow: [], deny: [] },
+      connections: [],
       requires: [],
       model: { harness: harnessName, model: null, options: [] },
       forEach: null,

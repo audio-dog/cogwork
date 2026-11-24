@@ -68,6 +68,8 @@ export const everyDocument = decodeDocument({
       instructionPackage: null,
       instruction: "Do the work.",
       permissionProfile: "read-only",
+      commands: { allow: [], deny: [] },
+      connections: [],
       requires: [],
       model: { harness: "codex", model: "gpt-5", options: [] },
       forEach: null,

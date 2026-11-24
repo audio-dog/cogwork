@@ -71,6 +71,8 @@ describe("TriggerObservation", () => {
             instructionPackage: null,
             instruction: "Judge the parked issue.",
             permissionProfile: "read-only",
+            commands: { allow: [], deny: [] },
+            connections: [],
             requires: [],
             model: { harness: null, model: null, options: [] },
             forEach: null,
