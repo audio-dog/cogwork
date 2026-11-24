@@ -1,0 +1,117 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_1f2227f0ba277f::t_18ffd1c3d55afc 47,134-146,240
+apps/desktop/src/renderer/src/components/workspace-record-context.tsx
+  s_1f2227f0ba277f::t_2f05845212895f 1-30
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_1f2227f0ba277f::t_e36fc61da38e57 13-14
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_1f2227f0ba277f::t_5b949bf137ed37 1,18-19,244
+apps/desktop/src/renderer/src/components/workspace-setting-tracker-choices.test.ts
+  s_1f2227f0ba277f::t_de311bf55f2bab 1-33
+apps/desktop/src/renderer/src/components/workspace-setting-tracker-choices.tsx
+  s_1f2227f0ba277f::t_664fe09478089f 1-364
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_1f2227f0ba277f::t_53cbdf74cdd54d 57-58
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_1f2227f0ba277f::t_4a1eacd3d266b7 125-133
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  s_1f2227f0ba277f::t_fd9251cf65b921 1-8,49-62,76,122-131
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  s_1f2227f0ba277f::t_2fe403105e6211 5,20,45-52,55
+apps/desktop/src/renderer/src/features/workflow-session-fixtures.tsx
+  s_1f2227f0ba277f::t_6bc0c4fa7ca80e 282-288
+apps/desktop/src/renderer/src/features/workflow-session-list.test.tsx
+  s_21038402bc2c71::t_066b39d17a347f 10,21,26,35-37,40
+apps/desktop/src/renderer/src/features/workflow-session-options.test.tsx
+  s_21038402bc2c71::t_632b3d1f619f08 3,17,23-25,28,31-92
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_21038402bc2c71::t_55b5d9cc86cd07 15,20-22,25,159-170
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  s_1f2227f0ba277f::t_899659df896cd3 23-24,97-101,124-128,149,156,169,172
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_1f2227f0ba277f::t_c04e98eeb720a0 188-279,284
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_1f2227f0ba277f::t_5cd5944aebc4be 33-36,41-42,47,55-57,61,71,77,85-87,91,95-100,133,138-164,169,175,181,183-184,197-198,212,214,217,220,224-228,232-234,238,241-250,256-258,260-266,270-277,285-298
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_1f2227f0ba277f::t_f12766c3ae9b34 179,193
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_1f2227f0ba277f::t_38a7182527b881 10,34,72,158
+apps/desktop/src/renderer/src/testing/router-links.tsx
+  s_1f2227f0ba277f::t_9dadf5a9f09e34 6-7
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_1f2227f0ba277f::t_e10bbaac557641 33-34,60-62,77,96,130-131
+packages/contracts/GLOSSARY-work.md
+  s_1f2227f0ba277f::t_5cbf4f833f63f7 28-31
+packages/contracts/GLOSSARY.md
+  s_1f2227f0ba277f::t_b817e60018d53b 15
+packages/contracts/src/rpc.ts
+  s_1f2227f0ba277f::t_0dc1da370b7fb8 59,106-111,187
+packages/contracts/src/workspace.ts
+  s_1f2227f0ba277f::t_fad40e17b30b43 35-40
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_1f2227f0ba277f::t_3ab1b7e3d5b436 5-6
+packages/engine/src/commands.test.ts
+  s_1f2227f0ba277f::t_d6343b05ef1d20 9,29,32-35,55-63,109-137
+packages/engine/src/commands.ts
+  s_1f2227f0ba277f::t_b6289d77e4c83c 18,47,147-163
+packages/engine/src/coordination-fold.test.ts
+  s_1f2227f0ba277f::t_4a06a13cb1c243 149-213
+packages/engine/src/coordination.ts
+  s_1f2227f0ba277f::t_ac3b6d23848135 60,135-136,184-209,223,243
+packages/engine/src/daemon-handlers.ts
+  s_1f2227f0ba277f::t_8f22da07c0fcf7 14,118
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_1f2227f0ba277f::t_09051f77b7306b 1,4,7,253-275,283,299-301,309,316,322,397,415,430,435-442,461-474,476-482
+packages/engine/src/github/trigger-source-pull-request-conditions.test.ts
+  s_1f2227f0ba277f::t_b704707833f88e 1-115
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_1f2227f0ba277f::t_ff5bc6c4c21c7c 38-42
+packages/engine/src/linear/account.ts
+  s_1f2227f0ba277f::t_804017bdcc498e 1-6,20-22,24,31-37
+packages/engine/src/linear/client-transport.ts
+  s_1f2227f0ba277f::t_fc1128129dc6a2 20,24-29,59,69,79,85,92,117,125,145,155
+packages/engine/src/linear/client.test.ts
+  s_1f2227f0ba277f::t_a92c1f8612b05b 78-117
+packages/engine/src/linear/client.ts
+  s_1f2227f0ba277f::t_c590a688aea43f 58,66-70,128-144,355
+packages/engine/src/read-model.ts
+  s_1f2227f0ba277f::t_1f1fd451350baf 77-79,83,91,98-100,107,110
+packages/engine/src/scheduler.test.ts
+  s_1f2227f0ba277f::t_04c6dfb581b7d5 1,10,15-16,23-25,204-329
+packages/engine/src/scheduler.ts
+  s_1f2227f0ba277f::t_ba02f133de73b3 66,79,180-187,192,244-249,271-273,277-291,294,298
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_1f2227f0ba277f::t_abbe0fe7696447 3,37,374-463
+packages/engine/src/trigger-observation.ts
+  s_1f2227f0ba277f::t_c5b2b3dcf0f4a6 24,58,84-86,326-357,377-380,417
+packages/engine/src/workflow-run-admission.test.ts
+  s_1f2227f0ba277f::t_f6eadf88f36291 111,114-121,126-143
+packages/engine/src/workflow-run-fan-out.test.ts
+  s_1f2227f0ba277f::t_75a171333dd507 81,287-289
+packages/engine/src/workflow-run.ts
+  s_1f2227f0ba277f::t_c26728c9d5aada 123,263,339-342,344,357,375
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c2fa21a887837dd38e4cb464834cec15e4d94fe9",
+  "prompts": {},
+  "sessions": {
+    "s_1f2227f0ba277f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff3e74ea-8e16-41ce-88e0-5182eb5f6cb8",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_21038402bc2c71": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6155eee9-bf49-4d00-b619-6a7ab31eb4ad",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
