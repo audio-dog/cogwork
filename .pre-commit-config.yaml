@@ -26,5 +26,6 @@ repos:
             | .*\.gen\.ts
             | .*\.generated\.ts
             | packages/engine/drizzle/.*
+            | packages/ui/src/components/sidebar\.tsx
             | \.agents/skills/(pnpm-[^/]+|react-composition-patterns|shadcn|tanstack-ai)/.*
           )$
