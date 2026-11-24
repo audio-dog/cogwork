@@ -86,13 +86,21 @@ describe("GitHub pull request condition dates", () => {
         .pipe(Stream.take(1), Stream.runCollect);
       yield* observe;
       yield* TestClock.adjust("10 seconds");
-      const events = yield* source
+      const restarted = yield* source
         .observe([subscription("github.pull-request-conflicts-with-base", "conflicts")])
-        .pipe(Stream.take(1), Stream.runCollect);
+        .pipe(
+          Stream.filter(({ revision }) => revision.startsWith("conflict:")),
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.forkChild({ startImmediately: true }),
+        );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("60 seconds");
+      const events = yield* Fiber.join(restarted);
 
       assert.deepStrictEqual(
         [...events].map(({ revision, atMillis }) => [revision, atMillis]),
-        [["conflict:head-sha:base-sha", 10_000]],
+        [["conflict:head-sha:base-sha", 70_000]],
       );
     }).pipe(
       Effect.provide(

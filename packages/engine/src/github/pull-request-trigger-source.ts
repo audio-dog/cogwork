@@ -12,11 +12,11 @@ import {
   conditionEntryKeys,
   isolateProviderItemRead,
   liveParameter,
+  makeProviderPollingStream,
   type ProviderPollCheckpoint,
   parameterValue,
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
-  providerPollingStream,
   providerSubject,
   triggerEntry,
   workspaceOptionReader,
@@ -459,6 +459,7 @@ export const makeGitHubPullRequestTriggerSource = (
   client: GitHubClientService,
   registry: Effect.Effect<RegistryState>,
 ): TriggerSource => {
+  const pollingStream = makeProviderPollingStream("github");
   const conflictStarts = Ref.makeUnsafe<ConflictStarts>(new Map());
   return {
     id: "github",
@@ -475,8 +476,6 @@ export const makeGitHubPullRequestTriggerSource = (
       },
     ],
     observe: (subscriptions) =>
-      providerPollingStream("github", (checkpoint) =>
-        read(client, registry, subscriptions, checkpoint, conflictStarts),
-      ),
+      pollingStream((checkpoint) => read(client, registry, subscriptions, checkpoint, conflictStarts)),
   };
 };

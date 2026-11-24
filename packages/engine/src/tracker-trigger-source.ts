@@ -13,12 +13,12 @@ import {
   issueNotBlockedFilter,
   labelsReadEveryPoll,
   liveParameter,
+  makeProviderPollingStream,
   type ProviderPollCheckpoint,
   parameterValue,
   passedFilters,
   providerCursorAfterRead,
   providerModifiedSinceGraceMillis,
-  providerPollingStream,
   providerSubject,
   recheckIssue,
   sourceFailure,
@@ -81,7 +81,7 @@ const modifiedSinceLowerBound = (
   const earliestCatchUp = Math.min(
     ...occurrences.map(({ parameters, catchUp }) => catchUpSince(parameters, catchUp?.since ?? now, now)),
   );
-  return (cursor ?? earliestCatchUp) - providerModifiedSinceGraceMillis;
+  return Math.max(cursor ?? 0, earliestCatchUp) - providerModifiedSinceGraceMillis;
 };
 
 export const makeTrackerTriggerSource = (
@@ -95,6 +95,7 @@ export const makeTrackerTriggerSource = (
   const issueFilters = [issueNotBlockedFilter(system)];
   const entries = trackerTriggerEntries(system);
   const conditionEntries = conditionEntryKeys(entries);
+  const pollingStream = makeProviderPollingStream(system);
 
   const originCause = (workspace: WorkspaceId, id: WorkItemId) =>
     artifacts === null
@@ -242,8 +243,7 @@ export const makeTrackerTriggerSource = (
     options: [
       { system, readers: { label: workspaceOptionReader(system, registry, issueTracker.listLabels) } },
     ],
-    observe: (subscriptions) =>
-      providerPollingStream(system, (checkpoint) => read(subscriptions, checkpoint)),
+    observe: (subscriptions) => pollingStream((checkpoint) => read(subscriptions, checkpoint)),
     recheck,
   };
 };

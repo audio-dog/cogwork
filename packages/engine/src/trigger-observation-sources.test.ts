@@ -1,4 +1,10 @@
-import { connectionIdOf, WorkflowDocument, type WorkflowRecord } from "@cogwork/contracts";
+import {
+  connectionIdOf,
+  WorkflowCatalogKey,
+  WorkflowDocument,
+  WorkflowNodeId,
+  type WorkflowRecord,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -16,7 +22,7 @@ import { IssueTracker, makeEmpty as makeEmptyIssueTracker } from "./issue-tracke
 import { emptyRegistry } from "./projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { makeScriptedSource } from "./scripted-source";
-import { trackerTriggerEntries } from "./tracker-trigger-source";
+import { makeTrackerTriggerSource, trackerTriggerEntries } from "./tracker-trigger-source";
 import { make } from "./trigger-observation";
 import {
   coordinationService,
@@ -32,6 +38,7 @@ import {
   sourceFailingOnce,
   subscription,
   triggerId,
+  ungatedWorkspace,
   workflowService,
 } from "./trigger-observation-fixtures";
 import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";
@@ -150,7 +157,18 @@ describe("TriggerObservation", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("restarts a rate-limited source only after Retry-After", () =>
+  it.effect.each([
+    {
+      name: "restarts a rate-limited source only after Retry-After",
+      failure: { reason: "rate-limited", retryAfterMillis: 12_000 },
+      waitMillis: 12_000,
+    },
+    {
+      name: "waits one poll interval before it restarts a source that failed with no retry delay",
+      failure: { reason: "unavailable", retryAfterMillis: null },
+      waitMillis: 60_000,
+    },
+  ] as const)("$name", ({ failure, waitMillis }) =>
     Effect.gen(function* () {
       yield* TestClock.setTime(1_000_000);
       const current = yield* Ref.make(record(true));
@@ -160,19 +178,14 @@ describe("TriggerObservation", () => {
       const starts = yield* Ref.make(0);
       const store = yield* makeMemoryTriggerObservationStore;
       const bus = yield* makeDaemonEventBus;
-      const rateLimited = sourceFailingOnce(
+      const failing = sourceFailingOnce(
         starts,
-        new SourceFailure({
-          source: "clock",
-          reason: "rate-limited",
-          retryAfterMillis: 12_000,
-          message: "wait",
-        }),
+        new SourceFailure({ source: "clock", message: "wait", ...failure }),
       );
       const observation = yield* make.pipe(
         Effect.provideService(Workflows, workflowService(current)),
         Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
-        Effect.provideService(TriggerSources, [rateLimited]),
+        Effect.provideService(TriggerSources, [failing]),
         Effect.provideService(TriggerObservationStore, store),
         Effect.provideService(DaemonEventBus, bus),
         Effect.provideService(IssueTracker, yield* makeEmptyIssueTracker),
@@ -183,7 +196,7 @@ describe("TriggerObservation", () => {
       yield* Effect.yieldNow;
 
       assert.strictEqual(yield* Ref.get(starts), 1);
-      yield* TestClock.adjust(11_999);
+      yield* TestClock.adjust(waitMillis - 1);
       yield* observation.refresh;
       assert.strictEqual(yield* Ref.get(starts), 1);
       yield* TestClock.adjust(1);
@@ -191,6 +204,61 @@ describe("TriggerObservation", () => {
       yield* observation.refresh;
       yield* Effect.yieldNow;
       assert.strictEqual(yield* Ref.get(starts), 2);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("keeps a tracker source's cursors when a Workflow change restarts its stream", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(864_000_000);
+      const changedReads = yield* Ref.make<ReadonlyArray<number>>([]);
+      const emptyTracker = yield* makeEmptyIssueTracker;
+      const tracker = makeTrackerTriggerSource(
+        "github",
+        {
+          ...emptyTracker,
+          openItemsChangedSince: (_workspace, sinceMillis) =>
+            Ref.update(changedReads, (reads) => [...reads, sinceMillis]).pipe(Effect.map(() => [])),
+        },
+        Effect.succeed({ workspaces: [ungatedWorkspace], failures: [] }),
+        null,
+      );
+      const commentTrigger = (id: string) => ({
+        id: Schema.decodeSync(WorkflowNodeId)(id),
+        entry: Schema.decodeSync(WorkflowCatalogKey)("github.new-comment-from-person"),
+        parameters: [{ id: "label", value: id }],
+        start: subscription.operation,
+      });
+      const commentRecord = (triggers: ReadonlyArray<string>) =>
+        record(
+          true,
+          Schema.decodeSync(WorkflowDocument)({
+            ...selectedDocument,
+            triggers: triggers.map(commentTrigger),
+          }),
+        );
+      const current = yield* Ref.make(commentRecord(["first"]));
+      const processed = yield* Ref.make<string | null>(null);
+      const observed = yield* Ref.make(0);
+      const sourceRevision = yield* Ref.make<string | null>(null);
+      const store = yield* makeMemoryTriggerObservationStore;
+      const bus = yield* makeDaemonEventBus;
+      yield* make.pipe(
+        Effect.provideService(Workflows, workflowService(current)),
+        Effect.provideService(Coordination, coordinationService(processed, observed, sourceRevision)),
+        Effect.provideService(TriggerSources, [tracker]),
+        Effect.provideService(TriggerObservationStore, store),
+        Effect.provideService(DaemonEventBus, bus),
+        Effect.provideService(IssueTracker, emptyTracker),
+        Effect.provideService(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
+      );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("60 seconds");
+      const changed = commentRecord(["first", "second"]);
+      yield* Ref.set(current, changed);
+      yield* bus.publish({ _tag: "WorkflowChanged", workflow: changed });
+      yield* Effect.yieldNow;
+
+      assert.deepStrictEqual(yield* Ref.get(changedReads), [863_970_000, 863_970_000, 864_030_000]);
     }).pipe(Effect.scoped),
   );
 

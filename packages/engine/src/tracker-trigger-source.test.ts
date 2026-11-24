@@ -17,7 +17,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import type { ListedTrackerItem, TrackerComment } from "./issue-tracker";
+import { IssueTrackerError, type ListedTrackerItem, type TrackerComment } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { makeTrackerTriggerSource } from "./tracker-trigger-source";
 import type { TriggerEvent, TriggerSubscription } from "./trigger-source";
@@ -262,6 +262,99 @@ describe("Tracker Trigger source", () => {
       yield* Fiber.interrupt(observing);
 
       assert.deepStrictEqual(changedReads, [604_770_000]);
+    });
+  });
+
+  it.effect("restarts after a failed read from the cursor of the last successful read", () => {
+    const changedReads: Array<number> = [];
+    const source = makeTrackerTriggerSource(
+      "github",
+      {
+        ...tracker({}),
+        openItemsChangedSince: (_workspace, sinceMillis) => {
+          changedReads.push(sinceMillis);
+          return changedReads.length === 2
+            ? Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "GitHub returned 502" }))
+            : Effect.succeed([]);
+        },
+      },
+      Effect.succeed(registryState),
+      null,
+    );
+    const commented = [subscription(newCommentKey, "commented")];
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(864_000_000);
+      const failing = yield* source
+        .observe(commented)
+        .pipe(Stream.runDrain, Effect.forkChild({ startImmediately: true }));
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("60 seconds");
+      yield* Fiber.await(failing);
+      const restarted = yield* source
+        .observe(commented)
+        .pipe(Stream.runDrain, Effect.forkChild({ startImmediately: true }));
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(restarted);
+
+      assert.deepStrictEqual(changedReads, [259_170_000, 863_970_000, 863_970_000]);
+    });
+  });
+
+  it.effect("bounds the first read of a Workspace that a restart gives its first subscription", () => {
+    const changedReads: Array<number> = [];
+    const source = makeTrackerTriggerSource(
+      "github",
+      tracker({ read: (_workspace, since) => changedReads.push(since) }),
+      Effect.succeed(registryState),
+      null,
+    );
+    const commented = subscription(newCommentKey, "commented");
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(864_000_000);
+      const unselected = yield* source
+        .observe([{ ...commented, workspaces: [] }])
+        .pipe(Stream.runDrain, Effect.forkChild({ startImmediately: true }));
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(unselected);
+      const selected = yield* source
+        .observe([commented])
+        .pipe(Stream.runDrain, Effect.forkChild({ startImmediately: true }));
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(selected);
+
+      assert.deepStrictEqual(changedReads, [259_170_000]);
+    });
+  });
+
+  it.effect("emits again the events of a batch that a restart interrupted", () => {
+    const changedReads: Array<number> = [];
+    const source = makeTrackerTriggerSource(
+      "github",
+      {
+        ...tracker({}),
+        openItemsChangedSince: (_workspace, sinceMillis) => {
+          changedReads.push(sinceMillis);
+          return Effect.succeed(changedReads.length === 1 ? [item(1)] : []);
+        },
+      },
+      Effect.succeed(registryState),
+      null,
+    );
+    const subscriptions = [
+      subscription(issueHasLabelKey, "labelled"),
+      subscription(newCommentKey, "commented"),
+    ];
+    return Effect.gen(function* () {
+      yield* source.observe(subscriptions).pipe(Stream.take(1), Stream.runDrain);
+      const emitted: Array<string> = [];
+      const restarted = yield* source.observe(subscriptions).pipe(
+        Stream.runForEach(({ revision }) => Effect.sync(() => emitted.push(revision))),
+        Effect.forkChild({ startImmediately: true }),
+      );
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(restarted);
+
+      assert.deepStrictEqual(emitted, ["label:needs-triage:1500", "comment:2:label:needs-triage"]);
     });
   });
 });

@@ -190,7 +190,7 @@ export const providerSubject = (title: string | undefined, url: string | null) =
 };
 
 export const providerModifiedSinceGraceMillis = 30_000;
-const providerPollInterval = Duration.seconds(60);
+export const providerPollInterval = Duration.seconds(60);
 const zeroCatchUpGraceMillis = Duration.toMillis(providerPollInterval) + providerModifiedSinceGraceMillis;
 
 export const providerCursorAfterRead = (cursor: number | undefined, startedAtMillis: number) =>
@@ -250,40 +250,42 @@ const uniqueEvents = (events: ReadonlyArray<TriggerEvent>) =>
 const poll = <R>(
   source: TriggerSourceId,
   state: Ref.Ref<ProviderPollState>,
+  delivered: Ref.Ref<number>,
   read: (checkpoint: ProviderPollCheckpoint) => Effect.Effect<ProviderPollRead, IssueTrackerError, R>,
 ) =>
-  Ref.get(state).pipe(
-    Effect.flatMap((current) => {
-      if (current.pending.length > 0) {
-        const emitted = current.pending.slice(0, batchSize);
-        return Ref.set(state, { ...current, pending: current.pending.slice(batchSize) }).pipe(
-          Effect.map(() => emitted),
-        );
-      }
-      return read(current).pipe(
-        Effect.flatMap(({ events, cursors }) => {
-          const unique = uniqueEvents(events);
-          const emitted = unique.slice(0, batchSize);
-          return Ref.set(state, { cursors, pending: unique.slice(batchSize) }).pipe(
-            Effect.map(() => emitted),
-          );
-        }),
-      );
-    }),
+  Ref.getAndSet(delivered, 0).pipe(
+    Effect.flatMap((consumed) =>
+      Ref.updateAndGet(state, (current) => ({ ...current, pending: current.pending.slice(consumed) })),
+    ),
+    Effect.flatMap((current) =>
+      current.pending.length > 0
+        ? Effect.succeed(current.pending)
+        : read(current).pipe(
+            Effect.map(({ events, cursors }) => ({ cursors, pending: uniqueEvents(events) })),
+            Effect.tap((next) => Ref.set(state, next)),
+            Effect.map(({ pending }) => pending),
+          ),
+    ),
+    Effect.map((pending) => pending.slice(0, batchSize)),
+    Effect.tap((emitted) => Ref.set(delivered, emitted.length)),
     Effect.mapError((error) => sourceFailure(source, error)),
   );
 
-export const providerPollingStream = <R>(
-  source: TriggerSourceId,
-  read: (checkpoint: ProviderPollCheckpoint) => Effect.Effect<ProviderPollRead, IssueTrackerError, R>,
-) =>
-  Stream.unwrap(
-    Ref.make<ProviderPollState>({ cursors: new Map(), pending: [] }).pipe(
-      Effect.map((state) =>
-        Stream.fromEffect(poll(source, state, read)).pipe(
-          Stream.repeat(Schedule.spaced(providerPollInterval)),
-          Stream.flattenIterable,
+// A batch leaves `pending` only when the stream pulls again, so a restart that interrupts admission
+// emits the rest of the batch again rather than losing it behind an advanced cursor.
+export const makeProviderPollingStream = (source: TriggerSourceId) => {
+  const state = Ref.makeUnsafe<ProviderPollState>({ cursors: new Map(), pending: [] });
+  return <R>(
+    read: (checkpoint: ProviderPollCheckpoint) => Effect.Effect<ProviderPollRead, IssueTrackerError, R>,
+  ) =>
+    Stream.unwrap(
+      Ref.make(0).pipe(
+        Effect.map((delivered) =>
+          Stream.fromEffect(poll(source, state, delivered, read)).pipe(
+            Stream.repeat(Schedule.spaced(providerPollInterval)),
+            Stream.flattenIterable,
+          ),
         ),
       ),
-    ),
-  );
+    );
+};

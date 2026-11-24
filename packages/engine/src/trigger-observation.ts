@@ -23,6 +23,7 @@ import * as Stream from "effect/Stream";
 
 import { Coordination, type CoordinationGate, defaultClaimant } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
+import { providerPollInterval } from "./provider-trigger-source";
 import { WorkspaceRegistry } from "./registry-service";
 import {
   admissionIsOlder,
@@ -103,7 +104,7 @@ const samePlanRejection = (left: ParkReason | undefined, right: ParkReason | nul
 const waitForRetry = (failure: SourceFailure) => {
   const retryRules = [
     { matches: failure.reason === "connection-not-ready", wait: Effect.never },
-    { matches: failure.retryAfterMillis === null, wait: Effect.void },
+    { matches: failure.retryAfterMillis === null, wait: Effect.sleep(providerPollInterval) },
   ];
   return retryRules.find(({ matches }) => matches)?.wait ?? Effect.sleep(failure.retryAfterMillis ?? 0);
 };
