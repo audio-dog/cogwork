@@ -25,12 +25,12 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import { Coordination, maxLineageHops } from "./coordination";
+import { maxLineageHops } from "./coordination";
 import { Harness } from "./harness";
 import { acceptOperationResult, harnessStreamFailed } from "./operation-result";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry-service";
-import { actionPlanCompletion, RunCompletionRoute } from "./run-completion";
+import { actionPlanCompletion, RunCompletionRoute, stuckCompletion } from "./run-completion";
 import { RunLedger } from "./run-ledger";
 import {
   type RunPlanRejection,
@@ -48,7 +48,7 @@ import { Workflows } from "./workflow";
 import { itemWorkspaceOf } from "./workflow-action-entry";
 import { executeWorkflowActionPlan } from "./workflow-action-plan";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
-import { operationKeyOf, parkedAdmission } from "./workflow-run-admission";
+import { operationKeyOf } from "./workflow-run-admission";
 import { ClaimState, makeWorkflowRunAttempts, resendOf } from "./workflow-run-attempts";
 import { make as makeRunEngineTools } from "./workflow-run-engine-tools";
 import { makeWorkflowRunExecutionContext } from "./workflow-run-execution-context";
@@ -84,7 +84,6 @@ const startableOperation = (
 
 export const make = Effect.gen(function* () {
   const workflows = yield* Workflows;
-  const coordination = yield* Coordination;
   const harness = yield* Harness;
   const ledger = yield* RunLedger;
   const recorder = yield* RunRecorder;
@@ -97,7 +96,6 @@ export const make = Effect.gen(function* () {
     previousRefusals,
     takePriorRefusal,
     settleClaimed,
-    recordClaimedAttempt,
     claimItem,
     complete,
     parkCappedLineage,
@@ -151,7 +149,7 @@ export const make = Effect.gen(function* () {
       const completion = actionPlanCompletion(yield* executeWorkflowActionPlan(resumed.plan, admission));
       yield* settleCompletion(admission, claimed, resumed.work, completion);
       if (!RunCompletionRoute.$is("Replan")(completion.route)) {
-        return yield* followCompletion(admission, completion, resumed.plan.attempt);
+        return yield* followCompletion(admission, resumed.work, completion, resumed.plan.attempt);
       }
     }
 
@@ -294,14 +292,9 @@ export const make = Effect.gen(function* () {
       return next;
     });
     if (decoded.success.stuck) {
-      yield* recordClaimedAttempt(admission, claimed, accepted, {
-        outcome: "failed",
-        reason: decoded.success.summary,
-      });
-      yield* coordination.park(admission.event.key, { _tag: "Stuck", summary: decoded.success.summary }, key);
-      yield* observationStore.putAll([parkedAdmission(admission, run.id)]);
-      yield* settleClaimed(claimed, "failed");
-      return "completed" as const;
+      const completion = stuckCompletion(decoded.success.summary);
+      yield* settleCompletion(admission, claimed, accepted, completion);
+      return yield* followCompletion(admission, accepted, completion, run.id);
     }
 
     return yield* actOnResult({
