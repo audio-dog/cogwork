@@ -1,0 +1,19 @@
+packages/engine/src/workflow-run-admission.test.ts
+  s_16858b3c794e0d::t_3dd47203b6c715 1,16,316-328,330-338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9e7bf225918863e68082a418b555dd8696d3286b",
+  "prompts": {},
+  "sessions": {
+    "s_16858b3c794e0d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "07074a9b-3927-4786-a28f-fbd1c12f6262",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
