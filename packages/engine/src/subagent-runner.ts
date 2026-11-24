@@ -219,9 +219,10 @@ export const subagentProjection = (
     .map((agent) =>
       toolDefinition({ name: agent.name, description: agent.description, inputSchema }).server(
         ({ task }, context) =>
-          Effect.runPromise(runChild(agent, task, context?.toolCallId), {
-            ...(context?.abortSignal ? { signal: context.abortSignal } : {}),
-          }),
+          Effect.runPromise(
+            runChild(agent, task, context?.toolCallId),
+            context?.abortSignal ? { signal: context.abortSignal } : {},
+          ),
       ),
     );
   const addChildUsage: ChatMiddleware = {

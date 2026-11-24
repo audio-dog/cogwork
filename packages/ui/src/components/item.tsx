@@ -8,8 +8,8 @@ import { cn } from "#lib/utils";
 
 function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: Fine for primitives
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Fine for primitives
       role="list"
       data-slot="item-group"
       className={cn(
