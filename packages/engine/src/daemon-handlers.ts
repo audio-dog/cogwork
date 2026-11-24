@@ -11,6 +11,7 @@ import {
   deregisterWorkspace,
   getGitHubPriorityFields,
   getIssueTrackerPeople,
+  getLinearTeams,
   handBack,
   installPlugin,
   rebindWorkspace,
@@ -114,6 +115,7 @@ export const handlersLayer = DaemonRpcs.toLayer({
   }),
   GetGitHubPriorityFields: getGitHubPriorityFields,
   GetIssueTrackerPeople: getIssueTrackerPeople,
+  GetLinearTeams: getLinearTeams,
   ListRuns: Effect.fn("Daemon.ListRuns")(function* () {
     const ledger = yield* RunLedger;
     return yield* ledger.listRuns(50);

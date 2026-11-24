@@ -20,6 +20,8 @@ import { boundDaemonCall, layer as workingCopyDaemonLayer } from "../daemon/work
 import { reportRendererError } from "./report-error";
 import { enableNotificationsWhenOn, useWorkflowSession } from "./workflow-session";
 import {
+  type PublishRefusal,
+  publishRefusalOf,
   type SaveStatus,
   viewOf,
   WorkingCopies,
@@ -92,7 +94,11 @@ export interface WorkingCopyField {
 }
 
 interface WorkingCopyValue {
-  readonly state: { readonly workflow: WorkflowRecord; readonly saveStatus: SaveStatus };
+  readonly state: {
+    readonly workflow: WorkflowRecord;
+    readonly saveStatus: SaveStatus;
+    readonly publishRefusal: PublishRefusal | null;
+  };
   readonly actions: {
     readonly field: (
       read: (workflow: WorkflowRecord) => string,
@@ -115,6 +121,11 @@ export function useWorkingCopy() {
 
 const reportFailure = (error: unknown) => reportRendererError(error, "workflow working copy");
 
+const reportUnlessRefused = (error: unknown) => {
+  if (publishRefusalOf(error)) return;
+  reportFailure(error);
+};
+
 const workspaceIds = (workflow: WorkflowRecord, machine: MachineReadiness | null) =>
   workflow.workingCopy.workspaces._tag === "Listed"
     ? workflow.workingCopy.workspaces.workspaces
@@ -135,14 +146,14 @@ function OpenWorkingCopy({
   const result = useAtomValue(copies.snapshot(opened.id));
   const snapshot: WorkingCopySnapshot = AsyncResult.isSuccess(result)
     ? result.value
-    : { accepted: opened, pending: [], saveStatus: "saved" };
+    : { accepted: opened, pending: [], saveStatus: "saved", publishRefusal: null };
   const workflow = viewOf(snapshot, session.catalog, session.machine);
   const keepOnInvalidInput = (read: (workflow: WorkflowRecord) => string) => (error: unknown) => {
     if (error instanceof WorkingCopyInputInvalid) return read(workflow);
     throw error;
   };
   const value: WorkingCopyValue = {
-    state: { workflow, saveStatus: snapshot.saveStatus },
+    state: { workflow, saveStatus: snapshot.saveStatus, publishRefusal: snapshot.publishRefusal },
     actions: {
       field: (read, write) => ({
         value: read(workflow),
@@ -155,10 +166,10 @@ function OpenWorkingCopy({
         copies
           .publish(workflow.id)
           .then(() => onPublished?.())
-          .catch(reportFailure);
+          .catch(reportUnlessRefused);
       },
       switchEnabled: (enabled) => {
-        copies.switchEnabled(workflow.id, enabled).then(enableNotificationsWhenOn).catch(reportFailure);
+        copies.switchEnabled(workflow.id, enabled).then(enableNotificationsWhenOn).catch(reportUnlessRefused);
       },
     },
     meta: {

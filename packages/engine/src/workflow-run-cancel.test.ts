@@ -62,19 +62,22 @@ describe("WorkflowRun cancellation", () => {
 
   it.effect("CancelRun after the attempt is recorded parks the item as Cancelled instead of Stuck", () =>
     Effect.gen(function* () {
-      const parking = yield* Deferred.make<void>();
-      const { runner, coordination } = yield* testProgram([{ ...allClear, stuck: true }], {
-        coordination: (service) => ({
-          ...service,
-          park: (ref, reason, operation) =>
-            reason._tag === "Stuck"
-              ? Deferred.succeed(parking, undefined).pipe(Effect.andThen(Effect.never))
-              : service.park(ref, reason, operation),
+      const settling = yield* Deferred.make<void>();
+      const ledger = yield* RunLedger;
+      const { runner, coordination } = yield* testProgram([{ ...allClear, stuck: true }]).pipe(
+        Effect.provideService(RunLedger, {
+          ...ledger,
+          updateRun: (runId, update) =>
+            update.status === "failed"
+              ? Effect.flatMap(Deferred.succeed(settling, undefined), (first) =>
+                  first ? Effect.never : ledger.updateRun(runId, update),
+                )
+              : ledger.updateRun(runId, update),
         }),
-      });
+      );
       const running = yield* Effect.forkChild(runner.execute(admission), { startImmediately: true });
-      yield* Deferred.await(parking);
-      const [record] = yield* (yield* RunLedger).listRuns(10);
+      yield* Deferred.await(settling);
+      const [record] = yield* ledger.listRuns(10);
       if (record === undefined) return yield* Effect.die("the Run was not accepted");
 
       yield* cancelRun({ runId: record.id, note: "Too late" });

@@ -108,12 +108,38 @@ describe("WorkflowRun", () => {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
         recheck: waitingRecheck,
       });
+      const starts = yield* Ref.make(0);
       yield* observationStore.putAll([admission]);
 
-      assert.strictEqual(yield* runner.execute(admission), "waiting");
+      assert.strictEqual(
+        yield* runner.execute(
+          admission,
+          Ref.update(starts, (n) => n + 1),
+        ),
+        "waiting",
+      );
+      assert.strictEqual(yield* Ref.get(starts), 0);
       assert.deepStrictEqual(yield* (yield* RunLedger).listRuns(10), []);
       assert.isNull(yield* Ref.get(coordination.processed));
       assert.lengthOf(yield* observationStore.admissions, 1);
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
+
+  it.effect("signals the Run start once, after the Run ledger accepts the Run", () =>
+    Effect.gen(function* () {
+      const { runner } = yield* testProgram([{}]);
+      const ledger = yield* RunLedger;
+      const acceptedRunsAtStart = yield* Ref.make<ReadonlyArray<number>>([]);
+
+      yield* runner.execute(
+        admission,
+        ledger.listRuns(10).pipe(
+          Effect.orDie,
+          Effect.flatMap((runs) => Ref.update(acceptedRunsAtStart, (counts) => [...counts, runs.length])),
+        ),
+      );
+
+      assert.deepStrictEqual(yield* Ref.get(acceptedRunsAtStart), [1]);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 

@@ -31,7 +31,7 @@ import { Harness } from "./harness";
 import { acceptOperationResult, harnessStreamFailed } from "./operation-result";
 import { defaultRunBudget } from "./provider-runner";
 import { WorkspaceRegistry } from "./registry-service";
-import { actionPlanCompletion, RunCompletionRoute } from "./run-completion";
+import { actionPlanCompletion, RunCompletionRoute, stuckCompletion } from "./run-completion";
 import { type ManualCancellation, RunControl } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import {
@@ -100,7 +100,6 @@ export const make = Effect.gen(function* () {
     previousRefusals,
     takePriorRefusal,
     settleClaimed,
-    recordClaimedAttempt,
     claimItem,
     complete,
     parkCappedLineage,
@@ -145,6 +144,7 @@ export const make = Effect.gen(function* () {
     admission: TriggerAdmission,
     claimed: Ref.Ref<ClaimState>,
     id: RunId,
+    runStarted: Effect.Effect<void>,
   ) {
     const pendingPlan = yield* actionPlans.pending(
       keyOf(admission.event.key),
@@ -175,7 +175,7 @@ export const make = Effect.gen(function* () {
       const completion = actionPlanCompletion(yield* executeWorkflowActionPlan(resumed.plan, admission));
       yield* settleCompletion(admission, claimed, resumed.work, completion);
       if (!RunCompletionRoute.$is("Replan")(completion.route)) {
-        return yield* followCompletion(admission, completion, resumed.plan.attempt);
+        return yield* followCompletion(admission, resumed.work, completion, resumed.plan.attempt);
       }
     }
 
@@ -283,6 +283,7 @@ export const make = Effect.gen(function* () {
     const accepted = ClaimState.Claimed({ key, run: id, lineageParent: id });
     yield* Ref.set(claimed, accepted).pipe(
       Effect.andThen(ledger.acceptRun(run, plan)),
+      Effect.andThen(runStarted),
       Effect.uninterruptible,
     );
 
@@ -316,13 +317,9 @@ export const make = Effect.gen(function* () {
       return next;
     });
     if (decoded.success.stuck) {
-      yield* recordClaimedAttempt(admission, claimed, accepted, {
-        outcome: "failed",
-        reason: decoded.success.summary,
-      });
-      yield* parkRun(admission, { _tag: "Stuck", summary: decoded.success.summary }, key, run.id);
-      yield* settleClaimed(claimed, "failed");
-      return "completed" as const;
+      const completion = stuckCompletion(decoded.success.summary);
+      yield* settleCompletion(admission, claimed, accepted, completion);
+      return yield* followCompletion(admission, accepted, completion, run.id);
     }
 
     return yield* actOnResult({
@@ -357,13 +354,16 @@ export const make = Effect.gen(function* () {
     return Recheck.$is("Waiting")(yield* triggerObservation.recheck(admission));
   });
 
-  const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (admission: TriggerAdmission) {
+  const executeToOutcome = Effect.fn("WorkflowRun.executeToOutcome")(function* (
+    admission: TriggerAdmission,
+    runStarted: Effect.Effect<void>,
+  ) {
     const claimed = yield* Ref.make<ClaimState>(ClaimState.Idle());
     const id = runId(SecureRandom.uuidV4Unsafe());
     return yield* runControl
       .run(
         id,
-        executeRaw(admission, claimed, id).pipe(
+        executeRaw(admission, claimed, id, runStarted).pipe(
           Effect.catchCauseIf(
             (cause) => !Cause.hasInterruptsOnly(cause),
             (cause) => recoverClaimed(admission, claimed, cause),
@@ -374,7 +374,7 @@ export const make = Effect.gen(function* () {
       .pipe(Effect.onInterrupt(() => settleInterrupted(claimed)));
   });
 
-  const executeAdmission = (admission: TriggerAdmission) =>
+  const executeAdmission = (admission: TriggerAdmission, runStarted: Effect.Effect<void> = Effect.void) =>
     observationStore.admissions.pipe(
       Effect.map(
         (admissions) =>
@@ -392,7 +392,7 @@ export const make = Effect.gen(function* () {
           (): AdmissionExecutionState => ({ current, outcome: "completed" }),
           (state) => {
             if (state.current === null) return Effect.succeed(state);
-            return executeToOutcome(state.current).pipe(
+            return executeToOutcome(state.current, runStarted).pipe(
               Effect.scoped,
               Effect.flatMap((next) => {
                 if (typeof next === "string") {

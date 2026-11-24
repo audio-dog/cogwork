@@ -122,6 +122,15 @@ const issueTrackerPeopleForWorkspaceAtom = Atom.family((workspace: WorkspaceId) 
 export const issueTrackerPeopleAtom = (workspace: WorkspaceId, connection: ConnectionBindingId) =>
   issueTrackerPeopleForWorkspaceAtom(workspace)(connection);
 
+const linearTeamsForWorkspaceAtom = Atom.family((workspace: WorkspaceId) =>
+  Atom.family((connection: ConnectionBindingId) =>
+    DaemonAtomRpc.query("GetLinearTeams", { workspace, connection }),
+  ),
+);
+
+export const linearTeamsAtom = (workspace: WorkspaceId, connection: ConnectionBindingId) =>
+  linearTeamsForWorkspaceAtom(workspace)(connection);
+
 export const setHarnessEnabledAtom = DaemonAtomRpc.mutation("SetHarnessEnabled");
 
 export const installPluginAtom = DaemonAtomRpc.mutation("InstallPlugin");

@@ -32,6 +32,12 @@ export const IssueTrackerPerson = Schema.Struct({
 });
 export type IssueTrackerPerson = typeof IssueTrackerPerson.Type;
 
+export const LinearTeam = Schema.Struct({
+  key: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+});
+export type LinearTeam = typeof LinearTeam.Type;
+
 export const IssueTrackerConfig = Schema.Struct({
   type: IssueTrackerType,
   connectionId: ConnectionBindingId.pipe(Schema.withDecodingDefaultKey(Effect.succeed("unbound"))),
