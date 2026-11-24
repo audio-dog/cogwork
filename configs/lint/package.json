@@ -6,5 +6,8 @@
   "scripts": {
     "test": "node --test --test-reporter=spec tests/react-lint-scope.test.mjs",
     "test:rules": "node --test --test-reporter=spec tests/rules.test.mjs"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.94.0"
   }
 }

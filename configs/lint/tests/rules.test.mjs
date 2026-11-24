@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { fixtureRoot, lintWithRule, repoRoot } from "./rule-test-harness.mjs";
+import oxlintConfig from "../../../oxlint.config.ts";
+import cogworkPlugin from "../oxlint-plugin/index.ts";
+import { fixtureRoot, lintFixturesWithOxlint, lintWithRule, repoRoot } from "./rule-test-harness.mjs";
 
 const ruleCases = [
   {
@@ -280,5 +282,66 @@ for (const ruleCase of ruleCases) {
       [],
       result.output,
     );
+  });
+}
+
+const oxlintRuleCases = [
+  {
+    extension: "test.ts",
+    message:
+      "Rule: do not export from a test file. Why: a module that imports a test file also registers and runs that file's tests, so shared code in a test file couples two suites. Fix: move the shared value into a non-test module and import it from there, or keep it local to the test file.",
+    name: "no-export-in-test",
+  },
+];
+
+const pluginName = cogworkPlugin.meta.name;
+const enabledRules = Object.fromEntries(
+  Object.entries(oxlintConfig.rules).filter(([rule]) => rule.startsWith(`${pluginName}/`)),
+);
+const oxlintRun = lintFixturesWithOxlint({
+  jsPlugins: oxlintConfig.jsPlugins.map((plugin) => path.resolve(repoRoot, plugin)),
+  rules: enabledRules,
+});
+const isPluginDiagnostic = (diagnostic) => diagnostic.code?.startsWith(`${pluginName}(`);
+
+test("every Oxlint plugin rule is enabled and has fixtures", () => {
+  const unclaimed = Object.keys(cogworkPlugin.rules).filter(
+    (name) =>
+      !(`${pluginName}/${name}` in enabledRules) || !oxlintRuleCases.some((rule) => rule.name === name),
+  );
+
+  assert.deepEqual(unclaimed, []);
+});
+
+test("every message an Oxlint plugin rule registers belongs to a tested rule", () => {
+  const untested = Object.entries(cogworkPlugin.rules).flatMap(([name, rule]) =>
+    Object.values(rule.meta?.messages ?? {})
+      .filter(
+        (message) =>
+          !oxlintRuleCases.some((ruleCase) => ruleCase.name === name && ruleCase.message === message),
+      )
+      .map((message) => ({ name, message })),
+  );
+
+  assert.deepEqual(untested, []);
+});
+
+for (const ruleCase of oxlintRuleCases) {
+  const fixturePath = (example) => path.join(fixtureRoot, ruleCase.name, `${example}.${ruleCase.extension}`);
+  const diagnosticsFor = (example) => oxlintRun.diagnosticsByFile.get(fixturePath(example)) ?? [];
+
+  test(`${ruleCase.name} catches its prohibited pattern`, () => {
+    const reported = diagnosticsFor("invalid-example").filter(
+      (diagnostic) =>
+        diagnostic.code === `${pluginName}(${ruleCase.name})` && diagnostic.message === ruleCase.message,
+    );
+
+    assert.equal(reported.length, 1, oxlintRun.output);
+    assert.equal(reported[0].severity, "error");
+  });
+
+  test(`${ruleCase.name} allows its supported alternative`, () => {
+    assert.ok(existsSync(fixturePath("valid-example")));
+    assert.deepEqual(diagnosticsFor("valid-example").filter(isPluginDiagnostic), [], oxlintRun.output);
   });
 }
