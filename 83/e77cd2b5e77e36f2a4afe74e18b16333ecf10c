@@ -1,0 +1,28 @@
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  h_46518a29d4dd91 5-6
+packages/engine/src/coordination-fold.test.ts
+  h_46518a29d4dd91 149-213
+packages/engine/src/coordination.ts
+  h_46518a29d4dd91 60,135-136,184-209,223,243
+packages/engine/src/github/pull-request-trigger-source.ts
+  h_46518a29d4dd91 1,4,7,253-275,283,299-301,309,316,322,397,415,430,435-442,461-474,476-482
+packages/engine/src/github/trigger-source-pull-request-conditions.test.ts
+  h_46518a29d4dd91 1-115
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  h_46518a29d4dd91 38-42
+packages/engine/src/trigger-observation-eligible.test.ts
+  h_46518a29d4dd91 3,37,403-492
+packages/engine/src/trigger-observation.ts
+  h_46518a29d4dd91 26,62,88-90,344-375,431,461-462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "83e77cd2b5e77e36f2a4afe74e18b16333ecf10c",
+  "prompts": {},
+  "humans": {
+    "h_46518a29d4dd91": {
+      "author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
