@@ -7,6 +7,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as Ref from "effect/Ref";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
+
 import { type CatalogApi, CatalogError, type CatalogSource, httpSource, makeService } from "./model-catalog";
 
 const api: CatalogApi = {

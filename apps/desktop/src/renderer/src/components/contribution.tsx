@@ -8,6 +8,7 @@ import { Switch } from "@cogwork/ui/components/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@cogwork/ui/components/tooltip";
 import { RiErrorWarningLine } from "@remixicon/react";
 import { createContext, type ReactNode, use } from "react";
+
 import {
   Authority,
   authorityLabel,

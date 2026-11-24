@@ -14,6 +14,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import { Coordination, type CoordinationService, fold } from "./coordination";
 import { DaemonEventBus, make as makeDaemonEventBus } from "./daemon-event-bus";
 import { IssueTracker, makeEmpty as makeEmptyIssueTracker } from "./issue-tracker";

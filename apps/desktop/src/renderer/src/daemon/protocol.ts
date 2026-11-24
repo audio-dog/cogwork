@@ -11,6 +11,7 @@ import type { FromServerEncoded } from "effect/rpc/RpcMessage";
 import * as RpcSerialization from "effect/rpc/RpcSerialization";
 import * as Schedule from "effect/Schedule";
 import { SocketCloseError, SocketOpenError } from "effect/socket/Socket";
+
 import type { DaemonRpcBridge } from "../../../shared/ipc";
 import { recordProtocolInboxChange, resetProtocolInboxDepth } from "./process-health";
 

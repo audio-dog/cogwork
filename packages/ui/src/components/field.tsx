@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { useMemo } from "react";
+
 import { Label } from "#components/label";
 import { Separator } from "#components/separator";
 import { cn } from "#lib/utils";
@@ -69,8 +70,8 @@ function Field({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
       role="group"
       data-slot="field"
       data-orientation={orientation}

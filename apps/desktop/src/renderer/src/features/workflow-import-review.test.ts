@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
+
 import { WorkflowDocument } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
+
 import { importReviewMarks } from "./workflow-import-review";
 
 const decodeDocument = Schema.decodeUnknownSync(WorkflowDocument);

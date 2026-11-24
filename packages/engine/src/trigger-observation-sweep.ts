@@ -1,5 +1,6 @@
 import { keyOf, type WorkflowDocument } from "@cogwork/contracts";
 import * as Effect from "effect/Effect";
+
 import { sweepKey } from "./clock-source";
 import { Coordination } from "./coordination";
 import { IssueTracker } from "./issue-tracker";

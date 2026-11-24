@@ -16,6 +16,7 @@ import * as FiberSet from "effect/FiberSet";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
+
 import {
   CursorNativeModelIdResult,
   cursorModelFlag,
@@ -184,9 +185,7 @@ const cursorReadiness = Effect.fn("CursorRunner.readiness")((agentBin: string) =
 );
 
 // Cursor keeps conversation history server-side; the opaque handle is how you resume it.
-export const cursorModelOptions = (handle: string | null) => ({
-  ...(handle ? { sessionId: handle } : {}),
-});
+export const cursorModelOptions = (handle: string | null) => (handle ? { sessionId: handle } : {});
 
 const launchCodes = new Set(["ENOENT", "EACCES"]);
 

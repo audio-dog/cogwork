@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 import { vi } from "vitest";
+
 import { matchTriggerEvent } from "../trigger-observation-subscriptions";
 import { Recheck, type TriggerSubscription } from "../trigger-source";
 import type { WorkflowArtifactStoreService } from "../workflow-artifact-store";

@@ -2,8 +2,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { Effect, Exit, Scope } from "effect";
 import { expect, it } from "vitest";
+
 import { createDaemonBridgePort } from "./daemon-bridge";
 
 it("relays opaque frames and closes the socket with its owning scope", async () => {

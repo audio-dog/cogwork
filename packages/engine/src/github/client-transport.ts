@@ -15,6 +15,7 @@ import type * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
+
 import { CredentialStore } from "../credential-store";
 import { defaultTrackerCooldown, IssueTrackerError } from "../issue-tracker";
 import type { GitHubRepoRef } from "./client";

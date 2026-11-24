@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
 import { Connections, type ConnectionsValue } from "./connections-surface";
 
 const scriptedClient: ConnectionsValue = {

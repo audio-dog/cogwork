@@ -1,4 +1,5 @@
 import type { ConnectionBindingId, ConnectionId, PrBaseDivergence } from "@cogwork/contracts";
+
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { type GitHubRepoRef, repoRefFromRepository } from "./client";
 

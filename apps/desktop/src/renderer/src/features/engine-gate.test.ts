@@ -1,5 +1,6 @@
 import { initialBoard } from "@cogwork/contracts";
 import { describe, expect, it } from "vitest";
+
 import { BoardResult } from "./activity-session";
 import { brokenReason, treatmentFor } from "./engine-gate";
 import type { EnginePhase } from "./use-engine-status";

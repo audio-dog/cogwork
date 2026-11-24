@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Metric from "effect/Metric";
+
 import { processHealthMetrics, recordProcessHealth } from "./performance-metrics";
 
 describe("process health metrics", () => {

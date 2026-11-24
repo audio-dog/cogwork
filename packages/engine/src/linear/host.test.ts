@@ -5,6 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import { afterEach, vi } from "vitest";
+
 import { CredentialStore } from "../credential-store";
 import type { WorkspaceIssueTrackerBinding } from "../projector";
 import { LinearClient, layer } from "./client";

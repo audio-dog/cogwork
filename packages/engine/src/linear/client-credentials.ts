@@ -7,6 +7,7 @@ import * as Exit from "effect/Exit";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Redacted from "effect/Redacted";
+
 import {
   type ClientCredentialsGrant,
   type ClientCredentialsRef,

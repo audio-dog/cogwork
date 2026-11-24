@@ -2,18 +2,19 @@ import { HarnessName, RunPlan, type RunPlanSubagent, SessionId } from "@cogwork/
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import { EventType, InMemoryRunStore, type ModelMessage, type StreamChunk } from "@tanstack/ai";
-import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import {
   type ChatWithInterruptsPersistence,
   defineAIPersistence,
   memoryPersistence,
 } from "@tanstack/ai-persistence";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
+import type { AnyTextAdapter } from "@tanstack/ai/adapters";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
+
 import { ContextAssembler, type ContextAssemblerService, type InstructionLayer } from "./context-assembler";
 import { CredentialError, CredentialStore, type CredentialStoreService } from "./credential-store";
 import type { HarnessRequest } from "./harness";

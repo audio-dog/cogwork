@@ -3,6 +3,7 @@ import * as FiberSet from "effect/FiberSet";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
+
 import { makeIssueSearchTool } from "./issue-search-tool";
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";

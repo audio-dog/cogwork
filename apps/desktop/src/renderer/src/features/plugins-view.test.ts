@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { placeholderConfiguration } from "../testing/configuration";
 import { attentionAction, attentionLine, PluginAttention, pluginsView } from "./plugins-view";
 

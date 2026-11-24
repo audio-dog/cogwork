@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
+
 import { Button } from "#components/button";
 import { Input } from "#components/input";
 import { Textarea } from "#components/textarea";
@@ -7,9 +8,9 @@ import { cn } from "#lib/utils";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
     <div
       data-slot="input-group"
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
       role="group"
       className={cn(
         "group/input-group relative flex h-8 w-full min-w-0 items-center rounded-lg border border-input transition-colors outline-none in-data-[slot=combobox-content]:focus-within:border-inherit in-data-[slot=combobox-content]:focus-within:ring-0 has-disabled:bg-input/50 has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-3 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-3 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:bg-input/30 dark:has-disabled:bg-input/80 dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pe-1.5 has-[>[data-align=inline-start]]:[&>input]:ps-1.5",
@@ -45,9 +46,9 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
-    // biome-ignore lint/a11y/useKeyWithClickEvents: click only forwards focus to the wrapped control, which is itself keyboard-accessible
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- click only forwards focus to the wrapped control, which is itself keyboard-accessible
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- a div with role="group" keeps the primitive layout-neutral, unlike <fieldset>
       role="group"
       data-slot="input-group-addon"
       data-align={align}

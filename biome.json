@@ -10,31 +10,12 @@
     "includes": ["**", "!**/*.gen.ts", "!**/.tanstack-output-schema-codex-*.json"]
   },
   "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "lineWidth": 110
+    "enabled": false
   },
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended",
-      "suspicious": {
-        "noDuplicateTestHooks": "error",
-        "noExportsInTest": "error",
-        "noFocusedTests": "error",
-        "noSkippedTests": "error"
-      },
-      "style": {
-        "useFilenamingConvention": {
-          "level": "error",
-          "options": {
-            "filenameCases": ["kebab-case"]
-          }
-        }
-      },
-      "nursery": {
-        "useReactCompiler": "error"
-      }
+      "preset": "none"
     }
   },
   "plugins": [
@@ -48,39 +29,19 @@
     "./configs/lint/no-flatmap-ladder.grit",
     "./configs/lint/no-side-effect-in-state-updater.grit"
   ],
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "double"
-    }
-  },
   "css": {
     "parser": {
       "tailwindDirectives": true
     }
   },
   "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
+    "enabled": false
   },
   "overrides": [
     {
       "includes": ["configs/lint/tests/fixtures/**"],
       "linter": {
         "enabled": false
-      }
-    },
-    {
-      "includes": ["**/routes/**"],
-      "linter": {
-        "rules": {
-          "style": {
-            "useFilenamingConvention": "off"
-          }
-        }
       }
     },
     {

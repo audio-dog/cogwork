@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+
 import type { CheckRun } from "../ci";
 import type { IssueTrackerError } from "../issue-tracker";
 import type { OpenPullRequestInput } from "../source-control";
@@ -24,6 +25,7 @@ import {
   issuePullReferencesQuery,
 } from "./client-graphql";
 import {
+  actionsJobIdOf,
   commentMillis,
   decodeCheckRuns,
   decodeCompare,
@@ -339,23 +341,21 @@ export const makePullClient = (transport: GitHubTransport) => {
     listPulls: Effect.fn("github.listPulls")(function* (repo: GitHubRepoRef, headBranch?: string) {
       const pulls = yield* readPulls(repo, headBranch);
       const references = yield* pullReferences(repo, headBranch);
-      return pulls.map(
-        (pull): RawPull => ({
-          number: pull.number,
-          title: pull.title,
-          url: pull.html_url || `https://github.com/${repo.owner}/${repo.name}/pull/${pull.number}`,
-          authorLogin: pull.user.login,
-          authorAssociation: pull.author_association ?? "NONE",
-          draft: pull.draft ?? false,
-          headSha: pull.head.sha,
-          baseSha: pull.base?.sha,
-          headRef: pull.head.ref,
-          headRepository: pull.head.repo?.full_name ?? null,
-          ...(pull.base?.ref ? { baseRef: pull.base.ref } : {}),
-          closingIssueNumbers: references.get(pull.number) ?? [],
-          updatedAtMillis: millisFromIso(pull.updated_at ?? null),
-        }),
-      );
+      return pulls.map((pull): RawPull => ({
+        number: pull.number,
+        title: pull.title,
+        url: pull.html_url || `https://github.com/${repo.owner}/${repo.name}/pull/${pull.number}`,
+        authorLogin: pull.user.login,
+        authorAssociation: pull.author_association ?? "NONE",
+        draft: pull.draft ?? false,
+        headSha: pull.head.sha,
+        baseSha: pull.base?.sha,
+        headRef: pull.head.ref,
+        headRepository: pull.head.repo?.full_name ?? null,
+        ...(pull.base?.ref ? { baseRef: pull.base.ref } : {}),
+        closingIssueNumbers: references.get(pull.number) ?? [],
+        updatedAtMillis: millisFromIso(pull.updated_at ?? null),
+      }));
     }),
     getPull,
     getPullDiff: Effect.fn("github.getPullDiff")(function* (
@@ -395,18 +395,17 @@ export const makePullClient = (transport: GitHubTransport) => {
           repoPath(repo, `/commits/${sha}/check-runs?per_page=100&page=${page}`),
         );
         const decoded = yield* Effect.mapError(decodeCheckRuns(json), toUnavailable);
-        const current = decoded.check_runs.map(
-          (run): CheckRun => ({
-            name: run.name,
-            status: run.status,
-            conclusion: run.conclusion,
-            startedAtMillis: millisFromIso(run.started_at),
-            completedAtMillis: millisFromIso(run.completed_at),
-            detailsUrl: run.details_url ?? null,
-            outputTitle: run.output?.title ?? null,
-            outputSummary: run.output?.summary ?? null,
-          }),
-        );
+        const current = decoded.check_runs.map((run): CheckRun => ({
+          name: run.name,
+          status: run.status,
+          conclusion: run.conclusion,
+          startedAtMillis: millisFromIso(run.started_at),
+          completedAtMillis: millisFromIso(run.completed_at),
+          detailsUrl: run.details_url ?? null,
+          outputTitle: run.output?.title ?? null,
+          outputSummary: run.output?.summary ?? null,
+          actionsJobId: actionsJobIdOf(run),
+        }));
         if (current.length < 100) return current;
         return [...current, ...(yield* collect(page + 1))];
       });

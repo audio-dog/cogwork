@@ -4,12 +4,11 @@
   "private": true,
   "description": "Orchestration control plane for AI coding agents: discover work, schedule runs, and drive harnesses.",
   "type": "module",
-  "packageManager": "pnpm@12.16.1",
   "scripts": {
-    "format-and-lint:fix": "biome check . --write",
-    "format-and-lint:unsafe": "biome check . --write --unsafe",
-    "format-and-lint": "biome check .",
-    "prepare": "effect-tsgo patch && node scripts/install-commit-hook.mjs",
+    "format-and-lint:fix": "oxfmt --disable-nested-config && oxlint --fix && biome lint . --write",
+    "format-and-lint:unsafe": "oxfmt --disable-nested-config && oxlint --fix --fix-suggestions && biome lint . --write --unsafe",
+    "format-and-lint": "oxfmt --check --disable-nested-config && oxlint && biome lint .",
+    "prepare": "effect-tsgo patch --oxlint && node scripts/install-commit-hook.mjs",
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
@@ -23,8 +22,12 @@
     "@effect/platform-node": "catalog:effect",
     "@effect/tsgo": "catalog:",
     "@j178/prek": "0.5.3",
+    "@shekohex/oxc-effect": "0.2.1",
     "@types/node": "catalog:",
     "effect": "catalog:effect",
+    "oxfmt": "0.79.0",
+    "oxlint": "1.94.0",
+    "oxlint-tsgolint": "7.0.2007",
     "tsx": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:"
@@ -35,5 +38,6 @@
       "version": "^26.13.0",
       "onFail": "download"
     }
-  }
+  },
+  "packageManager": "pnpm@12.16.1"
 }

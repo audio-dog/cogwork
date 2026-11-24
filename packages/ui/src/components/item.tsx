@@ -2,13 +2,14 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
 import type * as React from "react";
+
 import { Separator } from "#components/separator";
 import { cn } from "#lib/utils";
 
 function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    // biome-ignore lint/a11y/useSemanticElements: Fine for primitives
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Fine for primitives
       role="list"
       data-slot="item-group"
       className={cn(

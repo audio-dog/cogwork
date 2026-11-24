@@ -2,6 +2,7 @@ import { type Cause, WorkflowCatalogKey, type WorkItemId, type WorkspaceId } fro
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+
 import type { IssueTrackerService, ListedTrackerItem, TrackerProse } from "./issue-tracker";
 import type { RegisteredWorkspace, RegistryState } from "./projector";
 import {
@@ -99,11 +100,10 @@ export const makeTrackerTriggerSource = (
     artifacts === null
       ? Effect.succeed(unknownCause)
       : artifacts.origin(workspace, id).pipe(
-          Effect.map(
-            (origin): Cause =>
-              origin === null
-                ? unknownCause
-                : { _tag: "Cogwork", origin: origin.item, lineage: origin.lineage },
+          Effect.map((origin): Cause =>
+            origin === null
+              ? unknownCause
+              : { _tag: "Cogwork", origin: origin.item, lineage: origin.lineage },
           ),
           Effect.catch((error) =>
             Effect.logWarning("Workflow artifact origin read failed", { error }).pipe(

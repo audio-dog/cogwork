@@ -19,6 +19,7 @@ import {
   type WorkspaceId,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
+
 import { providerLabel } from "./provider-presentation";
 
 export type AvailableHarnessCatalog = HarnessOptionCatalog & { readonly harness: HarnessName };

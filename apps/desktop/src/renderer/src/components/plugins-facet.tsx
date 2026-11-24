@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@cogwork/ui/components/empty";
 import { RiBox3Line } from "@remixicon/react";
+
 import type { InstalledPlugin } from "../features/configuration-model";
 import { pluginFailureTitle, useConfiguration } from "./configuration-provider";
 import { SearchEmpty } from "./customize-empty";

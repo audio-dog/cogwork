@@ -10,6 +10,7 @@ import * as Layer from "effect/Layer";
 import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
+
 import { WorkspaceRegistry } from "./registry-service";
 import { RunLedger } from "./run-ledger";
 import { day } from "./time";
@@ -64,6 +65,7 @@ export interface SchedulerState {
   readonly perWorkspace: ReadonlyMap<WorkspaceId, number>;
   readonly inflight: ReadonlySet<string>;
   readonly acted: ReadonlySet<string>;
+  readonly deferred: ReadonlyMap<string, number>;
   readonly budgetDay: number;
   readonly budgetUsed: number;
   readonly stopping: boolean;
@@ -75,6 +77,7 @@ export const initialState: SchedulerState = {
   perWorkspace: new Map(),
   inflight: new Set(),
   acted: new Set(),
+  deferred: new Map(),
   budgetDay: -1,
   budgetUsed: 0,
   stopping: false,
@@ -105,14 +108,17 @@ interface WorkflowCandidate {
 interface ReservationDisposition {
   readonly refundBudget: boolean;
   readonly retry: boolean;
+  readonly defer: boolean;
 }
 
 const workflowRunDispositions = {
-  completed: { refundBudget: false, retry: false },
-  retry: { refundBudget: false, retry: true },
-  skipped: { refundBudget: true, retry: false },
-  waiting: { refundBudget: true, retry: true },
+  completed: { refundBudget: false, retry: false, defer: false },
+  retry: { refundBudget: false, retry: true, defer: false },
+  skipped: { refundBudget: true, retry: false, defer: false },
+  waiting: { refundBudget: true, retry: true, defer: true },
 } satisfies Record<WorkflowRunOutcome, ReservationDisposition>;
+
+const waitingRecheckInterval = Duration.minutes(1);
 
 const workflowItemKeyFor = (admission: TriggerAdmission) => `workflow:${keyOf(admission.event.key)}`;
 
@@ -141,7 +147,7 @@ const fits = (candidate: WorkflowCandidate, state: SchedulerState, config: Sched
   const workspaceAvailable =
     candidate.workspace === null ||
     (state.perWorkspace.get(candidate.workspace) ?? 0) < candidate.workspaceLimit;
-  const identityAvailable = candidate.keys.every((key) => !state.acted.has(key));
+  const identityAvailable = candidate.keys.every((key) => !state.acted.has(key) && !state.deferred.has(key));
   const reservationAvailable = candidate.reservationKeys.every((key) => !state.inflight.has(key));
   return schedulerAvailable && workspaceAvailable && identityAvailable && reservationAvailable;
 };
@@ -177,38 +183,51 @@ const release = (state: SchedulerState, candidate: WorkflowCandidate, retry: boo
   acted: retry ? new Set([...state.acted].filter((key) => !candidate.keys.includes(key))) : state.acted,
 });
 
+const withDeferral = (state: SchedulerState, candidate: WorkflowCandidate, nowMillis: number) => {
+  const retryAtMillis = nowMillis + Duration.toMillis(waitingRecheckInterval);
+  return {
+    ...state,
+    deferred: new Map([...state.deferred, ...candidate.keys.map((key) => [key, retryAtMillis] as const)]),
+  };
+};
+
 const finishReservation = (
   state: SchedulerState,
   candidate: WorkflowCandidate,
   disposition: ReservationDisposition,
+  nowMillis: number,
 ) => {
   const released = release(state, candidate, disposition.retry);
-  return disposition.refundBudget
+  const refunded = disposition.refundBudget
     ? { ...released, budgetUsed: Math.max(0, released.budgetUsed - 1) }
     : released;
+  return disposition.defer ? withDeferral(refunded, candidate, nowMillis) : refunded;
 };
+
+const correlationOf = ({ admission }: WorkflowCandidate) => ({
+  workflow: admission.subscription.workflow,
+  item: keyOf(admission.event.key),
+  operation: admission.subscription.operation,
+});
 
 const utcDay = (millis: number) => Math.floor(millis / Duration.toMillis(day));
 
-const refreshed = (state: SchedulerState, today: number, candidates: ReadonlyArray<WorkflowCandidate>) => {
+const refreshed = (
+  state: SchedulerState,
+  nowMillis: number,
+  candidates: ReadonlyArray<WorkflowCandidate>,
+) => {
+  const today = utcDay(nowMillis);
   const rolledOver = state.budgetDay === today ? state : { ...state, budgetDay: today, budgetUsed: 0 };
   const live = new Set([...candidates.flatMap(({ keys }) => keys), ...rolledOver.inflight]);
-  return { ...rolledOver, acted: new Set([...rolledOver.acted].filter((key) => live.has(key))) };
+  return {
+    ...rolledOver,
+    acted: new Set([...rolledOver.acted].filter((key) => live.has(key))),
+    deferred: new Map(
+      [...rolledOver.deferred].filter(([key, retryAtMillis]) => live.has(key) && retryAtMillis > nowMillis),
+    ),
+  };
 };
-
-const planCandidates = (
-  candidates: ReadonlyArray<WorkflowCandidate>,
-  state: SchedulerState,
-  config: SchedulerConfig,
-  today: number,
-) =>
-  candidates.reduce<{ readonly state: SchedulerState; readonly picks: ReadonlyArray<WorkflowCandidate> }>(
-    (planned, candidate) =>
-      fits(candidate, planned.state, config)
-        ? { state: reserve(planned.state, candidate), picks: [...planned.picks, candidate] }
-        : planned,
-    { state: refreshed(state, today, candidates), picks: [] },
-  );
 
 const updateStateMetrics = (state: SchedulerState) =>
   Effect.all([Metric.update(runsInFlight, state.global), Metric.update(budgetUsed, state.budgetUsed)], {
@@ -236,7 +255,7 @@ export const make = (config: SchedulerConfig) =>
     const startedAtMillis = yield* Clock.currentTimeMillis;
 
     const runWorkflow = (candidate: WorkflowCandidate) =>
-      Ref.make<ReservationDisposition>({ refundBudget: false, retry: true }).pipe(
+      Ref.make<ReservationDisposition>({ refundBudget: false, retry: true, defer: false }).pipe(
         Effect.flatMap((dispositionRef) =>
           workflowRun.execute(candidate.admission).pipe(
             Effect.map((outcome) => workflowRunDispositions[outcome]),
@@ -249,22 +268,68 @@ export const make = (config: SchedulerConfig) =>
             ),
             Effect.ensuring(
               stateMetricsGate.withPermit(
-                Ref.get(dispositionRef).pipe(
-                  Effect.flatMap((disposition) =>
-                    Ref.updateAndGet(stateRef, (state) => finishReservation(state, candidate, disposition)),
+                Effect.all([Ref.get(dispositionRef), Clock.currentTimeMillis]).pipe(
+                  Effect.flatMap(([disposition, nowMillis]) =>
+                    Ref.updateAndGet(stateRef, (state) =>
+                      finishReservation(state, candidate, disposition, nowMillis),
+                    ),
                   ),
                   Effect.flatMap(updateStateMetrics),
                 ),
               ),
             ),
-            Effect.annotateLogs({
-              workflow: candidate.admission.subscription.workflow,
-              item: keyOf(candidate.admission.event.key),
-              operation: candidate.admission.subscription.operation,
-            }),
+            Effect.annotateLogs(correlationOf(candidate)),
           ),
         ),
       );
+
+    const isWaiting = Effect.fn("Scheduler.isWaiting")((candidate: WorkflowCandidate) =>
+      workflowRun.isWaiting(candidate.admission).pipe(
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("readiness check failed; the candidate counts as ready", cause).pipe(
+              Effect.map(() => false),
+            ),
+        ),
+      ),
+    );
+
+    const reserveIfFits = Effect.fn("Scheduler.reserveIfFits")(
+      (candidate: WorkflowCandidate, config: SchedulerConfig) =>
+        stateMetricsGate.withPermit(
+          Ref.modify(stateRef, (state) => {
+            if (!fits(candidate, state, config)) return [{ reserved: false, state }, state];
+            const next = reserve(state, candidate);
+            return [{ reserved: true, state: next }, next];
+          }).pipe(
+            Effect.tap(({ state }) => updateStateMetrics(state)),
+            Effect.map(({ reserved }) => reserved),
+          ),
+        ),
+    );
+
+    const start = Effect.fn("Scheduler.start")(function* (
+      candidate: WorkflowCandidate,
+      config: SchedulerConfig,
+    ) {
+      if (!(yield* reserveIfFits(candidate, config))) return false;
+      yield* FiberSet.run(jobs, runWorkflow(candidate));
+      return true;
+    }, Effect.uninterruptible);
+
+    const offer = Effect.fn("Scheduler.offer")(function* (
+      candidate: WorkflowCandidate,
+      config: SchedulerConfig,
+    ) {
+      if (!fits(candidate, yield* Ref.get(stateRef), config)) return false;
+      if (yield* isWaiting(candidate)) {
+        const checkedAtMillis = yield* Clock.currentTimeMillis;
+        yield* Ref.update(stateRef, (state) => withDeferral(state, candidate, checkedAtMillis));
+        return false;
+      }
+      return yield* start(candidate, config);
+    });
 
     const tick = Effect.fn("Scheduler.tick")(function* () {
       const config = yield* Ref.get(configRef);
@@ -284,24 +349,25 @@ export const make = (config: SchedulerConfig) =>
             : (workspaceLimits.get(admission.event.workspace) ?? config.perWorkspaceLimit),
         ),
       );
-      const today = utcDay(yield* Clock.currentTimeMillis);
-      const planned = yield* stateMetricsGate.withPermit(
-        Ref.modify(stateRef, (state) => {
-          const next = planCandidates(candidates, state, config, today);
-          return [next, next.state];
-        }).pipe(Effect.tap(({ state }) => updateStateMetrics(state))),
+      const nowMillis = yield* Clock.currentTimeMillis;
+      yield* stateMetricsGate.withPermit(
+        Ref.updateAndGet(stateRef, (state) => refreshed(state, nowMillis, candidates)).pipe(
+          Effect.flatMap(updateStateMetrics),
+        ),
       );
+      const started = yield* Effect.forEach(candidates, (candidate) =>
+        offer(candidate, config).pipe(Effect.annotateLogs(correlationOf(candidate))),
+      );
+      const picks = started.filter(Boolean).length;
+      const state = yield* Ref.get(stateRef);
       const budgetExhausted =
-        !planned.state.stopping &&
-        !planned.state.paused &&
-        planned.picks.length === 0 &&
+        !state.stopping &&
+        !state.paused &&
+        picks === 0 &&
         candidates.length > 0 &&
-        planned.state.budgetUsed >= config.dailyBudget;
+        state.budgetUsed >= config.dailyBudget;
       if (budgetExhausted) yield* Metric.update(budgetExhaustedTicks, 1);
-      yield* Effect.forEach(planned.picks, (candidate) => FiberSet.run(jobs, runWorkflow(candidate)), {
-        discard: true,
-      });
-      return planned.picks.length;
+      return picks;
     }, Effect.trackDuration(schedulerTickDuration));
 
     const drain = Effect.fn("Scheduler.drain")(function* (options: DrainOptions) {

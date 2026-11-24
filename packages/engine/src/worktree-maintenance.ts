@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+
 import { IssueTracker } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";
 import { WorkspaceRegistry } from "./registry-service";

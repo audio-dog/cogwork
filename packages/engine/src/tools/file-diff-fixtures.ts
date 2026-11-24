@@ -1,5 +1,6 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { setImmediate as yieldImmediate } from "node:timers/promises";
+
 import { assert } from "@effect/vitest";
 import { localProcessSandbox } from "@tanstack/ai-sandbox-local-process";
 import * as Context from "effect/Context";
@@ -13,6 +14,7 @@ import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
+
 import { watchWorktreeDiffs } from "./file-diff-feed";
 import { writeFile } from "./owned-tools";
 import { resolveBaseSha, type WorktreeSandbox } from "./sandbox";

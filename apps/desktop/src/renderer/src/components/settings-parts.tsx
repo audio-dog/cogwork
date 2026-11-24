@@ -2,6 +2,7 @@ import { Card } from "@cogwork/ui/components/card";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@cogwork/ui/components/item";
 import { cn } from "@cogwork/ui/lib/utils";
 import { createContext, type ReactNode, use, useRef } from "react";
+
 import type { SettingEntry } from "../features/settings-catalog";
 
 const FocusedSettingContext = createContext<{ focus?: string; jump?: number }>({});

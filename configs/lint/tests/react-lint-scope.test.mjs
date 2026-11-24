@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+
 import { repoRoot } from "./rule-test-harness.mjs";
 
 // `no-use-effect.grit` stays scoped to current React packages to avoid a repository-wide Biome pass.

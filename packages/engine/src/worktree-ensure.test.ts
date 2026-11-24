@@ -5,6 +5,7 @@ import * as Fiber from "effect/Fiber";
 import * as Latch from "effect/Latch";
 import * as Metric from "effect/Metric";
 import * as Ref from "effect/Ref";
+
 import { type AddWorktreeArgs, GitError, type GitService } from "./git";
 import * as Worktree from "./worktree";
 import {

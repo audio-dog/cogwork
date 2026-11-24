@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+
 import { IssueTrackerError } from "../issue-tracker";
 import {
   PerformanceIssueFiler,
@@ -387,6 +388,7 @@ it.effect("retries creation after a transient failure that did not report accept
                   requestReview: unexpectedClientCall,
                   editComment: unexpectedClientCall,
                   verifyCredential: unexpectedClientCall,
+                  getActionsJobLogExcerpt: unexpectedClientCall,
                 } satisfies GitHubClientService;
               }),
             ),

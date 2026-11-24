@@ -10,6 +10,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+
 import { defaultTelemetryStorePath } from "./paths";
 import { localTelemetryLayer } from "./telemetry-store";
 

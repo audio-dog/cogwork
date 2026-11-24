@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+
 import { type CheckRun, checkState, latestFailingCheckAtMillis } from "./ci";
 
 const run = (over: Partial<CheckRun> & { readonly name: string }): CheckRun => ({

@@ -5,6 +5,7 @@ import {
 } from "@cogwork/contracts";
 import type { SubagentRunner } from "@cogwork/engine";
 import * as Data from "effect/Data";
+
 import type { ClaudeCatalogModel } from "./models.generated";
 
 export const claudeModelLevels = {

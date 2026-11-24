@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import * as NodeSocketServer from "@effect/platform-node/NodeSocketServer";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -25,6 +26,7 @@ import * as ScopedRef from "effect/ScopedRef";
 import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 import { describe, expect, it } from "vitest";
+
 import { createDaemonBridgePort, type DaemonBridgePort } from "../../../main/daemon-bridge";
 import type { DaemonRpcBridge, RpcSessionId } from "../../../shared/ipc";
 import { layerProtocolIpc, makeProtocolIpc, protocolInboxCapacity } from "./protocol";

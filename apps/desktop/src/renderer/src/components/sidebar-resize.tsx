@@ -1,6 +1,7 @@
 import { useSidebar } from "@cogwork/ui/components/sidebar";
 import { useLocalStorageValue, useWindowSize } from "@react-hookz/web";
 import { useRef } from "react";
+
 import { clampResizableWidth } from "../hooks/use-resizable-width";
 import { useRightPanelStore } from "../store/right-panel";
 import {

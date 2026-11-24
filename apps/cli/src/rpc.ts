@@ -2,6 +2,7 @@ import * as os from "node:os";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
+
 import { claudeCodeRunner } from "@cogwork/claude-code";
 import { codexRunner } from "@cogwork/codex-cli";
 import { DaemonRpcs, HarnessName, type WorkspaceId } from "@cogwork/contracts";
@@ -27,6 +28,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as SocketServer from "effect/socket/SocketServer";
 import * as Tuple from "effect/Tuple";
+
 import { layer as credentialsLayer } from "./credentials";
 import { granolaLoginLayer } from "./granola-login";
 import { layer as ledgerLayer } from "./ledger";

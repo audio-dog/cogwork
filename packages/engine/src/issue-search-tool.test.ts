@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+
 import { IssueSearchInput, makeIssueSearchTool } from "./issue-search-tool";
 import { makeEmpty } from "./issue-tracker";
 import type { RegisteredWorkspace } from "./projector";

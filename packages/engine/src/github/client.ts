@@ -1,14 +1,21 @@
 import type { ConnectionId } from "@cogwork/contracts";
+import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Layer from "effect/Layer";
 import type * as Redacted from "effect/Redacted";
+
+import type { IssueTrackerError } from "../issue-tracker";
+import { actionsJobLogExcerpt } from "./actions-job-log";
 import { makeIssueClient } from "./client-issues";
 import { makePullClient } from "./client-pulls";
 import { decodeAuthenticatedUser } from "./client-responses";
-import { makeTransport, toUnavailable, withTransientRetry } from "./client-transport";
+import { makeTransport, repoPath, toUnavailable, withTransientRetry } from "./client-transport";
 
 export interface GitHubRepoRef {
   readonly owner: string;
@@ -152,11 +159,53 @@ export const writeAccessReviewDecision = (reviews: ReadonlyArray<RawReview>) =>
       .map((review) => ({ login: review.authorLogin, state: review.state })),
   );
 
+class ActionsJobKey extends Data.Class<{
+  readonly owner: string;
+  readonly name: string;
+  readonly tokenEnv: string;
+  readonly connectionId?: ConnectionId;
+  readonly jobId: number;
+}> {}
+
+const actionsJobKeyOf = (repo: GitHubRepoRef, jobId: number) =>
+  new ActionsJobKey({
+    owner: repo.owner,
+    name: repo.name,
+    tokenEnv: repo.tokenEnv,
+    ...(repo.connectionId ? { connectionId: repo.connectionId } : {}),
+    jobId,
+  });
+
+const actionsJobLogCapacity = 200;
+
+// The log of a completed job does not change, so only a failed read is tried again.
+const actionsJobLogTimeToLive = (exit: Exit.Exit<string, IssueTrackerError>) =>
+  Exit.isSuccess(exit) ? Duration.infinity : Duration.zero;
+
 const make = Effect.fn("github.client.make")(function* (client: HttpClient.HttpClient) {
   const transport = yield* makeTransport(client);
   const { execute, send } = transport;
 
+  const readActionsJobLogExcerpt = Effect.fn("github.readActionsJobLogExcerpt")(function* (
+    key: ActionsJobKey,
+  ) {
+    const log = yield* withTransientRetry(
+      send(
+        key,
+        HttpClientRequest.get(repoPath(key, `/actions/jobs/${key.jobId}/logs`)),
+        (response) => response.text,
+      ),
+    );
+    return actionsJobLogExcerpt(log);
+  });
+  const actionsJobLogExcerpts = yield* Cache.makeWith(readActionsJobLogExcerpt, {
+    capacity: actionsJobLogCapacity,
+    timeToLive: actionsJobLogTimeToLive,
+  });
+
   return {
+    getActionsJobLogExcerpt: (repo: GitHubRepoRef, jobId: number) =>
+      Cache.get(actionsJobLogExcerpts, actionsJobKeyOf(repo, jobId)),
     authenticatedLogin: Effect.fn("github.authenticatedLogin")(function* (repo: GitHubRepoRef) {
       const json = yield* withTransientRetry(
         send(repo, HttpClientRequest.get("https://api.github.com/user"), (response) => response.json),

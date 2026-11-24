@@ -16,6 +16,7 @@ import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+
 import type { ListedTrackerItem, TrackerComment } from "./issue-tracker";
 import type { RegisteredWorkspace, WorkspaceIssueTrackerBinding } from "./projector";
 import { makeTrackerTriggerSource } from "./tracker-trigger-source";

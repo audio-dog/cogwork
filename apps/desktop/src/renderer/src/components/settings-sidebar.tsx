@@ -19,6 +19,7 @@ import { TooltipProvider } from "@cogwork/ui/components/tooltip";
 import { RiArrowLeftLine, RiCloseLine, RiSearchLine } from "@remixicon/react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+
 import {
   findSection,
   type SettingEntry,
@@ -53,7 +54,13 @@ function SearchResult({ entry, onSelect }: { entry: SettingEntry; onSelect: () =
   return (
     <Item
       size="sm"
-      render={<button type="button" onClick={onSelect} />}
+      render={
+        <button
+          type="button"
+          aria-label={[entry.title, section?.label].filter(Boolean).join(", ")}
+          onClick={onSelect}
+        />
+      }
       className="w-full cursor-pointer text-left hover:bg-sidebar-accent"
     >
       {Icon ? (

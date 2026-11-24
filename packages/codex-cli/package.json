@@ -2,8 +2,8 @@
   "name": "@cogwork/codex-cli",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "Codex CLI harness runner for Cogwork, built on the TanStack AI Codex adapter",
+  "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },

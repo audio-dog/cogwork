@@ -2,6 +2,7 @@ import { highlighter } from "@cogwork/ui/lib/highlighter";
 import { cn } from "@cogwork/ui/lib/utils";
 import { createTanStackMarkdownHighlighter } from "@tanstack/highlight/markdown";
 import { type MarkdownComponentProps, Markdown as TanStackMarkdown } from "@tanstack/markdown/react";
+
 import { safeHref } from "../features/safe-href";
 
 const markdownHighlighter = createTanStackMarkdownHighlighter(highlighter);
@@ -10,9 +11,14 @@ function MarkdownParagraph({ className, ...props }: MarkdownComponentProps<"p">)
   return <p className={cn("leading-relaxed", className)} {...props} />;
 }
 
-function MarkdownLink({ className, href, ...props }: MarkdownComponentProps<"a">) {
+function MarkdownLink({ className, href, children, ...props }: MarkdownComponentProps<"a">) {
   const safe = safeHref(href);
-  if (!safe) return <span className={className} {...props} />;
+  if (!safe)
+    return (
+      <span className={className} {...props}>
+        {children}
+      </span>
+    );
   return (
     <a
       className={cn("font-medium text-primary underline underline-offset-2", className)}
@@ -20,7 +26,9 @@ function MarkdownLink({ className, href, ...props }: MarkdownComponentProps<"a">
       rel="noreferrer"
       target="_blank"
       {...props}
-    />
+    >
+      {children}
+    </a>
   );
 }
 

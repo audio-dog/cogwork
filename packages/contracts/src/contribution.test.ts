@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+
 import { localContributionId } from "./contribution";
 
 describe("localContributionId", () => {

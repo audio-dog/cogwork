@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
 import { ItemTitle } from "./item-tab";
 
 const title = "Link the tracker item";

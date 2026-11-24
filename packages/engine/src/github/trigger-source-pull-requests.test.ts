@@ -7,6 +7,7 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import { vi } from "vitest";
+
 import { GitHubClient } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
@@ -154,6 +155,61 @@ describe("GitHub Trigger sources", () => {
       ),
     ),
   );
+
+  it.effect("freezes the log excerpt of each failed GitHub Actions job in pull request Work Context", () => {
+    const getActionsJobLogExcerpt = vi.fn((_target: unknown, jobId: number) =>
+      jobId === 801
+        ? Effect.succeed(" FAIL  src/index.test.ts > adds\nAssertionError: expected 3 to equal 4")
+        : Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "log read failed" })),
+    );
+    const actionsCheck = (name: string, conclusion: string, actionsJobId: number) => ({
+      name,
+      status: "completed",
+      conclusion,
+      startedAtMillis: 2_500,
+      actionsJobId,
+    });
+
+    return Effect.gen(function* () {
+      const client = yield* GitHubClient;
+      const events = yield* makeGitHubPullRequestTriggerSource(client, Effect.succeed(registryState))
+        .observe([subscription("github.pull-request-checks-failed", "checks")])
+        .pipe(Stream.take(1), Stream.runCollect);
+      const body = events[0]?.workContext?.body ?? "";
+
+      assert.include(
+        body,
+        "- test: completed, failure, no details URL\n  - Title: none\n  - Summary:\n    none\n  - Log excerpt:\n     FAIL  src/index.test.ts > adds\n    AssertionError: expected 3 to equal 4",
+      );
+      assert.include(
+        body,
+        "- typecheck: completed, failure, no details URL\n  - Title: none\n  - Summary:\n    none\n  - Log excerpt:\n    unavailable",
+      );
+      assert.deepStrictEqual(
+        getActionsJobLogExcerpt.mock.calls.map(([, jobId]) => jobId).toSorted(),
+        [801, 802],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mock(GitHubClient, {
+          authenticatedLogin: () => Effect.succeed("cogwork[bot]"),
+          listPulls: () => Effect.succeed([trustedPull]),
+          listCheckRuns: () =>
+            Effect.succeed([
+              actionsCheck("test", "failure", 801),
+              actionsCheck("typecheck", "failure", 802),
+              actionsCheck("build", "success", 803),
+            ]),
+          getPull: (_target, number) => Effect.succeed(pullDetail(number, "clean")),
+          listPullFiles: () => Effect.succeed([]),
+          listTriggerComments: () => Effect.succeed([]),
+          listReviewComments: () => Effect.succeed([]),
+          listReviews: () => Effect.succeed([]),
+          getActionsJobLogExcerpt,
+        }),
+      ),
+    );
+  });
 
   it.effect("skips a failed GitHub pull request read", () => {
     const failedPull = { ...trustedPull, number: 12, headSha: "failed-sha", closingIssueNumbers: [12] };
