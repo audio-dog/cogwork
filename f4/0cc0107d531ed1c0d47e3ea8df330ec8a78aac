@@ -1,0 +1,77 @@
+.pre-commit-config.yaml
+  s_c6524b505f1a55::t_b02cf19570a16e 29
+apps/cli/src/telemetry-store.ts
+  s_c6524b505f1a55::t_7ed266c0c7afe1 228
+apps/desktop/src/renderer/src/components/customize-place-menu.tsx
+  s_c6524b505f1a55::t_92aa7e8dbc9514 89-97
+apps/desktop/src/renderer/src/components/import-review.tsx
+  s_c6524b505f1a55::t_7996e71d0df7ee 48-56
+apps/desktop/src/renderer/src/components/markdown.tsx
+  s_c6524b505f1a55::t_bc8b2de0504238 14,16-21,29-31
+apps/desktop/src/renderer/src/components/settings-sidebar.tsx
+  s_c6524b505f1a55::t_d37f1f5fdfcf8b 57-63
+biome.json
+  s_c6524b505f1a55::t_d812cf5ab0e8b8 18
+oxlint.config.ts
+  s_c6524b505f1a55::t_7bfb3c8f5c5379 1-32
+package.json
+  s_c6524b505f1a55::t_92d69e2f5cd519 8-11,25,29-30
+packages/cursor-acp/src/harness.ts
+  s_c6524b505f1a55::t_201a5a168a4eaa 188
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_c6524b505f1a55::t_84da1d44baf151 5-6
+packages/engine/src/coordination-fold.test.ts
+  s_c6524b505f1a55::t_f40a82bb1008b6 149-213
+packages/engine/src/coordination.ts
+  s_c6524b505f1a55::t_e14eac8513c306 60,135-136,184-209,223,243
+packages/engine/src/github/trigger-source-pull-request-conditions.test.ts
+  s_21038402bc2c71::t_7c103a4bf0f049 1-123
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_c6524b505f1a55::t_56a1254e6cad45 38-42
+packages/engine/src/subagent-runner.ts
+  s_c6524b505f1a55::t_4a78d90a28e6c0 222-225
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_c6524b505f1a55::t_670c7022aa7c64 3,37,374-463
+packages/engine/src/trigger-observation.ts
+  s_c6524b505f1a55::t_572cc39ceb5014 24,59,85-87,327-358,378-381,418
+packages/ui/src/components/field.tsx
+  s_c6524b505f1a55::t_680c1f9d106d55 74
+packages/ui/src/components/input-group.tsx
+  s_c6524b505f1a55::t_f242ee8e8eded9 13,49,51
+packages/ui/src/components/item.tsx
+  s_c6524b505f1a55::t_0158ed7c464746 12
+packages/ui/src/components/label.tsx
+  s_c6524b505f1a55::t_46eabe43c43bb5 7
+packages/ui/src/components/spinner.tsx
+  s_c6524b505f1a55::t_22b02178a5e637 8-10
+pnpm-lock.yaml
+  s_c6524b505f1a55::t_a2f7c64064b9f3 168-169,277,281-283,296-301,1305-1306,1310-1311,1315-1316,1320-1321,1325-1326,1330-1331,1335-1336,1340-1341,2259-2414,2642-2651,5255-5271,6657,6660,6663,6666,6669,6672,6675,6678,6680-6686,7375-7451,7617-7627,9963-9994
+pnpm-workspace.yaml
+  s_c6524b505f1a55::t_f700631ab1f1ad 16
+scripts/format-edited-files.mjs
+  s_c6524b505f1a55::t_ed11ad73bb60be 63-67,75-85,97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f40cc0107d531ed1c0d47e3ea8df330ec8a78aac",
+  "prompts": {},
+  "sessions": {
+    "s_21038402bc2c71": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6155eee9-bf49-4d00-b619-6a7ab31eb4ad",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c6524b505f1a55": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "61f62db5-cc85-456a-aa01-a631e3b442f3",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
