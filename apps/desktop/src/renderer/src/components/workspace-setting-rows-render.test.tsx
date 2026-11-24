@@ -10,7 +10,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { emptyDraft } from "../features/workspace-record";
-import { priorityFieldItems, WorkspaceRecord } from "./workspace-setting-rows";
+import { WorkspaceRecord } from "./workspace-setting-rows";
+import { priorityFieldItems } from "./workspace-setting-tracker-choices";
 
 describe("WorkspaceRecord.SourceControlRows", () => {
   it("offers linear git history for every issue tracker", () => {
