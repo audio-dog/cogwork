@@ -263,6 +263,7 @@ describe("coordination fold", () => {
           parks: [{ reason, operation, atMillis: 4 }, ...otherParks],
         },
         "cogwork",
+        0,
       );
 
       assert.strictEqual(view.failedAttemptAtMillis(key), expected);
