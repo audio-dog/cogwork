@@ -138,6 +138,7 @@ describe("TriggerObservation", () => {
                 revision: { observed: revisions.get(keyOf(ref)) ?? event.revision, processed: null },
               },
               "cogwork",
+              0,
             ),
           );
         },
@@ -312,6 +313,7 @@ describe("TriggerObservation", () => {
                 revision: { observed: "200.000", processed: "100.000" },
               },
               "cogwork",
+              0,
             ),
           ),
       } satisfies CoordinationService;
@@ -408,6 +410,7 @@ describe("TriggerObservation", () => {
                 revision: { observed: "checks:head:test", processed: null },
               },
               "cogwork",
+              0,
             ),
           ),
         );

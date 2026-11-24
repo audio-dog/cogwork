@@ -272,7 +272,7 @@ export class ActionPlanProbe extends Context.Service<
 }
 
 const viewAt = (barrierAtMillis: number) => ({
-  ...fold({ claim: null, attempts: [], handbacks: [], parks: [], revision: null }, "cogwork"),
+  ...fold({ claim: null, attempts: [], handbacks: [], parks: [], revision: null }, "cogwork", 0),
   barrierAtMillis,
 });
 

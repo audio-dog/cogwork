@@ -178,6 +178,7 @@ const testLayer = (handbacks: ReadonlyArray<HandbackRecord>) =>
               revision: { observed: "r1", processed: null },
             },
             "cogwork",
+            0,
           ),
         ),
     }),

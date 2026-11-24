@@ -9,6 +9,7 @@ import {
   Principal,
 } from "@cogwork/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";
@@ -71,6 +72,7 @@ const makeCoordination = () =>
         Ref.get(handbacks),
         Ref.get(observed),
         Ref.get(activeClaim),
+        Clock.currentTimeMillis,
       ]).pipe(
         Effect.map(
           ([
@@ -80,6 +82,7 @@ const makeCoordination = () =>
             currentHandbacks,
             currentObserved,
             currentClaim,
+            nowMillis,
           ]) =>
             fold(
               {
@@ -90,6 +93,7 @@ const makeCoordination = () =>
                 revision: { observed: currentObserved, processed: currentProcessed },
               },
               "cogwork",
+              nowMillis,
             ),
         ),
       );

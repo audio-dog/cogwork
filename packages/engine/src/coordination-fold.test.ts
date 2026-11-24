@@ -62,7 +62,7 @@ describe("coordination fold", () => {
 
   counterCases.forEach(({ name, attempts, handbacks, expected }) => {
     it(name, () => {
-      assert.deepStrictEqual(fold(ledger(attempts, handbacks), "cogwork").counters(operation), expected);
+      assert.deepStrictEqual(fold(ledger(attempts, handbacks), "cogwork", 0).counters(operation), expected);
     });
   });
 
@@ -77,24 +77,79 @@ describe("coordination fold", () => {
       revision: null,
     };
 
-    assert.strictEqual(fold({ ...parked, claim }, "cogwork").gate(operation)._tag, "Claimed");
+    assert.strictEqual(fold({ ...parked, claim }, "cogwork", 0).gate(operation)._tag, "Claimed");
     assert.strictEqual(
-      fold({ ...parked, revision: { observed: "2", processed: "2" } }, "cogwork").gate(operation)._tag,
+      fold({ ...parked, revision: { observed: "2", processed: "2" } }, "cogwork", 0).gate(operation)._tag,
       "Quiet",
     );
-    assert.strictEqual(fold(parked, "cogwork").gate(operation)._tag, "Parked");
-    assert.strictEqual(fold(parked, "cogwork").gate(operation, "2")._tag, "Parked");
-    assert.deepStrictEqual(fold(ledger([attempt("failed", 1, maxLineageHops)]), "cogwork").gate(operation), {
-      _tag: "Parked",
-      reason: { _tag: "HopCap" },
-    });
+    assert.strictEqual(fold(parked, "cogwork", 0).gate(operation)._tag, "Parked");
+    assert.strictEqual(fold(parked, "cogwork", 0).gate(operation, "2")._tag, "Parked");
+    assert.deepStrictEqual(
+      fold(ledger([attempt("failed", 1, maxLineageHops)]), "cogwork", 0).gate(operation),
+      {
+        _tag: "Parked",
+        reason: { _tag: "HopCap" },
+      },
+    );
     assert.strictEqual(
-      fold(ledger([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]), "cogwork").gate(
+      fold(ledger([attempt("failed", 1), attempt("failed", 2), attempt("failed", 3)]), "cogwork", 0).gate(
         operation,
       )._tag,
       "Open",
     );
-    assert.strictEqual(fold(ledger([]), "cogwork").gate(operation)._tag, "Open");
+    assert.strictEqual(fold(ledger([]), "cogwork", 0).gate(operation)._tag, "Open");
+  });
+
+  const retryDelayCases = [
+    {
+      name: "waits one minute after the first failure",
+      attempts: [attempt("failed", 1)],
+      handbacks: [],
+      cases: [
+        { nowMillis: 1, gate: { _tag: "AwaitingRetry", retryAtMillis: 60_001 } },
+        { nowMillis: 60_000, gate: { _tag: "AwaitingRetry", retryAtMillis: 60_001 } },
+        { nowMillis: 60_001, gate: { _tag: "Open" } },
+      ],
+    },
+    {
+      name: "waits two minutes after the second failure",
+      attempts: [attempt("failed", 1), attempt("failed", 2)],
+      handbacks: [],
+      cases: [
+        { nowMillis: 60_001, gate: { _tag: "AwaitingRetry", retryAtMillis: 120_002 } },
+        { nowMillis: 120_002, gate: { _tag: "Open" } },
+      ],
+    },
+    {
+      name: "clears the delay after a later success",
+      attempts: [attempt("failed", 1), attempt("succeeded", 2)],
+      handbacks: [],
+      cases: [{ nowMillis: 2, gate: { _tag: "Open" } }],
+    },
+    {
+      name: "clears the delay at a handback",
+      attempts: [attempt("failed", 1)],
+      handbacks: [{ by: "person", atMillis: 2, note: null }],
+      cases: [{ nowMillis: 2, gate: { _tag: "Open" } }],
+    },
+  ] as const;
+
+  retryDelayCases.forEach(({ name, attempts, handbacks, cases }) => {
+    it(name, () => {
+      cases.forEach(({ nowMillis, gate }) => {
+        assert.deepStrictEqual(fold(ledger(attempts, handbacks), "cogwork", nowMillis).gate(operation), gate);
+      });
+    });
+  });
+
+  it("delays the failed revision after an earlier revision was processed", () => {
+    const view = fold(
+      { ...ledger([attempt("failed", 1)]), revision: { observed: "2", processed: "1" } },
+      "cogwork",
+      1,
+    );
+
+    assert.deepStrictEqual(view.gate(operation, "2"), { _tag: "AwaitingRetry", retryAtMillis: 60_001 });
   });
 
   const revisionRetryCases = [
@@ -116,6 +171,7 @@ describe("coordination fold", () => {
           revision: { observed: "2", processed: "1" },
         },
         "cogwork",
+        0,
       );
 
       assert.strictEqual(view.gate(operation, "1")._tag, "Parked");
@@ -140,6 +196,7 @@ describe("coordination fold", () => {
         revision: null,
       },
       "cogwork",
+      0,
     );
 
     assert.strictEqual(view.gate(operation, "1")._tag, "Parked");
@@ -206,6 +263,7 @@ describe("coordination fold", () => {
           parks: [{ reason, operation, atMillis: 4 }, ...otherParks],
         },
         "cogwork",
+        0,
       );
 
       assert.strictEqual(view.failedAttemptAtMillis(key), expected);
