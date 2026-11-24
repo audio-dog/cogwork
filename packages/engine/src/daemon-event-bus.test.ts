@@ -14,9 +14,6 @@ const stats = Schema.decodeSync(SchedulerStats);
 const runId = Schema.decodeSync(RunId);
 const workspace = Schema.decodeSync(WorkspaceId)("example");
 const workItem = Schema.decodeSync(WorkItemId)("#7");
-const droppedEvents = Metric.counter("cogwork_daemon_event_bus_dropped_events_total", {
-  description: "Daemon events evicted before every subscriber consumed them.",
-});
 
 const schedulerEvent = (globalInFlight: number) =>
   ({
@@ -34,11 +31,23 @@ const schedulerEvent = (globalInFlight: number) =>
   }) as const;
 
 describe("DaemonEventBus", () => {
+  // Effect registers a metric lazily, so this must read the registry before any other test in this
+  // file touches the counter and registers it for us.
+  it.effect("snapshots a zero drop count before anything is dropped", () =>
+    Effect.gen(function* () {
+      const dropId = DaemonEventBus.droppedEventsMetric.id;
+      assert.isUndefined((yield* Metric.snapshot).find((snapshot) => snapshot.id === dropId));
+      yield* DaemonEventBus.make;
+      const dropped = (yield* Metric.snapshot).find((snapshot) => snapshot.id === dropId);
+      assert.deepStrictEqual(dropped?.state, { count: 0, incremental: false });
+    }),
+  );
+
   it.effect("counts every evicted event and logs only when loss starts", () =>
     Effect.gen(function* () {
       const bus = yield* DaemonEventBus.DaemonEventBus;
       const logs = MutableRef.make<ReadonlyArray<string>>([]);
-      const before = (yield* Metric.value(droppedEvents)).count;
+      const before = (yield* Metric.value(DaemonEventBus.droppedEventsMetric)).count;
       yield* bus.subscribe();
       yield* Effect.forEach(
         Array.from({ length: 1026 }, (_, i) => i),
@@ -51,7 +60,7 @@ describe("DaemonEventBus", () => {
       );
 
       assert.strictEqual(yield* bus.droppedEvents, 2);
-      assert.strictEqual((yield* Metric.value(droppedEvents)).count, before + 2);
+      assert.strictEqual((yield* Metric.value(DaemonEventBus.droppedEventsMetric)).count, before + 2);
       assert.strictEqual(
         logs.current.filter((message) => message.includes("Daemon event bus started dropping events")).length,
         1,
