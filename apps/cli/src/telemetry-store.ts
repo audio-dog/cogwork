@@ -225,7 +225,7 @@ const spanRow = (span: Tracer.Span) => {
 };
 
 class PersistedSpan implements Tracer.Span {
-  readonly _tag: "Span" = "Span";
+  readonly _tag = "Span" as const;
 
   constructor(
     private readonly span: Tracer.Span,

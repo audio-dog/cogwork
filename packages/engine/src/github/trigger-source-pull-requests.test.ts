@@ -35,8 +35,11 @@ describe("GitHub Trigger sources", () => {
         .pipe(Stream.take(2), Stream.runCollect);
 
       assert.deepStrictEqual(
-        [...events].map(({ revision }) => revision),
-        ["checks:head-sha:test:failure", "conflict:head-sha:base-sha"],
+        [...events].map(({ revision, atMillis }) => [revision, atMillis]),
+        [
+          ["checks:head-sha:test:failure", 3_000],
+          ["conflict:head-sha:base-sha", 3_000],
+        ],
       );
       assert.deepStrictEqual(events[0]?.key, {
         _tag: "PullRequest",
