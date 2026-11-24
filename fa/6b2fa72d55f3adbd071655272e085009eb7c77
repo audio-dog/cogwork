@@ -1,0 +1,79 @@
+apps/desktop/src/main/desktop-notifications.test.ts
+  s_3de2e34810ff56::t_46e18ec582b6d7 11-12,14-15,43-47,50-51
+apps/desktop/src/main/engine-supervisor.test.ts
+  s_3de2e34810ff56::t_1a981f161c8b2b 137-138,141,263,289,355-358,547,584
+apps/desktop/src/main/quit.test.ts
+  s_3de2e34810ff56::t_0ccd66ccafbb40 1,7,10,23,40,65
+apps/desktop/src/main/window.test.ts
+  s_3de2e34810ff56::t_f99b9ed46be7b8 1-2,5-7,9,14,17,20,33
+apps/desktop/src/renderer/src/components/provider-picker.test.tsx
+  s_523aa5e880949f::t_d089b46a8e3ccf 76
+apps/desktop/src/renderer/src/components/traits-menu.test.tsx
+  s_523aa5e880949f::t_9676b9723f8946 1-6,51,74,88
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_523aa5e880949f::t_a5ab6b0556d686 13,21,58,80
+apps/desktop/src/renderer/src/features/attention-session.test.tsx
+  s_33e48cc85a29e7::t_2f66237307e5d8 463
+apps/desktop/src/renderer/src/features/run-activity.test.ts
+  s_33e48cc85a29e7::t_1b72cda4f7fb33 243-244
+apps/desktop/src/renderer/src/features/workflow-daemon-provider.test.tsx
+  s_33e48cc85a29e7::t_a6d27719331e25 9,24-26
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_33e48cc85a29e7::t_1ad65a62e41a7c 34
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_33e48cc85a29e7::t_532d6d4c4a5dff 9,104
+oxlint.config.ts
+  s_3de2e34810ff56::t_984f468eb562c3 31-68
+packages/contracts/src/settings.test.ts
+  s_523aa5e880949f::t_387346a04a9e8a 21-28,31-53
+packages/cursor-acp/src/model.test.ts
+  s_523aa5e880949f::t_ada9d770bf7753 108-112
+packages/engine/src/control-store.test.ts
+  s_3de2e34810ff56::t_00810f875e6435 42,554
+packages/engine/src/coordination-fold.test.ts
+  s_523aa5e880949f::t_5134e9786b16ae 63-64
+packages/engine/src/github/client.test.ts
+  s_33e48cc85a29e7::t_62801a8b624afc 115-117,145,798,997
+packages/engine/src/linear/client-credentials.test.ts
+  s_33e48cc85a29e7::t_9581de54a86414 194
+packages/engine/src/linear/oauth.test.ts
+  s_33e48cc85a29e7::t_b6046cc76cc589 201,321
+packages/engine/src/linear/trigger-source.test.ts
+  s_3de2e34810ff56::t_5105d691f5b0f8 76,104
+packages/engine/src/model-catalog.test.ts
+  s_33e48cc85a29e7::t_e2f6536a25094d 149
+packages/engine/src/session-choice.test.ts
+  s_523aa5e880949f::t_db254be7d8eaaf 73,77-78,81,88,92,96,100-101,104,110,114-115,118,124,130,134,138,142-143,147,153,159-160,163,169-170,175,181-182,185,191-192,196,202-203,207,213-214,218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa6b2fa72d55f3adbd071655272e085009eb7c77",
+  "prompts": {},
+  "sessions": {
+    "s_33e48cc85a29e7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aefc395e521a73d87",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_3de2e34810ff56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "336d8884-4607-46d4-82c8-97d66d3da869",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_523aa5e880949f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-aa5d416beb444583d",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
