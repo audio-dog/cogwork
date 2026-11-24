@@ -134,9 +134,11 @@ interface TestSupervisorOptions extends EngineSupervisorOptions {
   readonly spawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
 }
 
+type SpawnChild = (command: ChildProcess.Command) => FakeChild;
+
 const options = (
   overrides: Partial<EngineSupervisorOptions> & {
-    readonly spawn: (command: ChildProcess.Command) => FakeChild;
+    readonly spawn: SpawnChild;
   },
 ): TestSupervisorOptions => {
   const { spawn, ...supervisor } = overrides;
@@ -258,7 +260,7 @@ describe("EngineSupervisor", () => {
   });
 
   it("adopts an existing daemon without spawning", async () => {
-    const spawn = vi.fn(() => new FakeChild());
+    const spawn = vi.fn<SpawnChild>(() => new FakeChild());
 
     await withSupervisor(
       options({ probe: () => Effect.succeed(true), spawn }),
@@ -284,7 +286,7 @@ describe("EngineSupervisor", () => {
   it("spawns the resolved command through ChildProcessSpawner", async () => {
     const child = new FakeChild();
     const environment = { PATH: "/home/test/.local/bin:/usr/bin", KEEP: "yes" };
-    const spawn = vi.fn((_spawned: ChildProcess.Command) => child);
+    const spawn = vi.fn<SpawnChild>(() => child);
 
     await withSupervisor(options({ environment, spawn }), async (runtime, supervisor) => {
       await runtime.runPromise(supervisor.start);
@@ -345,16 +347,15 @@ describe("EngineSupervisor", () => {
           directory: "/diagnostics",
         }),
       );
-      const failed = expect(capture).rejects.toMatchObject({
-        operation: "capture daemon profile",
-        cause: "Engine closed during profile capture (code 137)",
-      });
       await yieldUntil(runtime, () => child.messages.length === 1);
       child.stdout.end();
       child.stderr.end();
       child.close(137);
 
-      await failed;
+      await expect(capture).rejects.toMatchObject({
+        operation: "capture daemon profile",
+        cause: "Engine closed during profile capture (code 137)",
+      });
     });
   });
 
@@ -543,7 +544,7 @@ describe("EngineSupervisor", () => {
 
   it("restarts unexpected exits up to the schedule budget", async () => {
     const children: FakeChild[] = [];
-    const spawn = vi.fn(() => {
+    const spawn = vi.fn<SpawnChild>(() => {
       const child = new FakeChild();
       children.push(child);
       return child;
@@ -580,7 +581,7 @@ describe("EngineSupervisor", () => {
   });
 
   it("leaves an adopted engine running on stop", async () => {
-    const spawn = vi.fn(() => new FakeChild());
+    const spawn = vi.fn<SpawnChild>(() => new FakeChild());
 
     await withSupervisor(
       options({ probe: () => Effect.succeed(true), spawn }),

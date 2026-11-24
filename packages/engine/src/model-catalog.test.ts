@@ -146,7 +146,7 @@ const withFetch =
 
 describe("ModelCatalog httpSource", () => {
   it.effect("serves the stale catalog when a refresh times out", () => {
-    const onAbort = vi.fn();
+    const onAbort = vi.fn<() => void>();
     const fetchStub = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(jsonResponse(api))

@@ -5,10 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Effect, Layer, ManagedRuntime, SubscriptionRef } from "effect";
+import type { WebContents } from "electron";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { type EngineStatus, IpcChannel, type WindowPreferences } from "../shared/ipc";
+import type { DesktopNotifications } from "./desktop-notifications";
 import { EngineSupervisor, type EngineSupervisorService } from "./engine-supervisor";
+import type { mainLogger, rendererLogger } from "./logger";
+import type { WindowPreferencesStore } from "./window-preferences";
 
 type IpcHandler = (...args: readonly unknown[]) => unknown;
 
@@ -25,15 +29,15 @@ vi.mock("electron", () => ({
 }));
 
 vi.mock("./logger", () => ({
-  mainLogger: { warn: vi.fn() },
-  rendererLogger: { error: vi.fn() },
+  mainLogger: { warn: vi.fn<typeof mainLogger.warn>() },
+  rendererLogger: { error: vi.fn<typeof rendererLogger.error>() },
 }));
 
-import { registerIpc } from "./ipc";
+import { type IpcDeps, registerIpc } from "./ipc";
 
 class FakeSender extends EventEmitter {
   readonly id = 1;
-  readonly send = vi.fn();
+  readonly send = vi.fn<WebContents["send"]>();
 
   isDestroyed() {
     return false;
@@ -60,16 +64,16 @@ const captureMainProfile = () => Effect.succeed("/diagnostics/main.heapsnapshot"
 const makeRuntime = () => ManagedRuntime.make(Layer.succeed(EngineSupervisor, supervisor));
 
 const notifications = {
-  enable: vi.fn(async () => ({ _tag: "ready" as const })),
-  sync: vi.fn(async () => ({ _tag: "ready" as const })),
-  getStatus: vi.fn(() => ({ _tag: "inactive" as const })),
-  takeNavigation: vi.fn(() => null),
-  openSettings: vi.fn(async () => true),
-  openUrl: vi.fn(),
-  closeAll: vi.fn(),
+  enable: vi.fn<DesktopNotifications["enable"]>(async () => ({ _tag: "ready" })),
+  sync: vi.fn<DesktopNotifications["sync"]>(async () => ({ _tag: "ready" })),
+  getStatus: vi.fn<DesktopNotifications["getStatus"]>(() => ({ _tag: "inactive" })),
+  takeNavigation: vi.fn<DesktopNotifications["takeNavigation"]>(() => null),
+  openSettings: vi.fn<DesktopNotifications["openSettings"]>(async () => true),
+  openUrl: vi.fn<DesktopNotifications["openUrl"]>(),
+  closeAll: vi.fn<DesktopNotifications["closeAll"]>(),
 };
 
-const chooseFolder = vi.fn(async () => "/Users/taylor/sites/cogwork");
+const chooseFolder = vi.fn<IpcDeps["chooseFolder"]>(async () => "/Users/taylor/sites/cogwork");
 
 const deps = (socketPath: string, runtime: ReturnType<typeof makeRuntime>) => ({
   socketPath,
@@ -303,7 +307,7 @@ it("interrupts a pending connection when the renderer is destroyed", async () =>
     expect(sender.listenerCount("destroyed")).toBe(1);
     sender.emit("destroyed");
 
-    await expect(pending).rejects.toThrow();
+    await expect(pending).rejects.toThrow("All fibers interrupted without error");
   } finally {
     await runtime.dispose();
     rmSync(dir, { recursive: true, force: true });
@@ -349,7 +353,7 @@ it("persists profiling through the shared desktop preferences", async () => {
     status: Effect.runSync(SubscriptionRef.make<EngineStatus>("running")),
   };
   const runtime = ManagedRuntime.make(Layer.succeed(EngineSupervisor, ownedSupervisor));
-  const set = vi.fn((preferences: { readonly profiling?: boolean }) => ({
+  const set = vi.fn<WindowPreferencesStore["set"]>((preferences) => ({
     closeToHide: true,
     profiling: preferences.profiling ?? false,
   }));
@@ -387,7 +391,7 @@ it("restores profiling preferences when the engine restart fails", async () => {
   const cache: { current: WindowPreferences } = {
     current: { closeToHide: true, profiling: false },
   };
-  const set = vi.fn((preferences: Partial<WindowPreferences>) => {
+  const set = vi.fn<WindowPreferencesStore["set"]>((preferences) => {
     cache.current = { ...cache.current, ...preferences };
     return cache.current;
   });
@@ -428,8 +432,8 @@ it("rejects profiling for an adopted standalone daemon", async () => {
 });
 
 it("leaves an adopted standalone daemon alone when profiling is disabled", async () => {
-  const start = vi.fn();
-  const stop = vi.fn();
+  const start = vi.fn<() => void>();
+  const stop = vi.fn<() => void>();
   const adoptedSupervisor = {
     ...supervisor,
     status: Effect.runSync(SubscriptionRef.make<EngineStatus>("adopted")),
@@ -527,7 +531,7 @@ it("allows an immediate retry after a rejected profile capture", async () => {
   const runtime = makeRuntime();
   const sender = new FakeSender();
   const getPreferences = vi
-    .fn()
+    .fn<WindowPreferencesStore["get"]>()
     .mockReturnValueOnce({ closeToHide: true, profiling: false })
     .mockReturnValue({ closeToHide: true, profiling: true });
 

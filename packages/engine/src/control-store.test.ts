@@ -39,7 +39,7 @@ import {
   retainRunEvents,
 } from "./control-store";
 
-const pushSchemaMock = vi.hoisted(() => vi.fn());
+const pushSchemaMock = vi.hoisted(() => vi.fn<typeof import("drizzle-kit/payload/sqlite").pushSchema>());
 
 vi.mock("drizzle-kit/payload/sqlite", () =>
   vi
@@ -551,7 +551,7 @@ layer(NodeServices.layer)((it) => {
          INSERT INTO extra_data VALUES ('kept');`,
       );
       pushSchemaMock.mockResolvedValueOnce({
-        get sqlStatements() {
+        get sqlStatements(): string[] {
           throw new Error("unexpected preflight defect");
         },
         hints: [],

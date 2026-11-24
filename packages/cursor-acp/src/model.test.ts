@@ -105,10 +105,11 @@ describe("createCursorModelCatalog", () => {
 
 describe("cursorNativeModelId", () => {
   it("translates every generated model with descriptor defaults", () => {
-    cursorCatalog.models.forEach((model) => {
-      const result = cursorNativeModelId(cursorCatalog, model.value, {});
-      if (!CursorNativeModelIdResult.$is("Success")(result)) assert.fail(result.error);
-    });
+    const failures = cursorCatalog.models
+      .map((model) => cursorNativeModelId(cursorCatalog, model.value, {}))
+      .filter(CursorNativeModelIdResult.$is("Failure"));
+
+    assert.deepStrictEqual(failures, []);
   });
 
   it("round-trips every decomposed raw id through base model selections", () => {

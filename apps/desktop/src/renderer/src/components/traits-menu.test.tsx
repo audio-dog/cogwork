@@ -1,4 +1,9 @@
-import { type HarnessCatalogChoice, HarnessName, HarnessOptionCatalog } from "@cogwork/contracts";
+import {
+  type HarnessCatalogChoice,
+  HarnessName,
+  HarnessOptionCatalog,
+  type ModelOptionSelections,
+} from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -43,7 +48,7 @@ describe("TraitsMenu", () => {
     const markup = renderToStaticMarkup(
       <TraitsMenu
         state={{ catalog, model, options }}
-        actions={{ select: vi.fn() }}
+        actions={{ select: vi.fn<(options: ModelOptionSelections) => void>() }}
         meta={{ disabled: false }}
       />,
     );
@@ -66,7 +71,7 @@ describe("TraitsMenu", () => {
     const markup = renderToStaticMarkup(
       <TraitsMenu
         state={{ catalog, model, options: staleOptions }}
-        actions={{ select: vi.fn() }}
+        actions={{ select: vi.fn<(options: ModelOptionSelections) => void>() }}
         meta={{ disabled: false }}
       />,
     );
@@ -80,7 +85,7 @@ describe("TraitsMenu", () => {
     const markup = renderToStaticMarkup(
       <TraitsMenu
         state={{ catalog, model: { value: "plain", label: "Plain" }, options: [] }}
-        actions={{ select: vi.fn() }}
+        actions={{ select: vi.fn<(options: ModelOptionSelections) => void>() }}
         meta={{ disabled: false }}
       />,
     );

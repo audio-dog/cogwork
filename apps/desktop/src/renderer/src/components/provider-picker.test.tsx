@@ -73,7 +73,7 @@ describe("ProviderPicker", () => {
             stale: false,
             disabledHarness: false,
           },
-          actions: { pick: vi.fn() },
+          actions: { pick: vi.fn<(harness: HarnessName, model: string) => void>() },
           meta: { disabled: false },
         }}
       >

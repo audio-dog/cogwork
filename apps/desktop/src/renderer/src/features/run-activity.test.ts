@@ -240,8 +240,8 @@ describe("foldTranscript", () => {
 
   it("pulls each published transcript snapshot once across subscribers", () => {
     const pump = makeTranscriptPump();
-    const pull = vi.fn();
-    const refresh = vi.fn();
+    const pull = vi.fn<() => void>();
+    const refresh = vi.fn<() => void>();
     const first = AsyncResult.success({ done: false, replaying: true, entries: [] });
     const second = AsyncResult.success({ done: false, replaying: true, entries: [] });
 

@@ -198,7 +198,7 @@ describe("linear oauth helpers", () => {
   });
 
   it.effect("fails a hanging refresh at the token endpoint deadline", () => {
-    const onAbort = vi.fn();
+    const onAbort = vi.fn<() => void>();
     const fetch: typeof globalThis.fetch = (_input, init) => {
       init?.signal?.addEventListener("abort", onAbort);
       return Promise.withResolvers<Response>().promise;
@@ -318,7 +318,7 @@ describe("linear oauth helpers", () => {
 
   it.effect("fails a hanging token exchange at the token endpoint deadline", () =>
     Effect.gen(function* () {
-      const onAbort = vi.fn();
+      const onAbort = vi.fn<() => void>();
       const requestFiber = yield* Effect.forkChild(
         Effect.flip(
           exchangeToken(exchangeParams).pipe(

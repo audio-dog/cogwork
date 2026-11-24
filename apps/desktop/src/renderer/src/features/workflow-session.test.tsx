@@ -31,7 +31,7 @@ import { type ListWorkflowOptions, WorkingCopiesProvider } from "./working-copy-
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
-const navigate = vi.hoisted(() => vi.fn(async (_destination: unknown) => undefined));
+const navigate = vi.hoisted(() => vi.fn<(destination: unknown) => Promise<void>>(async () => undefined));
 
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),

@@ -8,9 +8,11 @@ import {
   notificationIdFromActivation,
 } from "./desktop-notifications";
 
+type NotificationDeps = Parameters<typeof createDesktopNotifications>[0];
+
 class FakeNotification extends EventEmitter implements DesktopNotificationHandle {
-  readonly close = vi.fn();
-  readonly show = vi.fn();
+  readonly close = vi.fn<DesktopNotificationHandle["close"]>();
+  readonly show = vi.fn<DesktopNotificationHandle["show"]>();
 
   constructor(
     readonly id: string,
@@ -38,15 +40,15 @@ const setup = (history: readonly FakeNotification[] = [], launchIdentifier: stri
       created.push(notification);
       return notification;
     },
-    getHistory: vi.fn(async () => history),
-    isSupported: vi.fn(() => true),
-    remove: vi.fn(),
-    registerActivation: vi.fn(),
-    showWindow: vi.fn(),
+    getHistory: vi.fn<NotificationDeps["getHistory"]>(async () => history),
+    isSupported: vi.fn<NotificationDeps["isSupported"]>(() => true),
+    remove: vi.fn<NotificationDeps["remove"]>(),
+    registerActivation: vi.fn<NotificationDeps["registerActivation"]>(),
+    showWindow: vi.fn<NotificationDeps["showWindow"]>(),
     navigate: (id: string) => navigated.push(id),
     publishStatus: (status: { readonly _tag: string }) => statuses.push(status._tag),
-    logFailure: vi.fn(),
-    openSettings: vi.fn(async () => true),
+    logFailure: vi.fn<NotificationDeps["logFailure"]>(),
+    openSettings: vi.fn<NotificationDeps["openSettings"]>(async () => true),
     launchIdentifier,
   };
   return {

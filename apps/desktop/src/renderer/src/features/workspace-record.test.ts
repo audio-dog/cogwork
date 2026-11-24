@@ -6,7 +6,7 @@ import {
   WorkspaceState,
 } from "@cogwork/contracts";
 import * as Schema from "effect/Schema";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 
 import {
   draftAfterSubmission,
@@ -101,7 +101,7 @@ describe("workspace record draft", () => {
 
     const draft = seededDraft(state);
     const update = workspaceUpdateFromDraft(draft);
-    if (!WorkspaceState.guards.Registered(state)) return expect.fail("expected record");
+    assert(WorkspaceState.guards.Registered(state), "expected record");
     const { checkoutPath: _checkoutPath, ...expected } = state.record;
 
     expect(update).toEqual(expected);

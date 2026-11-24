@@ -6,6 +6,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CogworkBridge } from "../../../shared/ipc";
 import { Configuration } from "../components/configuration-provider";
 import {
   createWorkflowAtom,
@@ -20,7 +21,9 @@ import { DaemonWorkflowProvider, useWorkflowSession } from "./workflow-session";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
-const enableNotifications = vi.hoisted(() => vi.fn(async () => ({ _tag: "ready" as const })));
+const enableNotifications = vi.hoisted(() =>
+  vi.fn<CogworkBridge["notifications"]["enable"]>(async () => ({ _tag: "ready" })),
+);
 
 vi.mock("./desktop-notifications", () => ({ DesktopNotificationCoordinator: () => null }));
 

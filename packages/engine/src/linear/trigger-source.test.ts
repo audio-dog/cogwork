@@ -73,7 +73,7 @@ const observeOpenIssuesSince = vi.fn<LinearClientService["observeOpenIssuesSince
   ]),
 );
 
-const readTriggerProse = vi.fn(() =>
+const readTriggerProse = vi.fn<LinearClientService["readTriggerProse"]>(() =>
   Effect.succeed({
     body: "Body",
     comments: [
@@ -101,7 +101,7 @@ const readTriggerProse = vi.fn(() =>
     ],
   }),
 );
-const readProse = vi.fn(() => readTriggerProse());
+const readProse = vi.fn<LinearClientService["readProse"]>((ref, issueId) => readTriggerProse(ref, issueId));
 const targetTriggerOf = (event: object) => {
   if (!("target" in event) || typeof event.target !== "object" || event.target === null) return undefined;
   return "trigger" in event.target ? event.target.trigger : undefined;

@@ -112,9 +112,9 @@ const withHttpClient =
     );
 
 const delayedJsonClient = (bodyOf: (request: HttpClientRequest.HttpClientRequest) => unknown) => {
-  const requests = vi.fn((request: HttpClientRequest.HttpClientRequest) =>
-    HttpClientResponse.fromWeb(request, jsonResponse(bodyOf(request))),
-  );
+  const requests = vi.fn<
+    (request: HttpClientRequest.HttpClientRequest) => HttpClientResponse.HttpClientResponse
+  >((request) => HttpClientResponse.fromWeb(request, jsonResponse(bodyOf(request))));
   const client = HttpClient.make((request) =>
     Effect.sleep("20 seconds").pipe(Effect.map(() => requests(request))),
   );
@@ -142,7 +142,7 @@ const transientWrite = (
   firstStatus: number,
   write: (client: GitHubClientService) => Effect.Effect<void, IssueTrackerError>,
 ) => {
-  const status = vi.fn().mockReturnValueOnce(firstStatus).mockReturnValue(201);
+  const status = vi.fn<() => number>().mockReturnValueOnce(firstStatus).mockReturnValue(201);
   const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, status())));
   return Effect.gen(function* () {
     const client = yield* GitHubClient;
@@ -795,7 +795,7 @@ describe("GitHub client", () => {
   });
 
   it.effect("does not retry a review when the response is lost", () => {
-    const status = vi.fn().mockReturnValueOnce(500).mockReturnValue(201);
+    const status = vi.fn<() => number>().mockReturnValueOnce(500).mockReturnValue(201);
     const fetch = vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({}, status())));
 
     return Effect.gen(function* () {
@@ -994,7 +994,7 @@ describe("GitHub client", () => {
   });
 
   it.effect("reports an ambiguous coordination comment without replaying it", () => {
-    const onAbort = vi.fn();
+    const onAbort = vi.fn<() => void>();
     const fetch = vi.fn<typeof globalThis.fetch>((_input, init) => {
       init?.signal?.addEventListener("abort", onAbort);
       return Promise.withResolvers<Response>().promise;
