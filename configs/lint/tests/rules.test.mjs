@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -327,10 +327,8 @@ test("every message an Oxlint plugin rule registers belongs to a tested rule", (
 });
 
 for (const ruleCase of oxlintRuleCases) {
-  const diagnosticsFor = (example) =>
-    oxlintRun.diagnosticsByFile.get(
-      path.join(fixtureRoot, ruleCase.name, `${example}.${ruleCase.extension}`),
-    ) ?? [];
+  const fixturePath = (example) => path.join(fixtureRoot, ruleCase.name, `${example}.${ruleCase.extension}`);
+  const diagnosticsFor = (example) => oxlintRun.diagnosticsByFile.get(fixturePath(example)) ?? [];
 
   test(`${ruleCase.name} catches its prohibited pattern`, () => {
     const reported = diagnosticsFor("invalid-example").filter(
@@ -343,6 +341,7 @@ for (const ruleCase of oxlintRuleCases) {
   });
 
   test(`${ruleCase.name} allows its supported alternative`, () => {
+    assert.ok(existsSync(fixturePath("valid-example")));
     assert.deepEqual(diagnosticsFor("valid-example").filter(isPluginDiagnostic), [], oxlintRun.output);
   });
 }

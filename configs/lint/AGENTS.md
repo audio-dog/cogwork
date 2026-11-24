@@ -6,7 +6,3 @@ After changing a GritQL rule, an Oxlint plugin rule in `oxlint-plugin/`, their f
 ```sh
 pnpm --filter @cogwork/lint-config test:rules
 ```
-
-An Oxlint plugin rule is a `defineRule` from `@oxlint/plugins` in `oxlint-plugin/rules/`. Register it
-in `oxlint-plugin/index.ts`, enable it as `cogwork/<rule>` in `oxlint.config.ts`, put each report
-message in `meta.messages`, and add a case and fixtures to `tests/rules.test.mjs`.

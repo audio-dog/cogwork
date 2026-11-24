@@ -1,6 +1,6 @@
 import { defineRule, type ESTree } from "@oxlint/plugins";
 
-const testFile = /\.test\.tsx?$/;
+const testFilePattern = /\.test\.tsx?$/;
 
 export default defineRule({
   meta: {
@@ -11,7 +11,7 @@ export default defineRule({
     },
   },
   create(context) {
-    if (!testFile.test(context.filename)) {
+    if (!testFilePattern.test(context.filename)) {
       return {};
     }
     const report = (node: ESTree.ModuleDeclaration) => context.report({ node, messageId: "exportInTest" });
