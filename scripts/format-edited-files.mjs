@@ -60,17 +60,27 @@ const readPayload = async () => {
   }
 };
 
-const formatFiles = (checkout, files) => {
-  const result = spawnSync(
-    join(checkout, "node_modules", ".bin", "oxfmt"),
-    ["--write", "--disable-nested-config", "--no-error-on-unmatched-pattern", ...files],
-    { cwd: checkout, stdio: "inherit" },
-  );
+const runTool = (checkout, tool, args) => {
+  const result = spawnSync(join(checkout, "node_modules", ".bin", tool), args, {
+    cwd: checkout,
+    stdio: "inherit",
+  });
   if (result.error) {
     console.error(result.error.message);
     return 1;
   }
   return result.status ?? 1;
+};
+
+const tidyFiles = (checkout, files) => {
+  const lintStatus = runTool(checkout, "oxlint", ["--fix", "--no-error-on-unmatched-pattern", ...files]);
+  const formatStatus = runTool(checkout, "oxfmt", [
+    "--write",
+    "--disable-nested-config",
+    "--no-error-on-unmatched-pattern",
+    ...files,
+  ]);
+  return lintStatus || formatStatus;
 };
 
 // The hook runs wherever the harness left the agent, so the checkout comes from this file's own
@@ -84,7 +94,7 @@ const run = async () => {
   const workingDirectory = typeof payload.cwd === "string" ? payload.cwd : process.cwd();
   const files = await eligibleFiles(paths, checkout, workingDirectory);
   if (files.length === 0) return;
-  process.exitCode = formatFiles(checkout, files);
+  process.exitCode = tidyFiles(checkout, files);
 };
 
 if (import.meta.main) await run();

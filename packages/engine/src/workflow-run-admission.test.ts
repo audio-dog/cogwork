@@ -1,4 +1,4 @@
-import { NeedIdentity, WorkflowDocument } from "@cogwork/contracts";
+import { keyOf, NeedIdentity, WorkflowActionPlan, WorkflowDocument } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -11,8 +11,10 @@ import { HarnessError } from "./harness";
 import { RunLedger } from "./run-ledger";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import { Recheck } from "./trigger-source";
+import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { admission, granolaAdmission, siblingGranolaAdmission } from "./workflow-run-admissions-fixtures";
 import {
+  decodeRun,
   document,
   operation,
   siblingWorkflow,
@@ -21,6 +23,23 @@ import {
   workflowServiceWith,
 } from "./workflow-run-documents-fixtures";
 import { requirements, testProgram } from "./workflow-run-fixtures";
+
+const waitingRecheck = Recheck.Waiting({ reason: "#1 fails Issue is not blocked" });
+const pendingPlan = WorkflowActionPlan.make({
+  item: keyOf(admission.event.key),
+  workflow,
+  attempt: decodeRun("pending-plan"),
+  operation,
+  revision: admission.event.revision,
+  createdAtMillis: 1,
+  consumedHandbackAtMillis: 0,
+  digest: "pending-plan",
+  summary: "Pending plan",
+  answers: {},
+  lineage: admission.lineage,
+  handOff: null,
+  steps: [],
+});
 
 describe("WorkflowRun", () => {
   it.effect("waits for every sibling rejection before processing the source revision", () =>
@@ -87,7 +106,7 @@ describe("WorkflowRun", () => {
   it.effect("keeps an admission waiting while its item fails a Trigger filter", () =>
     Effect.gen(function* () {
       const { runner, coordination, observationStore } = yield* testProgram([{}], {
-        recheck: Recheck.Waiting({ reason: "#1 fails Issue is not blocked" }),
+        recheck: waitingRecheck,
       });
       yield* observationStore.putAll([admission]);
 
@@ -97,6 +116,39 @@ describe("WorkflowRun", () => {
       assert.lengthOf(yield* observationStore.admissions, 1);
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
+
+  const readinessCases = [
+    {
+      name: "waiting while its item fails a Trigger filter",
+      recheck: waitingRecheck,
+      pendingPlans: [],
+      waiting: true,
+    },
+    {
+      name: "ready when its item matches its Trigger",
+      recheck: Recheck.Matches(),
+      pendingPlans: [],
+      waiting: false,
+    },
+    {
+      name: "ready when it resumes a pending action plan",
+      recheck: waitingRecheck,
+      pendingPlans: [pendingPlan],
+      waiting: false,
+    },
+  ] as const;
+
+  readinessCases.forEach(({ name, recheck, pendingPlans, waiting }) => {
+    it.effect(`reports an admission as ${name}`, () =>
+      Effect.gen(function* () {
+        const actionPlans = yield* WorkflowActionPlanStore;
+        yield* Effect.forEach(pendingPlans, (plan) => actionPlans.create(plan), { discard: true });
+        const { runner } = yield* testProgram([], { recheck });
+
+        assert.strictEqual(yield* runner.isWaiting(admission), waiting);
+      }).pipe(Effect.provide(requirements), Effect.scoped),
+    );
+  });
 
   it.effect("reports a non-exhausted failure as retryable", () =>
     Effect.gen(function* () {
