@@ -3,8 +3,8 @@ import { vi } from "vitest";
 
 export const navigate = vi.fn(async (_destination: unknown) => undefined);
 
-export const mockedRouter = (original: object) => ({
-  ...original,
+export const withRouterLinks = <Router extends object>(router: Router) => ({
+  ...router,
   Link: ({
     children,
     to,

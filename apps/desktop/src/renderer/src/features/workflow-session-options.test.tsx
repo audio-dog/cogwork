@@ -1,13 +1,12 @@
 // @vitest-environment happy-dom
 
-import type { WorkflowOption } from "@cogwork/contracts";
+import type { WorkflowOption, WorkflowRecord } from "@cogwork/contracts";
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buttonNamed,
   catalog,
-  disposers,
   eventually,
   everyRecord,
   listFrom,
@@ -15,23 +14,82 @@ import {
   mountEditor,
   record,
   transitionRecord,
+  unmountEditors,
 } from "./workflow-session-fixtures";
 import type { ListWorkflowOptions } from "./working-copy-provider";
-
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 vi.mock("@tanstack/react-router", async (importOriginal) =>
-  (await import("./workflow-session-router-fixtures")).mockedRouter(await importOriginal()),
+  (await import("../testing/router-links")).withRouterLinks(
+    await importOriginal<typeof import("@tanstack/react-router")>(),
+  ),
 );
 
-afterEach(async () => {
-  vi.useRealTimers();
-  vi.restoreAllMocks();
-  document.body.replaceChildren();
-  await Promise.all(disposers.splice(0).map((dispose) => dispose()));
-});
+afterEach(unmountEditors);
 
 describe("WorkflowEditor", () => {
+  it("lists same-code problems with distinct identities", async () => {
+    const duplicateLocation = {
+      trigger: null,
+      operation: null,
+      question: null,
+      choice: null,
+      field: "workflow",
+    };
+    const workflow: WorkflowRecord = {
+      ...record,
+      diagnostics: [
+        {
+          code: "no-trigger",
+          class: "incomplete",
+          location: duplicateLocation,
+          message: "Add a trigger",
+        },
+      ],
+      readiness: [
+        {
+          code: "no-trigger",
+          class: "advisory",
+          location: duplicateLocation,
+          message: "No trigger is ready",
+        },
+      ],
+    };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { container, root } = await mountEditor(workflow);
+    const problems = container.querySelector<HTMLButtonElement>('[aria-label="2 problems"]');
+    if (!problems) throw new Error("Problems button did not render");
+    await act(async () => problems.click());
+
+    expect(document.body.textContent).toContain("Add a trigger");
+    expect(document.body.textContent).toContain("No trigger is ready");
+    expect(consoleError.mock.calls.flat().join(" ")).not.toContain("same key");
+    await act(async () => root.unmount());
+  });
+
+  it("blocks Save for an incomplete problem and never for an advisory one", async () => {
+    const location = { trigger: null, operation: null, question: null, choice: null, field: "document" };
+    const advisory: WorkflowRecord = {
+      ...everyRecord,
+      workingRevision: 2,
+      readiness: [
+        { code: "harness-unavailable", class: "advisory", location, message: "Harness codex is unavailable" },
+      ],
+    };
+    const incomplete: WorkflowRecord = {
+      ...advisory,
+      diagnostics: [
+        { code: "no-trigger", class: "incomplete", location, message: "Workflow has no Trigger" },
+      ],
+    };
+    const { container, root, daemon } = await mountEditor(advisory);
+
+    expect(buttonNamed(container, "Save")?.disabled).toBe(false);
+    await daemon((probe) => probe.seed(incomplete));
+    await eventually(() => expect(buttonNamed(container, "Save")?.disabled).toBe(true));
+    await act(async () => root.unmount());
+  });
+
   it("keeps action options with their answer after removing an earlier action", async () => {
     const loadingOptions = Promise.withResolvers<never>();
     const { container, root, daemon } = await mountEditor(transitionRecord, {

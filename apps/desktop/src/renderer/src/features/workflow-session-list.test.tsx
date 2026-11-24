@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { WorkflowEditor } from "../components/workflow-editor";
 import { WorkflowsList } from "../components/workflows-list";
+import { navigate } from "../testing/router-links";
 import { openTestWorkingCopies } from "../testing/working-copies";
 import { importReviewMark } from "./workflow-import-review";
 import { type WorkflowClient, WorkflowProvider, workflowProviderValue } from "./workflow-session";
@@ -16,31 +17,27 @@ import {
   decodeWorkflowId,
   disposers,
   eventually,
-  everyDocument,
   everyRecord,
+  everyDocument,
   mountEditor,
   record,
   sessionClient,
   sessionState,
+  unmountEditors,
   unused,
   workflowDocument,
 } from "./workflow-session-fixtures";
-import { navigate } from "./workflow-session-router-fixtures";
 import { exportWorkflow, importWorkflow } from "./workflow-transfer";
 import { WorkingCopiesProvider } from "./working-copy-provider";
-
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 vi.mock("@tanstack/react-router", async (importOriginal) =>
-  (await import("./workflow-session-router-fixtures")).mockedRouter(await importOriginal()),
+  (await import("../testing/router-links")).withRouterLinks(
+    await importOriginal<typeof import("@tanstack/react-router")>(),
+  ),
 );
 
-afterEach(async () => {
-  vi.useRealTimers();
-  vi.restoreAllMocks();
-  document.body.replaceChildren();
-  await Promise.all(disposers.splice(0).map((dispose) => dispose()));
-});
+afterEach(unmountEditors);
 
 describe("WorkflowEditor", () => {
   it("keeps the list on/off control disabled until the Workflow is published", async () => {

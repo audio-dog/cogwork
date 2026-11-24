@@ -15,6 +15,7 @@ import {
   HarnessNotRegistered,
   IssueTrackerError,
   IssueTrackerPerson,
+  LinearTeam,
   type OperationSettingBatch,
   type PluginFailure,
   type PluginId,
@@ -43,6 +44,7 @@ import { DaemonEventPublisher } from "./event-publisher";
 import { GitHubClient } from "./github/client";
 import { repoTargetFor as githubRepoTargetFor } from "./github/host";
 import { Harness } from "./harness";
+import { connectionCredentialAccount } from "./linear/account";
 import { LinearClient } from "./linear/client";
 import { accountTargetFor as linearAccountTargetFor } from "./linear/host";
 import { PluginManager } from "./plugin";
@@ -140,6 +142,23 @@ export const getIssueTrackerPeople = Effect.fn("Daemon.GetIssueTrackerPeople")(f
   );
   const listed = yield* people(workspace, payload.connection);
   return listed.flatMap((person) => Option.toArray(decodePerson(person)));
+});
+
+const decodeTeam = Schema.decodeUnknownOption(LinearTeam);
+
+export const getLinearTeams = Effect.fn("Daemon.GetLinearTeams")(function* (
+  payload: IssueTrackerReadRequest,
+) {
+  const workspace = yield* registeredWorkspace(payload.workspace);
+  if (connectionSystemOf(payload.connection) !== "linear") {
+    return yield* new IssueTrackerError({
+      reason: "unavailable",
+      message: `Connection ${payload.connection} is not a linear Connection`,
+    });
+  }
+  const account = connectionCredentialAccount(workspace.config.id, payload.connection);
+  const teams = yield* (yield* LinearClient).listTeams({ account });
+  return teams.flatMap((team) => Option.toArray(decodeTeam(team)));
 });
 
 const pluginMembership = (overview: PluginOverview) =>

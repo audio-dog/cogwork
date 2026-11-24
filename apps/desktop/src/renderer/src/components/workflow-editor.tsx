@@ -44,6 +44,7 @@ import { useState } from "react";
 import { documentNodeIds, freshNodeId } from "../features/workflow-defaults";
 import { importReviewMark } from "../features/workflow-import-review";
 import { useWorkflowSession } from "../features/workflow-session";
+import type { PublishRefusal } from "../features/working-copy";
 import { useWorkingCopy, WorkingCopyProvider } from "../features/working-copy-provider";
 import { BufferedInput } from "./buffered-field";
 import {
@@ -128,6 +129,19 @@ function SaveFailure() {
   } = useWorkingCopy();
   if (saveStatus === "saved") return null;
   return <span className="text-xs text-destructive">Not saved</span>;
+}
+
+const publishRefusalText: Record<PublishRefusal, string> = {
+  "not-saved": "Not published. An earlier edit was not saved.",
+  "stale-revision": "Not published. Another edit changed this Workflow. Examine it, then save again.",
+};
+
+function PublishRefusalNote() {
+  const {
+    state: { publishRefusal },
+  } = useWorkingCopy();
+  if (!publishRefusal) return null;
+  return <span className="text-xs text-destructive">{publishRefusalText[publishRefusal]}</span>;
 }
 
 function EnabledSwitch() {
@@ -223,6 +237,7 @@ function EditorHeader() {
           save={name.save}
         />
         <SaveFailure />
+        <PublishRefusalNote />
         <ProblemsButton problems={problems} workflowDocument={workflow.workingCopy} />
         <EnabledSwitch />
         <SaveButton />

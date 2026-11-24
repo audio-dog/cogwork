@@ -55,12 +55,17 @@ import {
   decodeTriggerIssue,
   decodeWorkspaceLabels,
 } from "./client-schemas";
-import { type LinearTeamRef, makeTransport, requireSuccess } from "./client-transport";
+import { type LinearAccountRef, type LinearTeamRef, makeTransport, requireSuccess } from "./client-transport";
 
 export interface RawWorkflowState {
   readonly id: string;
   readonly name: string;
   readonly type: string;
+}
+
+interface RawTeam {
+  readonly key: string;
+  readonly name: string;
 }
 
 export interface RawLabel {
@@ -118,6 +123,23 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
         return [...users.nodes, ...(yield* collect(cursor))];
       });
     return yield* withPaginationDeadline("user", collect());
+  });
+
+  const listTeams = Effect.fn("linear.listTeams")(function* (ref: LinearAccountRef) {
+    const collect: (after?: string | null) => Effect.Effect<ReadonlyArray<RawTeam>, IssueTrackerError> =
+      Effect.fn("linear.collectTeamPages")(function* (after = null) {
+        const page = yield* call(ref, (sdk) =>
+          sdk.teams({ first: 250, after }).then((teams) => ({
+            nodes: teams.nodes.map(({ key, name }) => ({ key, name })),
+            hasNextPage: teams.pageInfo.hasNextPage,
+            endCursor: teams.pageInfo.endCursor ?? null,
+          })),
+        );
+        if (!page.hasNextPage) return page.nodes;
+        if (page.endCursor === null) return yield* unavailable("Linear team page missing cursor");
+        return [...page.nodes, ...(yield* collect(page.endCursor))];
+      });
+    return yield* withPaginationDeadline("team", collect());
   });
 
   // Team labels and workspace labels both apply to the team's issues.
@@ -330,6 +352,7 @@ const make = Effect.fn("linear.client.make")(function* (credentials: CredentialS
     readTriggerProse,
     listLabels,
     listActiveUsers,
+    listTeams,
     addLabel: (ref: LinearTeamRef, issueId: string, label: string) =>
       Effect.gen(function* () {
         const labelId = yield* ensureLabel(ref, label);

@@ -279,3 +279,10 @@ export const typeInto = (input: HTMLInputElement, text: string) =>
 
 export const buttonNamed = (container: HTMLElement, text: string) =>
   [...container.querySelectorAll("button")].find(({ textContent }) => textContent === text);
+
+export const unmountEditors = async () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  document.body.replaceChildren();
+  await Promise.all(disposers.splice(0).map((dispose) => dispose()));
+};

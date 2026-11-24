@@ -6,7 +6,7 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
-import { getIssueTrackerPeople } from "./commands";
+import { getIssueTrackerPeople, getLinearTeams } from "./commands";
 import { GitHubClient } from "./github/client";
 import { LinearClient } from "./linear/client";
 import type { RegisteredWorkspace } from "./projector";
@@ -26,9 +26,13 @@ const workspaceOf = (name: string, issueTracker: typeof IssueTrackerConfig.Encod
 
 const github = workspaceOf("web", { type: "github" });
 const linear = workspaceOf("app", { type: "linear", teams: ["ENG"] });
+const teamless = workspaceOf("ops", { type: "linear" });
 
 const trackers = Layer.mergeAll(
-  Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [github, linear], failures: [] })),
+  Layer.succeed(
+    WorkspaceRegistry,
+    readOnlyRegistry({ workspaces: [github, linear, teamless], failures: [] }),
+  ),
   Layer.mock(GitHubClient, {
     listAssignees: (repo) =>
       Effect.succeed(repo.connectionId === connectionIdOf("github", "acme") ? ["taylorfsteele"] : []),
@@ -45,6 +49,15 @@ const trackers = Layer.mergeAll(
               },
               { id: "0b6d9c1e-7a2f-4c3d-9e8b-1a2b3c4d5e6f", name: "Ada Lovelace", displayName: "" },
               { id: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d", name: " ", displayName: "" },
+            ]
+          : [],
+      ),
+    listTeams: (ref) =>
+      Effect.succeed(
+        ref.account.connectionId === connectionIdOf("linear", "acme")
+          ? [
+              { key: "PROD", name: "Platform" },
+              { key: "OPS", name: " " },
             ]
           : [],
       ),
@@ -88,6 +101,35 @@ describe("getIssueTrackerPeople", () => {
 
       assert.include(
         Exit.isFailure(exit) ? Cause.pretty(exit.cause) : "listed people",
+        "is not a linear Connection",
+      );
+    }).pipe(Effect.provide(trackers)),
+  );
+});
+
+describe("getLinearTeams", () => {
+  it.effect("offers each team the Connection can see by key and name, with no team configured", () =>
+    Effect.gen(function* () {
+      const teams = yield* getLinearTeams({
+        workspace: teamless.config.id,
+        connection: connectionIdOf("linear", "acme"),
+      });
+
+      assert.deepStrictEqual(teams, [{ key: "PROD", name: "Platform" }]);
+    }).pipe(Effect.provide(trackers)),
+  );
+
+  it.effect("refuses a Connection from another tracker so no credential leaves for the wrong service", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        getLinearTeams({
+          workspace: linear.config.id,
+          connection: connectionIdOf("github", "acme"),
+        }),
+      );
+
+      assert.include(
+        Exit.isFailure(exit) ? Cause.pretty(exit.cause) : "listed teams",
         "is not a linear Connection",
       );
     }).pipe(Effect.provide(trackers)),
