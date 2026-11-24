@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { emptyDraft } from "../features/workspace-record";
+import { type PatchDraft } from "./workspace-record-context";
 import { WorkspaceRecord } from "./workspace-setting-rows";
 import { priorityFieldItems } from "./workspace-setting-tracker-choices";
 
@@ -19,7 +20,7 @@ describe("WorkspaceRecord.SourceControlRows", () => {
       <WorkspaceRecord.Provider
         value={{
           state: { draft: { ...emptyDraft, issueTrackerType: "github" }, connections: [] },
-          actions: { patch: vi.fn() },
+          actions: { patch: vi.fn<PatchDraft>() },
           meta: { disabled: false, workspace: null },
         }}
       >
@@ -56,7 +57,7 @@ describe("WorkspaceRecord.IssueTrackerRows", () => {
               },
               connections: [revoked],
             },
-            actions: { patch: vi.fn() },
+            actions: { patch: vi.fn<PatchDraft>() },
             meta: { disabled: false, workspace: null },
           }}
         >
@@ -78,7 +79,7 @@ describe("WorkspaceRecord.IssueTrackerRows", () => {
         <WorkspaceRecord.Provider
           value={{
             state: { draft: emptyDraft, connections: [] },
-            actions: { patch: vi.fn() },
+            actions: { patch: vi.fn<PatchDraft>() },
             meta: { disabled: false, workspace: null },
           }}
         >

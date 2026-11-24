@@ -460,7 +460,7 @@ describe("AttentionClientProvider", () => {
   });
 
   it("keeps the Attention list visible and points to System Settings when OS delivery fails", async () => {
-    const openSettings = vi.fn();
+    const openSettings = vi.fn<() => void>();
     const { container, root } = await renderAttention({
       snapshot: snapshot(attentionWith({ _tag: "Stuck", summary: "Need a person" }, ["hand-back"], null)),
       client: defaultClient(),

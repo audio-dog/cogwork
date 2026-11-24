@@ -70,154 +70,152 @@ const full = SessionChoice.FreshRecovery({
   prompt: "full",
 });
 
-const expectChoice = (over: Partial<SessionChoiceInputs>, expected: SessionChoice) => {
-  assert.deepStrictEqual(decideSessionChoice(inputs(over)), expected);
-};
+const choose = (over: Partial<SessionChoiceInputs>) => decideSessionChoice(inputs(over));
 
 describe("decideSessionChoice", () => {
   it("starts fresh when recovery no longer points at the branch's latest session", () => {
-    expectChoice(
-      {
+    assert.deepStrictEqual(
+      choose({
         recoverySession: sessionId,
         latestBranchSession: latestBranchSessionId,
-      },
+      }),
       full,
     );
   });
 
   describe("same-harness × resumes-previous × fresh", () => {
     it("continues the previous session with only the continuation prompt", () => {
-      expectChoice({}, continuation);
+      assert.deepStrictEqual(choose({}), continuation);
     });
 
     it("uses only the full prompt when fresh was requested", () => {
-      expectChoice({ fresh: true }, full);
+      assert.deepStrictEqual(choose({ fresh: true }), full);
     });
 
     it("starts fresh when the previous session cannot resume", () => {
-      expectChoice({ session: opaqueSession({ handle: null }) }, full);
+      assert.deepStrictEqual(choose({ session: opaqueSession({ handle: null }) }), full);
     });
 
     it("stays fresh when requested for an unresumable session", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           session: opaqueSession({ handle: null }),
           fresh: true,
-        },
+        }),
         full,
       );
     });
 
     it("uses only the full prompt after a harness switch", () => {
-      expectChoice({ session: opaqueSession({ harness: otherHarness }) }, full);
+      assert.deepStrictEqual(choose({ session: opaqueSession({ harness: otherHarness }) }), full);
     });
 
     it("keeps the harness-switch decision when fresh was also requested", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           session: opaqueSession({ harness: otherHarness }),
           fresh: true,
-        },
+        }),
         full,
       );
     });
 
     it("starts fresh when no previous session exists", () => {
-      expectChoice({ session: null }, full);
+      assert.deepStrictEqual(choose({ session: null }), full);
     });
   });
 
   describe("resume policy", () => {
     it("continues an owned transcript without an opaque handle", () => {
-      expectChoice({ session: ownedSession() }, continuation);
+      assert.deepStrictEqual(choose({ session: ownedSession() }), continuation);
     });
 
     it("starts a new session when an opaque session is stale", () => {
-      expectChoice({ now: 20_000 }, full);
+      assert.deepStrictEqual(choose({ now: 20_000 }), full);
     });
 
     it("starts a new session when an opaque session is over the token limit", () => {
-      expectChoice({ lastRunTotalTokens: 2_000 }, full);
+      assert.deepStrictEqual(choose({ lastRunTotalTokens: 2_000 }), full);
     });
 
     it("does not age out an owned transcript", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           session: ownedSession(),
           now: 20_000,
           lastRunTotalTokens: 2_000,
-        },
+        }),
         continuation,
       );
     });
 
     it("starts a new session after any worktree recreation", () => {
-      expectChoice({ worktreeRecreated: true }, full);
+      assert.deepStrictEqual(choose({ worktreeRecreated: true }), full);
     });
   });
 
   describe("without resume policy", () => {
     it("continues an opaque session before its handle has been captured", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           session: opaqueSession({ handle: null }),
           applyResumePolicy: false,
-        },
+        }),
         continuation,
       );
     });
 
     it("continues despite age, token usage, or a fresh flag", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           applyResumePolicy: false,
           now: 20_000,
           lastRunTotalTokens: 2_000,
           fresh: true,
-        },
+        }),
         continuation,
       );
     });
 
     it("continues across a recreated worktree for runtime-host affinity", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           applyResumePolicy: false,
           worktreeRecreated: true,
-        },
+        }),
         continuation,
       );
     });
 
     it("continues across a recreated worktree for portable affinity", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           applyResumePolicy: false,
           sessionAffinity: "portable",
           worktreeRecreated: true,
-        },
+        }),
         continuation,
       );
     });
 
     it("starts a new session after sandbox lineage is recreated", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           applyResumePolicy: false,
           sessionAffinity: "sandbox-lineage",
           worktreeRecreated: true,
-        },
+        }),
         combined,
       );
     });
 
     it("matches the current fallback when affinity is unavailable", () => {
-      expectChoice(
-        {
+      assert.deepStrictEqual(
+        choose({
           applyResumePolicy: false,
           sessionAffinity: null,
           worktreeRecreated: true,
-        },
+        }),
         continuation,
       );
     });

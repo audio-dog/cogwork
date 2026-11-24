@@ -60,10 +60,8 @@ describe("coordination fold", () => {
     },
   ] as const;
 
-  counterCases.forEach(({ name, attempts, handbacks, expected }) => {
-    it(name, () => {
-      assert.deepStrictEqual(fold(ledger(attempts, handbacks), "cogwork").counters(operation), expected);
-    });
+  it.each(counterCases)("$name", ({ attempts, handbacks, expected }) => {
+    assert.deepStrictEqual(fold(ledger(attempts, handbacks), "cogwork").counters(operation), expected);
   });
 
   it("prioritizes claimed, quiet, parked, then open gates", () => {

@@ -14,7 +14,7 @@ import {
   type ModelOptionState,
   providerPickerCatalogs,
 } from "../features/operation-settings";
-import { ProviderPicker } from "./provider-picker";
+import { ProviderPicker, type ProviderPickerValue } from "./provider-picker";
 
 const harness = Schema.decodeSync(HarnessName)("codex");
 const model = {
@@ -73,7 +73,7 @@ describe("ProviderPicker", () => {
             stale: false,
             disabledHarness: false,
           },
-          actions: { pick: vi.fn() },
+          actions: { pick: vi.fn<ProviderPickerValue["actions"]["pick"]>() },
           meta: { disabled: false },
         }}
       >

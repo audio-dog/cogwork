@@ -6,9 +6,9 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import { vi } from "vitest";
+import { type Mock, vi } from "vitest";
 
-import { GitHubClient } from "./client";
+import { GitHubClient, type GitHubClientService } from "./client";
 import { makeGitHubPullRequestTriggerSource } from "./pull-request-trigger-source";
 import {
   pullClientLayer,
@@ -21,6 +21,8 @@ import {
   workflow,
   workspaceId,
 } from "./trigger-source-fixtures";
+
+type ListCheckRuns = GitHubClientService["listCheckRuns"];
 
 describe("GitHub Trigger sources", () => {
   it.effect("keys pull conditions by head and base revisions", () =>
@@ -76,12 +78,10 @@ describe("GitHub Trigger sources", () => {
     "reads changed files only for a pull that emits an event and reads each pull once per poll",
     () => {
       const quietPull = { ...trustedPull, number: 12, headSha: "quiet-sha" };
-      const getPull = vi.fn((_target: unknown, number: number) =>
+      const getPull = vi.fn<GitHubClientService["getPull"]>((_target, number) =>
         Effect.succeed(pullDetail(number, "clean")),
       );
-      const listPullFiles = vi.fn((_target: unknown, _baseSha: string, _headSha: string) =>
-        Effect.succeed([]),
-      );
+      const listPullFiles = vi.fn<GitHubClientService["listPullFiles"]>(() => Effect.succeed([]));
 
       return Effect.gen(function* () {
         const client = yield* GitHubClient;
@@ -160,7 +160,7 @@ describe("GitHub Trigger sources", () => {
   );
 
   it.effect("freezes the log excerpt of each failed GitHub Actions job in pull request Work Context", () => {
-    const getActionsJobLogExcerpt = vi.fn((_target: unknown, jobId: number) =>
+    const getActionsJobLogExcerpt = vi.fn<GitHubClientService["getActionsJobLogExcerpt"]>((_target, jobId) =>
       jobId === 801
         ? Effect.succeed(" FAIL  src/index.test.ts > adds\nAssertionError: expected 3 to equal 4")
         : Effect.fail(new IssueTrackerError({ reason: "unavailable", message: "log read failed" })),
@@ -256,7 +256,7 @@ describe("GitHub Trigger sources", () => {
   });
 
   it.effect("polls pull conditions when the pull watermark does not move", () => {
-    const listCheckRuns = vi.fn((_target: unknown, sha: string) =>
+    const listCheckRuns: Mock<ListCheckRuns> = vi.fn<ListCheckRuns>((_target, sha) =>
       Effect.succeed([
         {
           name: "test",

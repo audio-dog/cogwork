@@ -1,13 +1,13 @@
-import type { Event } from "electron";
+import type { App, Event } from "electron";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const electron = vi.hoisted(() => {
   const callbacks: { willQuit?: (event: Event) => void } = {};
   const app = {
-    on: vi.fn((_event: "will-quit", handler: (event: Event) => void) => {
+    on: vi.fn<(event: "will-quit", handler: (event: Event) => void) => void>((_event, handler) => {
       callbacks.willQuit = handler;
     }),
-    quit: vi.fn(),
+    quit: vi.fn<App["quit"]>(),
   };
   return { app, callbacks };
 });
@@ -20,7 +20,7 @@ import { installShutdownBeforeQuit } from "./quit";
 
 const makeApp = () => {
   const requestQuit = () => {
-    const event: Event = { preventDefault: vi.fn(), defaultPrevented: false };
+    const event: Event = { preventDefault: vi.fn<Event["preventDefault"]>(), defaultPrevented: false };
     const handler = electron.callbacks.willQuit;
     if (!handler) throw new Error("Quit handler was not installed");
     handler(event);
@@ -37,7 +37,7 @@ beforeEach(() => {
 
 it("waits for one shutdown before permitting quit", async () => {
   const shutdown = Promise.withResolvers<void>();
-  const dispose = vi.fn(() => shutdown.promise);
+  const dispose = vi.fn<() => Promise<void>>(() => shutdown.promise);
   const { app, requestQuit } = makeApp();
   installShutdownBeforeQuit(app, dispose);
 
@@ -62,7 +62,7 @@ it("waits for one shutdown before permitting quit", async () => {
 });
 
 it("resumes quit when shutdown fails", async () => {
-  const dispose = vi.fn(() => Promise.reject(new Error("shutdown failed")));
+  const dispose = vi.fn<() => Promise<void>>(() => Promise.reject(new Error("shutdown failed")));
   const { app, requestQuit } = makeApp();
   installShutdownBeforeQuit(app, dispose);
 

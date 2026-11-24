@@ -191,7 +191,7 @@ describe("linear client credentials", () => {
   });
 
   it.effect("fails a hanging mint at the token endpoint deadline", () => {
-    const onAbort = vi.fn();
+    const onAbort = vi.fn<() => void>();
     const run = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       effect.pipe(
         Effect.provideService(FetchHttpClient.Fetch, ((_input, init) => {
