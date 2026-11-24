@@ -248,6 +248,7 @@ const reasonOf = (
       }) as const,
     AwaitingApproval: ({ digest, revision }) =>
       ({ tag: "awaiting-approval", digest, builtOn: revision }) as const,
+    Cancelled: () => ({ tag: "cancelled" }) as const,
     HandedToYou: () =>
       ({
         tag: "handed-to-you",

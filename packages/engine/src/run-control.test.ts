@@ -1,4 +1,4 @@
-import { RunId, WorkspaceConfig, WorkspaceId } from "@cogwork/contracts";
+import { RunId } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -8,23 +8,12 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as MutableRef from "effect/MutableRef";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
-import type { WorkspaceIssueTrackerBinding } from "./projector";
 import * as RunControl from "./run-control";
 
 const runId = Schema.decodeSync(RunId);
-const workspaceId = Schema.decodeSync(WorkspaceId);
-const workspace = {
-  config: Schema.decodeSync(WorkspaceConfig)({
-    id: workspaceId("example"),
-    displayName: "Test workspace",
-    checkoutPath: "/repos/example",
-    issueTracker: { type: "linear" },
-  }),
-} satisfies WorkspaceIssueTrackerBinding;
 
 describe("RunControl", () => {
   it.effect("forgets a registered fiber after ordinary completion without releasing its claim", () =>
@@ -32,10 +21,7 @@ describe("RunControl", () => {
       const control = yield* RunControl.RunControl;
       const released = MutableRef.make(false);
 
-      yield* control.run(
-        runId("run-1"),
-        workspace,
-        Effect.void,
+      yield* control.run(runId("run-1"), Effect.void, () =>
         Effect.sync(() => MutableRef.set(released, true)),
       );
 
@@ -54,9 +40,8 @@ describe("RunControl", () => {
       const fiber = yield* Effect.forkChild(
         control.run(
           runId("run-1"),
-          workspace,
           Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
-          Effect.sync(() => MutableRef.set(released, true)),
+          () => Effect.sync(() => MutableRef.set(released, true)),
         ),
       );
       yield* Deferred.await(started);
@@ -73,24 +58,22 @@ describe("RunControl", () => {
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
       const started = yield* Deferred.make<void>();
-      const released = yield* Deferred.make<void>();
+      const released = yield* Deferred.make<RunControl.ManualCancellation>();
       const fiber = yield* Effect.forkChild(
         control.run(
           runId("run-1"),
-          workspace,
           Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
-          Deferred.succeed(released, undefined),
+          (cancellation) => Deferred.succeed(released, cancellation),
         ),
       );
       yield* Deferred.await(started);
 
-      const cancellation = yield* control.cancel(runId("run-1"));
+      const cancellation = yield* control.cancel(runId("run-1"), { note: "Wrong approach" });
       assert.strictEqual(cancellation._tag, "Interrupting");
       if (cancellation._tag !== "Interrupting") return;
 
-      assert.deepStrictEqual(cancellation.workspace, Option.some(workspace));
       yield* cancellation.awaitTermination;
-      assert.isTrue(yield* Deferred.isDone(released));
+      assert.deepStrictEqual(yield* Deferred.await(released), { note: "Wrong approach" });
       const exit = yield* Fiber.await(fiber);
       assert.isTrue(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause));
       assert.strictEqual((yield* control.cancel(runId("run-1")))._tag, "NotFound");
@@ -106,9 +89,8 @@ describe("RunControl", () => {
       const caller = yield* Effect.forkChild(
         control.run(
           runId("run-1"),
-          workspace,
           Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
-          Effect.sync(() => MutableRef.set(released, true)),
+          () => Effect.sync(() => MutableRef.set(released, true)),
         ),
       );
       yield* Deferred.await(started);
@@ -123,15 +105,12 @@ describe("RunControl", () => {
   it.effect("keeps a replacement registered after cancellation starts", () =>
     Effect.gen(function* () {
       const control = yield* RunControl.RunControl;
-      const replacementWorkspace = {
-        config: { ...workspace.config, id: workspaceId("replacement") },
-      } satisfies WorkspaceIssueTrackerBinding;
+      const replacementCancelled = yield* Deferred.make<void>();
       const firstStarted = yield* Deferred.make<void>();
       const finishFirstTeardown = yield* Deferred.make<void>();
       const first = yield* Effect.forkChild(
         control.run(
           runId("run-1"),
-          workspace,
           Deferred.succeed(firstStarted, undefined).pipe(
             Effect.andThen(Effect.never),
             Effect.ensuring(Deferred.await(finishFirstTeardown)),
@@ -147,8 +126,8 @@ describe("RunControl", () => {
       const replacement = yield* Effect.forkChild(
         control.run(
           runId("run-1"),
-          replacementWorkspace,
           Deferred.succeed(replacementStarted, undefined).pipe(Effect.andThen(Effect.never)),
+          () => Deferred.succeed(replacementCancelled, undefined),
         ),
       );
       yield* Deferred.await(replacementStarted);
@@ -159,8 +138,8 @@ describe("RunControl", () => {
       const replacementCancellation = yield* control.cancel(runId("run-1"));
       assert.strictEqual(replacementCancellation._tag, "Interrupting");
       if (replacementCancellation._tag === "Interrupting") {
-        assert.deepStrictEqual(replacementCancellation.workspace, Option.some(replacementWorkspace));
         yield* replacementCancellation.awaitTermination;
+        assert.isTrue(yield* Deferred.isDone(replacementCancelled));
       }
       yield* Fiber.await(first);
     }).pipe(Effect.provide(RunControl.layer), Effect.scoped),

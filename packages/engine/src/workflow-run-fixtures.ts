@@ -27,6 +27,7 @@ import {
 import { PluginManager } from "./plugin";
 import { emptyRegistry, type RegistryState } from "./projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
+import { layer as runControlLayer } from "./run-control";
 import { RunLedger } from "./run-ledger";
 import { SlackWrite } from "./slack-write";
 import {
@@ -147,6 +148,7 @@ export const requirements = Layer.mergeAll(
   Layer.succeed(WorkspaceRegistry, readOnlyRegistry(emptyRegistry)),
   workflowActionPlanStoreLayer,
   workflowArtifactStoreLayer,
+  runControlLayer,
   CredentialStore.layerEnv,
   NodeServices.layer,
   FetchHttpClient.layer,

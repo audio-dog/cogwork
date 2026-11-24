@@ -188,7 +188,7 @@ export const cancelRun = Effect.fn("Daemon.CancelRun")(function* (payload: {
   const run = yield* ledger.getRun(payload.runId);
   if (run === null) return yield* runNotFound(payload.runId);
   if (run.status !== "running") return yield* runAlreadyFinished(payload.runId, run.status);
-  const cancellation = yield* (yield* RunControl).cancel(payload.runId);
+  const cancellation = yield* (yield* RunControl).cancel(payload.runId, { note: payload.note });
   const drained =
     cancellation._tag === "NotFound" ||
     Option.isSome(yield* cancellation.awaitTermination.pipe(Effect.timeoutOption(cancelDrainDeadline)));

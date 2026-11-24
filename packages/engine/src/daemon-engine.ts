@@ -258,6 +258,7 @@ export function engineLayer<E, R>(adapters: HostAdapters<E, R>) {
         triggerObservationStore,
         triggerObservation,
         adapters.worktrees,
+        runControlLayer,
       ),
     ),
   );

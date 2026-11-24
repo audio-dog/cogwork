@@ -188,7 +188,7 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  it.effect("settles an interrupted Run as interrupted and records no attempt", () =>
+  it.effect("settles an interrupted Run as interrupted and records no attempt or park", () =>
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();
       const { runner, coordination } = yield* testProgram([], {
@@ -202,8 +202,12 @@ describe("WorkflowRun", () => {
 
       const runs = yield* (yield* RunLedger).listRuns(10);
       assert.deepStrictEqual(
-        { statuses: runs.map(({ status }) => status), attempts: yield* Ref.get(coordination.attempts) },
-        { statuses: ["interrupted"], attempts: [] },
+        {
+          statuses: runs.map(({ status }) => status),
+          attempts: yield* Ref.get(coordination.attempts),
+          parks: yield* Ref.get(coordination.parks),
+        },
+        { statuses: ["interrupted"], attempts: [], parks: [] },
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
