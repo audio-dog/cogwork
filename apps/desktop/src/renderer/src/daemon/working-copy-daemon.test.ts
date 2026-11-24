@@ -1,4 +1,11 @@
-import { DaemonRpcs, PrincipalId, WorkflowDocument, WorkflowId, WorkflowRecord } from "@cogwork/contracts";
+import {
+  DaemonRpcs,
+  PrincipalId,
+  WorkflowDocument,
+  WorkflowId,
+  WorkflowPublishRefused,
+  WorkflowRecord,
+} from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -39,6 +46,20 @@ class SentRequests extends Context.Service<SentRequests, Ref.Ref<ReadonlyArray<R
 
 const encodeReply = Schema.encodeSync(Schema.toCodecJson(WorkflowRecord));
 
+const staleRefusal = Schema.encodeSync(Schema.toCodecJson(WorkflowPublishRefused))(
+  new WorkflowPublishRefused({
+    reason: "stale-revision",
+    expectedRevision: 2,
+    actualRevision: 3,
+    diagnostics: [],
+  }),
+);
+
+const exitFor = (tag: string) =>
+  tag === "PublishWorkflow"
+    ? { _tag: "Failure" as const, cause: [{ _tag: "Fail" as const, error: staleRefusal }] }
+    : { _tag: "Success" as const, value: encodeReply(reply) };
+
 const memoryProtocol = Layer.effect(RpcClient.Protocol)(
   Effect.gen(function* () {
     const sent = yield* SentRequests;
@@ -52,7 +73,7 @@ const memoryProtocol = Layer.effect(RpcClient.Protocol)(
                   write(clientId, {
                     _tag: "Exit",
                     requestId: request.id,
-                    exit: { _tag: "Success", value: encodeReply(reply) },
+                    exit: exitFor(request.tag),
                   }),
                 ),
               )
@@ -96,6 +117,16 @@ describe("WorkingCopyDaemon over the daemon RPC contract", () => {
 
       assert.isTrue(Exit.hasDies(exit));
       assert.deepStrictEqual(yield* Ref.get(yield* SentRequests), []);
+    }).pipe(Effect.provide(contractLayer)),
+  );
+
+  it.effect("names a stale-revision publish refusal from the daemon", () =>
+    Effect.gen(function* () {
+      const daemon = yield* WorkingCopyDaemon;
+
+      const refusal = yield* Effect.flip(daemon.publish(workflowId, 2));
+
+      assert.strictEqual(refusal.reason, "stale-revision");
     }).pipe(Effect.provide(contractLayer)),
   );
 });

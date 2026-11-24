@@ -30,6 +30,8 @@ export interface MemoryDaemonProbe {
   readonly calls: Effect.Effect<ReadonlyArray<DaemonCall>>;
   readonly holdReplies: Effect.Effect<void>;
   readonly releaseReplies: Effect.Effect<void>;
+  readonly holdDelivery: Effect.Effect<void>;
+  readonly releaseDelivery: Effect.Effect<void>;
 }
 
 export class MemoryDaemon extends Context.Service<MemoryDaemon, MemoryDaemonProbe>()(
@@ -55,7 +57,9 @@ const editedRecord = (record: WorkflowRecord, edits: WorkflowEditBatch) => {
 const publishedRecord = (record: WorkflowRecord, revision: number) =>
   record.workingRevision === revision
     ? Effect.succeed({ ...record, publishedCopy: record.workingCopy, publishedRevision: revision })
-    : Effect.fail(refused("WorkflowPublishRefused stale-revision"));
+    : Effect.fail(
+        new WorkingCopyDaemonError({ message: "WorkflowPublishRefused", reason: "stale-revision" }),
+      );
 
 const switchedRecord = (record: WorkflowRecord, enabled: boolean) =>
   record.publishedRevision === null
@@ -70,6 +74,7 @@ export const memoryDaemonLayer = (records: ReadonlyArray<WorkflowRecord>) =>
       );
       const calls = yield* Ref.make<ReadonlyArray<DaemonCall>>([]);
       const replies = yield* Latch.make(true);
+      const delivery = yield* Latch.make(true);
 
       const save = (record: WorkflowRecord) =>
         SubscriptionRef.update(store, (records) => new Map(records).set(record.id, record)).pipe(
@@ -88,6 +93,7 @@ export const memoryDaemonLayer = (records: ReadonlyArray<WorkflowRecord>) =>
         Ref.update(calls, (made) => [...made, call]).pipe(
           Effect.andThen(replies.await),
           Effect.andThen(reply),
+          Effect.tap(() => delivery.await),
         );
 
       const daemon = WorkingCopyDaemon.of({
@@ -121,6 +127,8 @@ export const memoryDaemonLayer = (records: ReadonlyArray<WorkflowRecord>) =>
         calls: Ref.get(calls),
         holdReplies: Effect.asVoid(replies.close),
         releaseReplies: Effect.asVoid(replies.open),
+        holdDelivery: Effect.asVoid(delivery.close),
+        releaseDelivery: Effect.asVoid(delivery.open),
       });
       return Context.make(WorkingCopyDaemon, daemon).pipe(Context.add(MemoryDaemon, probe));
     }),
