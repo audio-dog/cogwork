@@ -21,7 +21,7 @@ import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
-import { Coordination, type CoordinationGate } from "./coordination";
+import { Coordination, type CoordinationGate, defaultClaimant } from "./coordination";
 import { DaemonEventBus } from "./daemon-event-bus";
 import { WorkspaceRegistry } from "./registry-service";
 import {
@@ -55,6 +55,7 @@ import {
   type TriggerSubscription,
 } from "./trigger-source";
 import { Workflows } from "./workflow";
+import { operationKeyOf } from "./workflow-run-admission";
 
 const decodeTriggerEvent = Schema.decodeUnknownEffect(TriggerEvent);
 
@@ -79,6 +80,9 @@ interface AdmissionState {
   readonly gate: CoordinationGate;
   readonly isUnprocessedRevision: boolean;
 }
+
+const heldOperationOf = (admission: TriggerAdmission) =>
+  operationKeyOf(admission, admission.subscription.operation);
 
 const isOfferable = ({ admission, gate, isUnprocessedRevision }: AdmissionState) => {
   const passesFilters = passesTriggerFilters(admission.subscription, admission.event);
@@ -319,6 +323,38 @@ export const make = Effect.gen(function* () {
     ),
   );
 
+  const wakeFollowUp = Effect.fn("TriggerObservation.wakeFollowUp")(function* (
+    pending: ReadonlyArray<TriggerAdmission>,
+  ) {
+    const [first] = pending;
+    if (first === undefined) return;
+    const view = yield* coordination.read(first.event.key);
+    const held = pending.flatMap((admission) => {
+      const failedAtMillis = view.failedAttemptAtMillis(heldOperationOf(admission));
+      return failedAtMillis === null ? [] : [{ admission, failedAtMillis }];
+    });
+    const woken = held.some(({ admission, failedAtMillis }) => admission.event.atMillis > failedAtMillis);
+    if (!woken) return;
+    const superseded = held
+      .map(({ admission }) => admission)
+      .toSorted((left, right) => (admissionIsOlder(left, right) ? -1 : 1))
+      .slice(0, -1);
+    yield* Effect.forEach(superseded, (admission) => store.complete(admission, Effect.void), {
+      discard: true,
+    });
+    yield* coordination.handBack(first.event.key, { by: defaultClaimant });
+  });
+
+  const wakeFollowUps = (pending: ReadonlyArray<TriggerAdmission>) =>
+    Effect.forEach(
+      Map.groupBy(
+        pending.filter(({ event }) => event.key._tag === "PullRequest"),
+        ({ event }) => keyOf(event.key),
+      ).values(),
+      wakeFollowUp,
+      { discard: true },
+    );
+
   const recheck = Effect.fn("TriggerObservation.recheck")(function* (admission: TriggerAdmission) {
     const source = sources.find((candidate) => ownsEntry(candidate, admission.event.entry));
     if (!source?.recheck) return Recheck.Matches();
@@ -338,7 +374,10 @@ export const make = Effect.gen(function* () {
   });
 
   return {
-    eligible: Effect.all([workflows.list, store.admissions]).pipe(
+    eligible: Effect.all([
+      workflows.list,
+      Effect.flatMap(store.admissions, wakeFollowUps).pipe(Effect.andThen(store.admissions)),
+    ]).pipe(
       Effect.flatMap(([listed, current]) => {
         const enabled = new Set(listed.workflows.filter(({ enabled }) => enabled).map(({ id }) => id));
         return Effect.forEach(oldestRevisionAdmissions(current), (admission) =>
@@ -375,13 +414,7 @@ export const make = Effect.gen(function* () {
                       admission,
                       actedOn: view.actedOn(admission.subscription.workflow),
                       isUnprocessedRevision: view.revision?.processed !== admission.event.revision,
-                      gate: view.gate(
-                        {
-                          workflow: admission.subscription.workflow,
-                          operation: admission.subscription.operation,
-                        },
-                        admission.event.revision,
-                      ),
+                      gate: view.gate(heldOperationOf(admission), admission.event.revision),
                     })),
                   ),
                 ),
