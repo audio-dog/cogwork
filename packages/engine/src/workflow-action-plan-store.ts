@@ -34,6 +34,8 @@ export interface WorkflowActionPlanStoreService {
     workflow: WorkflowId,
     attempt: RunId,
   ) => Effect.Effect<void, ControlStoreFailure>;
+  // Takes no write gate and opens no transaction: the caller holds both.
+  readonly removeItem: (item: WorkItemKey) => Effect.Effect<void, ControlStoreFailure>;
 }
 
 export class WorkflowActionPlanStore extends Context.Service<
@@ -99,6 +101,8 @@ export const makeMemory = Effect.gen(function* () {
         next.delete(`${item}:${workflow}:${attempt}`);
         return next;
       }),
+    removeItem: (item) =>
+      Ref.update(plans, (current) => new Map([...current].filter(([, plan]) => plan.item !== item))),
   } satisfies WorkflowActionPlanStoreService;
 });
 
@@ -238,6 +242,11 @@ export const makeControlStore = Effect.gen(function* () {
           WHERE work_item = ${item} AND workflow = ${workflow} AND attempt = ${attempt}
         `,
       ).pipe(Effect.asVoid),
+    removeItem: (item) =>
+      sql`DELETE FROM workflow_action_plans WHERE work_item = ${item}`.pipe(
+        Effect.asVoid,
+        Effect.mapError(failure("remove Workflow action plans of a work item")),
+      ),
   } satisfies WorkflowActionPlanStoreService;
 });
 

@@ -52,6 +52,14 @@ layer(
     }),
   );
 
+  it.effect("offers start-over in root help", () =>
+    Effect.gen(function* () {
+      yield* Command.runWith(cli, { version: "0.0.1" })(["--help"]);
+
+      assert.include((yield* TestConsole.logLines).join("\n"), "start-over");
+    }),
+  );
+
   it.effect("does not offer BYOK model listing while its Harness is unregistered", () =>
     Effect.gen(function* () {
       yield* Command.runWith(cli, { version: "0.0.1" })(["--help"]);

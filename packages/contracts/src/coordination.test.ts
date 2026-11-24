@@ -1,8 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Result from "effect/Result";
 
 import { WorkItemId, WorkspaceId } from "./base-schemas";
 import { ConnectionId } from "./connection";
-import { keyOf, refOfKey, WorkItemKey, type WorkItemRef } from "./coordination";
+import { keyOf, parseWorkItemReference, refOfKey, WorkItemKey, type WorkItemRef } from "./coordination";
 import { RunId } from "./run";
 
 const workspace = WorkspaceId.make("acme:web");
@@ -33,4 +34,33 @@ describe("refOfKey", () => {
       assert.isNull(refOfKey(key));
     },
   );
+});
+
+describe("parseWorkItemReference", () => {
+  const issue = (id: string): WorkItemRef => ({ _tag: "Issue", workspace, id: WorkItemId.make(id) });
+
+  it.each([
+    ["#1048", issue("#1048")],
+    [" AUD-1 ", issue("AUD-1")],
+    ["https://github.com/audio-dog/cogwork/issues/1187", issue("#1187")],
+    ["https://github.com/audio-dog/cogwork/issues/1187#issuecomment-1", issue("#1187")],
+    ["https://github.com/audio-dog/cogwork/pull/12/files", { _tag: "PullRequest", workspace, number: 12 }],
+    ["https://linear.app/audio-dog/issue/AUD-1/start-over", issue("AUD-1")],
+  ] as const)("reads %j", (reference, expected) => {
+    assert.deepStrictEqual(Result.getOrThrow(parseWorkItemReference(workspace, reference)), expected);
+  });
+
+  it.each([
+    "",
+    "1048",
+    "#0",
+    "aud-1",
+    "https://github.com/audio-dog/cogwork",
+    "https://gitlab.com/audio-dog/cogwork/issues/1",
+    "https://linear.app/audio-dog/project/AUD-1",
+  ])("refuses %j with a message", (reference) => {
+    const parsed = parseWorkItemReference(workspace, reference);
+    assert.isTrue(Result.isFailure(parsed));
+    assert.include(Result.getOrThrow(Result.flip(parsed)), "is not a work item reference");
+  });
 });

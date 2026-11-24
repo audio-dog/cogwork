@@ -218,6 +218,17 @@ export const HandBack = Rpc.make("HandBack", {
   error: WorkflowTouchpointFailure,
 });
 
+export class StartOverRefused extends Schema.TaggedError<StartOverRefused>()("StartOverRefused", {
+  reason: Schema.Literals(["not-a-tracker-item", "run-active"]),
+  message: TrimmedNonEmptyString,
+}) {}
+
+export const StartOver = Rpc.make("StartOver", {
+  payload: { item: WorkItemRef },
+  success: Schema.Void,
+  error: Schema.Union([ControlStoreFailure, StartOverRefused]),
+});
+
 export const ApproveWorkflowPlan = Rpc.make("ApproveWorkflowPlan", {
   payload: {
     item: WorkItemRef,
@@ -393,6 +404,7 @@ export const DaemonCommands = RpcGroup.make(
   ChooseWorkflowAnswer,
   DismissWorkflowNotification,
   HandBack,
+  StartOver,
   SetScheduling,
   ReportProcessHealth,
   CheckHarnesses,
