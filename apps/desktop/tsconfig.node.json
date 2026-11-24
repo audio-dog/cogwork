@@ -1,20 +1,15 @@
 {
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "src/shared/**/*"],
+  "extends": "@cogwork/types-config/tsconfig.base.json",
+  "include": [
+    "electron.vite.config.*",
+    "vitest.config.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/shared/**/*"
+  ],
   "compilerOptions": {
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
     "resolvePackageJsonImports": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext",
-    "composite": true,
-    "types": ["electron-vite/node"]
+    "types": ["electron-vite/node"],
+    "plugins": [{ "name": "@effect/language-service", "diagnostics": false }]
   }
 }

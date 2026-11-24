@@ -1,11 +1,21 @@
-import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const claudeBin = process.env.CLAUDE_CODE_BIN ?? "claude";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Config from "effect/Config";
+import * as Console from "effect/Console";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as ChildProcess from "effect/process/ChildProcess";
+import { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
+import * as Stream from "effect/Stream";
+
 const target = fileURLToPath(new URL("../src/models.generated.ts", import.meta.url));
 const check = process.argv.includes("--check");
-const commandOptions = { encoding: "utf8", timeout: 5_000 } as const;
+const commandDeadline = "5 seconds";
+
+class StaleModelCatalog extends Data.TaggedError("StaleModelCatalog")<{ readonly message: string }> {}
 const effortValues = ["low", "medium", "high", "xhigh", "max"] as const;
 const modelSpecs = [
   ["sonnet", "Sonnet", true, "full"],
@@ -99,23 +109,59 @@ export type ClaudeCatalogModel = (typeof claudeModelCatalog.models)[number]["val
 `;
 };
 
-const version = execFileSync(claudeBin, ["--version"], commandOptions).trim();
-const help = execFileSync(claudeBin, ["--help"], commandOptions);
-const nativeEffortValues = parseEffortValues(help);
-if (nativeEffortValues.join() !== effortValues.join()) {
-  throw new Error(
-    `Expected Claude effort levels ${effortValues.join(", ")}; received ${nativeEffortValues.join(", ")}`,
+const commandOutput = Effect.fn("ClaudeModelSync.commandOutput")(function* (
+  command: ChildProcess.Command,
+  label: string,
+) {
+  const spawner = yield* ChildProcessSpawner;
+  const result = yield* Effect.scoped(
+    Effect.flatMap(spawner.spawn(command), (handle) =>
+      Effect.all(
+        { stdout: Stream.mkString(Stream.decodeText(handle.stdout)), exitCode: handle.exitCode },
+        { concurrency: "unbounded" },
+      ),
+    ),
+  ).pipe(
+    Effect.timeoutOrElse({
+      duration: commandDeadline,
+      orElse: () => Effect.die(`${label} timed out after ${commandDeadline}`),
+    }),
   );
-}
-const file = render(version);
-if (!check) {
-  writeFileSync(target, file);
-  console.log(`Wrote ${modelSpecs.length} Claude models generated against ${version} to ${target}`);
-  process.exit(0);
-}
-if (readFileSync(target, "utf8") === file) {
-  console.log(`Claude model catalog is in sync (${modelSpecs.length} models, Claude Code ${version}).`);
-  process.exit(0);
-}
-console.error(`Claude model catalog is stale. Run \`pnpm --filter @cogwork/claude-code models:sync\`.`);
-process.exit(1);
+  if (result.exitCode === 0) return result.stdout;
+  return yield* Effect.die(`${label} exited with ${result.exitCode}`);
+});
+
+const claudeOutput = (claudeBin: string, args: ReadonlyArray<string>) =>
+  commandOutput(
+    ChildProcess.make(claudeBin, [...args], { stdin: "ignore", stderr: "inherit" }),
+    `${claudeBin} ${args.join(" ")}`,
+  );
+
+NodeRuntime.runMain(
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const claudeBin = yield* Config.String("CLAUDE_CODE_BIN").pipe(Config.withDefault("claude"));
+    const version = (yield* claudeOutput(claudeBin, ["--version"])).trim();
+    const nativeEffortValues = parseEffortValues(yield* claudeOutput(claudeBin, ["--help"]));
+    if (nativeEffortValues.join() !== effortValues.join()) {
+      return yield* Effect.die(
+        `Expected Claude effort levels ${effortValues.join(", ")}; received ${nativeEffortValues.join(", ")}`,
+      );
+    }
+    const file = render(version);
+    if (!check) {
+      yield* fs.writeFileString(target, file);
+      return yield* Console.log(
+        `Wrote ${modelSpecs.length} Claude models generated against ${version} to ${target}`,
+      );
+    }
+    if ((yield* fs.readFileString(target)) === file) {
+      return yield* Console.log(
+        `Claude model catalog is in sync (${modelSpecs.length} models, Claude Code ${version}).`,
+      );
+    }
+    return yield* new StaleModelCatalog({
+      message: "Claude model catalog is stale. Run `pnpm --filter @cogwork/claude-code models:sync`.",
+    });
+  }).pipe(Effect.provide(NodeServices.layer)),
+);

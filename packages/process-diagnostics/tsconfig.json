@@ -1,18 +1,9 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "@cogwork/types-config/tsconfig.base.json",
   "compilerOptions": {
-    "esModuleInterop": true,
-    "isolatedModules": true,
     "lib": ["ESNext"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "noEmit": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext",
     "types": ["node"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

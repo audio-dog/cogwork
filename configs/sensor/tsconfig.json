@@ -1,15 +1,7 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "@cogwork/types-config/tsconfig.base.json",
   "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "module": "esnext",
-    "moduleDetection": "force",
-    "moduleResolution": "bundler",
-    "noEmit": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext"
+    "allowImportingTsExtensions": true
   },
   "include": ["*.ts"],
   "exclude": ["node_modules"]

@@ -1,4 +1,5 @@
 {
+  "extends": "@cogwork/types-config/tsconfig.base.json",
   "include": [
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
@@ -7,20 +8,8 @@
     "src/shared/**/*"
   ],
   "compilerOptions": {
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
     "resolvePackageJsonImports": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext",
-    "composite": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "plugins": [{ "name": "@effect/language-service", "diagnostics": false }]
   }
 }

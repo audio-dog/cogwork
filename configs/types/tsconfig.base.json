@@ -1,0 +1,57 @@
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ESNext",
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "anyUnknownInErrorContext": "error",
+          "asyncFunction": "error",
+          "cryptoRandomUUID": "error",
+          "cryptoRandomUUIDInEffect": "error",
+          "deterministicKeys": "error",
+          "extendsNativeError": "error",
+          "globalConsole": "error",
+          "globalConsoleInEffect": "error",
+          "globalDate": "error",
+          "globalDateInEffect": "error",
+          "globalErrorInEffectCatch": "error",
+          "globalErrorInEffectFailure": "error",
+          "globalFetch": "error",
+          "globalFetchInEffect": "error",
+          "globalJsonInEffect": "error",
+          "globalRandom": "error",
+          "globalRandomInEffect": "error",
+          "globalTimers": "error",
+          "globalTimersInEffect": "error",
+          "instanceOfSchema": "error",
+          "lazyEffect": "off",
+          "leakingRequirements": "error",
+          "missingEffectServiceDependency": "error",
+          "newPromise": "error",
+          "nodeBuiltinImport": "error",
+          "processEnv": "error",
+          "processEnvInEffect": "error",
+          "schemaClassObjectLiteral": "suggestion",
+          "schemaSyncInEffect": "error",
+          "strictBooleanExpressions": "off",
+          "strictEffectProvide": "off",
+          "unknownInEffectCatch": "error",
+          "unstableApiUsage": "off",
+          "unsafeEffectTypeAssertion": "error"
+        }
+      }
+    ]
+  }
+}

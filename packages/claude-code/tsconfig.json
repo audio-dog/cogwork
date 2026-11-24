@@ -1,20 +1,8 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "@cogwork/types-config/tsconfig.base.json",
   "compilerOptions": {
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "noUncheckedIndexedAccess": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ESNext"
+    "noUncheckedIndexedAccess": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "scripts/**/*", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
