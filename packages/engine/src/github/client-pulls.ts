@@ -25,6 +25,7 @@ import {
   issuePullReferencesQuery,
 } from "./client-graphql";
 import {
+  actionsJobIdOf,
   commentMillis,
   decodeCheckRuns,
   decodeCompare,
@@ -403,6 +404,7 @@ export const makePullClient = (transport: GitHubTransport) => {
           detailsUrl: run.details_url ?? null,
           outputTitle: run.output?.title ?? null,
           outputSummary: run.output?.summary ?? null,
+          actionsJobId: actionsJobIdOf(run),
         }));
         if (current.length < 100) return current;
         return [...current, ...(yield* collect(page + 1))];
