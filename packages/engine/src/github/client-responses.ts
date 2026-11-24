@@ -153,6 +153,8 @@ export const toRawReviewComment = ({ user, ...comment }: typeof ReviewCommentSch
     : [];
 
 const CheckRunSchema = Schema.Struct({
+  id: Schema.optional(Schema.Finite),
+  app: Schema.optional(Schema.NullOr(Schema.Struct({ slug: Schema.optional(Schema.NullOr(Schema.String)) }))),
   name: Schema.String,
   status: Schema.String,
   conclusion: Schema.NullOr(Schema.String),
@@ -168,6 +170,10 @@ const CheckRunSchema = Schema.Struct({
 });
 
 const CheckRunsSchema = Schema.Struct({ check_runs: Schema.Array(CheckRunSchema) });
+
+// GitHub Actions gives the check run of each job the id of that job.
+export const actionsJobIdOf = (run: typeof CheckRunSchema.Type) =>
+  run.app?.slug === "github-actions" ? (run.id ?? null) : null;
 
 const decodeIssues = Schema.decodeUnknownEffect(Schema.Array(IssueSchema));
 export const decodeIssue = Schema.decodeUnknownEffect(IssueSchema);
