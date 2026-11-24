@@ -1,0 +1,105 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_45fe41701a6812::t_f639d38a66269f 47,134-146,240
+apps/desktop/src/renderer/src/components/workspace-record-context.tsx
+  s_45fe41701a6812::t_e094883a7c3b6a 1-30
+apps/desktop/src/renderer/src/components/workspace-setting-rows-render.test.tsx
+  s_45fe41701a6812::t_dbebc2628b64d8 13-14
+apps/desktop/src/renderer/src/components/workspace-setting-rows.tsx
+  s_45fe41701a6812::t_41651325d679c6 1,18-19,244
+apps/desktop/src/renderer/src/components/workspace-setting-tracker-choices.test.ts
+  s_45fe41701a6812::t_fe9319c500730a 1-33
+apps/desktop/src/renderer/src/components/workspace-setting-tracker-choices.tsx
+  s_45fe41701a6812::t_a390f04fd323b2 1-364
+apps/desktop/src/renderer/src/components/workspace-settings.tsx
+  s_45fe41701a6812::t_19431f7f4a7dfb 57-58
+apps/desktop/src/renderer/src/daemon/atoms.ts
+  s_45fe41701a6812::t_b724dad24f8419 125-133
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  s_45fe41701a6812::t_7773dc5bc2900a 1-8,49-62,76,122-131
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  s_45fe41701a6812::t_9fc526e4e666f1 5,20,45-52,55
+apps/desktop/src/renderer/src/features/workflow-session-fixtures.tsx
+  s_45fe41701a6812::t_05f883e6feb738 1-286
+apps/desktop/src/renderer/src/features/workflow-session-list.test.tsx
+  s_45fe41701a6812::t_5cd1a3ac4ccb4c 1-211
+apps/desktop/src/renderer/src/features/workflow-session-options.test.tsx
+  s_45fe41701a6812::t_285c435f9c602a 1-250
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_45fe41701a6812::t_ac165e9b534489 3,7-16,19-21,23,25,159-170
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  s_45fe41701a6812::t_951ce3bac0cf9b 23-24,97-101,124-128,149,156,169,172
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_45fe41701a6812::t_9f4445156d5048 188-279,284
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_45fe41701a6812::t_017db28390e4ea 33-36,41-42,47,55-57,61,71,77,85-87,91,95-100,133,138-164,169,175,181,183-184,197-198,212,214,217,220,224-228,232-234,238,241-250,256-258,260-266,270-277,285-298
+apps/desktop/src/renderer/src/features/workspace-record.test.ts
+  s_45fe41701a6812::t_0ad8b770dadcca 179,193
+apps/desktop/src/renderer/src/features/workspace-record.ts
+  s_45fe41701a6812::t_88527557b51539 10,34,72,158
+apps/desktop/src/renderer/src/testing/router-links.tsx
+  s_45fe41701a6812::t_dc238d9fed7241 1-37
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_45fe41701a6812::t_6489846e90a260 33-34,60-62,77,96,130-131
+packages/contracts/GLOSSARY-work.md
+  s_45fe41701a6812::t_568b6c1ab36563 28-31
+packages/contracts/GLOSSARY.md
+  s_45fe41701a6812::t_25a278ce4d3927 15
+packages/contracts/src/rpc.ts
+  s_45fe41701a6812::t_4a860d4dcd1cce 59,106-111,187
+packages/contracts/src/workspace.ts
+  s_45fe41701a6812::t_5a69002b36ce06 35-40
+packages/engine/src/commands.test.ts
+  s_45fe41701a6812::t_1bf777eb0a37db 9,29,32-35,55-63,109-137
+packages/engine/src/commands.ts
+  s_45fe41701a6812::t_873810e6fa9424 18,47,147-163
+packages/engine/src/daemon-handlers.ts
+  s_45fe41701a6812::t_a6fd15c0945ab4 14,118
+packages/engine/src/linear/account.ts
+  s_45fe41701a6812::t_ac72575d871b76 1-6,20-22,24,31-37
+packages/engine/src/linear/client-transport.ts
+  s_45fe41701a6812::t_834477e448189c 20,24-29,59,69,79,85,92,117,125,145,155
+packages/engine/src/linear/client.test.ts
+  s_45fe41701a6812::t_b124b4d9c0dadd 78-117
+packages/engine/src/linear/client.ts
+  s_45fe41701a6812::t_17900b9366968d 58,66-70,128-144,355
+packages/engine/src/read-model.ts
+  s_45fe41701a6812::t_2ee48df48e1ec3 77-79,83,91,98-100,107,110
+packages/engine/src/run-completion.test.ts
+  s_45fe41701a6812::t_f7c4324e1c49f2 1-7,11-19,21,29,34-38,64-142
+packages/engine/src/run-completion.ts
+  s_45fe41701a6812::t_e12740fdd5b625 1-8,11-12,14,22-29,33-36,38-42,56-57,63,65-100
+packages/engine/src/scheduler.test.ts
+  s_45fe41701a6812::t_a9c8a25ac91ea9 1,10,15-16,23-25,204-329
+packages/engine/src/scheduler.ts
+  s_45fe41701a6812::t_dcc96452331bcb 66,79,180-187,192,244-249,271-273,277-291,294,298
+packages/engine/src/tools/file-diff-feed-lifecycle.test.ts
+  s_45fe41701a6812::t_1397c9b5b9faa1 7,22,26,34,167-206
+packages/engine/src/tools/file-diff-feed.ts
+  s_45fe41701a6812::t_c58ab1391c20a9 16,50,398-411,459,465
+packages/engine/src/tools/file-diff-fixtures.ts
+  s_45fe41701a6812::t_6c9e13d6cc99df 76-81,128-139,233,246
+packages/engine/src/workflow-run-admission.test.ts
+  s_45fe41701a6812::t_8810d8642b84d9 111,114-121,126-143
+packages/engine/src/workflow-run-attempts.ts
+  s_45fe41701a6812::t_254ff5a5e3376c 26-33,41,156,223-226,237-240,253,307,312-317,324-333,346-347,349-358,360-362,402
+packages/engine/src/workflow-run-fan-out.test.ts
+  s_45fe41701a6812::t_b162f77632604f 81,287-289
+packages/engine/src/workflow-run-pending-plan.ts
+  s_45fe41701a6812::t_db0f04ee8af0d4 174,183-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee55789ba13fce4884e92864ce2e7d3d326d8840",
+  "prompts": {},
+  "sessions": {
+    "s_45fe41701a6812": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c20e054-5616-49d7-9f83-dbc788ebc7e8",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
