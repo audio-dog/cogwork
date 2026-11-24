@@ -1,6 +1,7 @@
 import {
   type Board,
   itemKey,
+  type QueuedItem,
   type RunSummary,
   refOfKey,
   type WorkflowId,
@@ -13,6 +14,12 @@ import {
 
 export interface FeedRun {
   readonly run: RunSummary;
+  readonly label: string;
+  readonly title: string | null;
+}
+
+export interface FeedQueued {
+  readonly item: QueuedItem;
   readonly label: string;
   readonly title: string | null;
 }
@@ -55,10 +62,15 @@ const terminalStatuses: ReadonlySet<RunSummary["status"]> = new Set([
 const inWorkspace = (filter: WorkspaceId | null, workspace: WorkspaceId) =>
   filter === null || filter === workspace;
 
+type TitledItem = Pick<RunSummary, "workspace" | "workItem" | "subject">;
+
+const titleOf = (board: Board, { workspace, workItem, subject }: TitledItem) =>
+  subject?.title ?? board.items.get(itemKey(workspace, workItem))?.item.title ?? null;
+
 const feedRunOf = (board: Board, run: RunSummary) => ({
   run,
   label: workItemLabel(run.workItem),
-  title: run.subject?.title ?? board.items.get(itemKey(run.workspace, run.workItem))?.item.title ?? null,
+  title: titleOf(board, run),
 });
 
 const runs = (board: Board, filter: WorkspaceId | null) =>
@@ -106,6 +118,11 @@ export const runningRuns = (board: Board, filter: WorkspaceId | null): FeedRun[]
     .filter((run) => run.status === "running")
     .sort((a, b) => a.startedAtMillis - b.startedAtMillis)
     .map((run) => feedRunOf(board, run));
+
+export const queuedItems = (board: Board, filter: WorkspaceId | null): FeedQueued[] =>
+  board.queue.queued
+    .filter((item) => inWorkspace(filter, item.workspace))
+    .map((item) => ({ item, label: workItemLabel(item.workItem), title: titleOf(board, item) }));
 
 export const recentlyDone = (board: Board, filter: WorkspaceId | null, limit = 8): FeedRun[] =>
   runs(board, filter)

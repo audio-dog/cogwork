@@ -3,7 +3,7 @@ import * as Stream from "effect/Stream";
 import type { WorkspaceId } from "./base-schemas";
 import type { ConnectionOverview } from "./connection";
 import type { ControlStore, SchedulerStats, WorkspaceFailureInfo, WorkspaceInfo } from "./daemon";
-import { DaemonEvent, type ReadModelItem, WorkspaceState } from "./daemon-event";
+import { DaemonEvent, type ReadModelItem, type SchedulerQueue, WorkspaceState } from "./daemon-event";
 import type { HarnessReadiness } from "./harness";
 import type { PluginOverview } from "./plugin";
 import type { RunSummary } from "./run";
@@ -18,6 +18,7 @@ export interface Board {
   readonly runs: ReadonlyMap<string, RunSummary>;
   readonly workspaces: ReadonlyMap<string, WorkspaceState>;
   readonly scheduler: SchedulerStats | null;
+  readonly queue: SchedulerQueue;
   readonly controlStore: ControlStore | null;
   readonly plugins: PluginOverview | null;
   readonly pluginNotices: readonly string[];
@@ -31,6 +32,7 @@ export const initialBoard: Board = {
   runs: new Map(),
   workspaces: new Map(),
   scheduler: null,
+  queue: { queued: [] },
   controlStore: null,
   plugins: null,
   pluginNotices: [],
@@ -121,6 +123,7 @@ export const applyDaemonEvent = (board: Board, event: DaemonEvent): Board =>
     }),
     HarnessesChanged: ({ readiness }) => ({ ...board, harnesses: readiness }),
     SchedulerChanged: ({ scheduler }) => ({ ...board, scheduler }),
+    QueueChanged: ({ queue }) => ({ ...board, queue }),
     WorkflowChanged: () => board,
     WorkflowDeleted: () => board,
   });

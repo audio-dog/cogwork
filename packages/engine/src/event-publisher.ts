@@ -5,18 +5,21 @@ import {
   contributionSettingApplies,
   type PluginOverview,
   type ReadyToMergeItem,
+  SchedulerQueue,
   type WorkspaceId,
 } from "@cogwork/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
 
 import { DaemonEventBus } from "./daemon-event-bus";
 import type { RegistryState } from "./projector";
 import { readyToMergeByWorkspace, schedulerStatsOf, workspaceStatesOf } from "./read-model";
 import { WorkspaceRegistry } from "./registry-service";
 import { Scheduler } from "./scheduler";
+import { TriggerObservation } from "./trigger-observation";
 
 const withoutContributionDiagnostic = ({
   diagnostic: _diagnostic,
@@ -96,11 +99,15 @@ const removedItems = (previous: ReadyToMergeView, current: ReadyToMergeView) =>
       .map(({ id }) => ({ _tag: "ItemRemoved", workspace, id }) as const);
   });
 
+const sameQueue = Schema.toEquivalence(SchedulerQueue);
+
 export const make = Effect.gen(function* () {
   const scheduler = yield* Scheduler;
   const registry = yield* WorkspaceRegistry;
   const bus = yield* DaemonEventBus;
+  const triggerObservation = yield* TriggerObservation;
   const readyToMergeView = yield* Ref.make<ReadyToMergeView>(new Map());
+  const queueView = yield* Ref.make<SchedulerQueue>({ queued: [] });
 
   const publishWorkspaces = Effect.fn("DaemonEventPublisher.publishWorkspaces")(function* () {
     const state = yield* registry.state;
@@ -131,6 +138,18 @@ export const make = Effect.gen(function* () {
     return stats;
   });
 
+  const publishQueue = Effect.fn("DaemonEventPublisher.publishQueue")(
+    function* () {
+      const queue = yield* triggerObservation.queue;
+      const previous = yield* Ref.getAndSet(queueView, queue);
+      if (sameQueue(previous, queue)) return;
+      yield* bus.publish({ _tag: "QueueChanged", queue });
+    },
+    Effect.catch((error) =>
+      Effect.logWarning("queue picture read failed; keeping the last picture", { error }),
+    ),
+  );
+
   const publishControlStore = Effect.fn("DaemonEventPublisher.publishControlStore")(function* (
     controlStore: ControlStorePicture,
   ) {
@@ -148,9 +167,11 @@ export const make = Effect.gen(function* () {
 
   return {
     readyToMerge: Ref.get(readyToMergeView),
+    queue: Ref.get(queueView),
     publishWorkspaces,
     publishWorkspaceRemoved,
     publishScheduler,
+    publishQueue,
     publishControlStore,
     publishPlugins,
     publishConnections,

@@ -1,6 +1,8 @@
 import {
-  type DaemonEvent,
+  DaemonEvent,
   type ReadyToMergeItem,
+  type SchedulerQueue,
+  WorkflowId,
   WorkItemId,
   WorkspaceConfig,
   WorkspaceId,
@@ -12,6 +14,7 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 
+import { CoordinationError } from "./coordination";
 import * as DaemonEventBus from "./daemon-event-bus";
 import { DaemonEventPublisher, layer as eventPublisherLayer } from "./event-publisher";
 import { IssueTrackerError } from "./issue-tracker";
@@ -19,6 +22,7 @@ import type { RegisteredWorkspace } from "./projector";
 import { readOnlyRegistry, WorkspaceRegistry } from "./registry-service";
 import { Scheduler } from "./scheduler";
 import { emptyService, SourceControlProvider } from "./source-control";
+import { TriggerObservation } from "./trigger-observation";
 import { memoryLayer as workflowArtifactsLayer } from "./workflow-artifact-store";
 
 const workspaceId = Schema.decodeSync(WorkspaceId)("web");
@@ -51,12 +55,31 @@ const readFailure = new IssueTrackerError({ reason: "unavailable", message: "Git
 
 type ReadyToMergeRead = ReadonlyArray<ReadyToMergeItem> | null;
 
-const publisherWithReads = (reads: Ref.Ref<ReadonlyArray<ReadyToMergeRead>>) =>
+const emptyQueue: SchedulerQueue = { queued: [] };
+
+const queueReadFailure = new CoordinationError({
+  reason: "unavailable",
+  retryable: true,
+  message: "Control store is busy",
+});
+
+const publisherWithReads = (
+  reads: Ref.Ref<ReadonlyArray<ReadyToMergeRead>>,
+  queues: Ref.Ref<ReadonlyArray<SchedulerQueue | null>> = Ref.makeUnsafe<
+    ReadonlyArray<SchedulerQueue | null>
+  >([]),
+) =>
   eventPublisherLayer.pipe(
     Layer.provideMerge(DaemonEventBus.layer),
     Layer.provide([
       Layer.succeed(WorkspaceRegistry, readOnlyRegistry({ workspaces: [workspace], failures: [] })),
       Layer.mock(Scheduler, {}),
+      Layer.mock(TriggerObservation, {
+        catalog: [],
+        queue: Ref.modify(queues, ([next = emptyQueue, ...rest]) => [next, rest]).pipe(
+          Effect.flatMap((next) => (next === null ? Effect.fail(queueReadFailure) : Effect.succeed(next))),
+        ),
+      }),
     ]),
     Layer.provideMerge([
       workflowArtifactsLayer,
@@ -95,5 +118,67 @@ describe("DaemonEventPublisher.publishWorkspaces", () => {
       const events = yield* publishTwice([[ready], null]);
       assert.deepStrictEqual(itemTags(events), ["ItemChanged", "ItemChanged"]);
     }),
+  );
+});
+
+const queueOf = (...workItems: ReadonlyArray<string>): SchedulerQueue => ({
+  queued: workItems.map((workItem, index) => ({
+    place: index + 1,
+    workspace: workspaceId,
+    workItem: Schema.decodeSync(WorkItemId)(workItem),
+    workflow: Schema.decodeSync(WorkflowId)("coding"),
+    operation: "implement",
+  })),
+});
+
+const firstQueue = queueOf("#1", "#2");
+const secondQueue = queueOf("#2");
+
+describe("DaemonEventPublisher.publishQueue", () => {
+  it.effect("publishes the queue picture only when it changed", () =>
+    Effect.gen(function* () {
+      const subscription = yield* (yield* DaemonEventBus.DaemonEventBus).subscribe();
+      const publisher = yield* DaemonEventPublisher;
+      yield* publisher.publishQueue();
+      yield* publisher.publishQueue();
+      yield* publisher.publishQueue();
+
+      const published = (yield* PubSub.takeAll(subscription))
+        .filter(DaemonEvent.guards.QueueChanged)
+        .map(({ queue }) => queue);
+      assert.deepStrictEqual(published, [firstQueue, secondQueue]);
+      assert.deepStrictEqual(yield* publisher.queue, secondQueue);
+    }).pipe(
+      Effect.provide(
+        publisherWithReads(
+          Ref.makeUnsafe<ReadonlyArray<ReadyToMergeRead>>([]),
+          Ref.makeUnsafe<ReadonlyArray<SchedulerQueue | null>>([firstQueue, firstQueue, secondQueue]),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("keeps the last queue picture when a read fails", () =>
+    Effect.gen(function* () {
+      const subscription = yield* (yield* DaemonEventBus.DaemonEventBus).subscribe();
+      const publisher = yield* DaemonEventPublisher;
+      yield* publisher.publishQueue();
+      yield* publisher.publishQueue();
+      yield* publisher.publishQueue();
+
+      const published = (yield* PubSub.takeAll(subscription))
+        .filter(DaemonEvent.guards.QueueChanged)
+        .map(({ queue }) => queue);
+      assert.deepStrictEqual(published, [firstQueue]);
+    }).pipe(
+      Effect.provide(
+        publisherWithReads(
+          Ref.makeUnsafe<ReadonlyArray<ReadyToMergeRead>>([]),
+          Ref.makeUnsafe<ReadonlyArray<SchedulerQueue | null>>([firstQueue, null, firstQueue]),
+        ),
+      ),
+      Effect.scoped,
+    ),
   );
 });
