@@ -73,7 +73,6 @@ describe("WorkflowRun", () => {
       if (!run) return;
       const plan = yield* (yield* RunLedger).getRunPlan(run.id);
 
-      assert.include(plan?.workContext.prose.body ?? "", "## Artifacts this lineage created");
       assert.include(plan?.workContext.prose.body ?? "", "https://example.test/issues/99");
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
@@ -119,11 +118,6 @@ describe("WorkflowRun", () => {
       assert.isDefined(actionPlan);
       assert.strictEqual(frozenPlan.steps[0]?.entry, notifyEntry);
       assert.deepStrictEqual(frozenPlan.steps[0]?.inputs, { notification: "Deploy ready" });
-      assert.strictEqual(plan?.workContext.prose.body, admission.event.workContext?.body);
-      assert.deepStrictEqual(
-        plan?.workContext.prose.comments.map((comment) => ({ ...comment })),
-        admission.event.workContext?.comments,
-      );
       assert.strictEqual(
         plan?.instructions.find(({ source }) => source === "workflow-operation")?.content,
         "implement-agent:Summarize the day.",

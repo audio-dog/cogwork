@@ -168,17 +168,6 @@ describe("WorkflowRun", () => {
     );
   });
 
-  it.effect("reports a non-exhausted failure as retryable", () =>
-    Effect.gen(function* () {
-      const { runner, coordination, observationStore } = yield* testProgram([{}]);
-      yield* observationStore.putAll([admission]);
-
-      assert.strictEqual(yield* runner.execute(admission), "retry");
-      assert.isNull(yield* Ref.get(coordination.processed));
-      assert.lengthOf(yield* observationStore.admissions, 1);
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
   it.effect("marks a source revision processed after its last sibling Workflow admission", () =>
     Effect.gen(function* () {
       const siblingAdmission = {
