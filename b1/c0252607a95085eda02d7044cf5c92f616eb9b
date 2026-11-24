@@ -1,0 +1,23 @@
+apps/desktop/src/renderer/src/components/provider-picker.test.tsx
+  s_3de2e34810ff56::t_2689ee8330a451 17,76
+oxlint.config.ts
+  s_3de2e34810ff56::t_cf8af19bde382a 51
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_3de2e34810ff56::t_5c55942462c8b6 9,11,25-26,78,81,160,256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b1c0252607a95085eda02d7044cf5c92f616eb9b",
+  "prompts": {},
+  "sessions": {
+    "s_3de2e34810ff56": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "336d8884-4607-46d4-82c8-97d66d3da869",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
