@@ -48,6 +48,7 @@ export default defineConfig({
         "packages/engine/src/control-store.test.ts",
         "packages/engine/src/coordination-fold.test.ts",
         "packages/engine/src/github/client.test.ts",
+        "packages/engine/src/github/trigger-source-pull-requests.test.ts",
         "packages/engine/src/linear/client-credentials.test.ts",
         "packages/engine/src/linear/oauth.test.ts",
         "packages/engine/src/linear/trigger-source.test.ts",
