@@ -4,7 +4,7 @@ import { cn } from "#lib/utils";
 
 function Label({ className, ...props }: React.ComponentProps<"label">) {
   return (
-    // biome-ignore lint/a11y/noLabelWithoutControl: reusable primitive; consumers associate a control via htmlFor
+    // oxlint-disable-next-line jsx-a11y/label-has-associated-control -- reusable primitive; consumers associate a control via htmlFor
     <label
       data-slot="label"
       className={cn(

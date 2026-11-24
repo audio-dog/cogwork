@@ -103,7 +103,6 @@ function FunnelFilterControl() {
           {state.options.map((opt) => {
             const checked = state.selected.has(opt.key);
             return (
-              // biome-ignore lint/a11y/noLabelWithoutControl: Base UI Checkbox wraps a hidden input; biome does not see it through the component boundary
               <label
                 key={opt.key}
                 className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-accent"
