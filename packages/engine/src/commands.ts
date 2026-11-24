@@ -60,6 +60,10 @@ import { WorkflowRun } from "./workflow-run";
 const workspaceById = (registry: RegistryState, id: WorkspaceId) =>
   registry.workspaces.find((workspace) => workspace.config.id === id) ?? null;
 
+const registeredDisplayName = (registry: RegistryState, id: WorkspaceId) =>
+  workspaceById(registry, id)?.config.displayName ??
+  registry.failures.find((failure) => failure.id === id)?.displayName;
+
 const workspaceIsRegistered = (registry: RegistryState, id: WorkspaceId) =>
   workspaceById(registry, id) !== null || registry.failures.some((failure) => failure.id === id);
 
@@ -374,9 +378,11 @@ export const deregisterWorkspace = Effect.fn("Daemon.DeregisterWorkspace")(funct
   const management = yield* WorkspaceManagement;
   const publisher = yield* DaemonEventPublisher;
   const store = yield* ControlStore;
+  const registry = yield* WorkspaceRegistry;
+  const displayName = registeredDisplayName(yield* registry.state, payload.workspace);
   return yield* publishAfter(management.deregister(payload.workspace), (workspace) =>
     Effect.gen(function* () {
-      yield* publisher.publishWorkspaceRemoved(workspace);
+      yield* publisher.publishWorkspaceRemoved(workspace, displayName);
       const controlStore = yield* store.picture.pipe(
         Effect.mapError(
           (error) =>

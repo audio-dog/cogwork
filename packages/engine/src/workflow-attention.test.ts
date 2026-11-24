@@ -18,6 +18,8 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
 import { Coordination, type CoordinationService, fold } from "./coordination";
+import { layer as daemonEventBusLayer } from "./daemon-event-bus";
+import { RunLedger, layerMemory as runLedgerLayer } from "./run-ledger";
 import type { TriggerAdmission } from "./trigger-observation-admission";
 import { makeMemoryTriggerObservationStore, TriggerObservationStore } from "./trigger-observation-store";
 import { Workflows, type WorkflowsService } from "./workflow";
@@ -35,15 +37,35 @@ const workspace = Schema.decodeSync(WorkspaceId)("cogwork");
 const item = Schema.decodeSync(WorkItemId)("#814");
 const attempt = Schema.decodeSync(RunId)("run-814");
 const ref = { _tag: "Issue", workspace, id: item } as const;
+const forgottenRef = { ...ref, id: Schema.decodeSync(WorkItemId)("#815") };
+const parentRun = {
+  id: Schema.decodeSync(RunId)("run-parent"),
+  workspace,
+  workItem: item,
+  workflow,
+  operation: "implement",
+  harness: Schema.decodeSync(HarnessName)("codex"),
+  branch: null,
+  session: null,
+  usage: null,
+  status: "succeeded",
+  startedAtMillis: 1_700_000_000_000,
+  endedAtMillis: 1_700_000_060_000,
+} as const;
 const document = Schema.decodeSync(WorkflowDocument)({
   name: "Touchpoints",
   workspaces: { _tag: "Every" },
   triggers: [],
   operations: [],
 });
-const admission = (revision: string, atMillis: number): TriggerAdmission => ({
+const admission = (
+  revision: string,
+  atMillis: number,
+  key: typeof ref = ref,
+  parent: string | null = null,
+): TriggerAdmission => ({
   event: {
-    key: ref,
+    key,
     revision,
     cause: { _tag: "Unknown" },
     atMillis,
@@ -60,7 +82,11 @@ const admission = (revision: string, atMillis: number): TriggerAdmission => ({
     workspaces: [workspace],
     catchUp: { since: 0 },
   },
-  lineage: { root: LineageId.make(keyOf(ref)), parent: null, hop: 0 },
+  lineage: {
+    root: LineageId.make(keyOf(key)),
+    parent: parent === null ? null : LineageId.make(parent),
+    hop: parent === null ? 0 : 1,
+  },
 });
 
 const coordinationView = fold(
@@ -127,6 +153,7 @@ const requirements = Layer.mergeAll(
   observationLayer,
   workflowActionPlanStoreLayer,
   Layer.succeed(Workflows, workflowService),
+  runLedgerLayer.pipe(Layer.provide(daemonEventBusLayer)),
 );
 
 it.effect("lists an item that no longer matched its Trigger as a skipped event", () =>
@@ -193,6 +220,7 @@ it.effect("lists one parked item and marks a later source revision", () =>
       publishedRevision: 3,
       operation,
       lineage: admission("1", 1).lineage,
+      parentRun: null,
       summary: "Needs a decision",
       changedSinceParked: true,
       commands: ["hand-back"],
@@ -209,4 +237,26 @@ it.effect("lists one parked item and marks a later source revision", () =>
       },
     ]);
   }).pipe(Effect.provide(requirements)),
+);
+
+it.effect(
+  "labels a parked item's parent Run from the Run ledger, and leaves it null once the ledger has no row",
+  () =>
+    Effect.gen(function* () {
+      yield* (yield* RunLedger).insertRun(parentRun);
+      yield* (yield* TriggerObservationStore).putAll([
+        admission("1", 1, ref, "run-parent"),
+        admission("1", 2, forgottenRef, "run-pruned"),
+      ]);
+
+      const result = yield* (yield* make).list;
+
+      assert.deepStrictEqual(
+        result.parks.map((park) => [keyOf(park.item), park.parentRun]),
+        [
+          [keyOf(ref), { operation: "implement", startedAtMillis: 1_700_000_000_000 }],
+          [keyOf(forgottenRef), null],
+        ],
+      );
+    }).pipe(Effect.provide(requirements)),
 );

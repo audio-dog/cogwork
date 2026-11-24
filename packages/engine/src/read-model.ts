@@ -80,6 +80,7 @@ const runsIn = (state: SchedulerState, workspace: WorkspaceId) =>
 const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, state: SchedulerState) => [
   ...registry.workspaces.map((workspace) => ({
     id: workspace.config.id,
+    displayName: workspace.config.displayName,
     inFlight: runsIn(state, workspace.config.id),
     limit: workspace.workspaceLimit ?? config.perWorkspaceLimit,
   })),
@@ -88,6 +89,7 @@ const workspaceLoadsOf = (registry: RegistryState, config: SchedulerConfig, stat
     return [
       {
         id: failure.id,
+        displayName: failure.displayName,
         inFlight: runsIn(state, failure.id),
         limit: failure.workspaceLimit ?? config.perWorkspaceLimit,
       },

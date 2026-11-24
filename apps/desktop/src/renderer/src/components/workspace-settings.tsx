@@ -46,9 +46,9 @@ import {
   workspaceHealth,
   workspaceIdentity,
   workspaceKey,
-  workspaceLabel,
   workspaceRecordDraftError,
   workspaceRecordWritable,
+  workspaceStateLabel,
   workspaceUpdateFromDraft,
 } from "../features/workspace-record";
 import { absoluteCheckoutPathFrom } from "../features/workspace-registration";
@@ -138,7 +138,7 @@ function useWorkspaceSettings(workspaceId: string): WorkspaceSettings {
   return {
     status: status === "ready" && !workspace ? "unknown" : status,
     workspace,
-    label: workspace ? workspaceLabel(workspace) : workspaceId,
+    label: workspace ? workspaceStateLabel(workspace) : workspaceId,
     draft: draft ?? emptyDraft,
     changes: draft && baseline ? changedFieldCount(draft, baseline) : 0,
     controlStore,
