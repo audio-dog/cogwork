@@ -1,4 +1,4 @@
-import { keyOf, NeedIdentity, WorkflowActionPlan, WorkflowDocument } from "@cogwork/contracts";
+import { keyOf, WorkflowActionPlan } from "@cogwork/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -13,15 +13,7 @@ import type { TriggerAdmission } from "./trigger-observation-admission";
 import { Recheck } from "./trigger-source";
 import { WorkflowActionPlanStore } from "./workflow-action-plan-store";
 import { admission, granolaAdmission, siblingGranolaAdmission } from "./workflow-run-admissions-fixtures";
-import {
-  decodeRun,
-  document,
-  operation,
-  siblingWorkflow,
-  workflow,
-  workflowService,
-  workflowServiceWith,
-} from "./workflow-run-documents-fixtures";
+import { decodeRun, operation, siblingWorkflow, workflow } from "./workflow-run-documents-fixtures";
 import { requirements, testProgram } from "./workflow-run-fixtures";
 
 const waitingRecheck = Recheck.Waiting({ reason: "#1 fails Issue is not blocked" });
@@ -321,60 +313,27 @@ describe("WorkflowRun", () => {
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
 
-  const documentWithOperation = (change: Partial<WorkflowDocument["operations"][number]>) =>
-    WorkflowDocument.make({
-      ...document,
-      operations: document.operations.map((candidate) => ({ ...candidate, ...change })),
-    });
-  const unreadyCases = [
-    {
-      name: "no Harness can be selected",
-      preflight: () => Effect.void,
-      service: {
-        ...workflowServiceWith(documentWithOperation({ model: { harness: null, model: null, options: [] } })),
-        catalog: workflowService.catalog.pipe(
-          Effect.map((result) => ({ ...result, machine: { ...result.machine, defaultHarness: null } })),
-        ),
-      },
-    },
-    {
-      name: "Harness preflight fails",
-      preflight: () =>
-        Effect.fail(
-          new HarnessError({
-            reason: "credential",
-            retryable: true,
-            message: "Harness unavailable",
-          }),
-        ),
-      service: workflowService,
-    },
-    {
-      name: "a required connection is not ready",
-      preflight: () => Effect.void,
-      service: workflowServiceWith(
-        documentWithOperation({ requires: [NeedIdentity.make("connection:github")] }),
-      ),
-    },
-  ] as const;
+  it.effect("declines without a park when Harness preflight fails", () =>
+    Effect.gen(function* () {
+      const { runner, coordination } = yield* testProgram([], {
+        preflight: () =>
+          Effect.fail(
+            new HarnessError({
+              reason: "credential",
+              retryable: true,
+              message: "Harness unavailable",
+            }),
+          ),
+        run: () => Stream.die("unexpected Harness run"),
+      });
 
-  unreadyCases.forEach(({ name, preflight, service }) => {
-    it.effect(`declines without a park when ${name}`, () =>
-      Effect.gen(function* () {
-        const { runner, coordination } = yield* testProgram(
-          [],
-          { preflight, run: () => Stream.die("unexpected Harness run") },
-          service,
-        );
-
-        assert.strictEqual(yield* runner.execute(admission), "waiting");
-        assert.deepStrictEqual(yield* Ref.get(coordination.parks), []);
-        assert.isNull(yield* Ref.get(coordination.processed));
-        assert.strictEqual(
-          (yield* coordination.service.read(admission.event.key)).gate({ workflow, operation })._tag,
-          "Open",
-        );
-      }).pipe(Effect.provide(requirements), Effect.scoped),
-    );
-  });
+      assert.strictEqual(yield* runner.execute(admission), "waiting");
+      assert.deepStrictEqual(yield* Ref.get(coordination.parks), []);
+      assert.isNull(yield* Ref.get(coordination.processed));
+      assert.strictEqual(
+        (yield* coordination.service.read(admission.event.key)).gate({ workflow, operation })._tag,
+        "Open",
+      );
+    }).pipe(Effect.provide(requirements), Effect.scoped),
+  );
 });

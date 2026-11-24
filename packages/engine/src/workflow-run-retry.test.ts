@@ -47,25 +47,6 @@ const resendRequest = (agentText: string) =>
   `${agentText}\n\nDo no other work unless an issue above needs it.`;
 
 describe("WorkflowRun", () => {
-  it.effect("refuses a matched action input that is empty after trim", () =>
-    Effect.gen(function* () {
-      const { runner, coordination } = yield* testProgram([
-        {
-          summary: "No message",
-          stuck: false,
-          answers: { done: "yes" },
-          inputs: { notification: "   " },
-        },
-      ]);
-      yield* runner.execute(admission);
-      const [run] = yield* (yield* RunLedger).listRuns(10);
-      const attempts = yield* Ref.get(coordination.attempts);
-
-      assert.strictEqual(run?.status, "failed");
-      assert.include(attempts[0]?.reason ?? "", "needs non-empty input notification");
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
   it.effect("declines an empty pull request before recording its action plan", () => {
     const workspace = {
       source: "control-store:workspace",

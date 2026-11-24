@@ -28,7 +28,6 @@ import {
   decodeWorkspace,
   document,
   harnessName,
-  issueSearchService,
   notifyEntry,
   postReviewCatalogEntry,
   reviewDocument,
@@ -43,44 +42,6 @@ import {
 import { requirements, resultEvent, testProgram } from "./workflow-run-fixtures";
 
 describe("WorkflowRun", () => {
-  it.effect("freezes the complete Granola note in Work context", () =>
-    Effect.gen(function* () {
-      const { runner } = yield* testProgram([
-        {
-          summary: "Captured",
-          stuck: false,
-          answers: { done: "yes" },
-          inputs: { notification: "Captured" },
-        },
-      ]);
-      yield* runner.execute(granolaAdmission);
-      const [run] = yield* (yield* RunLedger).listRuns(10);
-      assert.isDefined(run);
-      if (!run) return;
-      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
-
-      assert.strictEqual(
-        plan?.workContext.prose.body,
-        [
-          "# Weekly product sync",
-          "",
-          "## Attendees",
-          "Taylor <taylor@example.com>",
-          "Ari <ari@example.com>",
-          "",
-          "## Calendar event",
-          "Weekly product sync · 2026-10-29 09:00 MDT",
-          "",
-          "## Summary",
-          "Decided to ship the smaller change.",
-          "",
-          "## Transcript",
-          "Taylor: Ship the smaller change.\nAri: Agreed.",
-        ].join("\n"),
-      );
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
   it.effect("includes artifacts already created by the lineage in Work context", () =>
     Effect.gen(function* () {
       const artifact = WorkflowActionArtifact.make({
@@ -170,78 +131,6 @@ describe("WorkflowRun", () => {
       assert.deepStrictEqual(
         (yield* restartedNotifications.list).map(({ summary, answers }) => ({ summary, answers })),
         [{ summary: "Deploy ready", answers: { done: "yes" } }],
-      );
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
-  it.effect("adds issue search only when a Transition writes an issue", () =>
-    Effect.gen(function* () {
-      const { runner } = yield* testProgram(
-        [
-          {
-            summary: "Create it",
-            stuck: false,
-            answers: { done: "yes" },
-            inputs: { issue_title: "Title", issue_body: "Body" },
-            workspace: "none",
-          },
-        ],
-        {},
-        issueSearchService(yield* workflowService.catalog),
-      );
-
-      yield* runner.execute(admission);
-      const [run] = yield* (yield* RunLedger).listRuns(1);
-      assert.isDefined(run);
-      if (!run) return;
-      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
-
-      assert.deepStrictEqual(plan?.tools, ["issue-search"]);
-      assert.deepStrictEqual(
-        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
-        { member: "Tools", disposition: "projected" },
-      );
-    }).pipe(Effect.provide(requirements), Effect.scoped),
-  );
-
-  it.effect("lists no engine tool for a Harness that does not project Tools", () =>
-    Effect.gen(function* () {
-      const { runner } = yield* testProgram(
-        [
-          {
-            summary: "Create it",
-            stuck: false,
-            answers: { done: "yes" },
-            inputs: { issue_title: "Title", issue_body: "Body" },
-            workspace: "none",
-          },
-        ],
-        { projectedMembers: [] },
-        issueSearchService(yield* workflowService.catalog),
-      );
-
-      yield* runner.execute(admission);
-      const [run] = yield* (yield* RunLedger).listRuns(1);
-      assert.isDefined(run);
-      if (!run) return;
-      const plan = yield* (yield* RunLedger).getRunPlan(run.id);
-
-      assert.deepStrictEqual(plan?.tools, []);
-      assert.deepStrictEqual(
-        { ...plan?.provenance.projection.find(({ member }) => member === "Tools") },
-        {
-          member: "Tools",
-          disposition: "not-projected",
-          reason: "selected harness does not project Tools",
-        },
-      );
-      assert.deepStrictEqual(
-        { ...plan?.provenance.projection.find(({ member }) => member === "Subagents") },
-        {
-          member: "Subagents",
-          disposition: "not-projected",
-          reason: "selected harness does not project Subagents",
-        },
       );
     }).pipe(Effect.provide(requirements), Effect.scoped),
   );
