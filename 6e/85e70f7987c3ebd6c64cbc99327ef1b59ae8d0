@@ -1,0 +1,57 @@
+apps/desktop/src/renderer/src/components/workflow-editor.tsx
+  s_9a120119bcdfce::t_e7373907ddc1ec 47,134-146,240
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.test.ts
+  s_9a120119bcdfce::t_dfbe9bc89a8b28 1-8,49-62,76,122-131
+apps/desktop/src/renderer/src/daemon/working-copy-daemon.ts
+  s_9a120119bcdfce::t_8a192b3b64c7d8 5,20,45-52,55
+apps/desktop/src/renderer/src/features/workflow-session-fixtures.tsx
+  s_9a120119bcdfce::t_2bb8a7a4a3d141 1-286
+apps/desktop/src/renderer/src/features/workflow-session-list.test.tsx
+  s_9a120119bcdfce::t_45cfcea8befd97 1-211
+apps/desktop/src/renderer/src/features/workflow-session-options.test.tsx
+  s_9a120119bcdfce::t_8d5e0ecdd824ad 1-250
+apps/desktop/src/renderer/src/features/workflow-session.test.tsx
+  s_9a120119bcdfce::t_0655f9cc912b54 3,7-16,19-21,23,25,159-170
+apps/desktop/src/renderer/src/features/working-copy-provider.tsx
+  s_9a120119bcdfce::t_64fcd9411ccb6e 23-24,97-101,124-128,149,156,169,172
+apps/desktop/src/renderer/src/features/working-copy.test.ts
+  s_9a120119bcdfce::t_286b643e654c61 188-279,284
+apps/desktop/src/renderer/src/features/working-copy.ts
+  s_9a120119bcdfce::t_0cdcd1757b8826 33-36,41-42,47,55-57,61,71,77,85-87,91,95-100,133,138-164,169,175,181,183-184,197-198,212,214,217,220,224-228,232-234,238,241-250,256-258,260-266,270-277,285-298
+apps/desktop/src/renderer/src/testing/router-links.tsx
+  s_9a120119bcdfce::t_393b2608f550c1 1-37
+apps/desktop/src/renderer/src/testing/working-copy-daemon.ts
+  s_9a120119bcdfce::t_23e7e04fc0d422 33-34,60-62,77,96,130-131
+packages/engine/docs/adr/0013-a-follow-up-trigger-must-be-a-condition-the-agent-can-clear.md
+  s_9a120119bcdfce::t_7c414764dda8e1 5-6
+packages/engine/src/coordination-fold.test.ts
+  s_9a120119bcdfce::t_820eab3e93eee3 147-211
+packages/engine/src/coordination.ts
+  s_9a120119bcdfce::t_0b13e5076a9370 60,135-136,184-209,223,243
+packages/engine/src/github/pull-request-trigger-source.ts
+  s_9a120119bcdfce::t_b3cc77640b430e 1,4,7,253-275,283,299-301,309,316,322,397,415,430,435-442,461-474,476-482
+packages/engine/src/github/trigger-source-pull-request-conditions.test.ts
+  s_9a120119bcdfce::t_16fbb36b518f39 1-115
+packages/engine/src/github/trigger-source-pull-requests.test.ts
+  s_9a120119bcdfce::t_a1f976d4bdcba9 40-44
+packages/engine/src/trigger-observation-eligible.test.ts
+  s_9a120119bcdfce::t_d00a692499e080 3,37,374-463
+packages/engine/src/trigger-observation.ts
+  s_9a120119bcdfce::t_47059702f81b84 24,58,84-86,326-357,377-380,417
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6e85e70f7987c3ebd6c64cbc99327ef1b59ae8d0",
+  "prompts": {},
+  "sessions": {
+    "s_9a120119bcdfce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c0aacc59-b410-4b9d-882e-720b2ffd0905",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
