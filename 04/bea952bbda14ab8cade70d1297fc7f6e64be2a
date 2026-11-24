@@ -1,0 +1,29 @@
+configs/lint/oxlint-plugin/rules/no-export-in-test.ts
+  s_c357b720cb86f6::t_b927042014982d 3,14
+configs/lint/tests/rules.test.mjs
+  s_13202aa35a2b73::t_ce573e34765e11 2,330-331,344
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "04bea952bbda14ab8cade70d1297fc7f6e64be2a",
+  "prompts": {},
+  "sessions": {
+    "s_13202aa35a2b73": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a578ad4d9334bf647",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    },
+    "s_c357b720cb86f6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a564603704ccf6e29",
+        "model": "unknown"
+      },
+      "human_author": "taylorfsteele <taylor.f.steele@gmail.com>"
+    }
+  }
+}
