@@ -15,7 +15,6 @@ window.addEventListener("unhandledrejection", (event) =>
   reportRendererError(event.reason, "unhandledrejection"),
 );
 
-// biome-ignore lint/style/noNonNullAssertion: <If the root doesnt exist we have bigger problems>
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
