@@ -3,7 +3,7 @@ name: Lint Rule Fixtures
 on:
   pull_request:
     branches: ['main']
-    paths: ['biome.json', 'configs/lint/**']
+    paths: ['biome.json', 'oxlint.config.ts', 'configs/lint/**']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}

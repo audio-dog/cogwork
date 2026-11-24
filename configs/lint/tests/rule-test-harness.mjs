@@ -18,6 +18,33 @@ const resolveBiomeBin = () => {
   return path.resolve(path.dirname(packagePath), bin);
 };
 
+const resolveOxlintBin = () =>
+  path.resolve(path.dirname(require.resolve("oxlint/package.json")), "bin", "oxlint");
+
+export const lintFixturesWithOxlint = (config) => {
+  const tempDirectory = mkdtempSync(path.join(tmpdir(), "cogwork-oxlint-rules-"));
+  const configPath = path.join(tempDirectory, ".oxlintrc.json");
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [resolveOxlintBin(), `--config=${configPath}`, "--format=json", fixtureRoot],
+      { cwd: lintRoot, encoding: "utf8" },
+    );
+    const { diagnostics } = JSON.parse(result.stdout);
+
+    return {
+      diagnosticsByFile: Map.groupBy(diagnostics, (diagnostic) =>
+        path.resolve(lintRoot, diagnostic.filename),
+      ),
+      output: `${result.stdout}${result.stderr}`,
+    };
+  } finally {
+    rmSync(tempDirectory, { force: true, recursive: true });
+  }
+};
+
 export const lintWithRule = (rulePath, fixturePath) => {
   const tempDirectory = mkdtempSync(path.join(tmpdir(), "cogwork-lint-rule-"));
   const configPath = path.join(tempDirectory, "biome.json");
