@@ -1,4 +1,9 @@
-import { connectionAccountOf, linearTeams, type WorkspaceConfig } from "@cogwork/contracts";
+import {
+  type ConnectionBindingId,
+  connectionAccountOf,
+  linearTeams,
+  type WorkspaceConfig,
+} from "@cogwork/contracts";
 
 import type { CredentialAccount } from "../credential-store";
 
@@ -12,19 +17,22 @@ const linearAccountKey = (config: LinearWorkspaceConfig): string | null => {
   return rest.length === 0 ? first : config.id;
 };
 
-export const credentialAccountFor = (config: LinearWorkspaceConfig): CredentialAccount | null => {
-  const key = linearAccountKey(config);
-  if (key === null) return null;
-  const source = config.issueTracker;
-  const connectionId = source.connectionId === "unbound" ? undefined : source.connectionId;
-  const account = connectionId ? connectionAccountOf(connectionId) : null;
+export const connectionCredentialAccount = (key: string, connectionId: ConnectionBindingId) => {
+  const bound = connectionId === "unbound" ? undefined : connectionId;
+  const account = bound ? connectionAccountOf(bound) : null;
   return {
-    ...(connectionId ? { connectionId } : {}),
+    ...(bound ? { connectionId: bound } : {}),
     key,
     issueTracker: "linear",
     organization: account === "default" ? null : account,
     tokenEnv: "LINEAR_API_KEY",
     clientCredentials: null,
     oauthClientId: null,
-  };
+  } satisfies CredentialAccount;
+};
+
+export const credentialAccountFor = (config: LinearWorkspaceConfig): CredentialAccount | null => {
+  const key = linearAccountKey(config);
+  if (key === null) return null;
+  return connectionCredentialAccount(key, config.issueTracker.connectionId);
 };

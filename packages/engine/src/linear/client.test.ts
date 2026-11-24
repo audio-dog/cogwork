@@ -75,6 +75,46 @@ describe("LinearClient.listActiveUsers", () => {
   });
 });
 
+describe("LinearClient.listTeams", () => {
+  it.effect("collects every team page by key and name without a configured team", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof globalThis.fetch>((_input, init) => {
+        const { variables } = JSON.parse(String(init?.body));
+        const page =
+          variables.after === "cursor-1"
+            ? {
+                nodes: [{ id: "team-2", key: "ENG", name: "Engineering" }],
+                hasNextPage: false,
+                endCursor: null,
+              }
+            : {
+                nodes: [{ id: "team-1", key: "PROD", name: "Platform" }],
+                hasNextPage: true,
+                endCursor: "cursor-1",
+              };
+        return Promise.resolve(
+          graphqlResponse({
+            teams: {
+              nodes: page.nodes,
+              pageInfo: { hasNextPage: page.hasNextPage, hasPreviousPage: false, endCursor: page.endCursor },
+            },
+          }),
+        );
+      }),
+    );
+
+    return Effect.gen(function* () {
+      const teams = yield* (yield* LinearClient).listTeams({ account });
+
+      assert.deepStrictEqual(teams, [
+        { key: "PROD", name: "Platform" },
+        { key: "ENG", name: "Engineering" },
+      ]);
+    }).pipe(Effect.provide(layer.pipe(Layer.provide(credentials))));
+  });
+});
+
 describe("Linear label history", () => {
   it.effect("finds when a label was applied among history entries that added no labels", () =>
     Effect.gen(function* () {

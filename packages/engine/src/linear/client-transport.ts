@@ -17,11 +17,14 @@ import {
   withTransientAttemptDeadline,
 } from "./client-errors";
 
-export interface LinearTeamRef {
-  readonly team: string;
-  // The whole workspace reads through one Linear credential, so every team ref carries the same
-  // account; the team key alone routes writes, decoupled from which credential fetches them.
+export interface LinearAccountRef {
   readonly account: CredentialAccount;
+}
+
+// The whole workspace reads through one Linear credential, so every team ref carries the same
+// account; the team key alone routes writes, decoupled from which credential fetches them.
+export interface LinearTeamRef extends LinearAccountRef {
+  readonly team: string;
 }
 
 // Linear's request budget is per user and shared across every key that user owns, so every workspace
@@ -53,7 +56,7 @@ export const makeTransport = Effect.fn("linear.client.makeTransport")(function* 
 ) {
   const resumeAt = yield* Ref.make(new Map<string, number>());
 
-  const holdOff = Effect.fn("linear.holdOff")(function* (ref: LinearTeamRef, nowMillis: number) {
+  const holdOff = Effect.fn("linear.holdOff")(function* (ref: LinearAccountRef, nowMillis: number) {
     const until = (yield* Ref.get(resumeAt)).get(rateLimitScopeOf(ref.account.tokenEnv));
     if (until === undefined || until <= nowMillis) return;
     return yield* new IssueTrackerError({
@@ -63,7 +66,7 @@ export const makeTransport = Effect.fn("linear.client.makeTransport")(function* 
     });
   });
 
-  const noteRateLimit = (ref: LinearTeamRef, nowMillis: number, error: IssueTrackerError) =>
+  const noteRateLimit = (ref: LinearAccountRef, nowMillis: number, error: IssueTrackerError) =>
     Ref.update(resumeAt, (entries) =>
       new Map(entries).set(
         rateLimitScopeOf(ref.account.tokenEnv),
@@ -73,20 +76,20 @@ export const makeTransport = Effect.fn("linear.client.makeTransport")(function* 
 
   // Client credentials have no refresh token, so local invalidation mints a replacement. Reconcile
   // also revokes the connection so operators can see and repair the rejected credential.
-  const noteFailure = (ref: LinearTeamRef, nowMillis: number, error: IssueTrackerError) => {
+  const noteFailure = (ref: LinearAccountRef, nowMillis: number, error: IssueTrackerError) => {
     if (error.reason === "rate-limited") return noteRateLimit(ref, nowMillis, error);
     if (error.reason === "auth") return credentials.invalidate(ref.account);
     return Effect.void;
   };
 
-  const credentialFor = (ref: LinearTeamRef) =>
+  const credentialFor = (ref: LinearAccountRef) =>
     Effect.mapError(
       credentials.bearerToken(ref.account),
       (error) => new IssueTrackerError({ reason: "auth", message: error.message }),
     );
 
   const callWithCredential = Effect.fn("linear.callWithCredential")(function* <A>(
-    ref: LinearTeamRef,
+    ref: LinearAccountRef,
     credential: Credential,
     run: (sdk: LinearSdk) => PromiseLike<A>,
   ) {
@@ -111,7 +114,7 @@ export const makeTransport = Effect.fn("linear.client.makeTransport")(function* 
   });
 
   const call = Effect.fn("linear.call")(function* <A>(
-    ref: LinearTeamRef,
+    ref: LinearAccountRef,
     run: (sdk: LinearSdk) => PromiseLike<A>,
   ) {
     const credential = yield* credentialFor(ref);
@@ -119,7 +122,7 @@ export const makeTransport = Effect.fn("linear.client.makeTransport")(function* 
   });
 
   const callOnceWithCredential = Effect.fn("linear.callOnceWithCredential")(function* <A>(
-    ref: LinearTeamRef,
+    ref: LinearAccountRef,
     credential: Credential,
     run: (sdk: LinearSdk) => PromiseLike<A>,
   ) {
@@ -139,7 +142,7 @@ export const makeTransport = Effect.fn("linear.client.makeTransport")(function* 
   });
 
   const callOnce = Effect.fn("linear.callOnce")(function* <A>(
-    ref: LinearTeamRef,
+    ref: LinearAccountRef,
     run: (sdk: LinearSdk) => PromiseLike<A>,
   ) {
     const credential = yield* credentialFor(ref);
@@ -149,7 +152,7 @@ export const makeTransport = Effect.fn("linear.client.makeTransport")(function* 
   // The SDK fetches nested models lazily, so typed reads cost two extra requests per issue; observe
   // only stays inside Linear's rate limit while these reads stay single documents.
   const rawData = Effect.fn("linear.rawRequest")(function* (
-    ref: LinearTeamRef,
+    ref: LinearAccountRef,
     document: string,
     variables: Record<string, unknown>,
   ) {

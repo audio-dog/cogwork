@@ -176,7 +176,7 @@ describe("workspace record draft", () => {
       ...emptyDraft,
       displayName: "  cogwork  ",
       issueTrackerConnectionId: "github/acme",
-      teams: " ENG, APP ",
+      teams: ["ENG", "APP"],
       assigneeAllowlist: ["taylorfsteele", "cogwork-bot"],
       priorityFieldId: " 12 ",
       worktreeRoot: " /worktrees ",
@@ -190,7 +190,7 @@ describe("workspace record draft", () => {
     expect(draftAfterSubmission(draft, "/repos/cogwork", update)).toMatchObject({
       displayName: "cogwork",
       checkoutPath: "/repos/cogwork",
-      teams: "ENG, APP",
+      teams: ["ENG", "APP"],
       assigneeAllowlist: ["taylorfsteele", "cogwork-bot"],
       priorityFieldId: "12",
       worktreeRoot: "/worktrees",

@@ -1,24 +1,5 @@
-import type {
-  Connection,
-  ConnectionBindingId,
-  GitHubPriorityField,
-  IssueTrackerPerson,
-  WorkspaceId,
-} from "@cogwork/contracts";
-import { Alert, AlertDescription, AlertTitle } from "@cogwork/ui/components/alert";
+import type { Connection } from "@cogwork/contracts";
 import { Button } from "@cogwork/ui/components/button";
-import {
-  Combobox,
-  ComboboxChip,
-  ComboboxChips,
-  ComboboxChipsInput,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxValue,
-  useComboboxAnchor,
-} from "@cogwork/ui/components/combobox";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldTitle } from "@cogwork/ui/components/field";
 import { Input } from "@cogwork/ui/components/input";
 import {
@@ -29,43 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@cogwork/ui/components/select";
-import { Skeleton } from "@cogwork/ui/components/skeleton";
 import { Switch } from "@cogwork/ui/components/switch";
 import { Textarea } from "@cogwork/ui/components/textarea";
-import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
-import type * as Cause from "effect/Cause";
-import { createContext, type ReactNode, use } from "react";
 
-import { githubPriorityFieldsAtom, issueTrackerPeopleAtom } from "../daemon/atoms";
-import { daemonFailureMessage } from "../features/daemon-failure";
 import type { WorkspaceRecordDraft } from "../features/workspace-record";
-
-export type PatchDraft = (next: Partial<WorkspaceRecordDraft>) => void;
-
-export interface WorkspaceRecordValue {
-  readonly state: { readonly draft: WorkspaceRecordDraft; readonly connections: readonly Connection[] };
-  readonly actions: { readonly patch: PatchDraft };
-  readonly meta: { readonly disabled: boolean; readonly workspace: WorkspaceId | null };
-}
-
-const WorkspaceRecordContext = createContext<WorkspaceRecordValue | null>(null);
-
-function useWorkspaceRecord() {
-  const value = use(WorkspaceRecordContext);
-  if (!value) throw new Error("Workspace record rows must render inside a WorkspaceRecord.Provider");
-  return value;
-}
-
-function WorkspaceRecordProvider({
-  value,
-  children,
-}: {
-  readonly value: WorkspaceRecordValue;
-  readonly children: ReactNode;
-}) {
-  return <WorkspaceRecordContext value={value}>{children}</WorkspaceRecordContext>;
-}
+import { useWorkspaceRecord, WorkspaceRecordProvider } from "./workspace-record-context";
+import { AssigneeAllowlistRow, LinearTeamsRow, PriorityFieldRow } from "./workspace-setting-tracker-choices";
 
 function DraftInput({
   field,
@@ -146,29 +97,6 @@ export const trackerSelectionPatch = (
   issueTrackerConnectionId: establishedConnectionId(connections, issueTrackerType),
   assigneeAllowlist: [],
 });
-
-const trackerConnection = (draft: WorkspaceRecordDraft, connections: readonly Connection[]) =>
-  connections.find(({ id }) => id === draft.issueTrackerConnectionId)?.id ?? "unbound";
-
-function TrackerLoadFailure({
-  cause,
-  onRetry,
-  children,
-}: {
-  readonly cause: Cause.Cause<unknown>;
-  readonly onRetry: () => void;
-  readonly children: ReactNode;
-}) {
-  return (
-    <Alert variant="destructive" className="max-w-80">
-      <AlertTitle>{children}</AlertTitle>
-      <AlertDescription>{daemonFailureMessage(cause)}</AlertDescription>
-      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-        Try again
-      </Button>
-    </Alert>
-  );
-}
 
 export const sourceControlSelectionPatch = (
   connections: readonly Connection[],
@@ -258,98 +186,6 @@ function IdentityRows() {
   );
 }
 
-export const priorityFieldItems = (fields: readonly GitHubPriorityField[], selected: string) => {
-  const selectedIsAvailable = fields.some((field) => field.id.toString() === selected);
-  const unavailable =
-    selected === "" || selectedIsAvailable
-      ? []
-      : [{ value: selected, label: `Unavailable field #${selected}` }];
-  return [
-    { value: "none", label: "Do not order by priority" },
-    ...unavailable,
-    ...fields.map((field) => ({ value: field.id.toString(), label: field.name })),
-  ];
-};
-
-function PriorityFieldSelect({ fields }: { readonly fields: readonly GitHubPriorityField[] }) {
-  const {
-    state: { draft },
-    actions: { patch },
-    meta: { disabled },
-  } = useWorkspaceRecord();
-  const items = priorityFieldItems(fields, draft.priorityFieldId);
-  return (
-    <Select
-      items={items}
-      value={draft.priorityFieldId || "none"}
-      disabled={disabled}
-      onValueChange={(value) => patch({ priorityFieldId: !value || value === "none" ? "" : value })}
-    >
-      <SelectTrigger aria-label="Priority issue field" className="w-80">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectGroup>
-          {items.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      </SelectContent>
-    </Select>
-  );
-}
-
-function LivePriorityFieldSelect({
-  workspace,
-  connection,
-}: {
-  readonly workspace: WorkspaceId;
-  readonly connection: ConnectionBindingId;
-}) {
-  const atom = githubPriorityFieldsAtom(workspace, connection);
-  const result = useAtomValue(atom);
-  const refresh = useAtomRefresh(atom);
-  if (result._tag === "Success") return <PriorityFieldSelect fields={result.value} />;
-  if (result._tag !== "Failure") return <Skeleton className="h-9 w-80" />;
-  return (
-    <FieldGroup className="w-auto gap-2">
-      <PriorityFieldSelect fields={[]} />
-      <TrackerLoadFailure cause={result.cause} onRetry={refresh}>
-        Could not load priority fields
-      </TrackerLoadFailure>
-    </FieldGroup>
-  );
-}
-
-function PriorityFieldRow() {
-  const {
-    state: { draft, connections },
-    meta: { disabled, workspace },
-  } = useWorkspaceRecord();
-  if (draft.issueTrackerType !== "github") return null;
-  const connection = trackerConnection(draft, connections);
-  return (
-    <Field orientation="responsive" data-disabled={disabled}>
-      <FieldContent>
-        <FieldTitle>Priority</FieldTitle>
-        <FieldDescription>
-          Optional organization issue field used to order work within a Workflow.
-        </FieldDescription>
-      </FieldContent>
-      {workspace ? (
-        <LivePriorityFieldSelect workspace={workspace} connection={connection} />
-      ) : (
-        <FieldGroup className="w-auto gap-2">
-          <PriorityFieldSelect fields={[]} />
-          <FieldDescription>Register this workspace to load fields.</FieldDescription>
-        </FieldGroup>
-      )}
-    </Field>
-  );
-}
-
 export const trackerItems = [
   { value: "github", label: "GitHub Issues" },
   { value: "linear", label: "Linear" },
@@ -405,13 +241,7 @@ function IssueTrackerRows() {
       </Field>
       {draft.issueTrackerType === "linear" ? (
         <FieldGroup>
-          <Field orientation="responsive">
-            <FieldContent>
-              <FieldTitle>Teams</FieldTitle>
-              <FieldDescription>Comma-separated Linear team keys.</FieldDescription>
-            </FieldContent>
-            <DraftInput field="teams" label="Linear teams" placeholder="ENG, APP" />
-          </Field>
+          <LinearTeamsRow />
           <Field orientation="responsive">
             <FieldContent>
               <FieldTitle>Organization</FieldTitle>
@@ -423,114 +253,6 @@ function IssueTrackerRows() {
       ) : null}
       <PriorityFieldRow />
     </FieldGroup>
-  );
-}
-
-export const assigneeItems = (people: readonly IssueTrackerPerson[], selected: readonly string[]) => {
-  const listed = new Set(people.map(({ identity }) => identity));
-  const unknown = selected
-    .filter((identity) => !listed.has(identity))
-    .map((identity) => ({ identity, label: `Unknown: ${identity}` }));
-  return [...unknown, ...people];
-};
-
-export const unloadedAssigneeItems = (selected: readonly string[]) =>
-  selected.map((identity) => ({ identity, label: identity }));
-
-function AssigneeAllowlistSelect({ items }: { readonly items: readonly IssueTrackerPerson[] }) {
-  const {
-    state: { draft },
-    actions: { patch },
-    meta: { disabled },
-  } = useWorkspaceRecord();
-  const anchor = useComboboxAnchor();
-  const labels = new Map(items.map(({ identity, label }) => [identity, label]));
-  const labelOf = (identity: string) => labels.get(identity) ?? identity;
-  return (
-    <Combobox
-      multiple
-      items={items.map(({ identity }) => identity)}
-      value={[...draft.assigneeAllowlist]}
-      disabled={disabled}
-      itemToStringLabel={labelOf}
-      onValueChange={(assigneeAllowlist) => patch({ assigneeAllowlist })}
-    >
-      <ComboboxChips ref={anchor} className="w-80">
-        <ComboboxValue>
-          {(identities: readonly string[]) => (
-            <>
-              {identities.map((identity) => (
-                <ComboboxChip key={identity}>{labelOf(identity)}</ComboboxChip>
-              ))}
-              <ComboboxChipsInput aria-label="Assignee allowlist" placeholder="Choose people" />
-            </>
-          )}
-        </ComboboxValue>
-      </ComboboxChips>
-      <ComboboxContent anchor={anchor}>
-        <ComboboxEmpty>No people found.</ComboboxEmpty>
-        <ComboboxList>
-          {(identity: string) => (
-            <ComboboxItem key={identity} value={identity}>
-              {labelOf(identity)}
-            </ComboboxItem>
-          )}
-        </ComboboxList>
-      </ComboboxContent>
-    </Combobox>
-  );
-}
-
-function LiveAssigneeAllowlistSelect({
-  workspace,
-  connection,
-}: {
-  readonly workspace: WorkspaceId;
-  readonly connection: ConnectionBindingId;
-}) {
-  const {
-    state: { draft },
-  } = useWorkspaceRecord();
-  const atom = issueTrackerPeopleAtom(workspace, connection);
-  const result = useAtomValue(atom);
-  const refresh = useAtomRefresh(atom);
-  if (result._tag === "Success") {
-    return <AssigneeAllowlistSelect items={assigneeItems(result.value, draft.assigneeAllowlist)} />;
-  }
-  if (result._tag !== "Failure") return <Skeleton className="h-9 w-80" />;
-  return (
-    <FieldGroup className="w-auto gap-2">
-      <AssigneeAllowlistSelect items={unloadedAssigneeItems(draft.assigneeAllowlist)} />
-      <TrackerLoadFailure cause={result.cause} onRetry={refresh}>
-        Could not load people
-      </TrackerLoadFailure>
-    </FieldGroup>
-  );
-}
-
-function AssigneeAllowlistRow() {
-  const {
-    state: { draft, connections },
-    meta: { disabled, workspace },
-  } = useWorkspaceRecord();
-  return (
-    <Field orientation="responsive" data-disabled={disabled}>
-      <FieldContent>
-        <FieldTitle>Assignee allowlist</FieldTitle>
-        <FieldDescription>People whose assigned work Cogwork may take.</FieldDescription>
-      </FieldContent>
-      {workspace ? (
-        <LiveAssigneeAllowlistSelect
-          workspace={workspace}
-          connection={trackerConnection(draft, connections)}
-        />
-      ) : (
-        <FieldGroup className="w-auto gap-2">
-          <AssigneeAllowlistSelect items={unloadedAssigneeItems(draft.assigneeAllowlist)} />
-          <FieldDescription>Register this workspace to load people.</FieldDescription>
-        </FieldGroup>
-      )}
-    </Field>
   );
 }
 
